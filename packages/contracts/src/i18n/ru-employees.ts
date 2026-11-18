@@ -82,8 +82,8 @@ export const employeesStrings = {
   deactivateConfirm: 'Уволить',
   deactivateDone: 'Сотрудник уволен',
   selfDeactivateHint: 'Себя уволить нельзя',
-  grantAdmin: 'Дать администратора',
-  grantAdminTitle: 'Выдать права администратора?',
+  grantAdmin: 'Сделать администратором',
+  grantAdminTitle: 'Сделать администратором?',
   grantAdminText:
     'Сотрудник получит полный доступ к настройкам портала, ролям, справочникам и оргструктуре.',
   grantAdminDone: 'Права администратора выданы',

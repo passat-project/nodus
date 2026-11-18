@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { SystemRole, ui, type UserCard, type UserListItem } from '@nodus/contracts';
+import { ui, type UserCard, type UserListItem } from '@nodus/contracts';
 
 import { employeeProfileDefs } from './employee-profile-fields.js';
 
@@ -71,31 +70,6 @@ describe('employeeProfileDefs — иконки полей', () => {
       openCard: () => {},
     });
     expect(defs[0]?.key).toBe('middleName');
-  });
-
-  it('администратор — строкой под статусом, включая свою карточку (#923)', () => {
-    const base = {
-      card: {
-        id: 'u1',
-        email: 'u1@nodus.by',
-        displayName: 'Иван',
-        avatarUrl: null,
-        roles: [] as UserCard['roles'],
-      } as UserCard,
-      listItem: { managerId: null, positionName: null } as UserListItem,
-      manager: undefined,
-      openCard: () => {},
-    };
-    const statusHtml = (roles: UserCard['roles']) => {
-      const def = employeeProfileDefs({ ...base, card: { ...base.card, roles } }).find(
-        (entry) => entry.key === 'status',
-      );
-      return renderToStaticMarkup(def!.render() as ReactElement);
-    };
-    const adminRole = [{ id: 'r1', code: SystemRole.ADMIN, name: 'Администратор' }];
-
-    expect(statusHtml(adminRole as UserCard['roles'])).toContain(ui.employees.adminBadge);
-    expect(statusHtml([])).not.toContain(ui.employees.adminBadge);
   });
 
   it('руководитель — переход в его карточку стеком (#923)', () => {

@@ -16,7 +16,7 @@ import {
   VenusAndMars,
 } from 'lucide-react';
 import type { UserCard, UserListItem } from '@nodus/contracts';
-import { SystemRole, ui } from '@nodus/contracts';
+import { ui } from '@nodus/contracts';
 
 import type { CardRef } from '../../../app/shell/card-stack.js';
 import { formatDate } from '../../../shared/lib/format.js';
@@ -44,9 +44,6 @@ export function employeeProfileDefs(args: {
   openCard: (ref: CardRef) => void;
 }): EntityFieldDef[] {
   const { card, listItem, manager, openCard } = args;
-  // #923: «Администратор» — строкой под статусом (вердикт приёмки 18.11.2026):
-  // роль видна сразу в карточке, в том числе на своей.
-  const isAdmin = card.roles.some((role) => role.code === SystemRole.ADMIN);
   return [
     {
       // #132: отчество — ПОЛЕ карточки (в displayName его больше нет);
@@ -106,14 +103,7 @@ export function employeeProfileDefs(args: {
       key: 'status',
       icon: <UserCheck className="size-3.5" />,
       label: ui.employees.fieldStatus,
-      render: () => (
-        <span className="flex min-w-0 flex-col items-start gap-0.5">
-          <UserStatusChip status={card.status} />
-          {isAdmin ? (
-            <span className="text-xs text-muted-foreground">{ui.employees.adminBadge}</span>
-          ) : null}
-        </span>
-      ),
+      render: () => <UserStatusChip status={card.status} />,
     },
     {
       key: 'email',

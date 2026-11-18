@@ -63,16 +63,29 @@ describe('profileSubordinates (#923)', () => {
     expect(deputyIds.has('deputy')).toBe(true);
   });
 
-  it('зам, который и прямой подчинённый — одна строка, метка остаётся', () => {
+  it('зам, который и прямой подчинённый — одна строка, первой, метка остаётся', () => {
+    const direct = user({ id: 'direct', managerId: CHIEF });
     const deputy = user({ id: 'deputy', managerId: CHIEF });
     const { list, deputyIds } = profileSubordinates({
       userId: CHIEF,
-      users: [deputy],
+      users: [direct, deputy],
       departments: [department({ id: 'd1', headId: CHIEF, deputyId: deputy.id })],
     });
 
-    expect(list.map((item) => item.id)).toEqual(['deputy']);
+    expect(list.map((item) => item.id)).toEqual(['deputy', 'direct']);
     expect(deputyIds.has('deputy')).toBe(true);
+  });
+
+  it('замы идут первыми, даже если в справочнике позже (#923)', () => {
+    const direct = user({ id: 'direct', managerId: CHIEF });
+    const deputy = user({ id: 'deputy' });
+    const { list } = profileSubordinates({
+      userId: CHIEF,
+      users: [direct, deputy],
+      departments: [department({ id: 'd1', headId: CHIEF, deputyId: deputy.id })],
+    });
+
+    expect(list.map((item) => item.id)).toEqual(['deputy', 'direct']);
   });
 
   it('зам отдела, где сотрудник только зам, — не включается', () => {

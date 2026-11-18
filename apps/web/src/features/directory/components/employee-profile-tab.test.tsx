@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ui, type UserCard, type UserListItem } from '@nodus/contracts';
+import { SystemRole, ui, type UserCard, type UserListItem } from '@nodus/contracts';
 
 import { demoUserCards, demoUserListItems } from '../../../shared/mocks/data/users.js';
 import { stubLoadedImage } from '../../../test/stub-loaded-image.js';
@@ -115,5 +115,25 @@ describe('EmployeeProfileTab: секции и подчинённые (#923)', ()
       />,
     );
     expect(screen.getByRole('button', { name: ui.common.avatarUpload })).not.toBeNull();
+  });
+
+  it('«Администратор» — подписью под presence-чипом (#923)', () => {
+    const { rerender } = renderTab();
+    expect(screen.queryByText(ui.employees.adminBadge)).toBeNull();
+    rerender(
+      <EmployeeProfileTab
+        card={{
+          ...card,
+          roles: [{ id: 'role-admin', code: SystemRole.ADMIN, name: 'Администратор' }],
+        }}
+        listItem={listItemOf(card.id)}
+        manager={undefined}
+        subordinates={[]}
+        presenceStatus="online"
+      />,
+    );
+    expect(screen.getByText(ui.employees.adminBadge)).not.toBeNull();
+    // Подпись живёт у presence-чипа под фото, статус кадров не задет.
+    expect(screen.getByText(ui.common.online)).not.toBeNull();
   });
 });

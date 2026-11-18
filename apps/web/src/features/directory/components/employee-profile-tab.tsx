@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { Camera } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PresenceStatus, UserCard, UserListItem } from '@nodus/contracts';
-import { ui } from '@nodus/contracts';
+import { SystemRole, ui } from '@nodus/contracts';
 import { NodeChip } from '@nodus/ui/components/node-chip';
 import {
   ContextMenu,
@@ -36,10 +36,11 @@ function presenceLabel(status: PresenceStatus): string {
 /**
  * Постоянная ЛЕВАЯ зона профиля карточки сотрудника (#750, #923): БОЛЬШАЯ
  * фотография (камера — только своя карточка) с presence-чипом под ней и
- * заголовок «Информация о сотруднике» над полями-реестром полного UserCard
- * (до 46rem зоны поля идут под фото, дальше — справа; 1↔2 колонки — по ширине
- * колонки полей плюс стадия двух колонок по ширине зоны), ниже —
- * «Подчинённые» тем же стилем заголовка и сеткой 1↔2 по ширине зоны, переход в
+ * подписью «Администратор» под чипом (если роль выдана), заголовок
+ * «Информация о сотруднике» над полями-реестром полного UserCard (до 46rem
+ * зоны поля идут под фото, дальше — справа; 1↔2 колонки — по ширине колонки
+ * полей плюс стадия двух колонок по ширине зоны), ниже — «Подчинённые» тем же
+ * стилем заголовка и сеткой 1↔2 по ширине зоны (замы — первыми), переход в
  * карточки стеком (ADR-0009). Кнопки правки и действий живут в нижней полосе
  * зоны (`EmployeeProfileBar`), не здесь; скролл своей зоны, по горизонтали
  * контент не скроллится.
@@ -68,6 +69,9 @@ export function EmployeeProfileTab({
   const setAvatar = useSetMyAvatar();
   const removeAvatar = useRemoveMyAvatar();
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  // «Администратор» — подписью под presence-чипом под фото (вердикт приёмки
+  // 18.11.2026), в том числе на своей карточке.
+  const isAdmin = card.roles.some((role) => role.code === SystemRole.ADMIN);
 
   function onAvatarPicked(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -145,19 +149,24 @@ export function EmployeeProfileTab({
               aria-hidden
               tabIndex={-1}
             />
-            <NodeChip tone={presenceTone[presenceStatus]}>
-              <span
-                aria-hidden
-                className={
-                  presenceStatus === 'online'
-                    ? 'size-1.5 rounded-full bg-success'
-                    : presenceStatus === 'away'
-                      ? 'size-1.5 rounded-full bg-warning'
-                      : 'size-1.5 rounded-full bg-muted-foreground'
-                }
-              />
-              {presenceLabel(presenceStatus)}
-            </NodeChip>
+            <div className="flex flex-col items-center gap-1">
+              <NodeChip tone={presenceTone[presenceStatus]}>
+                <span
+                  aria-hidden
+                  className={
+                    presenceStatus === 'online'
+                      ? 'size-1.5 rounded-full bg-success'
+                      : presenceStatus === 'away'
+                        ? 'size-1.5 rounded-full bg-warning'
+                        : 'size-1.5 rounded-full bg-muted-foreground'
+                  }
+                />
+                {presenceLabel(presenceStatus)}
+              </NodeChip>
+              {isAdmin ? (
+                <span className="text-xs text-muted-foreground">{ui.employees.adminBadge}</span>
+              ) : null}
+            </div>
           </div>
           {/* Поля — справа от фото на широкой зоне (#923). Совсем узкая зона
               (пол профиля 320dp, #750): строка поля разваливается на две, и
@@ -181,9 +190,9 @@ export function EmployeeProfileTab({
         {/* Сетка подчинённых — та же container-query логика, что у полей:
             узко 1 колонка (должность под именем), широко 2 (должность
             справа, `min-w-0` + truncate — без горизонтального скролла).
-            Строка — всегда горизонтальная пара: аватар центрирован по всему
-            блоку «имя + должность», а не прижат к первой строке текста
-            (приёмка 18.11.2026). */}
+            Аватар закреплён слева в строке ИМЕНИ (как было), не отрывается
+            центрированием по всему блоку (вердикт 18.11.2026). Замы идут
+            ПЕРВЫМИ в списке (порядок считает `profileSubordinates`). */}
         <div
           data-slot="profile-subordinates"
           className="mt-1.5 grid grid-cols-1 gap-x-12 gap-y-0.5 @min-[55rem]:grid-cols-2"
@@ -199,15 +208,15 @@ export function EmployeeProfileTab({
                 type="button"
                 data-slot="profile-subordinate"
                 onClick={() => openCard({ kind: 'employee', id: person.id })}
-                className="-mx-2 flex min-w-0 items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent/50"
+                className="-mx-2 flex min-w-0 flex-col gap-0.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent/50 @min-[30rem]:flex-row @min-[30rem]:items-center @min-[30rem]:gap-2.5"
               >
-                <PersonAvatar
-                  name={person.displayName}
-                  avatarUrl={person.avatarUrl}
-                  className="size-7 shrink-0"
-                />
-                <span className="flex min-w-0 flex-1 flex-col gap-0.5 @min-[30rem]:flex-row @min-[30rem]:items-center @min-[30rem]:gap-2.5">
-                  <span className="min-w-0 truncate text-sm" title={person.displayName}>
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <PersonAvatar
+                    name={person.displayName}
+                    avatarUrl={person.avatarUrl}
+                    className="size-7 shrink-0"
+                  />
+                  <span className="min-w-0 flex-1 truncate text-sm" title={person.displayName}>
                     {person.displayName}
                   </span>
                   {isDeputy ? (
@@ -215,12 +224,12 @@ export function EmployeeProfileTab({
                       {ui.employees.deputyBadge}
                     </span>
                   ) : null}
-                  <span
-                    className="min-w-0 truncate text-xs text-muted-foreground @min-[30rem]:ml-auto"
-                    title={person.positionName ?? undefined}
-                  >
-                    {person.positionName ?? ''}
-                  </span>
+                </span>
+                <span
+                  className="min-w-0 truncate pl-9.5 text-xs text-muted-foreground @min-[30rem]:ml-auto @min-[30rem]:pl-0"
+                  title={person.positionName ?? undefined}
+                >
+                  {person.positionName ?? ''}
                 </span>
               </button>
             );
