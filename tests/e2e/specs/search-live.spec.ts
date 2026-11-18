@@ -30,27 +30,32 @@ test.describe('живой поиск по порталу (#952)', () => {
   test('Ctrl+K находит сотрудника, открывает карточку, Esc закрывает окно', async ({ page }) => {
     await loginUi(page, ADMIN.email, ADMIN.password);
     await page.keyboard.press('Control+k');
-    const dialog = page.getByRole('dialog');
-    await expect(dialog).toBeVisible();
+    // Якорь окна — команда cmdk: у карточки результата тоже role=dialog
+    // (data-card-surface), поэтому страничный getByRole('dialog') неоднозначен.
+    const search = page.locator('[data-slot="command"]');
+    await expect(search).toBeVisible();
 
-    const input = dialog.getByRole('combobox');
+    // Поле поиска — не единственный combobox в окне (у Select проекта роль
+    // combobox тоже), поэтому якорь — слот cmdk-поля.
+    const input = search.locator('[data-slot="command-input"]');
     await input.fill('Администратор');
 
     // Строка выдачи: заголовок результата-сотрудника (ФИО сидового админа).
-    const firstRow = dialog.getByRole('option').first();
+    const firstRow = search.getByRole('option').first();
     await expect(firstRow).toBeVisible({ timeout: 10_000 });
 
     // Esc закрывает окно и не теряет фокус со страницы.
     await page.keyboard.press('Escape');
-    await expect(dialog).toBeHidden();
+    await expect(search).toBeHidden();
 
     // Повторное открытие с тем же запросом (состояние живёт в сторе) →
-    // Enter открывает первый результат карточкой.
+    // клик открывает первый результат карточкой (окно поиска закрывается).
     await page.keyboard.press('Control+k');
-    const reopened = page.getByRole('dialog');
+    const reopened = page.locator('[data-slot="command"]');
     await expect(reopened).toBeVisible();
     await reopened.getByRole('option').first().click();
     await expect(reopened).toBeHidden();
+    await expect(page.locator('[data-card-surface]')).toBeVisible();
   });
 
   test('крестик: с текстом очищает запрос, с пустым полем закрывает окно', async ({ page }) => {
@@ -59,7 +64,7 @@ test.describe('живой поиск по порталу (#952)', () => {
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
 
-    const input = dialog.getByRole('combobox');
+    const input = dialog.locator('[data-slot="command-input"]');
     await input.fill('Админ');
     await dialog.getByRole('button', { name: 'Очистить запрос' }).click();
     await expect(input).toHaveValue('');

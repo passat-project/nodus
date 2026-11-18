@@ -17,6 +17,8 @@ import { searchSourceTypeSchema, type SearchSourceType } from '@nodus/contracts'
  * модулей читают env на импорте (auth.config бросает без JWT_SECRET).
  */
 loadEnv({ path: fileURLToPath(new URL('../../../../../../.env', import.meta.url)) });
+// Обслуживающий CLI не должен поднимать второй IMAP-клиент (MailInboxService).
+process.env.MAIL_RECEPTION_DISABLED = '1';
 
 const { NestFactory } = await import('@nestjs/core');
 const { AppModule } = await import('../../../app.module.js');

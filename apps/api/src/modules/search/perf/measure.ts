@@ -16,6 +16,8 @@ import { searchRequestSchema } from '@nodus/contracts';
  * видимость → три ноги → имена → DTO), а не по голому SQL.
  */
 loadEnv({ path: fileURLToPath(new URL('../../../../../../.env', import.meta.url)) });
+// Perf-прогон не поднимает второй IMAP-клиент (MailInboxService).
+process.env.MAIL_RECEPTION_DISABLED = '1';
 
 const { NestFactory } = await import('@nestjs/core');
 const { AppModule } = await import('../../../app.module.js');
