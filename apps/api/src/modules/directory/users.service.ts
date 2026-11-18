@@ -9,6 +9,7 @@ import {
   type ListUsersQuery,
   type MyOrganization,
   type Paginated,
+  type UpdateMyProfileDto,
   type UpdateUserDto,
   type UserCard,
   type UserListItem,
@@ -30,21 +31,22 @@ import { ManagerDerivationService } from './manager-derivation.service.js';
 import { ReferenceGuard } from './reference-guard.service.js';
 import { RoleAssignmentGuard } from './role-assignment-guard.service.js';
 import { RolesRepository } from './roles.repository.js';
-import { UsersRepository, type UserCardRow } from './users.repository.js';
+import { UsersRepository } from './users.repository.js';
 import { buildDisplayName, toUserCard } from './user-dto.js';
 import { assertRolesExist, updateMyProfileOf } from './users-profile.js';
+import { emitAccessChanged } from './users-deactivation.js';
+import {
+  activateUserOf,
+  adminRoleOf,
+  deactivateUserOf,
+  type LifecycleDeps,
+} from './users-lifecycle.js';
 import {
   listUsersOf,
   myOrganizationOf,
   userCardOf,
   type OrganizationDeps,
 } from './users-organization.js';
-
-/** Прямая роль «Администратор» сотрудника, если есть (замок и последний админ). */
-function adminRoleOf(row: Pick<UserCardRow, 'roles'>): { id: string; code: string } | null {
-  const match = row.roles.find((assignment) => assignment.role.code === SystemRole.ADMIN);
-  return match ? { id: match.role.id, code: match.role.code } : null;
-}
 
 /**
  * Сценарии справочника сотрудников. Prisma — только репозиторий;
@@ -81,6 +83,19 @@ export class UsersService {
       users: this.users,
       org: this.org,
       departments: this.departments,
+      avatarUrlOf: this.avatarUrlOf,
+    };
+  }
+
+  /** Зависимости жизненного цикла (увольнение/возврат, #923). */
+  private lifecycleDeps(): LifecycleDeps {
+    return {
+      users: this.users,
+      roles: this.roles,
+      tx: this.tx,
+      eventBus: this.eventBus,
+      departments: this.departments,
+      managers: this.managers,
       avatarUrlOf: this.avatarUrlOf,
     };
   }
@@ -220,10 +235,12 @@ export class UsersService {
       }
       if (beforeRoleIds !== null) {
         await this.guard.assertEffectiveRolesHeld(actor, id, beforeRoleIds, tx);
-        // #923/AUD-002: состав действующих ролей изменился (явные роли или роль
-        // подразделения) — access-токены сотрудника обесцениваются, иначе права
-        // из JWT жили бы до истечения TTL (#866).
-        await this.emitAccessChanged(tx, id, beforeRoleIds, actor.id);
+        // #923/AUD-002: состав действующих ролей изменился — access-токены
+        // сотрудника обесцениваются (права из JWT не живут до TTL, #866).
+        await emitAccessChanged(tx, id, beforeRoleIds, actor.id, {
+          guard: this.guard,
+          eventBus: this.eventBus,
+        });
       }
       if (
         adminRoleId !== null &&
@@ -245,87 +262,14 @@ export class UsersService {
 
   /** Деактивация (увольнение): статус + событие; сессии отзовёт подписчик auth. */
   async deactivateUser(id: string, actor: AuthUser): Promise<UserCard> {
-    // #923: себя уволить нельзя — правило бизнес-логики, а не только скрытая
-    // кнопка (I8: сервер обязан отказать).
-    if (id === actor.id) {
-      throw new DomainException(ErrorCode.DIRECTORY_SELF_DEACTIVATE, 'Cannot deactivate yourself');
-    }
-    const before = await this.users.findCardById(id);
-    if (!before) {
-      throw DomainException.notFound('User not found');
-    }
-    if (before.status === 'deactivated') {
-      return toUserCard(before, this.avatarUrlOf); // идемпотентно
-    }
-
-    return this.tx.run(async (tx) => {
-      // Замок строки admin (#490): деактивация последнего администратора
-      // сериализуется с правками состава роли; состав читается под замком.
-      let adminRoleId: string | null = null;
-      const lockedId = await this.roles.lockByCodeForUpdate(SystemRole.ADMIN, tx);
-      if (lockedId !== null) {
-        const current = (await this.users.findCardById(id, tx))!;
-        if (adminRoleOf(current) !== null) {
-          adminRoleId = lockedId;
-        }
-      }
-      await this.users.update(id, { status: 'deactivated' }, tx);
-      if (
-        adminRoleId !== null &&
-        (await this.roles.countActiveDirectMembers(adminRoleId, tx)) === 0
-      ) {
-        throw new DomainException(ErrorCode.ROLE_LAST_ADMIN, 'Last administrator', {
-          roleId: adminRoleId,
-        });
-      }
-      // #923: уволенный не может оставаться главой/замом — снимаем ссылки во
-      // всех подразделениях, пересчитываем производных руководителей поддерева
-      // (у них появился ближайший глава выше) и сообщаем подписчикам (I9).
-      const cleared = await this.departments.clearHeadAndDeputy(id, tx);
-      await this.managers.recomputeDepartments(
-        cleared.map((department) => department.id),
-        tx,
-      );
-      for (const department of cleared) {
-        const changedFields = [
-          ...(department.head ? ['headId'] : []),
-          ...(department.deputy ? ['deputyId'] : []),
-        ];
-        await this.eventBus.emit(
-          tx,
-          DIRECTORY_EVENTS.DEPARTMENT_UPDATED,
-          { departmentId: department.id, changedFields },
-          { actorId: actor.id, aggregateType: 'department', aggregateId: department.id },
-        );
-      }
-      await this.eventBus.emit(
-        tx,
-        DIRECTORY_EVENTS.USER_DEACTIVATED,
-        { userId: id },
-        { actorId: actor.id, aggregateType: 'user', aggregateId: id },
-      );
-      return toUserCard((await this.users.findCardById(id, tx))!, this.avatarUrlOf);
-    });
+    return deactivateUserOf(id, actor, this.lifecycleDeps());
   }
 
   /** Возврат в работу (AUD-016): снятие деактивации + парное событие. Сессии
    *  не восстанавливаются — вход заново (стоп-лист допускает новые токены);
    *  роли и история сохраняются. Повторная активация — без записи и события. */
   async activateUser(id: string, actor: AuthUser): Promise<UserCard> {
-    const before = await this.users.findCardById(id);
-    if (!before) throw DomainException.notFound('User not found');
-    if (before.status === 'active') return toUserCard(before, this.avatarUrlOf); // идемпотентно
-
-    return this.tx.run(async (tx) => {
-      await this.users.update(id, { status: 'active' }, tx);
-      await this.eventBus.emit(
-        tx,
-        DIRECTORY_EVENTS.USER_ACTIVATED,
-        { userId: id },
-        { actorId: actor.id, aggregateType: 'user', aggregateId: id },
-      );
-      return toUserCard((await this.users.findCardById(id, tx))!, this.avatarUrlOf);
-    });
+    return activateUserOf(id, actor, this.lifecycleDeps());
   }
 
   /** Саморедактирование (#923): ФИО и личные/контактные поля по строгому
@@ -387,32 +331,5 @@ export class UsersService {
       );
       return toUserCard((await this.users.findCardById(userId, tx))!, this.avatarUrlOf);
     });
-  }
-
-  /** `directory.role.access_changed` (#866/AUD-002, #923): после смены
-   *  подразделения или явных ролей действующие права сотрудника могли
-   *  измениться — auth обесценивает его access-токены. Эмитим только реально
-   *  изменившиеся роли (симметричная разница состава). */
-  private async emitAccessChanged(
-    tx: Parameters<EventBus['emit']>[0],
-    userId: string,
-    beforeRoleIds: readonly string[],
-    actorId: string,
-  ): Promise<void> {
-    const afterRoleIds = (await this.guard.effectiveRoleIds(userId, tx)) ?? [];
-    const before = new Set(beforeRoleIds);
-    const after = new Set(afterRoleIds);
-    const changed = [
-      ...beforeRoleIds.filter((roleId) => !after.has(roleId)),
-      ...afterRoleIds.filter((roleId) => !before.has(roleId)),
-    ];
-    for (const roleId of changed) {
-      await this.eventBus.emit(
-        tx,
-        DIRECTORY_EVENTS.ROLE_ACCESS_CHANGED,
-        { roleId, reason: 'membership', userIds: [userId] },
-        { actorId, aggregateType: 'role', aggregateId: roleId },
-      );
-    }
   }
 }

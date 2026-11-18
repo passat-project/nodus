@@ -32,6 +32,7 @@ describe('DepartmentsService: memberCount юрлица', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
     );
 
     const tree = await service.getTree('legal');
