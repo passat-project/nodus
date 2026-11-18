@@ -135,7 +135,11 @@ describe('Производный руководитель и профиль (#92
     );
     expect(deactivated.status).toBe(200);
 
-    const department = await f.api(f.users.employee, 'GET', `/directory/departments/${child}`);
+    // Читаем админским токеном набора: перевод карточкой законно отзывает
+    // access-токены сотрудника (#866) — гонка с диспетчером outbox делала тест
+    // флаки (карточка отдела не про права Кэрол).
+    const department = await f.api(f.users.directory, 'GET', `/directory/departments/${child}`);
+    expect(department.status).toBe(200);
     expect(departmentNodeSchema.parse(await department.json()).headId).toBeNull();
     // Подчинённые «переехали» к главе родительского подразделения.
     expect((await card(f.users.employee.id)).managerId).toBe(f.users.manager.id);
