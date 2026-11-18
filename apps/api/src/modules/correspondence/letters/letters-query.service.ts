@@ -14,6 +14,7 @@ import {
 import { z } from 'zod';
 
 import { DomainException } from '../../../core/errors/domain-exception.js';
+import { escapeLikePattern } from '../../../core/database/like-pattern.js';
 import { companyDate } from '../../../core/time/company-time.js';
 import { decodeCursor, encodeCursor } from '../../../core/pagination/cursor.util.js';
 import {
@@ -260,17 +261,20 @@ export class LettersQueryService {
   private async searchWhere(search: string | undefined) {
     if (!search) return [];
     const counterpartyIds = await this.counterparties.searchIds(search, SEARCH_COUNTERPARTIES);
+    // Метасимволы LIKE — литералы (#952 F1): «%» в поле поиска не должен
+    // находить весь реестр.
+    const needle = escapeLikePattern(search);
     return [
       {
         OR: [
-          { subject: { contains: search, mode: 'insensitive' as const } },
-          { regNumber: { contains: search, mode: 'insensitive' as const } },
-          { theirNumber: { contains: search, mode: 'insensitive' as const } },
+          { subject: { contains: needle, mode: 'insensitive' as const } },
+          { regNumber: { contains: needle, mode: 'insensitive' as const } },
+          { theirNumber: { contains: needle, mode: 'insensitive' as const } },
           // Поиск по номеру любого приложенного письма (#461, Р8): «456»
           // находит конверт, в котором лежит лист № 456.
           {
             attachedRefs: {
-              some: { number: { contains: search, mode: 'insensitive' as const } },
+              some: { number: { contains: needle, mode: 'insensitive' as const } },
             },
           },
           ...(counterpartyIds.length > 0 ? [{ counterpartyId: { in: counterpartyIds } }] : []),

@@ -13,6 +13,7 @@ import {
 } from '@nodus/contracts';
 
 import { EventBus } from '../../../core/events/event-bus.js';
+import { escapeLikePattern } from '../../../core/database/like-pattern.js';
 import { TransactionRunner } from '../../../core/database/transaction-runner.js';
 import { decodeCursor, encodeCursor } from '../../../core/pagination/cursor.util.js';
 import {
@@ -69,7 +70,7 @@ export class ConversationsService {
     let searchUserIds: string[] | undefined;
     if (query.search) {
       // ILIKE-метасимволы экранируются (поиск «100%» не должен совпадать со всем).
-      searchTitle = query.search.replace(/[%_]/g, (ch) => '\\' + ch);
+      searchTitle = escapeLikePattern(query.search);
       searchUserIds = (await this.userProfiles.searchByDisplayName(query.search, 100)).map(
         (ref) => ref.id,
       );

@@ -19,6 +19,7 @@ import { RolesRepository } from './roles.repository.js';
 import { RolesService } from './roles.service.js';
 import { UsersController } from './users.controller.js';
 import { UsersRepository } from './users.repository.js';
+import { EmployeeSearchSourceProvider } from './users-search-source.provider.js';
 import { UsersService } from './users.service.js';
 
 /**
@@ -31,6 +32,9 @@ import { UsersService } from './users.service.js';
   providers: [
     UsersService,
     UsersRepository,
+    // Источник поисковой проекции «сотрудник» (#952): маркер
+    // searchSourceType, сбор — DiscoveryService ядра search.
+    EmployeeSearchSourceProvider,
     DepartmentsService,
     DepartmentsRepository,
     PositionsService,

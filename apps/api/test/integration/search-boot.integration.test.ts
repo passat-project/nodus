@@ -37,8 +37,13 @@ describe('AppModule: фундамент поиска (#952, P0)', () => {
     expect(module.get(SearchSourceRegistry)).toBeDefined();
   });
 
-  it('реестр источников пуст — провайдеры модулей подключаются в P2', () => {
-    expect(module.get(SearchSourceRegistry).all()).toEqual([]);
+  it('реестр источников собран: пять провайдеров модулей (P2)', () => {
+    expect(
+      module
+        .get(SearchSourceRegistry)
+        .all()
+        .map((provider) => provider.searchSourceType),
+    ).toEqual(['task', 'letter', 'message', 'project', 'employee']);
   });
 
   it('диспетчер событий поднят (реестр обработчиков собран без падений)', () => {

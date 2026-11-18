@@ -1,7 +1,8 @@
 # Модуль search (ядро)
 
-Единый поиск по порталу (#952): проекция `search_documents` и окно поиска
-(компактное Ctrl+K + рабочее внутри рамы). Ядро, без фичефлага (I10).
+Единый поиск по порталу (#952): проекция `search_documents` и одно окно
+Ctrl+K (без рабочего листа — вердикт владельца 18.11.2026). Ядро, без
+фичефлага (I10). Архитектура — ADR-0052.
 
 ## Назначение
 
@@ -35,11 +36,17 @@
   провайдерами модулей-источников; модуль search не читает чужие таблицы.
 - `search_queries` — аналитика запросов (actor, query, types, project,
   период, result_count, took_ms, hint). Пишется best-effort после ответа.
-- Индексы: FTS по функции `search_tsv(title, body, keywords)` (expression-GIN,
-  `russian`, веса A/B/C), триграммы `pg_trgm` по `title` (только оператор
-  `<%`, порог — `SET LOCAL` в запросе), btree по точным ключам
-  `payload->>'number' | 'regNumber' | 'code'`, GIN по `participant_ids`,
-  btree под скан и pre-filter. Миграция `20261201120000_search_core`.
+- Индексы: FTS по **раскрытому выражению** `setweight(to_tsvector('russian', …))`
+  (SQL-функция `search_tsv` инлайнится — индекс на вызове функции planner не
+  видит; миграция `20261201130000_search_tsv_index_fix`), триграммы `pg_trgm`
+  по `title` (только оператор `<%`, порог — `SET LOCAL` в запросе), btree по
+  точным ключам `payload->>'number' | 'regNumber' | 'code'`, btree
+  `lower(title) text_pattern_ops` (равенство/префикс точной ноги), GIN по
+  `participant_ids`, btree под скан и pre-filter. Миграции
+  `20261201120000_search_core` + `20261201130000_search_tsv_index_fix`.
+- Perf-замер (`pnpm search:perf -- --count=50000`): p95 ≈ 70 мс на 50k
+  сообщений; цепочка SECURITY — golden-матрица и `EXPLAIN`-гейт в
+  `test/integration/search.integration.test.ts`.
 
 ## Видимость (P2)
 
@@ -57,8 +64,25 @@ Pre-filter до ранжирования и лимита: `ProjectViewScope`
 - `search_queries` хранит текст запроса (может содержать чувствительные
   строки): доступа из UI нет, хранение 90 дней, чистка вручную SQL по
   `created_at`; в логи текст запроса не пишется.
-- Бэкфилл — CLI `search:reindex` (P4): `--type`, `--rebuild`; идемпотентен.
+- Бэкфилл — CLI `pnpm search:reindex` (`--type=task|letter|message|project|employee`,
+  `--rebuild`): скан провайдеров пачками 500, upsert идемпотентен; после
+  выкатки — шаг runbook `docs/runbooks/prod-update.md`. Perf-замер —
+  `pnpm search:perf -- --count=50000` (генератор сообщений, p95, уборка).
 - Откат: удалить код, таблицы остаются (expand-only).
+
+## Индексация (P2)
+
+Обработчики outbox: `task.created/updated/assigned/participants_changed/deleted`,
+`chat.message_sent/edited/deleted`, `correspondence.letter_received/registered/
+updated/participants_changed/deleted`, `project.created/updated`,
+`directory.user.created/updated/deactivated/activated`,
+`directory.department.updated/archived`, `directory.position.updated/deleted`.
+Один runner на группы событий (`eventTypes` на типе конструктора — O1).
+Upsert идемпотентен по `source_updated_at`; tombstone (`deleted: true`)
+удаляет строку: мягко удалённые задача/письмо/сообщение, архивный проект,
+деактивированный сотрудник. Провайдеры: `tasks/ports/task-search-source`,
+`correspondence/search/letter-search-source`, `chat/search/message-search-source`,
+`projects/ports/project-search-source`, `directory/users-search-source`.
 
 ## Границы
 

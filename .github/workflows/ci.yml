@@ -363,6 +363,12 @@ jobs:
           export SEED_DEMO_PASSWORD="$(node -p "require('./tests/e2e/e2e-users.json').second.password")"
           pnpm --filter @nodus/api db:deploy && pnpm --filter @nodus/api db:seed
 
+      - name: Бэкфилл поисковой проекции (#952)
+        # Сид создаёт сотрудников/справочники — без бэкфилла окно поиска на
+        # e2e-стенде пустое (hint index_empty). Сборка выше уже есть, CLI —
+        # штатный (идемпотентен, повторный прогон строк не меняет).
+        run: node apps/api/dist/modules/search/cli/reindex.js
+
       # S3 SILO (#57, форк MinIO): service-контейнеры GH Actions не умеют
       # command, а CMD образа без аргумента только печатает версию — поднимаем
       # обычным docker run; api ходит root-кредами (minio-init не нужен).
@@ -425,7 +431,7 @@ jobs:
         # Полный «письмо → резолюция → поручение» пока не включаем: модули
         # резолюций и поручений не готовы. graph-stress.spec — perf-харнесс для
         # локального прогона, в CI не входит.
-        run: pnpm --filter @nodus/e2e test specs/auth.spec.ts specs/letters-live.spec.ts specs/chat-two-sessions-live.spec.ts specs/chat-attachments-live.spec.ts
+        run: pnpm --filter @nodus/e2e test specs/auth.spec.ts specs/letters-live.spec.ts specs/chat-two-sessions-live.spec.ts specs/chat-attachments-live.spec.ts specs/search-live.spec.ts
         env:
           NODUS_BASE_URL: http://localhost:4173
           E2E_LIVE_API: '1'
