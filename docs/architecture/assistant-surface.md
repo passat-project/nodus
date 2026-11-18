@@ -8,7 +8,7 @@
 
 Обновить: `UPDATE_ASSISTANT_SURFACE=1 pnpm --filter @nodus/api exec vitest run src/modules/assistant/tools/surface.test.ts`
 
-Всего инструментов: **80** (запись: 40).
+Всего инструментов: **88** (запись: 45).
 
 | Инструмент | Название | Вид | Модуль | API | Право | Флаг | Горячая |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -28,6 +28,12 @@
 | `chat.task_conversation` | Мессенджер: чат задачи | чтение | chat | GET /chat/conversations/by-task/:taskId | — | chat | нет |
 | `chat.unpin_message` | Мессенджер: открепить сообщение | запись | chat | DELETE /chat/conversations/:id/messages/:messageId/pin | — | chat | нет |
 | `context.get` | Контекст экрана | чтение | system | — | — | — | да |
+| `counterparties.create` | Контрагенты: создать | запись | crm | POST /counterparties | crm.create | crm | нет |
+| `counterparties.get` | Контрагенты: карточка | чтение | crm | GET /counterparties/:id | — | crm | нет |
+| `counterparties.list` | Контрагенты: реестр | чтение | crm | GET /counterparties | — | crm | нет |
+| `counterparties.update` | Контрагенты: изменить реквизиты | запись | crm | PATCH /counterparties/:id | crm.manage | crm | нет |
+| `dictionaries.item_create` | Справочники: добавить вариант | запись | dictionaries | POST /dictionaries/:code/items | dictionary.manage | — | нет |
+| `dictionaries.item_update` | Справочники: изменить вариант | запись | dictionaries | PATCH /dictionaries/:code/items/:id | dictionary.manage | — | нет |
 | `dictionaries.items` | Справочники: элементы | чтение | dictionaries | GET /dictionaries/:code/items | — | — | да |
 | `dictionaries.list` | Справочники: список | чтение | dictionaries | GET /dictionaries | — | — | да |
 | `directory.departments` | Сотрудники: оргструктура | чтение | directory | GET /directory/departments/tree | directory.read | — | нет |
@@ -52,6 +58,8 @@
 | `memory.forget` | Блокнот: забыть | чтение | system | — | — | — | нет |
 | `memory.list` | Блокнот: записи | чтение | system | — | — | — | да |
 | `memory.save` | Блокнот: запомнить | чтение | system | — | — | — | да |
+| `notifications.settings` | Уведомления: настройки | чтение | notifications | GET /notifications/settings | — | notifications | нет |
+| `notifications.update_settings` | Уведомления: настроить режим тишины | запись | notifications | PATCH /notifications/settings | — | notifications | нет |
 | `projects.add_member` | Проекты: добавить участника | запись | projects | POST /projects/:id/members | — | projects | нет |
 | `projects.add_node` | Проекты: создать папку | запись | projects | POST /projects/:id/nodes | — | projects | нет |
 | `projects.create` | Проекты: создать | запись | projects | POST /projects | project.create | projects | нет |

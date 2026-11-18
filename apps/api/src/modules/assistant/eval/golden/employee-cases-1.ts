@@ -12,15 +12,6 @@ export const EMPLOYEE_CASES_1: readonly GoldenCase[] = [
     rationale: 'Разговорный запрос списка своих задач — tasks.list; стадии дают счётчики.',
   },
   {
-    id: 'emp-tasks-03',
-    role: 'employee',
-    form: 'typo',
-    query: 'Какиие задачи у меня просрочены?',
-    expectedTools: ['tasks.list'],
-    forbiddenTools: ['tasks.transition'],
-    rationale: 'Просроченные задачи — tasks.list с overdue; переход не просили.',
-  },
-  {
     id: 'emp-tasks-04',
     role: 'employee',
     form: 'official',

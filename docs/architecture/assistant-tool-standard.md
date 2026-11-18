@@ -45,7 +45,7 @@
    `UPDATE_ASSISTANT_STANDARD=1 … manifest.test.ts` — документация в том же
    коммите; README модуля обновляется вручную.
 
-## Каталог (80 инструментов)
+## Каталог (88 инструментов)
 
 | Инструмент | Название | Модуль | Вид | Эффект | Класс | Объект | API | Право | Флаг | Полка |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -65,6 +65,12 @@
 | `chat.task_conversation` | Мессенджер: чат задачи | chat | чтение | read | get | чат | GET /chat/conversations/by-task/:taskId | — | chat | нет |
 | `chat.unpin_message` | Мессенджер: открепить сообщение | chat | запись | irreversible | update | сообщение | DELETE /chat/conversations/:id/messages/:messageId/pin | — | chat | нет |
 | `context.get` | Контекст экрана | system | чтение | read | context | контекст | — (вычислимый) | — | — | да |
+| `counterparties.create` | Контрагенты: создать | crm | запись | irreversible | create | контрагент | POST /counterparties | crm.create | crm | нет |
+| `counterparties.get` | Контрагенты: карточка | crm | чтение | read | get | контрагент | GET /counterparties/:id | — | crm | нет |
+| `counterparties.list` | Контрагенты: реестр | crm | чтение | read | list | контрагент | GET /counterparties | — | crm | нет |
+| `counterparties.update` | Контрагенты: изменить реквизиты | crm | запись | irreversible | update | контрагент | PATCH /counterparties/:id | crm.manage | crm | нет |
+| `dictionaries.item_create` | Справочники: добавить вариант | dictionaries | запись | irreversible | create | элемент | POST /dictionaries/:code/items | dictionary.manage | — | нет |
+| `dictionaries.item_update` | Справочники: изменить вариант | dictionaries | запись | irreversible | update | элемент | PATCH /dictionaries/:code/items/:id | dictionary.manage | — | нет |
 | `dictionaries.items` | Справочники: элементы | dictionaries | чтение | read | get | элемент | GET /dictionaries/:code/items | — | — | да |
 | `dictionaries.list` | Справочники: список | dictionaries | чтение | read | list | справочник | GET /dictionaries | — | — | да |
 | `directory.departments` | Сотрудники: оргструктура | directory | чтение | read | structure | подразделение | GET /directory/departments/tree | directory.read | — | нет |
@@ -89,6 +95,8 @@
 | `memory.forget` | Блокнот: забыть | system | чтение | write | forget | заметка | — (вычислимый) | — | — | нет |
 | `memory.list` | Блокнот: записи | system | чтение | read | list | заметка | — (вычислимый) | — | — | да |
 | `memory.save` | Блокнот: запомнить | system | чтение | write | remember | заметка | — (вычислимый) | — | — | да |
+| `notifications.settings` | Уведомления: настройки | notifications | чтение | read | get | уведомление | GET /notifications/settings | — | notifications | нет |
+| `notifications.update_settings` | Уведомления: настроить режим тишины | notifications | запись | irreversible | update | уведомление | PATCH /notifications/settings | — | notifications | нет |
 | `projects.add_member` | Проекты: добавить участника | projects | запись | write | create | участник | POST /projects/:id/members | — | projects | нет |
 | `projects.add_node` | Проекты: создать папку | projects | запись | write | create | папка | POST /projects/:id/nodes | — | projects | нет |
 | `projects.create` | Проекты: создать | projects | запись | irreversible | create | проект | POST /projects | project.create | projects | нет |

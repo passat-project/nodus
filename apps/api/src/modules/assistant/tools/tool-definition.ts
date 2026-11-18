@@ -21,6 +21,8 @@ export const ASSISTANT_TOOL_MODULES = [
   'chat',
   'directory',
   'dictionaries',
+  'crm',
+  'notifications',
   'workflows',
   'system',
   /** Вложения: чтение текста PDF/DOCX (#922). */

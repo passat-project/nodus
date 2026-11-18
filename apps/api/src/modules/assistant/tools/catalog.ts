@@ -2,7 +2,10 @@ import { chatActionsTools } from './definitions/chat-actions.tools.js';
 import { chatMessagesActionsTools } from './definitions/chat-messages-actions.tools.js';
 import { chatTools } from './definitions/chat.tools.js';
 import { chatWriteTools } from './definitions/chat-write.tools.js';
+import { counterpartiesReadTools } from './definitions/counterparties.tools.js';
+import { counterpartiesWriteTools } from './definitions/counterparties-write.tools.js';
 import { dictionariesTools } from './definitions/dictionaries.tools.js';
+import { dictionariesWriteTools } from './definitions/dictionaries-write.tools.js';
 import { directoryTools } from './definitions/directory.tools.js';
 import { filesTools } from './definitions/files.tools.js';
 import { lettersPartsReadTools } from './definitions/letters-parts.tools.js';
@@ -11,6 +14,7 @@ import { lettersTools } from './definitions/letters.tools.js';
 import { lettersWriteTools } from './definitions/letters-write.tools.js';
 import { meTools } from './definitions/me.tools.js';
 import { memoryTools } from './definitions/memory.tools.js';
+import { notificationsTools } from './definitions/notifications.tools.js';
 import { projectsCreateTools } from './definitions/projects-create.tools.js';
 import { projectsPartsTools } from './definitions/projects-parts.tools.js';
 import { projectsTools } from './definitions/projects.tools.js';
@@ -59,6 +63,10 @@ export const ALL_TOOLS: readonly AssistantToolDefinition[] = [
   ...directoryTools,
   ...meTools,
   ...dictionariesTools,
+  ...dictionariesWriteTools,
+  ...counterpartiesReadTools,
+  ...counterpartiesWriteTools,
+  ...notificationsTools,
   ...filesTools,
   ...workflowsTools,
   ...systemTools,

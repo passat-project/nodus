@@ -6,6 +6,7 @@ import { BATCH_928_CASES } from './batch-928.js';
 import { BATCH_929_CASES } from './batch-929.js';
 import { BATCH_930_CASES } from './batch-930.js';
 import { BATCH_931_CASES } from './batch-931.js';
+import { BATCH_932_CASES } from './batch-932.js';
 import { EMPLOYEE_CASES_1 } from './employee-cases-1.js';
 import { EMPLOYEE_CASES_2 } from './employee-cases-2.js';
 import { GIP_CASES_1 } from './gip-cases-1.js';
@@ -28,4 +29,5 @@ export const GOLDEN_SET: readonly GoldenCase[] = [
   ...BATCH_929_CASES,
   ...BATCH_930_CASES,
   ...BATCH_931_CASES,
+  ...BATCH_932_CASES,
 ];
