@@ -33,9 +33,12 @@ import { projectKanbanFeedUrl, useMoveProjectTask } from '../api/projects-api.js
 export function ProjectKanban({
   projectId,
   filter,
+  search,
 }: {
   projectId: string;
   filter?: ActiveListFilter<TaskListItem>;
+  /** Серверный поиск (#956): уже debounced; сужает фиды колонок на сервере. */
+  search?: string;
 }) {
   // Колонки — статусы типа по умолчанию («Стандартный»): у каждого типа свой
   // маршрут, общий каталог задваивал колонки («В работе» ×2). Доску по
@@ -51,11 +54,13 @@ export function ProjectKanban({
   const { isVisible, fields } = useViewFields('projects.kanban', cardFields);
   const openCard = useOpenCard();
 
+  const query = search?.trim() ?? '';
   const board = useKanbanBoard({
     axis: globalAxis,
     stages,
-    queryKey: tasksKeys.kanban(`project:${projectId}`),
-    feedUrl: (stageId, cursor, limit) => projectKanbanFeedUrl(projectId, stageId, cursor, limit),
+    queryKey: tasksKeys.kanban(`project:${projectId}`, query || undefined),
+    feedUrl: (stageId, cursor, limit) =>
+      projectKanbanFeedUrl(projectId, stageId, cursor, limit, query),
     onMove: (vars, opts) =>
       move.mutate(
         { taskId: vars.taskId, stageId: vars.stageId, index: vars.index },
@@ -65,8 +70,10 @@ export function ProjectKanban({
 
   // Локальный фильтр строки инструментов: сужает ТОЛЬКО отображение (DnD-логика
   // — по полному борду); при активном фильтре drag выключен, шапки — «n из m».
+  // Поиск (#956) — серверный: фиды колонок уже вернули только совпадения,
+  // но DnD на урезанном наборе так же недопустим.
   const visibleItems = useFilteredList(board.items, filter);
-  const filtering = isFilteringActive(filter);
+  const filtering = isFilteringActive(filter) || query !== '';
 
   if (!board.ready) {
     return <KanbanSkeleton />;
@@ -89,7 +96,10 @@ export function ProjectKanban({
               key={stage.id}
               stage={stage}
               count={cards.length}
-              total={filtering ? totalCards : undefined}
+              // «n из m» — только для локального фильтра атрибутов: при
+              // серверном поиске (query) фид уже содержит лишь совпадения,
+              // а проектного счётчика колонки без поиска нет (total соврал бы).
+              total={filtering && query === '' ? totalCards : undefined}
               cardIds={cards.map((t) => t.id)}
               hasNext={board.cursors[stage.id] !== null && board.cursors[stage.id] !== undefined}
               loadingMore={Boolean(board.loadingMore[stage.id])}

@@ -240,12 +240,11 @@ export function EmployeeCard({ userId }: { userId: string }) {
             visited={visited}
             onActivate={activateTab}
             isOwnCard={card.id === meId}
+            userId={userId}
             chat={chat}
             tasks={tasks}
-            tasksLoading={tasksQuery.isLoading}
             onCreateTask={() => openTaskCreate({ assigneeId: userId })}
             projects={projects}
-            projectsLoading={projectsQuery.isLoading}
             panelOpen={panelVisible}
             onPanelToggle={panel.toggle}
           />

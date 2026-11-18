@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { Paginated, ProjectListItem } from '@nodus/contracts';
 
 import { api } from '../api-client.js';
@@ -11,21 +11,33 @@ import { api } from '../api-client.js';
  */
 
 export const counterpartyRelationsKeys = {
-  projects: (counterpartyId: string) => ['projects', 'client', counterpartyId] as const,
+  projects: (counterpartyId: string, search?: string) =>
+    search
+      ? ([...['projects', 'client', counterpartyId], { search }] as const)
+      : (['projects', 'client', counterpartyId] as const),
 };
 
 /** Проекты, где контрагент — заказчик (GET /projects?clientId=). `scope=all` —
  *  все проекты заказчика, видимые смотрящему по правилам видимости, а не
  *  только пересечение с его участием (#866, AUD-028). `enabled: false` —
- *  пока модуля проектов нет (#52), запрос не уходит. */
-export function clientProjectsUrl(counterpartyId: string): string {
-  return `/projects?clientId=${counterpartyId}&scope=all&limit=100`;
+ *  пока модуля проектов нет (#52), запрос не уходит. `search` (#956) —
+ *  серверный поиск по названию/шифру во всей выдаче. */
+export function clientProjectsUrl(counterpartyId: string, search = ''): string {
+  const query = search.trim();
+  return `/projects?clientId=${counterpartyId}&scope=all&limit=100${
+    query ? `&search=${encodeURIComponent(query)}` : ''
+  }`;
 }
 
-export function useClientProjects(counterpartyId: string, options: { enabled?: boolean } = {}) {
+export function useClientProjects(
+  counterpartyId: string,
+  options: { enabled?: boolean; search?: string } = {},
+) {
+  const query = options.search?.trim() || undefined;
   return useQuery({
-    queryKey: counterpartyRelationsKeys.projects(counterpartyId),
-    queryFn: () => api<Paginated<ProjectListItem>>(clientProjectsUrl(counterpartyId)),
+    queryKey: counterpartyRelationsKeys.projects(counterpartyId, query),
+    queryFn: () => api<Paginated<ProjectListItem>>(clientProjectsUrl(counterpartyId, query)),
     enabled: options.enabled ?? true,
+    placeholderData: keepPreviousData,
   });
 }

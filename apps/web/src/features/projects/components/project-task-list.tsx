@@ -16,12 +16,17 @@ import { useProjectTaskPages } from '../api/projects-api.js';
 export function ProjectTaskList({
   projectId,
   filter,
+  search,
 }: {
   projectId: string;
   filter?: ActiveListFilter<TaskListItem>;
+  /** Серверный поиск (#956): уже debounced строкой инструментов. */
+  search?: string;
 }) {
-  const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } =
-    useProjectTaskPages(projectId);
+  const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useProjectTaskPages(
+    projectId,
+    search,
+  );
   const openCard = useOpenCard();
   const fields = useTaskTableFields({ projectVisible: false });
 

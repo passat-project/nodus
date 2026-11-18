@@ -1,19 +1,19 @@
-import { keepPreviousData, useInfiniteQuery, type InfiniteData } from '@tanstack/react-query';
-import type {
-  SearchFacets,
-  SearchHit,
-  SearchRequest,
-  SearchResponse,
-  SearchSort,
-  SearchSourceType,
-} from '@nodus/contracts';
+import type { SearchRequest, SearchSort, SearchSourceType } from '@nodus/contracts';
 
-import { api } from '../../../shared/api-client.js';
+import { SEARCH_PAGE_SIZE, useSearchHits } from '../../../shared/api/search.js';
 import { SEARCH_PERIOD_DAYS, type SearchPeriod } from '../model/search-store.js';
 
-/** Размер страницы выдачи: 20; «Показать ещё» листает по курсору — до капа
- *  выдачи на сервере (total ≤ 1000), а не до отдельного клиентского окна. */
-export const SEARCH_PAGE_SIZE = 20;
+/** Выдача поиска и чистые помощники — общий слой `shared/api/search` (#956):
+ *  панель сообщений открытого чата использует те же ключи и формат запроса.
+ *  Здесь остаётся только специфика окна: `period` → `from` и `SearchParams`. */
+export {
+  SEARCH_PAGE_SIZE,
+  searchFacets,
+  searchHint,
+  searchHits,
+  searchKeys,
+  searchPath,
+} from '../../../shared/api/search.js';
 
 /** Параметры окна поиска (стор) → запрос API. */
 export interface SearchParams {
@@ -42,68 +42,11 @@ export function searchRequestOf(params: SearchParams): SearchRequest {
   return request;
 }
 
-/** Wire-формат: `types` — одна строка через запятую (контракт принимает и её,
- *  и массив; Fastify на один параметр отдаёт строку). */
-export function searchPath(request: SearchRequest): string {
-  const search = new URLSearchParams();
-  search.set('q', request.q);
-  if (request.types && request.types.length > 0) search.set('types', request.types.join(','));
-  if (request.projectId) search.set('projectId', request.projectId);
-  if (request.from) search.set('from', request.from);
-  if (request.to) search.set('to', request.to);
-  search.set('sort', request.sort);
-  search.set('limit', String(request.limit));
-  if (request.cursor) search.set('cursor', request.cursor);
-  return `/search?${search.toString()}`;
-}
-
-export const searchKeys = {
-  all: ['search'] as const,
-  results: (request: SearchRequest) => [...searchKeys.all, 'results', request] as const,
-};
-
 /**
- * Выдача поиска: бесконечный запрос по курсору. `keepPreviousData` — старые
- * результаты остаются до ответа на новый запрос: выдача не мелькает при вводе
- * (жалоба владельца на мигание), индикатор загрузки показывает `isFetching`.
+ * Выдача окна поиска (Ctrl+K). `keepPreviousData` — старые результаты
+ * остаются до ответа на новый запрос: выдача не мелькает при вводе.
  */
 export function useSearchResults(params: SearchParams) {
   const request = searchRequestOf(params);
-  return useInfiniteQuery({
-    queryKey: searchKeys.results(request),
-    queryFn: ({ pageParam, signal }) =>
-      api<SearchResponse>(searchPath({ ...request, cursor: pageParam ?? undefined }), { signal }),
-    initialPageParam: null as string | null,
-    getNextPageParam: (last) => last.nextCursor,
-    enabled: request.q.length >= 2,
-    placeholderData: keepPreviousData,
-    staleTime: 30_000,
-  });
-}
-
-/** Строки всех загруженных страниц без повторов `type:id`: граница страниц
- *  по курсору может отдать одну строку дважды при вставке события между
- *  запросами (план R7). */
-export function searchHits(data: InfiniteData<SearchResponse> | undefined): SearchHit[] {
-  const seen = new Set<string>();
-  const hits: SearchHit[] = [];
-  for (const page of data?.pages ?? []) {
-    for (const hit of page.items) {
-      const key = `${hit.type}:${hit.id}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      hits.push(hit);
-    }
-  }
-  return hits;
-}
-
-export function searchFacets(
-  data: InfiniteData<SearchResponse> | undefined,
-): SearchFacets['types'] {
-  return data?.pages[0]?.facets.types ?? {};
-}
-
-export function searchHint(data: InfiniteData<SearchResponse> | undefined) {
-  return data?.pages[0]?.hint ?? null;
+  return useSearchHits(request, { enabled: request.q.length >= 2 });
 }

@@ -16,4 +16,12 @@ describe('адреса вкладок карточки сотрудника (#86
     expect(url).toContain('memberId=00000000-0000-4000-8000-000000000001');
     expect(url).toContain('scope=all');
   });
+
+  it('серверный поиск во вкладках (#956): search в обоих списках', () => {
+    const id = '00000000-0000-4000-8000-000000000001';
+    expect(assigneeTasksUrl(id, 'ПП-12')).toContain(`search=${encodeURIComponent('ПП-12')}`);
+    expect(memberProjectsUrl(id, 'Смета')).toContain(`search=${encodeURIComponent('Смета')}`);
+    // Пустой запрос не добавляет параметр (канонический URL без поиска).
+    expect(assigneeTasksUrl(id, '  ')).not.toContain('search=');
+  });
 });

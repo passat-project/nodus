@@ -28,12 +28,11 @@ export function EmployeeCardWorkTabs({
   visited,
   onActivate,
   isOwnCard,
+  userId,
   chat,
   tasks,
-  tasksLoading,
   onCreateTask,
   projects,
-  projectsLoading,
   panelOpen,
   onPanelToggle,
 }: {
@@ -43,13 +42,13 @@ export function EmployeeCardWorkTabs({
   onActivate: (tab: EmployeeWorkTab) => void;
   /** Своя карточка: личный диалог с собой — «Избранное», не «Чат». */
   isOwnCard: boolean;
+  /** Сотрудник карточки: вкладки грузят свои журналы сами (поиск — серверный). */
+  userId: string;
   /** Лента личного диалога (данные/ошибки грузит карточка). */
   chat: ReactNode;
   tasks: TaskListItem[];
-  tasksLoading: boolean;
   onCreateTask: () => void;
   projects: ProjectListItem[];
-  projectsLoading: boolean;
   /** Панель беседы открыта (её видимость решает хост по активной вкладке). */
   panelOpen: boolean;
   onPanelToggle: () => void;
@@ -91,11 +90,9 @@ export function EmployeeCardWorkTabs({
   function panel(tab: EmployeeWorkTab) {
     if (tab === 'chat') return chat;
     if (tab === 'tasks') {
-      return (
-        <EmployeeTasksTab tasks={tasks} isLoading={tasksLoading} onCreateTask={onCreateTask} />
-      );
+      return <EmployeeTasksTab userId={userId} onCreateTask={onCreateTask} />;
     }
-    return <EmployeeProjectsTab projects={projects} isLoading={projectsLoading} />;
+    return <EmployeeProjectsTab userId={userId} />;
   }
 
   return (

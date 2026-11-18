@@ -394,6 +394,11 @@ export const chatStrings = {
   /** Кнопка-лупа поиска в шапке беседы (все чаты, канон Telegram). */
   searchMessages: 'Поиск',
   searchPlaceholder: 'Поиск…',
+  /** Поиск сообщений открытого чата (#956): это НЕ поиск по избранному. */
+  searchMessagesPlaceholder: 'Поиск по сообщениям…',
+  searchMinChars: 'Введите минимум 2 символа',
+  searchLoading: 'Ищем сообщения…',
+  searchUnknownAuthor: 'Сотрудник',
   searchClear: 'Очистить',
   searchFilters: 'Фильтры',
   searchHint: 'Введите запрос — выдача появится здесь',

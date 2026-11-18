@@ -33,24 +33,37 @@ export { mapTaskInPages, tasksKeys } from '../../../shared/api/tasks-keys.js';
 /** Список (таблица с деревом): scope «мои» / «все доступные» (подчинённые
  *  по оргструктуре, task.view_all — сервер решает видимость); курсорные страницы по 100, подгрузка sentinel-ом
  * у dna контейнера (industry-паттерн: целиком на клиент крупные списки не
- * живут). Дерево строится из загруженного; родитель старше окна страницы
- * отображается корнем (известное ограничение до серверного lazy-дерева). */
-export function useTasksPages(scope: 'mine' | 'all' = 'mine', role?: 'decider') {
+ * живут). Серверный поиск (#956): `search` ищет по названию/номеру во ВСЕЙ
+ * выдаче, а не только по загруженным страницам. Дерево строится из
+ * загруженного; родитель старше окна страницы отображается корнем
+ * (известное ограничение до серверного lazy-дерева). */
+export function useTasksPages(scope: 'mine' | 'all' = 'mine', role?: 'decider', search?: string) {
+  const query = search?.trim() ?? '';
   return useInfiniteQuery({
     // «Мои» — канонический ключ (оптимистичные патчи бьют в него точно);
-    // «Все доступные» и «Ждут моего решения» — свои ключи под тем же
+    // «Все доступные», «Ждут моего решения» и поиск — свои ключи под тем же
     // префиксом (инвалидации общие, страницы не смешиваются).
     queryKey: tasksKeys.listPages(
-      role ? { scope: 'all', role } : scope === 'all' ? { scope } : undefined,
+      role
+        ? { scope: 'all', role, ...(query ? { search: query } : {}) }
+        : scope === 'all' || query
+          ? {
+              ...(scope === 'all' ? { scope: 'all' as const } : {}),
+              ...(query ? { search: query } : {}),
+            }
+          : undefined,
     ),
     queryFn: ({ pageParam }) =>
       api<Paginated<TaskListItem>>(
         `/tasks?view=list&scope=${role ? 'all' : scope}&limit=100${
           role ? `&role=${role}` : ''
-        }${pageParam ? `&cursor=${pageParam}` : ''}`,
+        }${query ? `&search=${encodeURIComponent(query)}` : ''}${
+          pageParam ? `&cursor=${pageParam}` : ''
+        }`,
       ),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -166,16 +179,6 @@ export function usePrefetchTask() {
     },
     [queryClient],
   );
-}
-
-/** Поиск задач (палитра Ctrl+K): серверный фильтр по титулу/номеру —
- * industry-паттерн: клиент не держит весь список ради поиска. */
-export function useTasksSearch(q: string) {
-  return useQuery({
-    queryKey: tasksKeys.search(q),
-    queryFn: () => api<Paginated<TaskListItem>>(`/tasks?search=${encodeURIComponent(q)}&limit=20`),
-    enabled: q.length > 0,
-  });
 }
 
 /** Подзадача в один клик (I4): мгновенно в кэш детали, замена темповой на серверную. */

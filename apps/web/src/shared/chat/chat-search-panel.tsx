@@ -1,13 +1,15 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Funnel, Search, X } from 'lucide-react';
-import { ui } from '@nodus/contracts';
+import { SEARCH_LIMITS, ui, type SearchRequest } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { cn } from '@nodus/ui/lib/utils';
 
+import { SEARCH_PAGE_SIZE, searchHits, useSearchHits } from '../api/search.js';
+import { useDebouncedValue } from '../lib/use-debounced-value.js';
 import { formatDayLabel } from './message-groups.js';
 import { FavoriteHitRow } from './favorite-hit-row.js';
 import { useConversationMessages } from './chat-queries.js';
-import { useFavoriteLabels, useFavorites } from './favorites-api.js';
+import { useFavoriteIds, useFavoriteLabels, useFavorites } from './favorites-api.js';
 import { useJumpStore } from './jump-store.js';
 import { filterNotesFlow, mergeNotesFlow, type NotesFilter } from './notes-flow.js';
 
@@ -18,14 +20,18 @@ const TOP_N = 8;
  * Панель поиска беседы (вердикт владельца 04.10, раунды 3–5; реф Битрикс24):
  * лупа в шапке раскрывает ПРАВУЮ панель — шапка-строка (назад/крестик +
  * пилюля поиска с лупой слева, очисткой и воронкой справа ВНУТРИ строки),
- * ниже — топ-выдача (строки: полное имя, текст до 3 строк, вложения
- * словами; группировка заголовками дат по центру; звезда-заливка справа
- * внизу); воронка раскрывает фильтры «продолжением строки вниз». Поверх
- * панели вложений — «назад», standalone — крестик. Выдача: в «Избранном» —
- * записи и карточки витрины; в обычных чатах/каналах — ИЗБРАННОЕ этого
- * чата; клик — классический прыжок с подсветкой (jump-store). Смонтирован
- * всегда (активация — `active`): первый выезд панели анимационно тот же,
- * что у вложений/участников. Смена беседы — сброс состояния.
+ * ниже — выдача (строки: полное имя, текст до 3 строк, вложения словами;
+ * группировка заголовками дат по центру; звезда-заливка справа внизу);
+ * воронка раскрывает фильтры «продолжением строки вниз». Поверх панели
+ * вложений — «назад», standalone — крестик.
+ *
+ * Выдача (#956): в обычном чате/канале — ПОИСК ПО ВСЕМ СООБЩЕНИЯМ беседы
+ * через единый поисковый контур (`/search` + `conversationId`, FTS-ранжирование,
+ * сниппеты с подсветкой); клик — классический прыжок (jump-store). Раньше
+ * здесь искалось только «Избранное» этого чата, что вводило в заблуждение.
+ * В «Избранном» (беседа с собой) — прежний режим: записи и карточки витрины
+ * с метками. Смонтирован всегда (активация — `active`); смена беседы —
+ * сброс состояния.
  */
 export function ChatSearchPanel({
   conversationId,
@@ -80,20 +86,42 @@ export function ChatSearchPanel({
     () => (messagesQuery.data?.items ?? []).filter((m) => !m.deletedAt),
     [messagesQuery.data],
   );
-  // Обычные чаты/каналы: выдача — ИЗБРАННОЕ этого чата (реф Битрикс24).
-  const favoritesQuery = useFavorites(isFavorites ? {} : { conversationId });
+  // «Избранное» (беседа с собой) — прежний режим. В обычном чате закладки
+  // НЕ грузятся: выдача там — поиск по сообщениям (#956).
+  const favoritesQuery = useFavorites(isFavorites ? {} : { conversationId }, {
+    enabled: isFavorites,
+  });
   const cards = useMemo(
     () => (favoritesQuery.data?.pages ?? []).flatMap((page) => page.items),
     [favoritesQuery.data],
   );
+  const needle = q.trim();
+  // Debounce 250 мс: живой поиск не шлёт запрос на каждый символ.
+  const debounced = useDebouncedValue(needle, 250);
+  // Поиск сообщений беседы: единый контур /search + conversationId.
+  const messageSearchRequest = useMemo<SearchRequest>(
+    () => ({
+      q: debounced,
+      types: ['message'],
+      conversationId,
+      sort: 'newest',
+      limit: SEARCH_PAGE_SIZE,
+    }),
+    [debounced, conversationId],
+  );
+  const messageSearch = useSearchHits(messageSearchRequest, {
+    enabled: !isFavorites && active && debounced.length >= SEARCH_LIMITS.queryMin,
+  });
+  const messageHits = useMemo(() => searchHits(messageSearch.data), [messageSearch.data]);
+  const favoriteIds = useFavoriteIds();
 
   const results = useMemo<SearchHit[]>(() => {
-    const needle = q.trim().toLowerCase();
+    const lower = needle.toLowerCase();
     if (isFavorites) {
       const entries = filterNotesFlow(
         mergeNotesFlow(messages, cards),
         filter,
-        needle || null,
+        lower || null,
         labels,
       );
       return entries
@@ -121,19 +149,33 @@ export function ChatSearchPanel({
               },
         );
     }
-    return cards
-      .filter((card) => !needle || card.text.toLowerCase().includes(needle))
-      .slice(0, TOP_N)
-      .map((card): SearchHit => ({
-        id: card.messageId,
-        kind: 'favorite',
-        author: card.author.displayName,
-        snippet: card.text,
-        attachments: card.attachments.map((a) => a.kind),
-        date: card.createdAt,
-        threadRootId: card.threadRootId,
-      }));
-  }, [isFavorites, messages, cards, filter, labels, q]);
+    return [];
+  }, [isFavorites, messages, cards, filter, labels, needle]);
+
+  // Сообщения — в порядке `newest` сервера; сниппет с маркерами подсветки.
+  // `conversationId` в hit сверяется с текущей беседой: keepPreviousData при
+  // смене чата может отдать строки прошлой беседы — они не показываются.
+  const messageResults = useMemo<SearchHit[]>(() => {
+    if (isFavorites) return [];
+    return messageHits.flatMap((hit) =>
+      hit.type === 'message' && hit.meta.conversationId === conversationId
+        ? [
+            {
+              id: hit.meta.messageId,
+              kind: 'message' as const,
+              author: hit.meta.authorName ?? ui.chat.searchUnknownAuthor,
+              snippet: hit.snippet,
+              attachments: [] as ('image' | 'file' | 'sticker')[],
+              date: hit.meta.createdAt,
+              threadRootId: hit.meta.threadRootId,
+              favorited: favoriteIds.has(hit.meta.messageId),
+            },
+          ]
+        : [],
+    );
+  }, [isFavorites, messageHits, favoriteIds, conversationId]);
+
+  const shown = isFavorites ? results : messageResults;
 
   const filtersActive = filter !== 'all' || labels.length > 0;
 
@@ -179,8 +221,10 @@ export function ChatSearchPanel({
           <input
             ref={inputRef}
             value={q}
-            placeholder={ui.chat.searchPlaceholder}
-            aria-label={ui.chat.searchMessages}
+            placeholder={
+              isFavorites ? ui.chat.searchPlaceholder : ui.chat.searchMessagesPlaceholder
+            }
+            aria-label={isFavorites ? ui.chat.searchMessages : ui.chat.searchMessagesPlaceholder}
             onChange={(event) => setQ(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Escape') {
@@ -300,27 +344,38 @@ export function ChatSearchPanel({
         </div>
       ) : null}
 
-      {/* Топ выдачи: клик — классический прыжок с подсветкой. Группировка
+      {/* Выдача: клик — классический прыжок с подсветкой. Группировка
           заголовками дат по центру (реф Битрикс24), время в строках НЕ
-          пишется; звезда-заливка — справа внизу строки. */}
+          пишется; звезда-заливка — справа внизу строки. В обычном чате —
+          все найденные сообщения беседы (сниппет с подсветкой, #956). */}
       <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-2">
-        {q.trim() === '' && !filtersActive && cards.length === 0 && !isFavorites ? (
+        {isFavorites && q.trim() === '' && !filtersActive && cards.length === 0 ? (
           <span className="flex flex-1 flex-col items-center justify-center gap-2 px-3 text-center">
             <Search className="size-8 text-muted-foreground/40" strokeWidth={1.5} />
             <span className="text-xs text-muted-foreground/80">{ui.chat.favoritesEmpty}</span>
           </span>
-        ) : q.trim() === '' && !filtersActive ? (
+        ) : needle === '' && (!isFavorites || !filtersActive) ? (
           <span className="flex flex-1 flex-col items-center justify-center gap-2 px-3 text-center">
             <Search className="size-8 text-muted-foreground/40" strokeWidth={1.5} />
             <span className="text-xs text-muted-foreground/80">{ui.chat.searchHint}</span>
           </span>
-        ) : results.length === 0 ? (
+        ) : !isFavorites && needle.length < SEARCH_LIMITS.queryMin ? (
+          <span className="px-2 py-2 text-xs text-muted-foreground/80">
+            {ui.chat.searchMinChars}
+          </span>
+        ) : !isFavorites && messageSearch.isError ? (
+          <span className="px-2 py-2 text-xs text-muted-foreground/80">{ui.search.errorTitle}</span>
+        ) : !isFavorites && messageSearch.isFetching && shown.length === 0 ? (
+          <span className="px-2 py-2 text-xs text-muted-foreground/80">
+            {ui.chat.searchLoading}
+          </span>
+        ) : shown.length === 0 ? (
           <span className="px-2 py-2 text-xs text-muted-foreground/80">
             {ui.chat.searchNoResults}
           </span>
         ) : (
-          results.map((entry, index) => {
-            const prev = results[index - 1];
+          shown.map((entry, index) => {
+            const prev = shown[index - 1];
             const day = formatDayLabel(entry.date);
             const newDay = prev === undefined || formatDayLabel(prev.date) !== day;
             return (
@@ -332,13 +387,24 @@ export function ChatSearchPanel({
                   author={entry.author}
                   snippet={entry.snippet}
                   attachments={entry.attachments}
-                  favorited={entry.kind === 'favorite'}
+                  favorited={entry.favorited ?? entry.kind === 'favorite'}
+                  highlightSnippet={!isFavorites}
                   onJump={() => jump(entry)}
                 />
               </Fragment>
             );
           })
         )}
+        {!isFavorites && messageSearch.hasNextPage ? (
+          <button
+            type="button"
+            onClick={() => void messageSearch.fetchNextPage()}
+            disabled={messageSearch.isFetchingNextPage}
+            className="mt-1 w-full rounded-lg px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground disabled:opacity-60"
+          >
+            {messageSearch.isFetchingNextPage ? ui.chat.searchLoading : ui.search.showMore}
+          </button>
+        ) : null}
       </div>
     </div>
   );
@@ -352,4 +418,6 @@ interface SearchHit {
   attachments: ('image' | 'file' | 'sticker')[];
   date: string;
   threadRootId: string | null;
+  /** Звезда-индикатор: у сообщений из поиска — реальная закладка (#956). */
+  favorited?: boolean;
 }

@@ -36,6 +36,16 @@ describe('запрос поиска: стор → wire (#952)', () => {
     expect(searchPath({ ...request, cursor: '20' })).toContain('cursor=20');
   });
 
+  it('conversationId попадает в путь поиска внутри чата (#956)', () => {
+    const request = {
+      ...searchRequestOf({ q: 'смета', types: ['message'], sort: 'newest' }),
+      conversationId: '8f1c1c1e-5a0f-4f2a-9d2e-3b7a6c1d0e11',
+    };
+    const params = new URLSearchParams(searchPath(request).split('?')[1]);
+    expect(params.get('conversationId')).toBe('8f1c1c1e-5a0f-4f2a-9d2e-3b7a6c1d0e11');
+    expect(params.get('types')).toBe('message');
+  });
+
   it('страницы склеиваются без повторов type:id (граница курсора)', () => {
     const hit = (id: string, type: 'task' | 'letter') =>
       ({

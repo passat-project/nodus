@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  keepPreviousData,
   useInfiniteQuery,
   useQuery,
   useQueryClient,
@@ -108,19 +109,44 @@ export function useChatUnreadSummary() {
 
 /** Вкладка мессенджера (#252): «Чаты» (люди и каналы) или «Чаты задач и
  *  писем» — серверный фильтр типа и курсорная подгрузка по 50 (чаты задач
- *  не вытесняют людей из первой страницы общего списка). */
-export function useScopedConversations(scope: ConversationScope) {
+ *  не вытесняют людей из первой страницы общего списка). Серверный поиск
+ *  (#956): `search` ищет по названию беседы, участникам и названию/номеру
+ *  задачи/письма (порты владельцев) — не только по загруженным 50 строкам. */
+export function useScopedConversations(scope: ConversationScope, search?: string) {
   const socketConnected = useSocketStatusStore((s) => s.connected);
+  const query = search?.trim() ?? '';
   return useInfiniteQuery({
-    queryKey: chatKeys.scoped(scope),
+    queryKey: chatKeys.scoped(scope, query || undefined),
     queryFn: ({ pageParam }) =>
       api<Paginated<ConversationListItem>>(
-        `/chat/conversations?scope=${scope}${pageParam ? `&cursor=${pageParam}` : ''}`,
+        `/chat/conversations?scope=${scope}${query ? `&search=${encodeURIComponent(query)}&limit=100` : ''}${
+          pageParam ? `&cursor=${pageParam}` : ''
+        }`,
       ),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
     refetchInterval: livePoll(LIVE_CHAT_POLL.conversations, socketConnected),
     refetchIntervalInBackground: false,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * Поиск бесед для пикеров (#956) — «Переслать»: серверный поиск по названию,
+ * участникам и названию сущности (задачи/письма). Один запрос до 100 строк:
+ * пикер не листает курсор, но ищет по ВСЕМ беседам, а не по первым 50.
+ */
+export function useConversationSearch(search: string) {
+  const query = search.trim();
+  return useQuery({
+    queryKey: chatKeys.search(query),
+    queryFn: () =>
+      api<Paginated<ConversationListItem>>(
+        `/chat/conversations?search=${encodeURIComponent(query)}&limit=100`,
+      ),
+    enabled: query.length > 0,
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
   });
 }
 

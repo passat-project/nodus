@@ -10,13 +10,25 @@ import { taskStagesKey } from './task-stages.js';
  *  не пишутся (patterns.md) — только эта фабрика. */
 export const tasksKeys = {
   all: ['tasks'] as const,
-  /** Журнал задач — бесконечные страницы (useTasksPages, useProjectTaskPages). */
-  listPages: (params?: { projectId?: string; scope?: 'all'; role?: 'decider' }) =>
+  /** Журнал задач — бесконечные страницы (useTasksPages, useProjectTaskPages).
+   *  `search` (#956) — серверный поиск: своя ветка кэша под общим префиксом,
+   *  чтобы инвалидации журнала доставали и её. */
+  listPages: (params?: {
+    projectId?: string;
+    assigneeId?: string;
+    scope?: 'all';
+    role?: 'decider';
+    search?: string;
+  }) =>
     params
       ? ([...tasksKeys.all, 'list-pages', params] as const)
       : ([...tasksKeys.all, 'list-pages'] as const),
-  /** Доски-канбаны (первые страницы колонок): scope — 'personal' | 'project:<id>'. */
-  kanban: (scope: string) => [...tasksKeys.all, 'kanban', scope] as const,
+  /** Доски-канбаны (первые страницы колонок): scope — 'personal' | 'project:<id>';
+   *  `search` (#956) — серверный поиск по колонкам. */
+  kanban: (scope: string, search?: string) =>
+    search
+      ? ([...tasksKeys.all, 'kanban', scope, { search }] as const)
+      : ([...tasksKeys.all, 'kanban', scope] as const),
   /** Префикс всех досок — инвалидация мутациями (перенос по степперу, CRUD стадий). */
   kanbanAll: () => [...tasksKeys.all, 'kanban'] as const,
   /** Общий каталог стадий — ключ из shared (потребители: задачи, проекты). */

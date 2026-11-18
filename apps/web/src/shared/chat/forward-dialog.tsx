@@ -9,7 +9,12 @@ import { useNavigate } from '@tanstack/react-router';
 
 import { openCardViaBridge, replaceTopMessengerCard } from '../lib/card-bridge.js';
 import { useAuthStore } from '../auth-store.js';
-import { useConversations, useConversationMessages } from './chat-queries.js';
+import { useDebouncedValue } from '../lib/use-debounced-value.js';
+import {
+  useConversations,
+  useConversationMessages,
+  useConversationSearch,
+} from './chat-queries.js';
 import { focusComposer, hasVisibleComposer } from './composer-focus.js';
 import { ConversationAvatar } from './conversation-avatar.js';
 import {
@@ -196,15 +201,18 @@ function ConversationLevel({
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FilterId>('all');
   const filterTypes = FILTERS.find((f) => f.id === filter)?.types ?? null;
+  // Поиск — серверный (#956): пикер пересылки раньше видел только первые 50
+  // бесед без догрузки. Debounce 250 мс; до ответа — прежние строки.
+  const search = useDebouncedValue(query.trim(), 250);
+  const { data: searchData } = useConversationSearch(search);
+  const source = search ? (searchData?.items ?? []) : conversations;
   // «Избранное» — ВСЕГДА первая строка пикера (вердикт 04.10 р.9, канон
   // Telegram Saved Messages): выбор = автозвезда на оригиналы, пояснение —
   // подзаголовком строки; из общего списка исключено (не дублируем).
-  const notes = conversations.find((c) => isNotesConversation(c, meId)) ?? null;
-  const filtered = conversations.filter(
-    (c) =>
-      c !== notes &&
-      (filterTypes === null || filterTypes.includes(c.type)) &&
-      conversationTitle(c, meId).toLowerCase().includes(query.trim().toLowerCase()),
+  const notes = source.find((c) => isNotesConversation(c, meId)) ?? null;
+  // Подстроку уже применил сервер; на клиенте — только фильтр типов.
+  const filtered = source.filter(
+    (c) => c !== notes && (filterTypes === null || filterTypes.includes(c.type)),
   );
   return (
     <>

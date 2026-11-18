@@ -9,4 +9,10 @@ describe('адрес вкладки «Проекты» карточки конт
     expect(url).toContain('clientId=00000000-0000-4000-8000-000000000002');
     expect(url).toContain('scope=all');
   });
+
+  it('серверный поиск проектов заказчика (#956)', () => {
+    const url = clientProjectsUrl('00000000-0000-4000-8000-000000000002', 'Смета');
+    expect(url).toContain(`search=${encodeURIComponent('Смета')}`);
+    expect(clientProjectsUrl('00000000-0000-4000-8000-000000000002', ' ')).not.toContain('search=');
+  });
 });

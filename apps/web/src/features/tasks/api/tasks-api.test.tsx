@@ -10,7 +10,7 @@ import { createElement, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Paginated, TaskListItem } from '@nodus/contracts';
 
-import { tasksKeys, usePrefetchTask, useUpdateTaskStage } from './tasks-api.js';
+import { tasksKeys, usePrefetchTask, useTasksPages, useUpdateTaskStage } from './tasks-api.js';
 
 const systemProcessType = {
   id: '20000000-0000-4000-8000-000000000900',
@@ -184,5 +184,30 @@ describe('usePrefetchTask: ховер не превращается в пото�
     } finally {
       nowSpy.mockRestore();
     }
+  });
+});
+
+describe('useTasksPages — серверный поиск (#956)', () => {
+  it('передаёт search в /tasks и в ключ кэша журнала', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (...args: unknown[]) => {
+      void args;
+      return jsonResponse(200, { items: [], nextCursor: null });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    const { result } = renderHook(() => useTasksPages('mine', undefined, 'ПП-12'), {
+      wrapper: makeWrapper(client),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const url = String(fetchMock.mock.calls[0]?.[0]);
+    expect(url).toContain('/tasks?view=list&scope=mine&limit=100');
+    expect(url).toContain(`search=${encodeURIComponent('ПП-12')}`);
+    expect(tasksKeys.listPages({ search: 'ПП-12' })).toEqual([
+      ...tasksKeys.all,
+      'list-pages',
+      { search: 'ПП-12' },
+    ]);
   });
 });
