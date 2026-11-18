@@ -76,28 +76,48 @@ function clipQuery(query: string): string {
 export interface BaselineMetrics {
   router: PathMetrics;
   search: PathMetrics;
+  /** Размер среза, на котором сняты числа (для подписи «тот же срез»). */
+  caseCount?: number;
 }
 
-function baselineBlock(baseline: BaselineMetrics | null, current: EvalResult): string[] {
+function baselineBlock(
+  baseline: BaselineSnapshot | null,
+  current: BaselineMetrics,
+  afterCaseCount: number,
+): string[] {
   if (!baseline) {
     return ['_Baseline не зафиксирован: отчёт до изменений каталога ещё не снят._'];
   }
+  const scope =
+    baseline.caseCount && baseline.caseCount !== afterCaseCount
+      ? `Срез: исходные ${baseline.caseCount} кейсов (каталог до — ${baseline.catalogSize ?? '—'} инструментов); «после» на том же срезе, итоговая таблица выше — весь набор.`
+      : `Срез: ${afterCaseCount} кейсов.`;
   return [
-    '| Метрика | До (baseline) | После |',
+    scope,
+    '',
+    '| Метрика | До (baseline) | После (тот же срез) |',
     '| --- | --- | --- |',
     `| recall@7 (диспетчер) | ${pct(baseline.router.recallAt7)} | ${pct(current.router.recallAt7)} |`,
     `| все ожидаемые в top-7 (диспетчер) | ${pct(baseline.router.allExpectedAt7)} | ${pct(current.router.allExpectedAt7)} |`,
     `| recall@7 (tools.search) | ${pct(baseline.search.recallAt7)} | ${pct(current.search.recallAt7)} |`,
-    `| неверный инструмент (выбран) | ${pct(baseline.router.wrongToolRate)} | ${pct(current.router.wrongToolRate)} |`,
+    `| неверный инструмент (выбран первым) | ${pct(baseline.router.wrongToolRate)} | ${pct(current.router.wrongToolRate)} |`,
     `| корректный отказ (диспетчер) | ${pct(baseline.router.refusalAccuracy)} | ${pct(current.router.refusalAccuracy)} |`,
+    `| безопасное уточнение (диспетчер) | ${pct(baseline.router.clarifySafety)} | ${pct(current.router.clarifySafety)} |`,
+    `| top-1 совпал с ожидаемым (диспетчер) | ${pct(baseline.router.top1Accuracy)} | ${pct(current.router.top1Accuracy)} |`,
   ];
 }
 
 export function renderEvalReport(
   result: EvalResult,
-  options: { baseline?: BaselineMetrics | null; generatedFrom?: string } = {},
+  options: {
+    baseline?: BaselineSnapshot | null;
+    /** «После» на том же срезе, на котором измерен baseline (исходные кейсы). */
+    baselineCurrent?: BaselineMetrics | null;
+    generatedFrom?: string;
+  } = {},
 ): string {
   const baseline = options.baseline ?? null;
+  const baselineAfter = options.baselineCurrent ?? result;
   const rows = (['search', 'router'] as const).map((path) =>
     metricsRow(path === 'search' ? result.search : result.router, path),
   );
@@ -148,6 +168,8 @@ export function renderEvalReport(
     'Пороги гейта: recall@7 ≥ 90%, неверный инструмент (выбран первым) < 5%,',
     'корректный отказ ≥ 95%, безопасное уточнение ≥ 90%. Запрещённый инструмент',
     'в полке top-7 — справочное число: полка это кандидаты, решение принимает модель.',
+    'Корректный отказ — метрика диспетчера; у `tools.search` отказ справочный:',
+    'лексическая полка не знает, что операции нет в каталоге, и предлагает ближайшую.',
     'Считаются на всём наборе; dev/holdout — контроль переобучения.',
     '',
     '## По ролям (диспетчер)',
@@ -164,7 +186,7 @@ export function renderEvalReport(
     '',
     '## До / после',
     '',
-    ...baselineBlock(baseline, result),
+    ...baselineBlock(baseline, baselineAfter, baselineAfter.caseCount ?? result.caseCount),
     '',
     '## Промахи выбора (диспетчер, до 12)',
     '',
@@ -209,10 +231,14 @@ export function summaryLine(result: EvalResult): string {
   ].join(' | ');
 }
 
-/** Тип для данных baseline (генерируются прогоном на каталоге до изменений). */
+/** Данные baseline: прогон на каталоге до изменений (исходные кейсы). */
 export interface BaselineSnapshot {
   source: string;
   retrievalVersion: string;
+  /** Кейсов в срезе замера (обычно 100 исходных). */
+  caseCount?: number;
+  /** Инструментов в каталоге «до». */
+  catalogSize?: number;
   router: PathMetrics;
   search: PathMetrics;
   byRole?: Record<string, { cases: number; router: PathMetrics }>;

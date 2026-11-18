@@ -14,8 +14,11 @@ import { GIP_CASES_2 } from './gip-cases-2.js';
 import { SECRETARY_CASES_1 } from './secretary-cases-1.js';
 import { SECRETARY_CASES_2 } from './secretary-cases-2.js';
 
-/** Золотой набор #926: 120 запросов четырёх ролей. */
-export const GOLDEN_SET: readonly GoldenCase[] = [
+/**
+ * Исходные 100 запросов четырёх ролей — база до/после: на них измерен
+ * baseline каталога `main` (до партий #927–#932), они же остаются в наборе.
+ */
+export const GOLDEN_BASE_SET: readonly GoldenCase[] = [
   ...GIP_CASES_1,
   ...GIP_CASES_2,
   ...SECRETARY_CASES_1,
@@ -24,6 +27,11 @@ export const GOLDEN_SET: readonly GoldenCase[] = [
   ...ADMIN_CASES_2,
   ...EMPLOYEE_CASES_1,
   ...EMPLOYEE_CASES_2,
+];
+
+/** Золотой набор #926: исходные кейсы + партии инструментов #927–#932 (150). */
+export const GOLDEN_SET: readonly GoldenCase[] = [
+  ...GOLDEN_BASE_SET,
   ...BATCH_927_CASES,
   ...BATCH_928_CASES,
   ...BATCH_929_CASES,
