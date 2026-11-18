@@ -12,7 +12,7 @@ import { useRowSelection } from '../../../../shared/views/use-row-selection.js';
 import { useViewFields } from '../../../../shared/views/use-view-fields.js';
 import { useProjectTaskPages } from '../../api/projects-api.js';
 import { useProjectStructure } from '../api/structure-api.js';
-import { STRUCTURE_VIEW_KEY, structureGrid, useStructureFields } from './structure-fields.js';
+import { STRUCTURE_VIEW_KEY, useStructureFields } from './structure-fields.js';
 import {
   buildStructureRows,
   filterStructureRows,
@@ -57,6 +57,7 @@ export function useStructureModel(projectId: string) {
     setWidth,
     cycleSort,
     commitOrder,
+    widthSet,
   } = useViewFields(STRUCTURE_VIEW_KEY, fields);
 
   const tasks = useMemo(
@@ -131,8 +132,6 @@ export function useStructureModel(projectId: string) {
       ),
     [rows],
   );
-  const gridTemplateColumns = structureGrid(visibleFields);
-
   return {
     isLoading: isLoading || isLoadingAllTasks,
     toolbar,
@@ -163,6 +162,6 @@ export function useStructureModel(projectId: string) {
     selectedNodeIds,
     selectedTaskIds,
     branchIds,
-    gridTemplateColumns,
+    widthSet,
   };
 }
