@@ -87,9 +87,21 @@ function makeValidator(
         ? { id, name: 'Контрагент' }
         : null,
     ),
+    // Пачка «действующих» (#646): тот же критерий, одна выборка на значения.
+    activeRefs: vi.fn(async (ids: string[]) =>
+      ids
+        .filter((id) => (opts.activeCounterparties ?? [COUNTERPARTY]).includes(id))
+        .map((id) => ({ id, name: 'Контрагент' })),
+    ),
   };
   const projects = {
     viewScopeFor: vi.fn(
+      async (): Promise<{ visibleProjectIds: string[]; hiddenProjectIds: string[] }> => ({
+        visibleProjectIds: [],
+        hiddenProjectIds: [],
+      }),
+    ),
+    freshViewScopeFor: vi.fn(
       async (): Promise<{ visibleProjectIds: string[]; hiddenProjectIds: string[] }> => ({
         visibleProjectIds: [],
         hiddenProjectIds: [],
@@ -207,15 +219,19 @@ describe('CustomFieldValueValidator (#431/#631)', () => {
     const { validator, projects } = makeValidator();
     const project = definition('f-project', 'project');
 
-    projects.viewScopeFor.mockResolvedValueOnce({
+    projects.freshViewScopeFor.mockResolvedValueOnce({
       visibleProjectIds: [PROJECT],
       hiddenProjectIds: [],
     });
     const ok = await validator.validate([project], { 'f-project': PROJECT }, undefined, ACTOR);
     expect(ok).toEqual([]);
-    expect(projects.viewScopeFor).toHaveBeenCalledWith(ACTOR);
+    // Запись значения — без TTL-кэша scope (#646): тот же свежий режим, что
+    // у видимости папок, иначе проект, только что ушедший в секретные,
+    // принимался бы из кэша 5 с.
+    expect(projects.freshViewScopeFor).toHaveBeenCalledWith(ACTOR);
+    expect(projects.viewScopeFor).not.toHaveBeenCalled();
 
-    projects.viewScopeFor.mockResolvedValueOnce({
+    projects.freshViewScopeFor.mockResolvedValueOnce({
       visibleProjectIds: [],
       hiddenProjectIds: [PROJECT],
     });

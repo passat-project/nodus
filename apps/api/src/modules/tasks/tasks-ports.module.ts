@@ -20,6 +20,9 @@ import { ProjectStaffingProvider } from './ports/project-staffing.provider.js';
 import { TaskProjectReaderProvider } from './ports/task-project-reader.provider.js';
 import { TASK_REF_READER } from './ports/task-ref-reader.port.js';
 import { TaskRefReaderProvider } from './ports/task-ref-reader.provider.js';
+import { TASK_VIEWER_READER } from './ports/task-viewer.port.js';
+import { TaskViewerProvider } from './ports/task-viewer.provider.js';
+import { TaskSearchSourceProvider } from './ports/task-search-source.provider.js';
 import { TASK_FORMULA_VALUES } from './ports/task-formula-values.port.js';
 import { TaskFormulaValuesProvider } from './ports/task-formula-values.provider.js';
 import { TasksQueryRepository } from './tasks/tasks-query.repository.js';
@@ -66,6 +69,13 @@ import { WorkflowPressRoundsProvider } from './ports/workflow-press-rounds.provi
     ProjectStaffingProvider,
     TaskRefReaderProvider,
     { provide: TASK_REF_READER, useExisting: TaskRefReaderProvider },
+    // Наборы видимости задач для pre-filter поиска (#952): те же ветви,
+    // что visibleTasksWhere, без доступа search к таблицам задач.
+    TaskViewerProvider,
+    { provide: TASK_VIEWER_READER, useExisting: TaskViewerProvider },
+    // Источник поисковой проекции «задача» (#952): маркер searchSourceType,
+    // сбор — DiscoveryService ядра search.
+    TaskSearchSourceProvider,
     // Задачи как источники формул (#632, Р7): значения, системные поля,
     // выборки связанных — только через порт (I3).
     TaskFormulaValuesProvider,
@@ -76,6 +86,7 @@ import { WorkflowPressRoundsProvider } from './ports/workflow-press-rounds.provi
     CUSTOM_FIELD_VALUES_READER,
     TASK_PROJECT_READER,
     TASK_REF_READER,
+    TASK_VIEWER_READER,
     TASK_FORMULA_VALUES,
     WORKFLOW_PRESS_ROUNDS_READER,
   ],

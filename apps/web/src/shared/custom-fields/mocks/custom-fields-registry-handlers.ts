@@ -11,7 +11,6 @@ import {
   reorderCustomFieldsBodySchema,
 } from '@nodus/contracts';
 
-import { dictionaryById, dictionaryIds, itemById } from '../../mocks/data/dictionaries.js';
 import {
   demoCustomFieldDefinitions,
   demoFieldById,
@@ -20,10 +19,12 @@ import {
 import {
   bindingTargetState,
   canManageFields,
+  definitionValueIssue,
   dto,
   error,
   forbidden,
   nameTaken,
+  settingsIssue,
   typeCategorySets,
 } from './custom-fields-mock-utils.js';
 import { counterPreview } from '../../mocks/data/numbering-store.js';
@@ -72,14 +73,33 @@ export const registryHandlers = [
       return error(ErrorCode.VALIDATION_FAILED, 'Invalid body', 400, parsed.error.issues);
     }
     const body: CreateCustomFieldBody = parsed.data;
-    if (body.settings.dictionaryId && !dictionaryById(body.settings.dictionaryId)) {
-      return error(ErrorCode.VALIDATION_FAILED, 'Dictionary not found', 400);
+    // Настройки справочника/валюты (#646) — та же проверка, что на PATCH.
+    const settingsRejected = settingsIssue(body.type, body.settings);
+    if (settingsRejected) return settingsRejected;
+    // Глобальная переменная привязок не имеет: сервер отвечает 422, а не
+    // молча выбрасывает набор (#646).
+    if (
+      body.isCompany &&
+      body.bindings !== undefined &&
+      (body.bindings.processTypeIds.length > 0 ||
+        body.bindings.projectTypeIds.length > 0 ||
+        body.bindings.nodeKindIds.length > 0)
+    ) {
+      return error(
+        ErrorCode.CUSTOM_FIELD_BINDING_INVALID,
+        'Company variable cannot have bindings',
+        422,
+        { reason: 'company' },
+      );
     }
-    if (body.settings.currencyId) {
-      const currency = itemById(body.settings.currencyId);
-      if (!currency || !currency.isActive || currency.dictionaryId !== dictionaryIds.currency) {
-        return error(ErrorCode.VALIDATION_FAILED, 'Currency not found', 400);
-      }
+    // Статическое умолчание — грамматика и ссылки (#646): сервер проверяет
+    // значение тем же валидатором, что и значения записи.
+    if (body.defaultValue?.kind === 'static') {
+      const rejected = definitionValueIssue(
+        { id: 'new', type: body.type, settings: body.settings },
+        body.defaultValue.value,
+      );
+      if (rejected) return rejected;
     }
     const existing = nameTaken(body.name);
     if (existing) {

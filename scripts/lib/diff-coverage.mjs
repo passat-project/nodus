@@ -13,6 +13,10 @@ const EXCLUDED = [
   // Пакетные test/ (интеграционные фикстуры) и корневой tests/.
   /(^|\/)tests?\//,
   /(^|\/)scripts?\//,
+  // Обслуживающие скрипты API (бэкфилл-проекции CLI, perf-харнесс): не
+  // рантайм запросов, запускаются руками против живой БД — юнит-покрытия
+  // by design нет (см. исключения coverage в apps/api/vitest*.config.ts).
+  /(^|\/)modules\/search\/(cli|perf)\//,
   /^packages\/ui\//,
   /^apps\/desktop\//,
   /^docs\//,

@@ -143,8 +143,14 @@ export function ProjectCreateDialog({
       setError(errorMessages[ErrorCode.VALIDATION_FAILED]);
       return;
     }
+    // Заказчик виден строке журнала: ссылку передаём, только если поле есть
+    // в форме типа (как диалог правки, #646) — иначе витрина получила бы
+    // значение атрибута, которого у типа нет.
+    const clientShown = formSlots(form).some(
+      (slot) => slot.fieldId === SYSTEM_FIELD_IDS.projectClient && slot.state !== 'hidden',
+    );
     create.mutate(
-      { body: parsed.data, client },
+      { body: parsed.data, client: clientShown ? client : undefined },
       {
         onSuccess: onClose,
         // Номер (#630): «Вернуться и заполнить» — окно с введённым, без

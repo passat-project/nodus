@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { Prisma } from '../../../generated/prisma/client.js';
+import { escapeLikePattern } from '../../../core/database/like-pattern.js';
 import { PrismaService } from '../../../core/database/prisma.service.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 
@@ -52,11 +53,10 @@ export interface CounterpartyCounts {
 /**
  * Экранирование спецсимволов LIKE (`%`, `_`, `\`) в поисковой строке:
  * Prisma `contains` их не экранирует, и «%» работал бы как «все записи»
- * (security-ревью #460). После экранирования — литералы.
+ * (security-ревью #460). Общий хелпер core (#952 F1) — локальные копии
+ * расходились между модулями.
  */
-export function escapeLike(value: string): string {
-  return value.replace(/[\\%_]/gu, (ch) => `\\${ch}`);
-}
+export const escapeLike = escapeLikePattern;
 
 export interface CounterpartyWriteData {
   shortName: string;
@@ -249,6 +249,15 @@ export class CounterpartiesRepository {
     return this.prisma.counterparty.findFirst({
       where: { id, archivedAt: null },
       select: { id: true, shortName: true },
+    });
+  }
+
+  /** Действующие контрагенты пачкой (#646): одна выборка на список ссылок. */
+  findActiveRefs(ids: readonly string[]): Promise<{ id: string; shortName: string }[]> {
+    return this.prisma.counterparty.findMany({
+      where: { id: { in: [...new Set(ids)] }, archivedAt: null },
+      select: { id: true, shortName: true },
+      orderBy: { id: 'asc' },
     });
   }
 

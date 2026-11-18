@@ -18,15 +18,22 @@ import { demoProjectTypes } from '../../mocks/data/projects.js';
 import { mockTypes } from '../../mocks/data/process-types-store.js';
 import { workflowsUsingField } from '../../mocks/data/workflows-store.js';
 import {
+  applyBindingsChange,
+  removeCreationFormSlot,
+  removeFormSlot,
+  removeUnboundSlot,
+} from './custom-fields-form-slots.js';
+import {
   bindingTargetState,
   canManageFields,
+  definitionValueIssue,
   dto,
   entitiesWithValue,
   error,
   forbidden,
   formsUsingField,
   nameTaken,
-  removeFormSlot,
+  settingsIssue,
   validateBindingTargets,
 } from './custom-fields-mock-utils.js';
 
@@ -103,6 +110,9 @@ export const definitionHandlers = [
       definition.bindings.processTypeIds = definition.bindings.processTypeIds.filter(
         (id) => id !== targetId,
       );
+      // Снятие привязки к типу снимает слот из формы создания маршрута
+      // (#646): иначе required-слот нельзя заполнить (not_in_type).
+      removeUnboundSlot(kind, targetId, definition.id, definition.bindings.processTypeIds);
     } else if (kind === 'project-type') {
       definition.bindings.projectTypeIds = definition.bindings.projectTypeIds.filter(
         (id) => id !== targetId,
@@ -134,6 +144,12 @@ export const definitionHandlers = [
       !customFieldValueSchemaOf(definition).safeParse(parsed.data.value).success
     ) {
       return error(ErrorCode.CUSTOM_FIELD_VALUE_INVALID, 'Value does not match field type', 422);
+    }
+    // Ссылки — как сервер без актёра (#646): записи не принимаются, остальные
+    // цели проверяются по демо-справочникам.
+    if (parsed.data.value !== null) {
+      const rejected = definitionValueIssue(definition, parsed.data.value);
+      if (rejected) return rejected;
     }
     definition.companyValue = parsed.data.value;
     definition.updatedAt = new Date().toISOString();
@@ -180,6 +196,10 @@ export const definitionHandlers = [
         issues: shape,
       });
     }
+    // Справочник/валюта настроек (#646): сервер проверяет их и на PATCH, а не
+    // только при создании.
+    const settingsRejected = settingsIssue(nextType, nextSettings);
+    if (settingsRejected) return settingsRejected;
     if (
       nextDefault?.kind === 'static' &&
       !customFieldValueSchemaOf({ type: nextType, settings: nextSettings }).safeParse(
@@ -187,6 +207,15 @@ export const definitionHandlers = [
       ).success
     ) {
       return error(ErrorCode.CUSTOM_FIELD_VALUE_INVALID, 'Default value is invalid', 422);
+    }
+    // Ссылочная часть умолчания (#646): грамматики мало — сервер проверяет
+    // существование/активность цели, а записи без актёра не принимает.
+    if (nextDefault?.kind === 'static') {
+      const rejected = definitionValueIssue(
+        { id: definition.id, type: nextType, settings: nextSettings },
+        nextDefault.value,
+      );
+      if (rejected) return rejected;
     }
     if (body.bindings !== undefined) {
       if (definition.isCompany) {
@@ -214,17 +243,7 @@ export const definitionHandlers = [
     if (body.settings !== undefined) definition.settings = nextSettings;
     if (body.bindingFormulas !== undefined) definition.bindingFormulas = body.bindingFormulas;
     if (body.bindings !== undefined) {
-      const before = definition.bindings;
-      for (const targetId of before.projectTypeIds) {
-        if (!body.bindings.projectTypeIds.includes(targetId)) {
-          removeFormSlot('project-type', targetId, definition.id);
-        }
-      }
-      for (const targetId of before.nodeKindIds) {
-        if (!body.bindings.nodeKindIds.includes(targetId)) {
-          removeFormSlot('node-kind', targetId, definition.id);
-        }
-      }
+      applyBindingsChange(definition, definition.bindings, body.bindings);
       definition.bindings = body.bindings;
     }
     definition.updatedAt = new Date().toISOString();
@@ -312,6 +331,9 @@ export const definitionHandlers = [
         ),
       };
     }
+    // Формы создания маршрутов (#646): required-слот удалённого атрибута
+    // блокировал бы создание записи типа.
+    removeCreationFormSlot(definition.id);
     demoCustomFieldDefinitions.splice(demoCustomFieldDefinitions.indexOf(definition), 1);
     return new HttpResponse(null, { status: 204 });
   }),

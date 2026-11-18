@@ -80,6 +80,7 @@ function makePolicy(
     );
   const registry = {
     definitions: vi.fn(async () => definitions),
+    lockRegistry: vi.fn(async () => undefined),
     prepareCreate: vi.fn(async (args: Record<string, unknown>) => {
       const allowed = allowedOf(args.target);
       const input = (args.input ?? {}) as Record<string, unknown>;

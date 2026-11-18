@@ -29,6 +29,7 @@ import { MessagesReadStateRepository } from './messages/messages-read-state.repo
 import { MessagesReactionsRepository } from './messages/messages-reactions.repository.js';
 import { MessagesDeleteService } from './messages/messages-delete.service.js';
 import { MessagesService } from './messages/messages.service.js';
+import { MessageSearchSourceProvider } from './search/message-search-source.provider.js';
 import { ThreadParticipantsRepository } from './messages/thread-participants.repository.js';
 import { ThumbnailQueue } from './messages/thumbnail.queue.js';
 import { ThumbnailService } from './messages/thumbnail.service.js';
@@ -137,6 +138,8 @@ import {
     ProjectChatController,
   ],
   providers: [
+    // Источник поисковой проекции «сообщение» (#952): маркер searchSourceType.
+    MessageSearchSourceProvider,
     // Вложения задачи решающему вне задачи (#433): read-only, тот же маркер
     // контекста `chat`; реестр прав файлов объединяет решения по OR.
     TaskDeciderFileAccess,

@@ -26,7 +26,9 @@ export const forbidden = () =>
 export const invalid = () =>
   HttpResponse.json(
     { code: ErrorCode.VALIDATION_FAILED, message: 'Invalid body' },
-    { status: 422 },
+    // Zod-провал тела — VALIDATION_FAILED → 400 (как ZodValidationPipe
+    // сервера); 422 у мока остаётся только у доменных правил.
+    { status: 400 },
   );
 
 export const nodeNotFound = () =>

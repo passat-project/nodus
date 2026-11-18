@@ -20,6 +20,10 @@ export interface CounterpartyReader {
    *  null — записи нет или она в архиве. */
   activeRef(id: string): Promise<CounterpartyRef | null>;
 
+  /** Действующие контрагенты пачкой (#646): проверка значений-ссылок одной
+   *  выборкой вместо N запросов; архивные и отсутствующие не попадают. */
+  activeRefs(ids: readonly string[]): Promise<CounterpartyRef[]>;
+
   /** Подписанты пачкой для DTO и истории (#55), включая архивных: подпись
    *  под письмом не исчезает вместе с карточкой контакта. */
   contactRefs(ids: readonly string[]): Promise<ContactRef[]>;

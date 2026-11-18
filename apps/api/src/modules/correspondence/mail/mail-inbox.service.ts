@@ -75,6 +75,10 @@ export class MailInboxService implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleInit(): void {
+    // Обслуживающие CLI (search:reindex, perf) поднимают контекст AppModule:
+    // второй IMAP-клиент на том же ящике конкурировал бы с живым api за
+    // соединение. Почта — единственный сервис с внешним соединением на старте.
+    if (process.env.MAIL_RECEPTION_DISABLED === '1') return;
     this.client.onClose(() => this.scheduleReconnect());
     this.client.onExists(() => {
       // Метка EXISTS — точка отсчёта «сервер почты увидел письмо» для

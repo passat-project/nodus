@@ -54,10 +54,17 @@ const HOME =
   'витрина Главной: число сотрудников и ближайшие дни рождения (день и месяц, без года — решение владельца #342) — любому вошедшему';
 const FILE_SERVERS =
   'разрешённые файловые серверы (#558): список нужен каждому сотруднику, чтобы показать «Открыть» у пути; меняет portal.settings.manage';
+const SEARCH_VISIBILITY =
+  'единый поиск (#952): pre-filter видимости в сервисе — наборы портов задач (участие/подчинённые/' +
+  'проекты/решающий), проектов, бесед (членство без hidden ∪ гейтованный решающий), формула письма ' +
+  '(регистратор/адресат/конфиденциальность/«Новые»), directory.read для сотрудников; выключенный ' +
+  'модуль не отдаёт свой тип';
 
 export const INTENTIONALLY_WITHOUT_PERMISSION: Record<string, string> = {
   // Чтение (#334)
   'GET /settings/file-servers': FILE_SERVERS,
+  // Поиск по порталу (#952): невидимое отсекается pre-filter в сервисе.
+  'GET /search': SEARCH_VISIBILITY,
   'GET /projects': PROJECT_VISIBILITY,
   'GET /projects/:id': PROJECT_VISIBILITY,
   'GET /projects/:id/history': PROJECT_VISIBILITY,

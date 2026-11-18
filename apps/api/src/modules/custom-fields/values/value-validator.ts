@@ -220,7 +220,8 @@ export class CustomFieldValueValidator {
       this.org.departmentRefs([...departmentIds], tx),
       this.dictionaries.itemRefs([...itemIds], tx),
       this.dictionaries.itemRefs([...currencyIds], tx),
-      Promise.all([...counterpartyIds].map((id) => this.counterparties.activeRef(id))),
+      // Пачка «действующих» контрагентов (#646): было N+1 по значению.
+      this.counterparties.activeRefs([...counterpartyIds]),
       projectIds.size === 0 ? new Set<string>() : this.visibleProjectIds(actor),
       // Батч-видимость (#641): один запрос на вид ссылки вместо запроса на
       // каждую ссылку; пачки дедуплицированы выше.
@@ -250,9 +251,7 @@ export class CustomFieldValueValidator {
         .filter((row) => currencyDictionaryIds.has(row.dictionaryId))
         .map((row) => [row.id, row]),
     );
-    const activeCounterparties = new Set(
-      counterparties.filter((ref) => ref !== null).map((ref) => ref.id),
-    );
+    const activeCounterparties = new Set(counterparties.map((ref) => ref.id));
 
     const facts = {
       scalarIds,
@@ -278,7 +277,11 @@ export class CustomFieldValueValidator {
 
   private async visibleProjectIds(actor: ProjectActor | undefined): Promise<ReadonlySet<string>> {
     if (!actor) return new Set();
-    const scope = await this.projects.viewScopeFor(actor);
+    // Запись значения — без TTL-кэша scope (#646): проект, только что
+    // ушедший в секретные, не должен приниматься из кэша. Тот же режим,
+    // что у видимости папок (`visibleForMany(..., {fresh: true})`) — проект
+    // и папка проверяются одинаково свежо.
+    const scope = await this.projects.freshViewScopeFor(actor);
     return new Set(scope.visibleProjectIds);
   }
 }

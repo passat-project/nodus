@@ -67,6 +67,8 @@ function makeService(definitions: CustomFieldDefinition[] = []) {
   const eventBus = { emit: vi.fn(async () => undefined) };
   const registry = {
     definitions: vi.fn(async () => definitions),
+    // Лок реестра — до чтения определений и записи привязок (#646).
+    lockRegistry: vi.fn(async () => undefined),
     syncPlaceBindings: vi.fn(async () => undefined),
   };
   const service = new NodeKindsService(
@@ -126,6 +128,7 @@ describe('NodeKindsService (#556 Р7, #631)', () => {
       'user-1',
     );
     // Слот И ЕСТЬ привязка (Р3): набор слотов уходит в syncPlaceBindings.
+    expect(registry.lockRegistry).toHaveBeenCalled();
     expect(registry.syncPlaceBindings).toHaveBeenCalledWith(
       { kind: 'node_kind', id: 'kind-1' },
       [MARK],

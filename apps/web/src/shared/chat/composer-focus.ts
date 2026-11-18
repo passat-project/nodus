@@ -30,7 +30,10 @@ import { useAttachSendDialog } from './dialog-stores.js';
  * - анрегистр активного композера (закрыли тред) передаёт курсор ранее
  *  зарегистрированному (ленте канала) — «закрыл тред → мигает канал».
  */
-const registry = new Map<string, HTMLTextAreaElement>();
+const registry = new Map<string, CaretOwner>();
+/** Владелец каретки — многострочный композер или однострочное поле поиска:
+ *  механизм «вечного курсора» общий (см. §«Фокус ПЕРЕДАЁТСЯ» выше). */
+type CaretOwner = HTMLTextAreaElement | HTMLInputElement;
 let activeId: string | null = null;
 let modality: 'pointer' | 'key' | 'other' = 'other';
 /** ЛКМ зажата (между pointerdown и pointerup/cancel) — фокус не крадём:
@@ -82,10 +85,18 @@ function debugSkip(guard: string): void {
  * слайдера, диалог поверх страницы).
  */
 function insideOverlayLayer(el: Element | null, composer: Element | null = null): boolean {
+  // Поверхность-владелец: диалог, в котором живёт поле. Слои ВНУТРИ неё —
+  // часть той же поверхности, а не конкурирующий оверлей: список выдачи cmdk
+  // сам role="listbox" (иначе клик по пустому месту списка «убивал» каретку
+  // поиска, #952). Чужие поповеры/меню Radix портируются в body — вне этой
+  // поверхности — и по-прежнему владеют фокусом.
+  const ownerSurface = composer?.closest('[role="dialog"]') ?? null;
   let node: Element | null = el;
   while (node instanceof Element) {
     if (node.hasAttribute('role') && OVERLAY_LAYER_ROLES.has(node.getAttribute('role') ?? '')) {
-      if (!(composer && node.contains(composer))) return true;
+      const ownLayer = composer !== null && node.contains(composer);
+      const sameSurface = ownerSurface !== null && ownerSurface.contains(node);
+      if (!ownLayer && !sameSurface) return true;
     }
     node = node.parentElement;
   }
@@ -206,7 +217,7 @@ function install(): void {
  *  mount→cleanup→mount только вместе с этим фокусом: cleanup промежуточной
  *  итерации возвращает курсор ранее зарегистрированному, повторный register
  *  без focus оставил бы курсор не там — трассировка focus/focusin, 14.09.2026). */
-export function registerComposer(id: string, el: HTMLTextAreaElement): void {
+export function registerComposer(id: string, el: CaretOwner): void {
   registry.set(id, el);
   activeId = id;
   if (!installed) install();
@@ -214,7 +225,7 @@ export function registerComposer(id: string, el: HTMLTextAreaElement): void {
 }
 
 /** Композер размонтируется; активный передаёт курсор следующему по регистрации. */
-export function unregisterComposer(id: string, el: HTMLTextAreaElement): void {
+export function unregisterComposer(id: string, el: CaretOwner): void {
   if (registry.get(id) !== el) return;
   registry.delete(id);
   if (activeId !== id) return;

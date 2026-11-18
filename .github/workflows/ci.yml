@@ -371,6 +371,22 @@ jobs:
           docker run -d --name silo -p 9000:9000             -e MINIO_ROOT_USER=nodus_ci -e MINIO_ROOT_PASSWORD=nodus_ci_secret_min8             pgsty/silo:RELEASE.2026-09-16T00-00-00Z server /data
           timeout 30 bash -c 'until curl -sf http://127.0.0.1:9000/minio/health/live >/dev/null; do sleep 1; done'
 
+      - name: Бэкфилл поисковой проекции (#952)
+        # Сид создаёт сотрудников/справочники — без бэкфилла окно поиска на
+        # e2e-стенде пустое (hint index_empty). Сборка выше уже есть, CLI —
+        # штатный (идемпотентен, повторный прогон строк не меняет). Идёт
+        # ПОСЛЕ S3 и с его env: AppModule при старте валидирует STORAGE_*
+        # (без них CLI падал до первой строки, CI e2e был гарантированно
+        # красным — блокер code-reviewer #952).
+        run: node apps/api/dist/modules/search/cli/reindex.js
+        env:
+          STORAGE_ENDPOINT: 127.0.0.1
+          STORAGE_PORT: '9000'
+          STORAGE_USE_SSL: 'false'
+          STORAGE_ACCESS_KEY: nodus_ci
+          STORAGE_SECRET_KEY: nodus_ci_secret_min8
+          STORAGE_URL_SECRET: ci-e2e-storage-url-secret-min-32-ch
+
       - name: Запуск API
         run: nohup node apps/api/dist/main.js > /tmp/nodus-api.log 2>&1 &
         env:
@@ -425,7 +441,7 @@ jobs:
         # Полный «письмо → резолюция → поручение» пока не включаем: модули
         # резолюций и поручений не готовы. graph-stress.spec — perf-харнесс для
         # локального прогона, в CI не входит.
-        run: pnpm --filter @nodus/e2e test specs/auth.spec.ts specs/letters-live.spec.ts specs/chat-two-sessions-live.spec.ts specs/chat-attachments-live.spec.ts
+        run: pnpm --filter @nodus/e2e test specs/auth.spec.ts specs/letters-live.spec.ts specs/chat-two-sessions-live.spec.ts specs/chat-attachments-live.spec.ts specs/search-live.spec.ts
         env:
           NODUS_BASE_URL: http://localhost:4173
           E2E_LIVE_API: '1'

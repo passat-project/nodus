@@ -94,7 +94,10 @@ export function FieldRow({
     >
       <span
         className={cn(
-          'flex shrink-0 items-center gap-2 text-xs font-medium text-muted-foreground',
+          // min-w-0 + shrink: на узкой зоне (колонка данных карточки с отступом
+          // под кнопку навигатора) метка ужимается и обрезается многоточием,
+          // вместо горизонтальной прокрутки всей колонки (#948).
+          'flex min-w-0 shrink items-center gap-2 text-xs font-medium text-muted-foreground',
           stacked ? 'w-full' : 'w-44',
           wide && 'min-h-7',
         )}
@@ -123,7 +126,11 @@ export function FieldRow({
       <span
         className={cn(
           'flex min-h-8 items-center gap-2 text-sm',
-          stacked ? 'w-full' : 'min-w-[10rem] flex-1',
+          // Узкая колонка данных (карточка, панель): значение ужимается само,
+          // а не распирает колонку и не включает горизонтальную прокрутку
+          // (#948). На нормальной ширине минимум 10rem держит перенос
+          // значения под метку.
+          stacked ? 'w-full' : 'min-w-[10rem] flex-1 @max-[21rem]:min-w-0',
           wide && 'items-start',
         )}
         aria-describedby={hint && hintId ? hintId : undefined}

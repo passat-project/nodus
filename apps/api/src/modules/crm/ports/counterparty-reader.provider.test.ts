@@ -27,6 +27,19 @@ describe('CounterpartyReaderProvider (#460, ADR-0012)', () => {
     expect(await provider.activeRef(ID)).toEqual({ id: ID, name: 'ООО «Тест»' });
   });
 
+  it('activeRefs: пачка действующих; пустой вход — без запроса (#646)', async () => {
+    const repo = {
+      findActiveRefs: vi.fn().mockResolvedValue([{ id: ID, shortName: 'ООО «Тест»' }]),
+    };
+    const provider = new CounterpartyReaderProvider(repo as never, noContacts as never);
+
+    expect(await provider.activeRefs([])).toEqual([]);
+    expect(repo.findActiveRefs).not.toHaveBeenCalled();
+
+    expect(await provider.activeRefs([ID])).toEqual([{ id: ID, name: 'ООО «Тест»' }]);
+    expect(repo.findActiveRefs).toHaveBeenCalledWith([ID]);
+  });
+
   it('contactRefs: подписант пачкой, архивный читается; пустой вход — без запроса', async () => {
     const contacts = {
       findRefs: vi

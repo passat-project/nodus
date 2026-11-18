@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { Prisma } from '../../generated/prisma/client.js';
+import { escapeLikePattern } from '../../core/database/like-pattern.js';
 import { PrismaService } from '../../core/database/prisma.service.js';
 import type { TransactionClient } from '../../core/database/transaction-runner.js';
 
@@ -79,8 +80,8 @@ export class UsersRepository {
       ...(filter.search
         ? {
             OR: [
-              { displayName: { contains: filter.search, mode: 'insensitive' } },
-              { email: { contains: filter.search, mode: 'insensitive' } },
+              { displayName: { contains: escapeLikePattern(filter.search), mode: 'insensitive' } },
+              { email: { contains: escapeLikePattern(filter.search), mode: 'insensitive' } },
             ],
           }
         : {}),

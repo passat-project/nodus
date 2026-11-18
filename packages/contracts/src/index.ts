@@ -15,6 +15,7 @@ export * from './events/directory-events.js';
 export * from './events/file-events.js';
 export * from './events/realtime.js';
 export * from './pagination/paginated.schema.js';
+export * from './search/search.schemas.js';
 export * from './i18n/ru.js';
 export * from './directory/user-ref.schema.js';
 export * from './directory/presence.schemas.js';

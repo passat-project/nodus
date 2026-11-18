@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { statesOfPhase, type ListTasksQuery, type TaskRef } from '@nodus/contracts';
 
 import type { Prisma } from '../../../generated/prisma/client.js';
+import { escapeLikePattern } from '../../../core/database/like-pattern.js';
 import { PrismaService } from '../../../core/database/prisma.service.js';
 import { taskListInclude, type TaskListRow } from './task-row.js';
 
@@ -44,9 +45,10 @@ export class TasksQueryRepository {
     if (q.overdue) and.push(overdueWhere(now));
     if (q.search) {
       const n = Number(q.search.replace(/^ПП-/i, ''));
+      const needle = escapeLikePattern(q.search);
       and.push({
         OR: [
-          { title: { contains: q.search, mode: 'insensitive' } },
+          { title: { contains: needle, mode: 'insensitive' } },
           ...(Number.isSafeInteger(n) && n > 0 ? [{ number: n }] : []),
         ],
       });

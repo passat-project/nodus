@@ -179,7 +179,13 @@ export const structureNodeHandlers = [
         { status: 422 },
       );
     }
-    const rule = ruleResponse(createIssues(kind!, { customFields: body.customFields }));
+    // Умолчания привязанных атрибутов — как на одиночном создании (#646):
+    // пачка не должна терять статику и «подразделение автора».
+    const bound = definitionsForTarget(demoCustomFieldDefinitions, 'node', kind!.id);
+    const values = withStaticDefaults(bound, { ...(body.customFields ?? {}) });
+    const malformed = invalidMockValues(bound, values);
+    if (malformed.length > 0) return valuesInvalid(malformed);
+    const rule = ruleResponse(createIssues(kind!, { customFields: values }));
     if (rule) return rule;
     if (nodesOfProject(guard.row.id).length + body.names.length > NODE_LIMITS.nodesPerProject) {
       return conflict(ErrorCode.PROJECT_NODE_LIMIT_REACHED, 'Node limit reached');
@@ -187,7 +193,7 @@ export const structureNodeHandlers = [
     // Счётчики «при создании» (#630): пачка — одна «транзакция»: место для
     // счёта проверяется ДО создания (у всех папок пачки оно общее — один
     // родитель), номера выдаются по порядку имён пачки.
-    const clean = stripCounterValues(body.customFields ?? {});
+    const clean = stripCounterValues(values);
     const target = placeOfNewNode(guard.row.id, body.parentId ?? null, body.kindId, clean);
     const numbering = planOnCreate(target, clean, {
       source: 'create',

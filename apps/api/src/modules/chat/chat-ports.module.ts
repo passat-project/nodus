@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { TasksPortsModule } from '../tasks/tasks-ports.module.js';
 import { MembershipReaderProvider } from './membership-reader.provider.js';
 import { CHAT_MEMBERSHIP_READER } from './membership-reader.port.js';
 import { MessageLivenessProvider } from './message-liveness.provider.js';
@@ -13,6 +14,9 @@ import { CHAT_MESSAGE_ACCESS } from './message-access.port.js';
  * межмодульного импорта; доменные сервисы/репозитории чата не экспортируются.
  */
 @Module({
+  // Читаемые беседы решающего (#952): членство ∪ чаты задач, где он решающий.
+  // Направление chat → tasks-ports, обратного импорта нет — цикла нет.
+  imports: [TasksPortsModule],
   providers: [
     MembershipReaderProvider,
     { provide: CHAT_MEMBERSHIP_READER, useClass: MembershipReaderProvider },

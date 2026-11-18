@@ -34,4 +34,10 @@ export interface TaskChatReader {
   /** Решающий ли пользователь текущего шага (#433): только ему чат задачи
    *  открывается read-only, остальным невидимым — нет. */
   isDecider(taskId: string, userId: string): Promise<boolean>;
+
+  /** Задачи, где пользователь — решающий и которые при этом ему ВИДИМЫ
+   *  (#952): сырой `TaskDeciders.taskIdsFor` намеренно без гейтов, а поиску
+   *  нужен безопасный набор для читаемых бесед. Конфиденциальные вне
+   *  участия и скрытые секретные проекты отсекаются `visibleTasksWhere`. */
+  deciderTaskIds(userId: string): Promise<string[]>;
 }

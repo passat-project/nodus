@@ -30,7 +30,14 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
-      exclude: ['src/generated/**', 'src/**/*.test.ts', 'src/**/*.d.ts'],
+      // Обслуживающие скрипты (бэкфилл-CLI, perf) — вне рантайма API.
+      exclude: [
+        'src/generated/**',
+        'src/**/*.test.ts',
+        'src/**/*.d.ts',
+        'src/modules/search/cli/**',
+        'src/modules/search/perf/**',
+      ],
       reporter: ['text-summary', 'json-summary', 'lcov'],
       reportsDirectory: 'coverage-integration',
     },

@@ -190,6 +190,9 @@ const CODE_TO_STATUS: Record<ErrorCode, number> = {
   // MCP-сервер (#902): не найден — 404. Сбой проверки соединения — не ошибка
   // HTTP-конвейера: ответ проверки приходит данными `ok: false`.
   [ErrorCode.ASSISTANT_MCP_NOT_FOUND]: HttpStatus.NOT_FOUND,
+  // Поиск (#952): statement_timeout — сервис не успел, клиент может уточнить
+  // запрос и повторить (504, не 500: состояние портала исправно).
+  [ErrorCode.SEARCH_TIMEOUT]: HttpStatus.GATEWAY_TIMEOUT,
 };
 
 /** Код для HTTP-исключений Nest/Fastify (400 у нас — всегда валидация входа). */

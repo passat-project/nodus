@@ -10,6 +10,7 @@ import { BellPopover } from '../../features/notifications/components/bell-popove
 import { RunningTimerChip } from '../../features/tasks/components/running-timer-chip.js';
 import { WhatsNewButton } from '../../features/whats-new/components/whats-new-button.js';
 import { useAuthStore } from '../../shared/auth-store.js';
+import { useSearchStore } from '../../features/search/model/search-store.js';
 import { useChatUnreadSummary } from '../../shared/chat/chat-queries.js';
 import { TabUnreadBadge } from '../../shared/chat/tab-unread-badge.js';
 import { CIRCUIT_REMEASURE } from './circuit-geometry.js';
@@ -35,7 +36,7 @@ export function TopBar() {
 
   const theme = useShellStore((s) => s.theme);
   const toggleTheme = useShellStore((s) => s.toggleTheme);
-  const setCommandOpen = useShellStore((s) => s.setCommandOpen);
+  const openSearch = useSearchStore((s) => s.openSearch);
   const { data: unread } = useChatUnreadSummary();
   const permissions = useAuthStore((s) => s.user?.permissions ?? NO_PERMISSIONS);
 
@@ -104,7 +105,7 @@ export function TopBar() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setCommandOpen(true)}
+          onClick={() => openSearch()}
           aria-label={`${ui.topbar.smartSearch} (${ui.topbar.searchHint})`}
           title={`${ui.topbar.smartSearch} (${ui.topbar.searchHint})`}
           className="text-muted-foreground hover:bg-accent hover:text-foreground"

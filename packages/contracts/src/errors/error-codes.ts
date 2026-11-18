@@ -263,10 +263,10 @@ export const ErrorCode = {
    *  (`details.reason`: create | clear; 422; #631 Р10). */
   PROJECT_FIELDS_REQUIRED: 'PROJECT_FIELDS_REQUIRED',
   /** Форма вида ссылается на негодные атрибуты (`details.reason`:
-   *  unknown_field | hidden_field; 422; #556). */
+   *  unknown_field | not_bindable; 422; #556, #631). */
   PROJECT_NODE_KIND_FORM_INVALID: 'PROJECT_NODE_KIND_FORM_INVALID',
   /** Форма типа проекта ссылается на негодные атрибуты (`details.reason`:
-   *  unknown_field; 422; #631 Р10). */
+   *  unknown_field | not_bindable; 422; #631 Р10). */
   PROJECT_TYPE_FORM_INVALID: 'PROJECT_TYPE_FORM_INVALID',
   /** ИИ-агент (#889): не настроен провайдер/модель — ассистент отвечать не
    *  может (409: запрос корректен, состояние портала не позволяет). */
@@ -279,6 +279,9 @@ export const ErrorCode = {
   ASSISTANT_PROVIDER_UNAVAILABLE: 'ASSISTANT_PROVIDER_UNAVAILABLE',
   /** MCP-сервер из настроек не найден (удалён параллельно) — 404. */
   ASSISTANT_MCP_NOT_FOUND: 'ASSISTANT_MCP_NOT_FOUND',
+  /** Поиск по порталу (#952): запрос превысил `statement_timeout` (504;
+   *  Postgres 57014 / Prisma P2028) — интерфейс предлагает уточнить запрос. */
+  SEARCH_TIMEOUT: 'SEARCH_TIMEOUT',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

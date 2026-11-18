@@ -141,4 +141,5 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.ASSISTANT_RUN_ALREADY_FINISHED]: 'Ответ уже завершён',
   [ErrorCode.ASSISTANT_PROVIDER_UNAVAILABLE]: 'Провайдер моделей не отвечает',
   [ErrorCode.ASSISTANT_MCP_NOT_FOUND]: 'MCP-сервер не найден',
+  [ErrorCode.SEARCH_TIMEOUT]: 'Запрос слишком тяжёлый — уточните его и повторите',
 };

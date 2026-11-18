@@ -29,6 +29,7 @@ import {
   contactRefOf,
   letterFieldsIssue,
   letterRelationIssue,
+  letterValuesFailure,
   notFound,
   projectRefOf,
   receiptMethodRefOf,
@@ -197,6 +198,12 @@ export const lettersTransitionHandlers = [
     const registration = body.form?.registration;
     let attached: ReturnType<typeof attachedRefsOf> | null = null;
     if (registration) {
+      // Значения-атрибуты (#646) — отдельный 422 со списком причин.
+      const valuesFailure = letterValuesFailure({
+        typeId: letter.typeId,
+        customFields: registration.customFields,
+      });
+      if (valuesFailure) return valuesFailure;
       const issue = await letterFieldsIssue({ ...registration, typeId: letter.typeId }, request);
       if (issue) return apiError(422, 'LETTER_REGISTRATION_INVALID', issue);
       if (registration.attachedRefs !== undefined) {

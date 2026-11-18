@@ -42,6 +42,14 @@ class UserUpdatedHandler {
   handle = vi.fn().mockResolvedValue(undefined);
 }
 
+/** Группа типов одним классом (#952, O1): диспетчер сливает `eventType` и
+ *  `eventTypes` с дедупом. */
+class GroupHandler {
+  static readonly eventType = 'task.updated';
+  static readonly eventTypes = ['task.updated', 'task.deleted'] as const;
+  handle = vi.fn().mockResolvedValue(undefined);
+}
+
 function createPrisma(options: { delivered?: Set<string>; events?: () => DomainEvent[] } = {}) {
   const delivered = options.delivered ?? new Set<string>();
   return {
@@ -111,6 +119,20 @@ describe('EventDispatcher', () => {
     expect(prisma.event.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { publishedAt: null }, orderBy: { seq: 'asc' } }),
     );
+  });
+
+  it('eventTypes: группа типов подписывает один обработчик, дубль с eventType не плодит доставку', async () => {
+    const handler = new GroupHandler();
+    const { dispatcher, prisma } = createDispatcher(
+      [handler],
+      createPrisma({ events: () => [{ ...EVENT, type: 'task.deleted' }] }),
+    );
+    await dispatcher.dispatchPending();
+    expect(handler.handle).toHaveBeenCalledTimes(1);
+    expect(prisma.eventDelivery.createMany).toHaveBeenCalledWith({
+      data: [{ eventId: 'e1', handler: 'GroupHandler' }],
+      skipDuplicates: true,
+    });
   });
 
   it('дедупликация: уже доставленное обработчику событие не вызывает его повторно', async () => {

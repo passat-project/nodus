@@ -15,6 +15,7 @@ import { tasksStrings } from './ru-tasks.js';
 import { nodeKindsStrings } from './ru-node-kinds.js';
 import { structureStrings } from './ru-structure.js';
 import { projectsStrings } from './ru-projects.js';
+import { searchStrings } from './ru-search.js';
 import { portalSettingsStrings } from './ru-settings.js';
 import { whatsNewStrings } from './ru-whats-new.js';
 
@@ -233,6 +234,7 @@ export const ui = {
   letters: lettersStrings,
   counterparties: counterpartiesStrings,
   projects: projectsStrings,
+  search: searchStrings,
   chat: chatStrings,
   files: filesStrings,
   notifications: notificationsStrings,
