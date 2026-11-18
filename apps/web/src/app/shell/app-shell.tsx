@@ -9,6 +9,8 @@ import { TooltipProvider } from '@nodus/ui/components/tooltip';
 import { AssistantEdgeEntry } from '../../features/assistant/components/assistant-edge-entry.js';
 import { useAssistantHotkey } from '../../features/assistant/components/assistant-entry.js';
 import { AssistantPanel } from '../../features/assistant/components/assistant-panel.js';
+import { SearchCommand } from '../../features/search/components/search-command.js';
+import { useSearchStore } from '../../features/search/model/search-store.js';
 import { registerCardBridge, registerReplaceTopMessenger } from '../../shared/lib/card-bridge.js';
 import { SurfaceVisibilityProvider } from '../../shared/lib/surface-visibility.js';
 import { startAttentionTracking } from '../../shared/attention/attention-store.js';
@@ -32,12 +34,12 @@ import { PopupDebugBadge } from '../../shared/desktop/popup-diagnostics-badge.js
 import { FileServersSync } from '../../features/settings/components/file-servers-sync.js';
 import { CircuitFrame } from './circuit-frame.js';
 import { CardStackHost } from './card-stack-host.js';
-import { CommandPalette } from './command-palette.js';
 import { EdgeScrollbar } from './edge-scrollbar.js';
 import { LiveGraph } from './live-graph.js';
 import { startLayoutJitterLogger } from './layout-jitter-logger.js';
 import { NodeRail } from './node-rail.js';
 import { EDGE_W_COLLAPSED, RightRail } from './right-rail.js';
+import { SearchPanelHost } from './search-panel-host.js';
 import { useRailHidden } from './rail-visibility.js';
 import { useShellStore } from './shell-store.js';
 import { TopBar } from './top-bar.js';
@@ -156,11 +158,29 @@ export function AppShell() {
     const onKey = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
-        useShellStore.getState().setCommandOpen(!useShellStore.getState().commandOpen);
+        // Ctrl+K — компакт поиска; из рабочего окна закрывает его (запрос
+        // сохраняется в общем сторе, #952).
+        useSearchStore.getState().toggleCompact();
+      }
+    };
+    // Ctrl+Enter в компактном поиске — рабочее окно. Перехват в ФАЗЕ
+    // ПОГРУЖЕНИЯ: cmdk на Enter выбирает активную строку, и без перехвата
+    // открывалась первая карточка + окно (замечание владельца 18.11).
+    const onCapture = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key !== 'Enter') return;
+      const search = useSearchStore.getState();
+      if (search.mode === 'compact') {
+        event.preventDefault();
+        event.stopPropagation();
+        search.openWorkspace();
       }
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onCapture, true);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onCapture, true);
+    };
   }, []);
 
   return (
@@ -208,6 +228,9 @@ export function AppShell() {
               {/* Окно ассистента: плавающий лист поверх правой части рамы
                   (внутри рамы — обрезка её скруглением, структура не едет). */}
               <AssistantPanel />
+              {/* Рабочее окно поиска (#952): лист во всю ширину рамы ниже
+                  шапки, z-62 — поверх ассистента (z-60). */}
+              <SearchPanelHost />
             </div>
             {/* Стек карточек сущностей поверх раздела (ADR-0009, ?cards=) */}
             <CardStackHost />
@@ -221,7 +244,7 @@ export function AppShell() {
       {/* Диагностика попапов (#811): только ?wsdebug=1, журнал решений гейта. */}
       <PopupDebugBadge />
       <NotificationToasts />
-      <CommandPalette />
+      <SearchCommand />
       <WhatsNewPanel />
       <ChatDialogHosts />
       {/* Единое окно создания задачи (#432): один хост на все входы. */}

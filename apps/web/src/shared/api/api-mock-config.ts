@@ -32,6 +32,8 @@ export const API_MOCK_DOMAINS = [
   // ИИ-ассистент (#889): окно диалога и настройки провайдеров на моках —
   // демо работает без ключей и без бэкенда.
   'assistant',
+  // Единый поиск (#952): P1 — окно на моках до бэкенда P2.
+  'search',
 ] as const;
 
 export type ApiMockDomain = (typeof API_MOCK_DOMAINS)[number];

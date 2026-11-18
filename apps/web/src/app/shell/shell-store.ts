@@ -11,7 +11,6 @@ export type ThemeId = 'dark' | 'light';
 interface ShellState {
   menuCollapsed: boolean;
   theme: ThemeId;
-  commandOpen: boolean;
   /** Верхняя карточка стека ЗАКРЫВАЕТСЯ (фаза гашения + схлопывание,
    *  requestClose → unmount, issue #63): сигнал для нижних карточек
    *  (проснуться из content-visibility-сна и отрисоваться ДО схлопывания
@@ -22,7 +21,6 @@ interface ShellState {
   lastSource: SourceRect | null;
   toggleMenu: () => void;
   toggleTheme: () => void;
-  setCommandOpen: (open: boolean) => void;
   setCardClosing: (closing: boolean) => void;
   setLastSource: (source: SourceRect | null) => void;
 }
@@ -36,12 +34,10 @@ export const useShellStore = create<ShellState>()(
     (set) => ({
       menuCollapsed: false,
       theme: 'light',
-      commandOpen: false,
       cardClosing: false,
       lastSource: null,
       toggleMenu: () => set((s) => ({ menuCollapsed: !s.menuCollapsed })),
       toggleTheme: () => set((s) => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
-      setCommandOpen: (commandOpen) => set({ commandOpen }),
       setCardClosing: (cardClosing) => set({ cardClosing }),
       setLastSource: (lastSource) => set({ lastSource }),
     }),

@@ -68,15 +68,17 @@ export type SearchSort = z.infer<typeof searchSortSchema>;
 export const searchHintSchema = z.enum(['stopwords', 'index_empty']);
 export type SearchHint = z.infer<typeof searchHintSchema>;
 
-/**
- * Запрос `GET /api/v1/search`. `q` обязателен (2..256, trim);
- * `types` — фильтр по источникам, `projectId` — по проекту (задачи, письма,
- * проекты; сообщения в v1 проектом не фильтруются — #952 N7), `from`/`to` —
- * по `sourceCreatedAt` включительно (дни UTC), `cursor` — из `nextCursor`.
- */
-export const searchRequestSchema = z.object({
-  q: z.string().trim().min(SEARCH_LIMITS.queryMin).max(SEARCH_LIMITS.queryMax),
-  types: z
+/** `types` в query: `task,letter` (одно значение — тоже строка, не массив;
+ *  принят и готовый массив — прямые вызовы схемы и тесты). */
+const searchTypesParam = z.preprocess(
+  (value) =>
+    typeof value === 'string'
+      ? value
+          .split(',')
+          .map((part) => part.trim())
+          .filter((part) => part !== '')
+      : value,
+  z
     .array(searchSourceTypeSchema)
     .min(1)
     .max(5)
@@ -85,6 +87,18 @@ export const searchRequestSchema = z.object({
       message: 'types must be unique',
     })
     .optional(),
+);
+
+/**
+ * Запрос `GET /api/v1/search`. `q` обязателен (2..256, trim);
+ * `types` — фильтр по источникам (`types=task,letter`), `projectId` — по
+ * проекту (задачи, письма, проекты; сообщения в v1 проектом не фильтруются —
+ * #952 N7), `from`/`to` — по `sourceCreatedAt` включительно (дни UTC),
+ * `cursor` — из `nextCursor`.
+ */
+export const searchRequestSchema = z.object({
+  q: z.string().trim().min(SEARCH_LIMITS.queryMin).max(SEARCH_LIMITS.queryMax),
+  types: searchTypesParam,
   projectId: z.uuid().optional(),
   from: z.iso.date().optional(),
   to: z.iso.date().optional(),

@@ -43,20 +43,21 @@ describe('parseApiMockEnv (#48)', () => {
     }
   });
 
-  it('домены полей, справочников, CRM, ролей и настроек доступны для моков (#431, #379, #558)', () => {
-    const config = parseApiMockEnv('custom-fields,dictionaries,crm,roles,settings');
+  it('домены полей, справочников, CRM, ролей, настроек и поиска доступны для моков', () => {
+    const config = parseApiMockEnv('custom-fields,dictionaries,crm,roles,settings,search');
     expect(config.enabled).toBe(true);
     expect(config.domains).toEqual(
-      new Set(['custom-fields', 'dictionaries', 'crm', 'roles', 'settings']),
+      new Set(['custom-fields', 'dictionaries', 'crm', 'roles', 'settings', 'search']),
     );
     // Новые домены — в конце списка: буквальные маршруты писем остаются первыми.
-    expect(API_MOCK_DOMAINS.slice(-6)).toEqual([
+    expect(API_MOCK_DOMAINS.slice(-7)).toEqual([
       'custom-fields',
       'dictionaries',
       'crm',
       'roles',
       'settings',
       'assistant',
+      'search',
     ]);
   });
 

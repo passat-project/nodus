@@ -28,6 +28,12 @@ describe('searchRequestSchema', () => {
   });
 
   it('принимает непустой types? без дублей и не больше пяти типов', () => {
+    // Wire-формат — одна строка `types=task,letter` (Fastify отдаёт одну
+    // строку, а не массив: без preprocess схема падала бы на одном типе).
+    expect(searchRequestSchema.parse({ q: 'труба', types: 'task,letter' }).types).toEqual([
+      'task',
+      'letter',
+    ]);
     expect(searchRequestSchema.safeParse({ q: 'труба', types: [] }).success).toBe(false);
     expect(
       searchRequestSchema.safeParse({ q: 'труба', types: ['task', 'letter', 'message'] }).success,
