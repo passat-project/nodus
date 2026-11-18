@@ -84,7 +84,7 @@ function setup(canSetup = true) {
   return { mutate };
 }
 
-describe('«Что здесь можно создавать» (#665)', () => {
+describe('«Типы задач и писем» (#665)', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();

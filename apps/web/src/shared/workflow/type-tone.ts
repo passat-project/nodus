@@ -1,7 +1,7 @@
 import type { ProcessType } from '@nodus/contracts';
 
 /** Тон плитки-значка типа процесса (токены темы, I15). Одна точка на веб:
- *  список типов «Процессов», «Что здесь можно создавать» и «Где создаётся»
+ *  список типов «Процессов», «Типы задач и писем» и «Где создаётся»
  *  (#665) рисуют тип одинаково. */
 export function typeToneOf(color: ProcessType['color']): string {
   const tones: Record<ProcessType['color'], string> = {

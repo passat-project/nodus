@@ -1,5 +1,5 @@
-import type { NodeKind, ProjectType } from '@nodus/contracts';
-import { allowedNodeKinds, ui } from '@nodus/contracts';
+import type { NodeKind, ProjectType, ProcessType } from '@nodus/contracts';
+import { allowedNodeKinds, typeConfigOf, ui } from '@nodus/contracts';
 
 import { plural } from '../../../shared/lib/format.js';
 
@@ -41,6 +41,19 @@ export function kindsSummary(type: ProjectType, kinds: readonly NodeKind[]): str
   return ui.projects.schemasKindsSummary
     .replace('{allowed}', String(allowed))
     .replace('{total}', String(visible.length));
+}
+
+/** Сводка раздела «Типы задач и писем» (#665): «3 из 7» / «Все разрешены». */
+export function creationSummary(type: ProjectType, types: readonly ProcessType[]): string {
+  const total = types.length;
+  if (total === 0) return ui.automation.creationScope.projectSummaryNone;
+  const allowed = types.filter(
+    (item) => !typeConfigOf(item).creation.excludedProjectTypeIds.includes(type.id),
+  ).length;
+  if (allowed === total) return ui.automation.creationScope.projectSummaryAll;
+  return ui.automation.creationScope.projectSummary
+    .replace('{allowed}', String(allowed))
+    .replace('{total}', String(total));
 }
 
 /** `kindIds` после тумблера «вид доступен типу»: полный набор снова

@@ -4,6 +4,7 @@ import { processTypeIconSchema, projectColorSchema, ui } from '@nodus/contracts'
 import { cn } from '@nodus/ui/lib/utils';
 
 import { identityTone } from '../../../shared/ui/identity-tone.js';
+import { useLiveProcessTypes } from '../../../shared/api/process-types-api.js';
 import { CommitInput } from '../../../shared/ui/panel/commit-field.js';
 import { PanelDanger, PanelField, SectionLink } from '../../../shared/ui/panel/panel-kit.js';
 import { SidePanel } from '../../../shared/ui/panel/side-panel.js';
@@ -12,7 +13,7 @@ import {
   useSetProjectTypeArchived,
   useUpdateProjectType,
 } from '../api/project-catalog-mutations.js';
-import { kindsSummary } from '../lib/project-type-summary.js';
+import { kindsSummary, creationSummary } from '../lib/project-type-summary.js';
 import { ProjectTypeCreationSection } from './project-type-creation.js';
 import { ProjectTypeKindsSection } from './project-type-kinds.js';
 
@@ -65,7 +66,7 @@ export function ProjectTypeSettingsPanel({
           ? ui.projects.schemasTypeSettings
           : section === 'kinds'
             ? ui.projects.schemasKinds
-            : ui.automation.creationScope.projectSectionHeader
+            : ui.automation.creationScope.projectSectionTitle
       }
       leading={
         <span
@@ -112,6 +113,9 @@ function TypeRoot({
 }) {
   const update = useUpdateProjectType();
   const archive = useSetProjectTypeArchived();
+  const tasks = useLiveProcessTypes('task');
+  const letters = useLiveProcessTypes('letter');
+  const processTypes = [...(tasks.data ?? []), ...(letters.data ?? [])];
   const archived = type.archivedAt !== null;
   const patch = (body: { id: string } & ProjectTypeUpdateBody) => update.mutate(body);
 
@@ -174,7 +178,7 @@ function TypeRoot({
       <div className="flex min-w-0 flex-col">
         <SectionLink
           title={ui.automation.creationScope.projectSectionTitle}
-          summary={ui.automation.creationScope.projectSummary}
+          summary={creationSummary(type, processTypes)}
           onClick={() => onSection('creation')}
         />
         <SectionLink
