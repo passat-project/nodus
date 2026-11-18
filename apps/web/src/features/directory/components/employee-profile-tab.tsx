@@ -35,15 +35,16 @@ function presenceLabel(status: PresenceStatus): string {
 
 /**
  * Постоянная ЛЕВАЯ зона профиля карточки сотрудника (#750, #923): БОЛЬШАЯ
- * фотография (камера — только своя карточка) с presence-чипом под ней и
- * подписью «Администратор» под чипом (если роль выдана), заголовок
+ * фотография у ЛЕВОГО края (камера — только своя карточка; в колонкой
+ * раскладке не центрируется) с presence-чипом под ней и подписью
+ * «Администратор» под чипом (если роль выдана), заголовок
  * «Информация о сотруднике» над полями-реестром полного UserCard (до 46rem
  * зоны поля идут под фото, дальше — справа; 1↔2 колонки — по ширине колонки
  * полей плюс стадия двух колонок по ширине зоны), ниже — «Подчинённые» тем же
- * стилем заголовка и сеткой 1↔2 по ширине зоны (замы — первыми), переход в
- * карточки стеком (ADR-0009). Кнопки правки и действий живут в нижней полосе
- * зоны (`EmployeeProfileBar`), не здесь; скролл своей зоны, по горизонтали
- * контент не скроллится.
+ * стилем заголовка и сеткой 1↔2 по ширине зоны (замы — первыми, «заместитель»
+ * справа от имени), переход в карточки стеком (ADR-0009). Кнопки правки и
+ * действий живут в нижней полосе зоны (`EmployeeProfileBar`), не здесь; скролл
+ * своей зоны, по горизонтали контент не скроллится.
  */
 export function EmployeeProfileTab({
   card,
@@ -108,8 +109,11 @@ export function EmployeeProfileTab({
         <div className="flex flex-col gap-y-7 @min-[46rem]/zone:flex-row @min-[46rem]/zone:items-start @min-[46rem]/zone:gap-x-8 @min-[46rem]/zone:gap-y-0">
           {/* Фото профиля: клик — выбрать, ПКМ — сменить/убрать (канон
               контекстных меню). Кнопки правки из-под аватара убраны в нижнюю
-              полосу карточки (#923). */}
-          <div className="flex shrink-0 flex-col items-center gap-2.5">
+              полосу карточки (#923). `self-start` — фото ВСЕГДА у левого края:
+              в колонкой раскладке (поля под фото) флекс-колонка по умолчанию
+              растягивается на всю ширину и центрировала большое фото
+              (вердикт 18.11.2026). */}
+          <div className="flex shrink-0 flex-col items-center gap-2.5 self-start">
             {canEditAvatar ? (
               <ContextMenu>
                 <ContextMenuTrigger asChild>
@@ -190,9 +194,10 @@ export function EmployeeProfileTab({
         {/* Сетка подчинённых — та же container-query логика, что у полей:
             узко 1 колонка (должность под именем), широко 2 (должность
             справа, `min-w-0` + truncate — без горизонтального скролла).
-            Аватар закреплён слева в строке ИМЕНИ (как было), не отрывается
-            центрированием по всему блоку (вердикт 18.11.2026). Замы идут
-            ПЕРВЫМИ в списке (порядок считает `profileSubordinates`). */}
+            Аватар — по центру блока «имя + должность» (как было), а метка
+            «заместитель» стоит СПРАВА от имени, не третьей строкой даже в
+            самой узкой колонке (вердикт 18.11.2026). Замы идут ПЕРВЫМИ
+            в списке (порядок считает `profileSubordinates`). */}
         <div
           data-slot="profile-subordinates"
           className="mt-1.5 grid grid-cols-1 gap-x-12 gap-y-0.5 @min-[55rem]:grid-cols-2"
@@ -208,28 +213,30 @@ export function EmployeeProfileTab({
                 type="button"
                 data-slot="profile-subordinate"
                 onClick={() => openCard({ kind: 'employee', id: person.id })}
-                className="-mx-2 flex min-w-0 flex-col gap-0.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent/50 @min-[30rem]:flex-row @min-[30rem]:items-center @min-[30rem]:gap-2.5"
+                className="-mx-2 flex min-w-0 items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent/50"
               >
-                <span className="flex min-w-0 items-center gap-2.5">
-                  <PersonAvatar
-                    name={person.displayName}
-                    avatarUrl={person.avatarUrl}
-                    className="size-7 shrink-0"
-                  />
-                  <span className="min-w-0 flex-1 truncate text-sm" title={person.displayName}>
-                    {person.displayName}
-                  </span>
-                  {isDeputy ? (
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {ui.employees.deputyBadge}
+                <PersonAvatar
+                  name={person.displayName}
+                  avatarUrl={person.avatarUrl}
+                  className="size-7 shrink-0"
+                />
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5 @min-[30rem]:flex-row @min-[30rem]:items-center @min-[30rem]:gap-2.5">
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="min-w-0 truncate text-sm" title={person.displayName}>
+                      {person.displayName}
                     </span>
-                  ) : null}
-                </span>
-                <span
-                  className="min-w-0 truncate pl-9.5 text-xs text-muted-foreground @min-[30rem]:ml-auto @min-[30rem]:pl-0"
-                  title={person.positionName ?? undefined}
-                >
-                  {person.positionName ?? ''}
+                    {isDeputy ? (
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {ui.employees.deputyBadge}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span
+                    className="min-w-0 truncate text-xs text-muted-foreground @min-[30rem]:ml-auto"
+                    title={person.positionName ?? undefined}
+                  >
+                    {person.positionName ?? ''}
+                  </span>
                 </span>
               </button>
             );
