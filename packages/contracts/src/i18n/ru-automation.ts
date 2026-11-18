@@ -1,3 +1,4 @@
+import { creationScopeStrings } from './ru-automation-creation-scope.js';
 import { creationStrings, typeSettingsStrings } from './ru-automation-forms.js';
 import { deciderStrings } from './ru-automation-deciders.js';
 import { problemStrings } from './ru-automation-problems.js';
@@ -210,27 +211,7 @@ export const automationStrings = {
   creation: creationStrings,
   /** «Где создаётся» (#665): одна связь «тип процесса × место создания»,
    *  показанная с двух сторон — в типе проекта и в типе задачи/письма. */
-  creationScope: {
-    sectionTitle: 'Где создаётся',
-    projectSectionTitle: 'Что здесь можно создавать',
-    /** Шапка панели раздела: длинное название страницы не влезает в h-14. */
-    projectSectionHeader: 'Что создаётся',
-    projectSummary: 'Задачи и письма',
-    tasksGroup: 'Задачи',
-    lettersGroup: 'Письма',
-    empty: 'Живых типов нет — создайте тип в «Процессах»',
-    withoutProject: 'Без проекта',
-    folderKind: 'Вид папки',
-    folderKindAny: 'Где угодно',
-    projectTypeRow: 'Проекты',
-    projectTypesEmpty: 'Типов проектов нет',
-    allowAll: 'Разрешить во всех типах проектов',
-    /** Связь пишется в настройку типа процесса: право `workflow.manage`. */
-    noWorkflowPermission: 'Менять связь может настройщик процессов',
-    /** Снятие работы, привязанной к включённому виду папки (#665). */
-    unbindWarning:
-      'Работа этого типа создаётся только в папке своего вида — без папки её будет не создать',
-  },
+  creationScope: creationScopeStrings,
   /** Правая панель редактора (#378 ред. 2): разделы с переходом внутрь. */
   panel: {
     assignNumberHint:

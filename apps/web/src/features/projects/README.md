@@ -179,7 +179,7 @@ localStorage-кэш на пользователя + серверный GET/PUT).
   (`components/project-schema-canvas.tsx` — место будущей схемы проекта),
   правая панель `components/project-type-settings.tsx`: корень (название,
   значок, цвет) и страницы-разделы поверх панели со стрелкой «назад» —
-  «Что здесь можно создавать» (`components/project-type-creation.tsx`: типы
+  «Типы задач и писем» (`components/project-type-creation.tsx`: типы
   задач и писем с тумблерами — вторая сторона связи «где создаётся», #665),
   «Виды папок» (`components/project-type-kinds.tsx`: тумблер «вид доступен
   типу», создание вида на месте, «Включить все виды») и «Шифр проекта»
