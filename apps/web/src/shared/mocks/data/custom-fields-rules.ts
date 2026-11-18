@@ -45,8 +45,15 @@ export function checkDemoValues(
   }
   for (const [fieldId, value] of Object.entries(values)) {
     const definition = demoFieldById(fieldId);
-    if (!definition || definition.isCompany) {
+    if (!definition) {
       issues.push({ fieldId, reason: 'unknown', message: 'Unknown custom field' });
+      continue;
+    }
+    // Глобальная переменная — существующий атрибут, но у записей его нет:
+    // сервер отвечает `not_in_type` (known, но не привязан к месту), а не
+    // `unknown` (#646).
+    if (definition.isCompany) {
+      issues.push({ fieldId, reason: 'not_in_type', message: 'Field is not bound to this place' });
       continue;
     }
     // Непривязанный к типу — отдельная причина (сервер: not_in_type, #631).
@@ -54,18 +61,43 @@ export function checkDemoValues(
       issues.push({ fieldId, reason: 'not_in_type', message: 'Field is not bound to this place' });
       continue;
     }
-    if (!customFieldValueSchemaOf(definition).safeParse(value).success) {
-      issues.push({ fieldId, reason: 'invalid', message: 'Value does not match field type' });
-      continue;
-    }
-    const reference = checkReference(definition, value);
-    if (reference) issues.push({ fieldId, ...reference });
+    const issue = checkValueIssue(definition, value, { allowRecordRefs: true });
+    if (issue) issues.push(issue);
   }
   return issues;
 }
 
+/** Виды ссылок на записи: умолчания и глобальные значения проверяются без
+ *  актёра — сервер такие ссылки не принимает (`not_found`). */
+const RECORD_REF_TYPES = new Set(['task', 'letter', 'node', 'project']);
+
+/** Значение одного определения: грамматика + ссылки (#646). Для умолчаний и
+ *  глобальных значений `allowRecordRefs: false` — как сервер без актёра. */
+export function checkValueIssue(
+  definition: Pick<CustomFieldDefinition, 'id' | 'type' | 'settings'>,
+  value: CustomFieldValue,
+  opts: { allowRecordRefs?: boolean } = {},
+): DemoFieldIssue | null {
+  if (!customFieldValueSchemaOf(definition).safeParse(value).success) {
+    return {
+      fieldId: definition.id,
+      reason: 'invalid',
+      message: 'Value does not match field type',
+    };
+  }
+  if (!opts.allowRecordRefs && RECORD_REF_TYPES.has(definition.type)) {
+    return {
+      fieldId: definition.id,
+      reason: 'not_found',
+      message: 'Record not found or not visible',
+    };
+  }
+  const reference = checkReference(definition, value);
+  return reference ? { fieldId: definition.id, ...reference } : null;
+}
+
 function checkReference(
-  definition: CustomFieldDefinition,
+  definition: Pick<CustomFieldDefinition, 'id' | 'type' | 'settings'>,
   value: CustomFieldValue,
 ): Pick<DemoFieldIssue, 'reason' | 'message'> | null {
   const ids = Array.isArray(value) ? value : null;

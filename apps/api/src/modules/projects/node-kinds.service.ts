@@ -58,6 +58,9 @@ export class NodeKindsService {
 
   async update(id: string, dto: NodeKindUpdateBody, actorId: string): Promise<NodeKind> {
     return this.txRunner.run(async (tx) => {
+      // Реестр атрибутов → формы видов (#646): удаление определения между
+      // проверкой формы и записью привязок иначе даёт P2003 → 400.
+      await this.registry.lockRegistry(tx);
       await this.kinds.lockForms(tx);
       const current = await this.kinds.findById(id, tx);
       if (!current) throw DomainException.notFound('Node kind not found');

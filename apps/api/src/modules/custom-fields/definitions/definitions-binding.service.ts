@@ -78,6 +78,11 @@ export class DefinitionsBindingService {
       const fresh = await this.definitions.findById(id, tx);
       if (!fresh) throw DomainException.notFound('Custom field not found', { definitionId: id });
       assertNotCompany(fresh, kind, targetId);
+      // Повторная проверка цели ПОД локом (#646): между внешней проверкой и
+      // записью цель могли удалить/архивировать — привязка-сирота или
+      // FK-ошибка вместо 404/422. Лок реестра сериализует с определением,
+      // а справочники мест читаются заново.
+      await assertTargetsBindable(this.catalog, this.targets, kind, [targetId]);
       await this.definitions.bindTarget(id, bindingRowKind(kind), targetId, tx);
       return this.afterChange(tx, id, actorId);
     });

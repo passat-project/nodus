@@ -74,6 +74,11 @@ export interface CustomFieldRegistry {
   /** Определения (весь реестр или место сущности). Порядок — карточки. */
   definitions(opts?: RegistryQuery, tx?: TransactionClient): Promise<CustomFieldDefinition[]>;
 
+  /** Advisory-лок реестра (#646): мутации форм места берут его ДО чтения
+   *  определений, чтобы конкурентное удаление атрибута не дало FK-ошибку
+   *  (`P2003` → 400) вместо 404/422. Порядок локов — реестр → формы места. */
+  lockRegistry(tx: TransactionClient): Promise<void>;
+
   /** Создание сущности: умолчания (невалидные пропускаются) + ввод
    *  (явное значение важнее) + проверка. Ошибка — 422 со списком полей. */
   prepareCreate(args: PrepareCreateArgs, tx?: TransactionClient): Promise<CustomFieldValues>;

@@ -238,9 +238,10 @@ export class ProjectsService {
       if (!locked) throw DomainException.notFound('Project not found');
       const fresh = await this.repo.findById(id, tx);
       if (!fresh) throw DomainException.notFound('Project not found');
-      if (fresh.status === 'archived' && !user.permissions.includes(Permission.PROJECT_MANAGE)) {
-        throw DomainException.forbidden('Archived project fields are managed by project.manage');
-      }
+      // Права руководства, секретность и архив перепроверяются по СВЕЖЕЙ
+      // строке под FOR UPDATE (#705): между loadForManage и замком актёра
+      // могли снять с роли, а проект — архивировать или закрыть.
+      await this.assertManageLocked(user, id, locked, tx);
       const built = await buildUpdatePatch(
         {
           groups: this.groups,

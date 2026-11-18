@@ -76,11 +76,28 @@ export async function letterFieldsIssue(
   }
   const [dateIssue] = checkLetterDates(input, localIsoDate());
   if (dateIssue) return dateIssue;
-  if (input.customFields) {
-    const { issues } = applyDemoPatch({}, input.customFields, boundFieldIds(input.typeId));
-    if (issues.length > 0) return { field: 'customFields', reason: 'invalid' };
-  }
+  // Значения атрибутов проверяются отдельно (#646) и отвечают 422
+  // CUSTOM_FIELD_VALUE_INVALID со списком причин — как сервер, без свёртки
+  // в «customFields/invalid».
   return null;
+}
+
+/** Отказ значений-атрибутов письма (#646): код и причины — как у сервера. */
+export function letterValuesFailure(input: {
+  typeId: string;
+  customFields?: Record<string, CustomFieldValue | null>;
+}): Response | null {
+  if (!input.customFields) return null;
+  const { issues } = applyDemoPatch({}, input.customFields, boundFieldIds(input.typeId));
+  if (issues.length === 0) return null;
+  return HttpResponse.json(
+    {
+      code: ErrorCode.CUSTOM_FIELD_VALUE_INVALID,
+      message: 'Custom field value is invalid',
+      details: { issues },
+    },
+    { status: 422 },
+  );
 }
 
 /** Ошибка схемы ввода регистрации → поле и причина 422 (путь после `prefix`). */

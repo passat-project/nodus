@@ -160,12 +160,40 @@ describe('DefinitionsBindingService.bind (#631, Р3)', () => {
     expect(definitions.bindTarget).not.toHaveBeenCalled();
   });
 
+  it('повторная проверка цели под локом реестра — 404, привязки нет (#646)', async () => {
+    const { service, definitions, targets } = makeService();
+    // Первая (до транзакции) проверка видит цель, вторая (под локом) — нет:
+    // цель удалили между проверкой и записью.
+    targets.projectTypes
+      .mockResolvedValueOnce([{ id: 'pt-1', name: 'Тендер', archived: false }])
+      .mockResolvedValueOnce([]);
+    await expect(service.bind(ROW.id, 'project-type', 'pt-1', 'actor-1')).rejects.toMatchObject({
+      code: ErrorCode.NOT_FOUND,
+    });
+    expect(definitions.bindTarget).not.toHaveBeenCalled();
+  });
+
   it('неизвестный атрибут — 404', async () => {
     const { service, definitions } = makeService();
     definitions.findById.mockResolvedValue(null);
     await expect(service.bind('nope', 'process-type', 't-1', 'actor-1')).rejects.toMatchObject({
       code: ErrorCode.NOT_FOUND,
     });
+  });
+});
+
+describe('DefinitionsBindingService — глобальная переменная (#646, решение зафиксировано)', () => {
+  // Решение: у глобальной переменной привязок нет вообще, поэтому и снятие
+  // невозможно — 422, а не «идемпотентный no-op». Поведение принято как есть:
+  // менять его без продуктового решения нельзя, тест фиксирует контракт.
+  it('unbind глобальной переменной — 422, слоты и привязки не трогаются', async () => {
+    const { service, definitions, formCleaner } = makeService();
+    definitions.findById.mockResolvedValue(row({ isCompany: true }));
+    await expect(service.unbind(ROW.id, 'process-type', 't-1', 'actor-1')).rejects.toMatchObject({
+      code: ErrorCode.CUSTOM_FIELD_BINDING_INVALID,
+    });
+    expect(definitions.unbindTarget).not.toHaveBeenCalled();
+    expect(formCleaner.removeFieldFromForm).not.toHaveBeenCalled();
   });
 });
 

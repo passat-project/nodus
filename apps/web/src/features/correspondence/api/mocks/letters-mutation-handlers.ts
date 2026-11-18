@@ -38,6 +38,7 @@ import {
   attachedRefsOf,
   contactRefOf,
   letterFieldsIssue,
+  letterValuesFailure,
   notFound,
   patchChanges,
   projectRefOf,
@@ -85,11 +86,11 @@ export const lettersMutationHandlers = [
     });
     const files = form.getAll('files').filter((entry): entry is File => entry instanceof File);
     if (!fields.success || files.length === 0 || files.length > LETTER_LIMITS.files) {
-      return apiError(422, 'VALIDATION_FAILED');
+      // Схема тела — VALIDATION_FAILED → 400 (как ZodValidationPipe сервера).
+      return apiError(400, 'VALIDATION_FAILED');
     }
-    if (files.some((file) => file.size > LETTER_LIMITS.fileBytes)) {
+    if (files.some((file) => file.size > LETTER_LIMITS.fileBytes))
       return apiError(413, 'VALIDATION_FAILED');
-    }
     if (fields.data.typeId !== incomingLetterType.id) return apiError(422, 'VALIDATION_FAILED');
     const mainIndex = Math.min(fields.data.mainIndex, files.length - 1);
     const attachments = files.map((file, index) =>
@@ -160,6 +161,12 @@ export const lettersMutationHandlers = [
     }
     const counterpartyId = body.counterpartyId ?? letter.counterparty?.id ?? '';
     const signerId = body.signerId !== undefined ? body.signerId : (letter.signer?.id ?? null);
+    // Значения-атрибуты (#646) — отдельный 422 со списком причин.
+    const valuesFailure = letterValuesFailure({
+      typeId: letter.typeId,
+      customFields: body.customFields,
+    });
+    if (valuesFailure) return valuesFailure;
     const issue = await letterFieldsIssue(
       {
         typeId: letter.typeId,
