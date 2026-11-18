@@ -74,11 +74,22 @@ export class ProcessTypesRepository {
     await tx.processType.update({ where: { id }, data });
   }
 
-  /** Конфигурация типа целиком (#432): разделы заменяются, не сливаются. */
-  async updateConfig(tx: TransactionClient, id: string, config: unknown): Promise<void> {
+  /** Конфигурация типа целиком (#432): разделы заменяются, не сливаются.
+   *  `markCustomized=false` — правка только «где создаётся» (#665): это не
+   *  настройка маршрута, и системный каталог не должен считаться
+   *  настроенным вручную (иначе его ревизии замирают навсегда). */
+  async updateConfig(
+    tx: TransactionClient,
+    id: string,
+    config: unknown,
+    opts: { markCustomized?: boolean } = {},
+  ): Promise<void> {
     await tx.processType.update({
       where: { id },
-      data: { config: config as Prisma.InputJsonValue, customizedAt: new Date() },
+      data: {
+        config: config as Prisma.InputJsonValue,
+        ...(opts.markCustomized === false ? {} : { customizedAt: new Date() }),
+      },
     });
   }
 

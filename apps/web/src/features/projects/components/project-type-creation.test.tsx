@@ -14,6 +14,9 @@ vi.mock('../../../shared/api/process-types-api.js', () => ({
   useLiveProcessTypes: vi.fn(),
   useUpdateTypeCreation: vi.fn(),
 }));
+vi.mock('../../../shared/api/use-can-manage-workflows.js', () => ({
+  useCanManageWorkflows: () => true,
+}));
 
 const PROJECT_TYPE_ID = '11111111-1111-4111-8111-111111111111';
 

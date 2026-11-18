@@ -211,7 +211,9 @@ export class ProcessTypesService {
     }
     const config = { ...normalizeTypeConfig(type.config), ...body };
     await this.txRunner.run(async (tx) => {
-      await this.repo.updateConfig(tx, id, config);
+      // «Где создаётся» — не настройка маршрута (#665): не помечаем тип
+      // настроенным вручную, иначе системный каталог перестанет получать ревизии.
+      await this.repo.updateConfig(tx, id, config, { markCustomized: !creationOnly });
       await this.eventBus.emit(
         tx,
         WORKFLOW_EVENTS.TYPE_UPDATED,

@@ -225,6 +225,8 @@ export const automationStrings = {
     projectTypeRow: 'Проекты',
     projectTypesEmpty: 'Типов проектов нет',
     allowAll: 'Разрешить во всех типах проектов',
+    /** Связь пишется в настройку типа процесса: право `workflow.manage`. */
+    noWorkflowPermission: 'Менять связь может настройщик процессов',
   },
   /** Правая панель редактора (#378 ред. 2): разделы с переходом внутрь. */
   panel: {

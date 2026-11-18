@@ -1,7 +1,7 @@
 import { normalizeTypeConfig, type ProcessType } from '@nodus/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { singleProjectOf, typeAllowedAtPlace } from './task-create-scope.js';
+import { singleProjectOf, projectForType, typeAllowedAtPlace } from './task-create-scope.js';
 
 const PROJECT_TYPE = '11111111-1111-4111-8111-111111111111';
 const OTHER_PROJECT_TYPE = '22222222-2222-4222-8222-222222222222';
@@ -91,5 +91,14 @@ describe('окно создания: где предлагать тип (#665)',
     expect(typeAllowedAtPlace(entity, { projectTypeId: null, nodeKindId: KIND }, projects)).toBe(
       true,
     );
+  });
+
+  it('проект подставляется, только если он единственный и ещё не выбран', () => {
+    const entity = type({ withoutProject: false });
+    expect(projectForType(entity, undefined, projects)).toBeNull();
+    expect(projectForType(entity, 'p2', [projects[0]!])).toBe('p1');
+    expect(projectForType(entity, 'p1', [projects[0]!])).toBeNull();
+    // Тип, который можно без проекта, проект не навязывает.
+    expect(projectForType(type(), undefined, [projects[0]!])).toBeNull();
   });
 });
