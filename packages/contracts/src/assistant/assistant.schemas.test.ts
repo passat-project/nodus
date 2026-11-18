@@ -182,6 +182,7 @@ describe('assistantRunSchema: статусы и терминальные сос�
     model: 'deepseek/deepseek-v4.1-flash-1017',
     inputTokens: null,
     outputTokens: null,
+    contextTokens: null,
     errorCode: null,
     errorMessage: null,
     startedAt: ISO,

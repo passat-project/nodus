@@ -226,6 +226,18 @@ describe('AssistantRepository: сообщения (#893)', () => {
     expect(messages.map((message) => message.id)).toEqual(['older', 'newer']);
   });
 
+  it('messagesBefore: строго раньше границы и по возрастанию (#943)', async () => {
+    const { repo, prisma } = makeRepo();
+    const boundary = new Date('2026-11-17T10:00:00.000Z');
+    await repo.messagesBefore(SESSION_ID, { createdAt: boundary });
+    expect(prisma.assistantMessage.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { sessionId: SESSION_ID, createdAt: { lt: boundary } },
+        orderBy: { createdAt: 'asc' },
+      }),
+    );
+  });
+
   it('createMessage: пустой текст — строка, а не undefined; статус прогона null', async () => {
     const { repo, prisma } = makeRepo();
     prisma.assistantMessage.create.mockResolvedValueOnce(messageRow({ run: null }));
