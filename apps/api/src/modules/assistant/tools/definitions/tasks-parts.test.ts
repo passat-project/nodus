@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { Paginated, TaskRelation } from '@nodus/contracts';
 import type { ToolContext } from '../tool-definition.js';
 import { tasksActionsTool, tasksRelationsTool } from './tasks-parts.tools.js';
 import {

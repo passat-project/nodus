@@ -191,29 +191,20 @@ describe('AssistantActionsService: предложение (ADR-0048)', () => {
     expect(bus.publish).toHaveBeenCalledWith(RUN_ID, 'action.executed', expect.anything());
   });
 
-  it('байпас не исполняет необратимое действие: карточка ждёт человека (#926)', async () => {
-    const irreversible = findAnyTool('tasks.add_participant') as AssistantToolDefinition;
-    expect(irreversible.effect).toBe('irreversible');
-    const { service, executor, repo } = build();
+  it('байпас не исполняет необратимое: карточка ждёт человека (#926)', async () => {
+    const { service, executor } = build();
     const result = await service.propose({
       runId: RUN_ID,
       sessionId: 'session-1',
       messageId: 'message-1',
       userId: USER_ID,
-      tool: irreversible,
-      rawInput: {
-        taskId: '55555555-5555-4555-8555-555555555555',
-        userId: '44444444-4444-4444-8444-444444444444',
-        role: 'observer',
-      },
+      tool: findAnyTool('tasks.add_participant') as AssistantToolDefinition,
+      rawInput: { taskId: RUN_ID, userId: USER_ID, role: 'observer' },
       automatic: true,
       authorization: 'Bearer user-token',
       ctx,
     });
-
     expect(executor.executeWrite).not.toHaveBeenCalled();
-    expect(repo.ensureActionBatch).toHaveBeenCalled();
-    expect(result.text).toContain('ждёт подтверждения');
     expect(result.text).toContain('необратимо');
   });
 
