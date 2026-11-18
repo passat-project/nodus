@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { NodeKind, ProjectType } from '@nodus/contracts';
+import type { NodeKind, ProcessType, ProjectType } from '@nodus/contracts';
+import { normalizeTypeConfig, ui } from '@nodus/contracts';
 
 import {
+  creationSummary,
   kindsSummary,
   kindIdsAfterToggle,
   typeMeta,
@@ -37,6 +39,43 @@ function type(overrides: Partial<ProjectType> = {}): ProjectType {
     ...overrides,
   };
 }
+
+function processType(id: string, excluded: string[] = []): ProcessType {
+  return {
+    id,
+    code: id,
+    name: id,
+    category: 'task',
+    direction: null,
+    icon: 'square-check',
+    color: 'neutral',
+    description: '',
+    creatable: true,
+    isSystem: false,
+    sortOrder: 0,
+    archivedAt: null,
+    workflowId: '42000000-0000-4000-8000-000000000001',
+    config: normalizeTypeConfig({
+      creation: { excludedProjectTypeIds: excluded, folderKindId: null, withoutProject: true },
+    }),
+    creationForm: { fields: [], chips: [] },
+    viewer: { canView: true, canCreate: true },
+    numbering: null,
+  } as ProcessType;
+}
+
+describe('creationSummary (#665)', () => {
+  it('пусто, всё разрешено и «N из M»', () => {
+    const projectType = type();
+    expect(creationSummary(projectType, [])).toBe(ui.automation.creationScope.projectSummaryNone);
+    expect(creationSummary(projectType, [processType('a')])).toBe(
+      ui.automation.creationScope.projectSummaryAll,
+    );
+    expect(
+      creationSummary(projectType, [processType('a'), processType('b', [projectType.id])]),
+    ).toBe('Разрешены 1 из 2');
+  });
+});
 
 describe('visibleTypeKinds', () => {
   it('живые виды + уже привязанные архивные, чужие архивные не показываются', () => {

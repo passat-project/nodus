@@ -2,12 +2,14 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ProcessType, ProjectType } from '@nodus/contracts';
-import { normalizeTypeConfig } from '@nodus/contracts';
+import { normalizeTypeConfig, ui } from '@nodus/contracts';
+import { toast } from 'sonner';
 
 import {
   useLiveProcessTypes,
   useUpdateTypeCreation,
 } from '../../../shared/api/process-types-api.js';
+import { useCanManageWorkflows } from '../../../shared/api/use-can-manage-workflows.js';
 import { ProjectTypeCreationSection } from './project-type-creation.js';
 
 vi.mock('../../../shared/api/process-types-api.js', () => ({
@@ -15,8 +17,9 @@ vi.mock('../../../shared/api/process-types-api.js', () => ({
   useUpdateTypeCreation: vi.fn(),
 }));
 vi.mock('../../../shared/api/use-can-manage-workflows.js', () => ({
-  useCanManageWorkflows: () => true,
+  useCanManageWorkflows: vi.fn(() => true),
 }));
+vi.mock('sonner', () => ({ toast: { warning: vi.fn() } }));
 
 const PROJECT_TYPE_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -71,12 +74,18 @@ const LETTER = processType({
   excluded: [PROJECT_TYPE_ID],
 });
 
-function setup(canSetup = true) {
+function setup(
+  canSetup = true,
+  tasks: ProcessType[] = [TASK],
+  letters: ProcessType[] = [LETTER],
+  manage = true,
+) {
   const mutate = vi.fn();
+  vi.mocked(useCanManageWorkflows).mockReturnValue(manage);
   vi.mocked(useLiveProcessTypes).mockImplementation(
     (category) =>
       ({
-        data: category === 'task' ? [TASK] : [LETTER],
+        data: category === 'task' ? tasks : letters,
       }) as never,
   );
   vi.mocked(useUpdateTypeCreation).mockReturnValue({ mutate, isPending: false } as never);
@@ -114,5 +123,34 @@ describe('«Типы задач и писем» (#665)', () => {
   it('без права настройки тумблеры недоступны', () => {
     setup(false);
     expect(screen.getByRole('switch', { name: /Комплект/ })).toHaveProperty('disabled', true);
+  });
+
+  it('без права процессов — пояснение вместо 403', () => {
+    setup(true, [TASK], [LETTER], false);
+    expect(screen.getByText(ui.automation.creationScope.noWorkflowPermission)).toBeTruthy();
+    expect(screen.getByRole('switch', { name: /Комплект/ })).toHaveProperty('disabled', true);
+  });
+
+  it('пустые группы — спокойная подсказка', () => {
+    setup(true, [], []);
+    expect(screen.getAllByText(ui.automation.creationScope.empty).length).toBeGreaterThan(0);
+  });
+
+  it('снятие работы, привязанной к виду, — предупреждение', () => {
+    const bound = {
+      ...TASK,
+      config: normalizeTypeConfig({
+        creation: {
+          excludedProjectTypeIds: [],
+          folderKindId: '33333333-3333-4333-8333-333333333333',
+          withoutProject: false,
+        },
+      }),
+    } as ProcessType;
+    setup(true, [bound]);
+    fireEvent.click(screen.getByRole('switch', { name: /Комплект/ }));
+    expect(vi.mocked(toast.warning)).toHaveBeenCalledWith(
+      ui.automation.creationScope.unbindWarning,
+    );
   });
 });
