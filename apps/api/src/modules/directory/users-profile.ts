@@ -41,10 +41,18 @@ export async function updateMyProfileOf(
     firstName: dto.firstName ?? before.firstName,
     middleName: dto.middleName === undefined ? before.middleName : dto.middleName,
   };
+  // displayName пересчитывается только при присланном ФИО: правка контактов не
+  // должна откатывать имя, изменённое параллельно из устаревшего снимка (#923).
+  const namesProvided =
+    dto.lastName !== undefined || dto.firstName !== undefined || dto.middleName !== undefined;
   return deps.tx.run(async (tx) => {
     // displayName — денормализация ФИО для всех ~40 мест UI: смена имени в
     // профиле обязана обновить топбар и списки (событие ниже).
-    await deps.users.update(userId, { ...dto, displayName: buildDisplayName(names) }, tx);
+    await deps.users.update(
+      userId,
+      { ...dto, ...(namesProvided ? { displayName: buildDisplayName(names) } : {}) },
+      tx,
+    );
     await deps.eventBus.emit(
       tx,
       DIRECTORY_EVENTS.USER_UPDATED,

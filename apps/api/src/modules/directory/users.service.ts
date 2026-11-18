@@ -182,6 +182,11 @@ export class UsersService {
       firstName: dto.firstName ?? before.firstName,
       middleName: dto.middleName === undefined ? before.middleName : dto.middleName,
     };
+    // displayName — денормализация ФИО: пишем его только когда ФИО реально
+    // прислали. Иначе правка «город/ставка» из устаревшего снимка `before`
+    // откатывала бы имя, изменённое параллельной транзакцией (#923).
+    const namesProvided =
+      dto.lastName !== undefined || dto.firstName !== undefined || dto.middleName !== undefined;
     const { roleIds, ...fields } = dto;
     const membershipChanges = roleIds !== undefined || dto.departmentId !== undefined;
 
@@ -249,7 +254,7 @@ export class UsersService {
         id,
         {
           ...fields,
-          displayName: buildDisplayName(names),
+          ...(namesProvided ? { displayName: buildDisplayName(names) } : {}),
         },
         tx,
       );

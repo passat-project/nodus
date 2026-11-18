@@ -169,12 +169,15 @@ const userOrgAdminShape = {
   legalPositionId: userOrgSchema.shape.legalPositionId,
 };
 
-/** Обновление карточки администратором (directory.manage), всё опционально. */
+/** Обновление карточки администратором (directory.manage), всё опционально.
+ *  `avatarUrl` не принимается: фото ставится только конвейером аватара
+ *  (`POST/DELETE /users/me/avatar`), иначе админ мог бы записать произвольный
+ *  внешний URL в карточку (#923, security-аудит). */
 export const updateUserSchema = z
   .object({
     ...userNamesSchema.partial().shape,
     ...userOrgAdminShape,
-    ...userProfileSchema.shape,
+    ...userProfileSchema.omit({ avatarUrl: true }).shape,
     roleIds: z.array(z.uuid()),
   })
   .partial();

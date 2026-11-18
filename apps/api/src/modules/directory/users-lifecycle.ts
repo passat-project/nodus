@@ -69,6 +69,12 @@ export async function deactivateUserOf(
         adminRoleId = lockedId;
       }
     }
+    // #923: уволенный не может оставаться главой/замом — ссылки снимаются,
+    // подчинённые переезжают к ближайшему главе выше (события — там же).
+    // Снимаем ДО записи статуса: общая дисциплина замков `departments → users`,
+    // как в переводе и DepartmentsService (обратный порядок давал дедлок с
+    // правкой/переносом подразделения).
+    await clearLeadershipOf(id, actor.id, tx, deps);
     await deps.users.update(id, { status: 'deactivated' }, tx);
     if (
       adminRoleId !== null &&
@@ -78,9 +84,6 @@ export async function deactivateUserOf(
         roleId: adminRoleId,
       });
     }
-    // #923: уволенный не может оставаться главой/замом — ссылки снимаются,
-    // подчинённые переезжают к ближайшему главе выше (события — там же).
-    await clearLeadershipOf(id, actor.id, tx, deps);
     await deps.eventBus.emit(
       tx,
       DIRECTORY_EVENTS.USER_DEACTIVATED,

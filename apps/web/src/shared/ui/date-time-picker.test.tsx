@@ -52,7 +52,7 @@ describe('DateTimePicker: выбор года (#923)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Дата рождения' }));
     fireEvent.click(screen.getByRole('button', { name: 'Выбрать год' }));
-    // Блок 1980–1991 (год значения — 1990).
+    // Блок 1984–1999 (год значения — 1990).
     const year = screen.getByRole('button', { name: '1985' });
     fireEvent.click(year);
     // Вернулись к календарю: снова видны дни месяца, сетки лет нет.

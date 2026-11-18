@@ -11,8 +11,9 @@ import { setupChatFixture } from './chat-fixtures.js';
 /**
  * Валидация ссылок оргструктуры (#441) на живом стеке: руководитель/зам
  * подразделения и ссылки сотрудника — только существующие активные объекты
- * своего вида структуры; самоссылка руководителя запрещена. Отказ —
- * 400 DIRECTORY_REFERENCE_INVALID с details { field, reason }.
+ * своего вида структуры. Руководитель сотрудника — производное поле (#923):
+ * клиентское значение `managerId` не принимается (zod вырезает), отказ за
+ * самоссылку/цикл больше не нужен — циклов нет по построению.
  */
 describe('Ссылки оргструктуры (#441)', () => {
   let chat: Awaited<ReturnType<typeof setupChatFixture<'manager' | 'employee'>>>;
@@ -80,11 +81,11 @@ describe('Ссылки оргструктуры (#441)', () => {
     return created.id;
   };
 
-  it('POST /directory/users: руководитель-призрак → 400 not_found', async () => {
+  it('POST /directory/users: managerId от клиента игнорируется — руководитель производный (#923)', async () => {
     const response = await chat.api(manager, 'POST', '/directory/users', {
       key: randomUUID(),
       body: {
-        email: `ghost-manager-${chat.runId}@test.nodus.local`,
+        email: `chat-it-${chat.runId}-manager-ignore@test.nodus.local`,
         password: 'Start!23456789',
         lastName: 'Проверка',
         firstName: 'Ссылок',
@@ -93,25 +94,11 @@ describe('Ссылки оргструктуры (#441)', () => {
       },
     });
 
-    expect(response.status).toBe(400);
-    const body = (await response.json()) as {
-      code: string;
-      details: { field: string; reason: string };
-    };
-    expect(body.code).toBe(ErrorCode.DIRECTORY_REFERENCE_INVALID);
-    expect(body.details).toMatchObject({ field: 'managerId', reason: 'not_found' });
-  });
-
-  it('PATCH /directory/users/:id: руководитель — сам сотрудник → 400 self', async () => {
-    const response = await chat.api(manager, 'PATCH', `/directory/users/${employee.id}`, {
-      key: randomUUID(),
-      body: { managerId: employee.id },
-    });
-
-    expect(response.status).toBe(400);
-    expect(((await response.json()) as { code: string }).code).toBe(
-      ErrorCode.DIRECTORY_REFERENCE_INVALID,
-    );
+    expect(response.status).toBe(201);
+    const card = (await response.json()) as { managerId: string | null };
+    // Нет подразделения/главы — вычисленный руководитель пуст; присланное
+    // значение не сохраняется и не проверяется как ссылка.
+    expect(card.managerId).toBeNull();
   });
 
   it('PATCH /directory/users/:id: подразделение чужого вида → 400 kind_mismatch', async () => {
@@ -212,103 +199,5 @@ describe('Ссылки оргструктуры (#441)', () => {
     const updated = (await patched.json()) as { kind: string; name: string };
     expect(updated.kind).toBe('management');
     expect(updated.name).toBe(`Позиция ${chat.runId} (изм.)`);
-  });
-
-  it('PATCH /directory/users/:id: валидный руководитель → 200', async () => {
-    const response = await chat.api(manager, 'PATCH', `/directory/users/${employee.id}`, {
-      key: randomUUID(),
-      body: { managerId: manager.id },
-    });
-
-    expect(response.status).toBe(200);
-    const card = (await response.json()) as { managerId: string | null };
-    expect(card.managerId).toBe(manager.id);
-  });
-
-  it('параллельные PATCH A↔B: один 200, один 400 cycle — кольца нет (#441)', async () => {
-    await chat.prisma.user.updateMany({
-      where: { id: { in: [manager.id, employee.id] } },
-      data: { managerId: null },
-    });
-
-    // Держим advisory-лок графа отдельной транзакцией: оба PATCH доходят до
-    // lockManagerTree и встают в очередь — гонка воспроизводится детерминированно.
-    let release!: () => void;
-    let acquired!: () => void;
-    const hold = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const ready = new Promise<void>((resolve) => {
-      acquired = resolve;
-    });
-    const holder = chat.prisma.$transaction(
-      async (tx) => {
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('nodus:users:manager-graph'))`;
-        acquired();
-        await hold;
-      },
-      { timeout: 30_000 },
-    );
-    await ready;
-
-    const requests = Promise.all([
-      chat.api(manager, 'PATCH', `/directory/users/${manager.id}`, {
-        key: randomUUID(),
-        body: { managerId: employee.id },
-      }),
-      chat.api(manager, 'PATCH', `/directory/users/${employee.id}`, {
-        key: randomUUID(),
-        body: { managerId: manager.id },
-      }),
-    ]);
-
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      const rows = await chat.prisma.$queryRaw<{ count: number }[]>`
-        SELECT count(*)::int AS count FROM pg_locks
-        WHERE locktype = 'advisory' AND NOT granted
-      `;
-      if ((rows[0]?.count ?? 0) >= 2) break;
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-
-    release();
-    const [first, second] = await requests;
-    await holder;
-
-    const statuses = [first.status, second.status].sort((x, y) => x - y);
-    expect(statuses).toEqual([200, 400]);
-    const rejected = first.status === 400 ? first : second;
-    expect(((await rejected.json()) as { code: string }).code).toBe(
-      ErrorCode.DIRECTORY_REFERENCE_INVALID,
-    );
-
-    const [storedManager, storedEmployee] = await Promise.all([
-      chat.prisma.user.findUniqueOrThrow({ where: { id: manager.id } }),
-      chat.prisma.user.findUniqueOrThrow({ where: { id: employee.id } }),
-    ]);
-    const oneWay = storedManager.managerId === employee.id && storedEmployee.managerId === null;
-    const otherWay = storedEmployee.managerId === manager.id && storedManager.managerId === null;
-    expect(oneWay || otherWay).toBe(true);
-  });
-
-  it('PATCH /directory/users/:id: цикл руководителей A→B→A → 400 cycle', async () => {
-    // B уже руководитель A (из предыдущего сценария или явно).
-    await chat.prisma.user.update({
-      where: { id: employee.id },
-      data: { managerId: manager.id },
-    });
-
-    const denied = await chat.api(manager, 'PATCH', `/directory/users/${manager.id}`, {
-      key: randomUUID(),
-      body: { managerId: employee.id },
-    });
-
-    expect(denied.status).toBe(400);
-    const body = (await denied.json()) as {
-      code: string;
-      details: { field: string; reason: string };
-    };
-    expect(body.code).toBe(ErrorCode.DIRECTORY_REFERENCE_INVALID);
-    expect(body.details).toMatchObject({ field: 'managerId', reason: 'cycle' });
   });
 });

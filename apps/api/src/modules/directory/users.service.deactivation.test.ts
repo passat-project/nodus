@@ -140,6 +140,19 @@ describe('UsersService: деактивация сотрудника', () => {
     );
   });
 
+  it('ссылки главы снимаются ДО записи статуса (порядок замков, #923)', async () => {
+    users.findCardById.mockResolvedValue(cardRow());
+    departmentsRepo.clearHeadAndDeputy.mockResolvedValue([
+      { id: 'dep-1', head: true, deputy: false },
+    ]);
+
+    await service.deactivateUser('user-1', actor());
+
+    expect(departmentsRepo.clearHeadAndDeputy.mock.invocationCallOrder[0]!).toBeLessThan(
+      users.update.mock.invocationCallOrder[0]!,
+    );
+  });
+
   it('идемпотентна: уже деактивирован — без события', async () => {
     users.findCardById.mockResolvedValue(cardRow({ status: 'deactivated' }));
 

@@ -219,6 +219,20 @@ describe('UsersService: создание и правка сотрудника', 
         expect.objectContaining({ userId: 'user-1' }),
         expect.anything(),
       );
+      // displayName — денормализация ФИО: без присланного ФИО не переписывается.
+      expect(users.update).toHaveBeenLastCalledWith(
+        'user-1',
+        { mobilePhone: '+375291234567' },
+        'tx-handle',
+      );
+
+      users.update.mockClear();
+      await service.updateUser('user-1', { lastName: 'Петров' }, actor());
+      expect(users.update).toHaveBeenCalledWith(
+        'user-1',
+        expect.objectContaining({ lastName: 'Петров', displayName: 'Петров Сотрудник' }),
+        'tx-handle',
+      );
     });
 
     it('добавляет роль, все права которой есть у актора', async () => {
