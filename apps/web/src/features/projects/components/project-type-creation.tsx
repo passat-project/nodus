@@ -8,6 +8,7 @@ import {
   useLiveProcessTypes,
   useUpdateTypeCreation,
 } from '../../../shared/api/process-types-api.js';
+import { useCanManageWorkflows } from '../../../shared/api/use-can-manage-workflows.js';
 import { PanelNote } from '../../../shared/ui/panel/panel-kit.js';
 import { ProcessTypeGlyph } from '../../../shared/workflow/process-type-icon.js';
 import { typeToneOf } from '../../../shared/workflow/type-tone.js';
@@ -30,6 +31,10 @@ export function ProjectTypeCreationSection({
   const tasks = useLiveProcessTypes('task');
   const letters = useLiveProcessTypes('letter');
   const update = useUpdateTypeCreation();
+  // Запись связи требует `workflow.manage` (сервер — истина, I8): у настройщика
+  // типов проектов без права процессов тумблеры неактивны, а не дают 403.
+  const canManage = useCanManageWorkflows();
+  const canSave = canSetup && canManage;
 
   function toggle(item: ProcessType, allowed: boolean): void {
     const scope = typeConfigOf(item).creation;
@@ -68,7 +73,7 @@ export function ProjectTypeCreationSection({
               </span>
               <Switch
                 checked={!typeConfigOf(item).creation.excludedProjectTypeIds.includes(type.id)}
-                disabled={!canSetup || update.isPending}
+                disabled={!canSave || update.isPending}
                 aria-label={`${item.name}: ${ui.automation.creationScope.projectSectionTitle}`}
                 onCheckedChange={(checked) => toggle(item, checked)}
               />
@@ -81,6 +86,9 @@ export function ProjectTypeCreationSection({
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
+      {canSetup && !canSave ? (
+        <PanelNote>{ui.automation.creationScope.noWorkflowPermission}</PanelNote>
+      ) : null}
       {group(ui.automation.creationScope.tasksGroup, tasks.data)}
       {group(ui.automation.creationScope.lettersGroup, letters.data)}
     </div>

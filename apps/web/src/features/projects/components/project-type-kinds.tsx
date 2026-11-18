@@ -18,6 +18,7 @@ import {
   useLiveProcessTypes,
   useUpdateTypeCreation,
 } from '../../../shared/api/process-types-api.js';
+import { useCanManageWorkflows } from '../../../shared/api/use-can-manage-workflows.js';
 import { useUpdateProjectType } from '../api/project-catalog-mutations.js';
 import { kindIdsAfterToggle, visibleTypeKinds } from '../lib/project-type-summary.js';
 import { useCreateNodeKind } from '../node-kinds/api/node-kinds-api.js';
@@ -47,6 +48,7 @@ export function ProjectTypeKindsSection({
   const tasks = useLiveProcessTypes('task');
   const letters = useLiveProcessTypes('letter');
   const updateTypeScope = useUpdateTypeCreation();
+  const canManageWorkflows = useCanManageWorkflows();
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
 
@@ -195,7 +197,7 @@ export function ProjectTypeKindsSection({
         </PanelAction>
       ) : null}
 
-      {canSetup && boundWorks.length > 0 ? (
+      {canSetup && canManageWorkflows && boundWorks.length > 0 ? (
         <PanelAction icon={Check} onClick={allowBoundWorks}>
           {ui.projects.schemasSuggestWorks}
         </PanelAction>
