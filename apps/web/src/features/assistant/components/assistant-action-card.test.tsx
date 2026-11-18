@@ -82,6 +82,23 @@ describe('AssistantActionCard: подтверждение (Ф2)', () => {
     expect(h.undoMutate).toHaveBeenCalledWith('a-1', expect.anything());
   });
 
+  it('длинная подпись «Открыть» обрезается внутри карточки (#936)', () => {
+    render(
+      <AssistantActionCard
+        action={action({
+          state: 'executed',
+          href: '?cards=task:task-1',
+          hrefLabel: '№29 '.repeat(30).trim(),
+        })}
+        sessionId="s-1"
+      />,
+    );
+    const button = screen.getByRole('button', { name: /Открыть/ });
+    expect(button.className).toContain('max-w-full');
+    expect(button.className).toContain('min-w-0');
+    expect(button.querySelector('span')?.className).toContain('truncate');
+  });
+
   it('необратимое выполненное — без кнопки «Отменить»', () => {
     render(
       <AssistantActionCard

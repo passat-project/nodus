@@ -142,12 +142,14 @@ export function AssistantActionCard({
             type="button"
             size="sm"
             variant="outline"
-            className="h-7 gap-1 px-2 text-label"
+            className="h-7 min-w-0 max-w-full justify-start gap-1 px-2 text-label"
             onClick={() => openCardFromHref(action.href!)}
           >
-            <ArrowUpRight className="size-3 text-primary" />
-            {strings.open}
-            {action.hrefLabel ? `: ${action.hrefLabel}` : ''}
+            <ArrowUpRight className="size-3 shrink-0 text-primary" />
+            <span className="min-w-0 truncate">
+              {strings.open}
+              {action.hrefLabel ? `: ${action.hrefLabel}` : ''}
+            </span>
           </Button>
         ) : null}
 

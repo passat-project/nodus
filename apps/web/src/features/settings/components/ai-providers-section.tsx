@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, Star, Trash2 } from 'lucide-react';
+import { Plus, Route, Star, Trash2 } from 'lucide-react';
 import { ui, type AiSettingsBody, type AiSettingsResponse } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@nodus/ui/components/dialog';
@@ -10,7 +10,6 @@ import { DataTable } from '../../../shared/views/data-table.js';
 import { useListToolbar } from '../../../shared/views/use-list-toolbar.js';
 import { useRowSelection } from '../../../shared/views/use-row-selection.js';
 import { useAiSettingsQuery, useUpdateAiSettings } from '../api/ai-settings.js';
-import { AiDefaultModelsBar, type DefaultModelsPatch } from './ai-default-models-bar.js';
 import { providerColumns, type ProviderDraft } from './ai-provider-columns.js';
 import { AiProviderDialog, type ProviderDialogMode } from './ai-provider-dialog.js';
 import { AiRegistryHeader } from './ai-registry-header.js';
@@ -23,8 +22,8 @@ const VIEW_KEY = 'ai-providers.list';
  * Раздел «Провайдеры» экрана «Настройки портала → ИИ-агент» (#894, ADR-0044;
  * вынос в раздел — #902): реестр моделей с колонками-полями, «Создать» слева
  * от поиска, окно создания с полями столбиком. Клик по строке — окно правки;
- * пресеты — выбором при создании. Ниже списка НИЧЕГО нет: дефолт, правила и
- * модели живут в окне провайдера.
+ * пресеты — выбором при создании. Дефолт портала и модель-диспетчер — в окне
+ * провайдера; колонки реестра показывают, кто назначен.
  *
  * Сохранение — один `PUT` полной заменой на каждое действие окна/удаления
  * (оптимистично, откат при ошибке): ключ уходит, только если его ввели;
@@ -105,7 +104,12 @@ export function AiProvidersSection({
   function applyProvider(
     id: string,
     patch: Partial<ProviderDraft>,
-    defaults: { defaultProviderId: string | null; defaultModelId: string | null },
+    defaults: {
+      defaultProviderId: string | null;
+      defaultModelId: string | null;
+      routerProviderId: string | null;
+      routerModelId: string | null;
+    },
     instructions: string,
   ) {
     if (!draft) return;
@@ -116,6 +120,8 @@ export function AiProvidersSection({
       ),
       defaultProviderId: defaults.defaultProviderId,
       defaultModelId: defaults.defaultModelId,
+      routerProviderId: defaults.routerProviderId,
+      routerModelId: defaults.routerModelId,
       instructions,
     });
   }
@@ -137,12 +143,6 @@ export function AiProvidersSection({
     for (const id of ids) selection.deselect(id);
   }
 
-  /** Модели по умолчанию (#917): основная и диспетчер — тем же общим PUT. */
-  function applyModels(patch: DefaultModelsPatch) {
-    if (!draft) return;
-    void persist({ ...draft, ...patch });
-  }
-
   /** Звезда в строке: дефолтный провайдер + его первая включённая модель. */
   const makeDefault = useCallback(
     (id: string) => {
@@ -154,9 +154,27 @@ export function AiProvidersSection({
     [draft, providers, persist],
   );
 
+  /** Колонка «Диспетчер»: провайдер + его первая включённая модель (#917). */
+  const makeRouter = useCallback(
+    (id: string) => {
+      if (!draft) return;
+      const provider = providers.find((item) => item.id === id);
+      const model = provider?.models.find((item) => item.enabled)?.id ?? null;
+      if (!model) return;
+      void persist({ ...draft, routerProviderId: id, routerModelId: model });
+    },
+    [draft, providers, persist],
+  );
+
   const columns = useMemo(
-    () => providerColumns(draft?.defaultProviderId ?? null, makeDefault),
-    [draft?.defaultProviderId, makeDefault],
+    () =>
+      providerColumns(
+        draft?.defaultProviderId ?? null,
+        draft?.routerProviderId ?? null,
+        makeDefault,
+        makeRouter,
+      ),
+    [draft?.defaultProviderId, draft?.routerProviderId, makeDefault, makeRouter],
   );
 
   const selectedCount = selection.selected.size;
@@ -178,10 +196,6 @@ export function AiProvidersSection({
           </Button>
         }
       />
-
-      {draft && providers.length > 0 ? (
-        <AiDefaultModelsBar draft={draft} providers={providers} onChange={applyModels} />
-      ) : null}
 
       <div className="min-h-0 flex-1">
         <DataTable
@@ -205,6 +219,17 @@ export function AiProvidersSection({
                     icon: <Star className="size-3.5" strokeWidth={1.75} />,
                     label: strings.defaultSet,
                     onSelect: () => makeDefault(provider.id),
+                  },
+                ]),
+            ...(provider.id === draft?.routerProviderId ||
+            !provider.models.some((model) => model.enabled)
+              ? []
+              : [
+                  {
+                    id: 'router',
+                    icon: <Route className="size-3.5" strokeWidth={1.75} />,
+                    label: strings.routerSet,
+                    onSelect: () => makeRouter(provider.id),
                   },
                 ]),
             {
@@ -241,6 +266,8 @@ export function AiProvidersSection({
           mode={dialog}
           defaultProviderId={draft.defaultProviderId}
           defaultModelId={draft.defaultModelId}
+          routerProviderId={draft.routerProviderId ?? null}
+          routerModelId={draft.routerModelId ?? null}
           instructions={draft.instructions}
           onClose={() => setDialog(null)}
           onCreate={createProvider}
