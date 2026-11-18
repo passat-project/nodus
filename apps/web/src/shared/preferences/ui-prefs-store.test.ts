@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useUiPrefsStore } from './ui-prefs-store.js';
 import { useAuthStore } from '../auth-store.js';
-import { useViewStore } from '../views/view-store.js';
+import { useViewStore, viewsStorageKey } from '../views/view-store.js';
 
 /**
  * Сторы персонализации (аудит #45): скоупы applyNav/resetPersonal и
@@ -128,7 +128,7 @@ describe('view-store: порядок колонок и видимость', () =
 
   it('rehydrate: битый вид отбрасывается, соседний выживает', async () => {
     localStorage.setItem(
-      'nodus-views-v2',
+      viewsStorageKey(null),
       JSON.stringify({
         state: {
           views: {
