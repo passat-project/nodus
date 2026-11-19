@@ -21,8 +21,10 @@ import {
   ProfileReadonlyValue as ReadonlyValue,
 } from './employee-profile-dialog-field.js';
 import { ProfileSectionHeading } from './profile-section-heading.js';
+import { ReferenceCombobox } from './reference-combobox.js';
 
-/** Sentinel Radix Select для «не выбрано» (пустая строка значением запрещена). */
+/** Sentinel Radix Select для «не выбрано» остаётся только у пола (Gender) —
+ *  справочники выбираются комбобоксом (#981). */
 const NONE = '__none__';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -63,6 +65,13 @@ export function ProfileDialogSections({
 }) {
   const departments = useDepartmentsList();
   const positions = usePositions('management').data ?? [];
+  // Плоские списки справочников в порядке дерева — опции комбобоксов (#981):
+  // уровни отступами не рисуются, архивных пунктов-заглушек нет (#881).
+  const departmentOptions = departments.map((department) => ({
+    id: department.id,
+    label: department.name,
+  }));
+  const positionOptions = positions.map((position) => ({ id: position.id, label: position.name }));
   const manager = card.managerId ? users.find((user) => user.id === card.managerId) : undefined;
   const set = (key: keyof ProfileDraft) => (event: React.ChangeEvent<HTMLInputElement>) =>
     onChange({ [key]: event.target.value });
@@ -152,6 +161,56 @@ export function ProfileDialogSections({
         </label>
       </Section>
 
+      <Section title={ui.employees.sectionStructure}>
+        {canManage ? (
+          <div className="grid grid-cols-1 gap-3 @min-[32rem]:grid-cols-2">
+            <Field label={ui.employees.department}>
+              <ReferenceCombobox
+                value={draft.departmentId}
+                onChange={(id) => onChange({ departmentId: id })}
+                options={departmentOptions}
+                ariaLabel={ui.employees.department}
+              />
+            </Field>
+            <Field label={ui.employees.position}>
+              <ReferenceCombobox
+                value={draft.positionId}
+                onChange={(id) => onChange({ positionId: id })}
+                options={positionOptions}
+                ariaLabel={ui.employees.position}
+              />
+            </Field>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 @min-[32rem]:grid-cols-2">
+            <Field label={ui.employees.department}>
+              <ReadonlyValue
+                tone="info"
+                value={
+                  departments.find((item) => item.id === draft.departmentId)?.name ??
+                  ui.common.notSet
+                }
+              />
+            </Field>
+            <Field label={ui.employees.position}>
+              <ReadonlyValue
+                tone="info"
+                value={
+                  positions.find((item) => item.id === draft.positionId)?.name ?? ui.common.notSet
+                }
+              />
+            </Field>
+          </div>
+        )}
+        <Field
+          label={ui.employees.fieldManager}
+          hint={ui.employees.managerComputedHint}
+          hintShort={ui.employees.managerComputedTag}
+        >
+          <ReadonlyValue value={manager?.displayName ?? ui.common.notSet} />
+        </Field>
+      </Section>
+
       <Section title={ui.employees.sectionWork}>
         <div className="grid grid-cols-1 gap-3 @min-[32rem]:grid-cols-2">
           {canManage ? (
@@ -222,90 +281,6 @@ export function ProfileDialogSections({
             />
           </Field>
         </div>
-      </Section>
-
-      <Section title={ui.employees.sectionStructure}>
-        {canManage ? (
-          <div className="grid grid-cols-1 gap-3 @min-[32rem]:grid-cols-2">
-            <Field label={ui.employees.department}>
-              <Select
-                value={draft.departmentId ?? NONE}
-                onValueChange={(value) => onChange({ departmentId: value === NONE ? null : value })}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent position="popper" sideOffset={4}>
-                  <SelectItem value={NONE}>{ui.employees.notSelected}</SelectItem>
-                  {draft.departmentId &&
-                  !departments.some((item) => item.id === draft.departmentId) ? (
-                    <SelectItem value={draft.departmentId} disabled>
-                      {ui.employees.archivedValue}
-                    </SelectItem>
-                  ) : null}
-                  {departments.map((department) => (
-                    // Плоский список (вердикт приёмки 18.11.2026): порядок
-                    // дерева сохранён, уровни отступами не рисуются — длинное
-                    // дерево читается как список без «лесенки».
-                    <SelectItem key={department.id} value={department.id}>
-                      {department.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label={ui.employees.position}>
-              <Select
-                value={draft.positionId ?? NONE}
-                onValueChange={(value) => onChange({ positionId: value === NONE ? null : value })}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent position="popper" sideOffset={4}>
-                  <SelectItem value={NONE}>{ui.employees.notSelected}</SelectItem>
-                  {draft.positionId && !positions.some((item) => item.id === draft.positionId) ? (
-                    <SelectItem value={draft.positionId} disabled>
-                      {ui.employees.archivedValue}
-                    </SelectItem>
-                  ) : null}
-                  {positions.map((position) => (
-                    <SelectItem key={position.id} value={position.id}>
-                      {position.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-3 @min-[32rem]:grid-cols-2">
-            <Field label={ui.employees.department}>
-              <ReadonlyValue
-                tone="info"
-                value={
-                  departments.find((item) => item.id === draft.departmentId)?.name ??
-                  ui.common.notSet
-                }
-              />
-            </Field>
-            <Field label={ui.employees.position}>
-              <ReadonlyValue
-                tone="info"
-                value={
-                  positions.find((item) => item.id === draft.positionId)?.name ?? ui.common.notSet
-                }
-              />
-            </Field>
-          </div>
-        )}
-        <Field
-          label={ui.employees.fieldManager}
-          hint={ui.employees.managerComputedHint}
-          hintShort={ui.employees.managerComputedTag}
-        >
-          <ReadonlyValue value={manager?.displayName ?? ui.common.notSet} />
-        </Field>
       </Section>
     </div>
   );

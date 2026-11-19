@@ -147,9 +147,9 @@ export const employeesStrings = {
   noParent: 'Нет вышестоящего подразделения',
   myDepartment: 'Ваше подразделение',
   locateMe: 'Найти меня',
-  archivedValue: 'Текущее значение',
   renamePosition: 'Переименовать',
   managerPlaceholder: 'Начните вводить имя',
   loadErrorRetry: 'Повторить',
   notSelected: 'Не выбрано',
+  clearSelection: 'Очистить выбор',
 } as const;
