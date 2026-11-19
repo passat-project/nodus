@@ -76,6 +76,23 @@ export async function setupRolesFixture() {
     skipDuplicates: true,
   });
 
+  // #946: актор структурных правок, которого тесты НЕ назначают главой/замом.
+  // Перевод обесценивает access-токен сотрудника (directory.user.updated +
+  // departmentId, #866) — актор-субъект ловил бы 401 посреди набора.
+  const structureAdmin = await prisma.user.create({
+    data: {
+      email: `structure-admin-${runId}@test.local`,
+      passwordHash: 'integration-test-no-password',
+      lastName: 'Админ',
+      firstName: 'Структуры',
+      displayName: `Админ структуры ${runId}`,
+    },
+    select: { id: true, email: true, displayName: true },
+  });
+  await prisma.userRole.create({
+    data: { userId: structureAdmin.id, roleId: directoryRole },
+  });
+
   // Системная роль «Администратор» — общая для файлов прогона (код уникален):
   // upsert, чтобы параллельные наборы не гонялись за созданием.
   const admin = await prisma.role.upsert({
@@ -118,6 +135,8 @@ export async function setupRolesFixture() {
       limited: await mint(chat.users.bob),
       employee: await mint(chat.users.carol),
       directory: await mint(chat.users.dave),
+      // #946: актор структурных правок, не попадающий в главы/замы тестов.
+      structureAdmin: await mint(structureAdmin),
     },
     adminRoleId: admin.id,
     roleIds,
@@ -147,6 +166,10 @@ export async function setupRolesFixture() {
     },
     async cleanup(): Promise<void> {
       try {
+        // #946: события/аудит актора структуры и сам актор — до ролей.
+        await prisma.event.deleteMany({ where: { actorId: structureAdmin.id } });
+        await prisma.auditLog.deleteMany({ where: { actorId: structureAdmin.id } });
+        await prisma.user.deleteMany({ where: { id: structureAdmin.id } });
         await prisma.event.deleteMany({
           where: { aggregateType: 'role', aggregateId: { in: roleIds } },
         });

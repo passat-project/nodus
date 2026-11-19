@@ -227,4 +227,21 @@ describe('UsersService.updateUser: перевод главы/зама (#923)', (
     expect(departmentsRepo.clearLeadershipIn).not.toHaveBeenCalled();
     expect(managers.recomputeUsers).not.toHaveBeenCalled();
   });
+
+  it('перевод вместе с другими полями — одно событие user.updated (#946)', async () => {
+    await service.updateUser(
+      'user-1',
+      { departmentId: 'dep-new', mobilePhone: '+375291234567' },
+      actor,
+    );
+
+    const userEvents = (
+      eventBus.emit.mock.calls as unknown as [string, string, { changedFields: string[] }][]
+    )
+      .filter((call) => call[1] === 'directory.user.updated')
+      .map((call) => call[2]);
+    expect(userEvents).toEqual([
+      { userId: 'user-1', changedFields: ['departmentId', 'mobilePhone'] },
+    ]);
+  });
 });

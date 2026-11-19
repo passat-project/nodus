@@ -93,6 +93,16 @@ export function DepartmentDialog({
   }
 
   const valid = name.trim().length > 0;
+  const samePerson = headId !== null && deputyId !== null && headId === deputyId;
+  // #946: назначение переводит сотрудника в подразделение — предупреждаем до
+  // сохранения. Для юрструктуры правило не действует (формальная структура).
+  const willTransfer =
+    kind === 'management' &&
+    [headId, deputyId].some((userId) => {
+      if (!userId) return false;
+      const user = users.find((candidate) => candidate.id === userId);
+      return user?.departmentId !== editing?.id;
+    });
   const pending = create.isPending || update.isPending;
   // Кандидаты — только активные: уволенного сервер не примет (валидация
   // ссылок #441). Текущие значения правки не сбрасываются — их видно в полях.
@@ -239,12 +249,20 @@ export function DepartmentDialog({
               users={deputyCandidates}
             />
           </Field>
+          {willTransfer ? (
+            <p className="text-xs text-muted-foreground">{ui.employees.leaderTransferHint}</p>
+          ) : null}
+          {samePerson ? (
+            <p className="text-xs text-destructive" role="alert">
+              {ui.employees.leaderSamePerson}
+            </p>
+          ) : null}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {ui.common.cancel}
           </Button>
-          <Button disabled={!valid || pending} onClick={submit}>
+          <Button disabled={!valid || samePerson || pending} onClick={submit}>
             {ui.common.save}
           </Button>
         </DialogFooter>
