@@ -12,11 +12,18 @@ import { AuditRepository } from '../../../core/audit/audit.repository.js';
 import { EventBus } from '../../../core/events/event-bus.js';
 import { TransactionRunner } from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
+import {
+  USER_PROFILE_READER,
+  type UserProfileReader,
+} from '../../../core/ports/user-profile.port.js';
 import { FilesRepository } from '../files.repository.js';
 import { DerivativesQueue } from '../derivatives/derivatives.queue.js';
 import { MinioStorageDriver } from '../storage/minio-storage.driver.js';
 import { OFFICE_CONFIG, type OfficeConfig } from './office.config.js';
+import { OfficeSessionsStore } from './office-sessions.store.js';
+import { registeredEditorsCheck } from './office-save-guard.js';
 import { OfficeTokenService } from './office-token.service.js';
+import { parseHttpUrl } from './office-url.js';
 
 /** Тело колбэка документ-сервера (протокол DS, не наш контракт):
  *  api.onlyoffice.com/docs/docs-api/usage-api/callback-handler/. */
@@ -52,6 +59,8 @@ export class OfficeCallbackService {
     private readonly tokens: OfficeTokenService,
     private readonly derivativesQueue: DerivativesQueue,
     @Inject(OFFICE_CONFIG) private readonly config: OfficeConfig,
+    @Inject(USER_PROFILE_READER) private readonly userProfiles: UserProfileReader,
+    private readonly sessions: OfficeSessionsStore,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(OfficeCallbackService.name);
@@ -103,6 +112,29 @@ export class OfficeCallbackService {
     const file = await this.repository.findById(fileId);
     if (!file) {
       this.logger.warn({ fileId, key: body.key }, 'Office callback for missing file');
+      return;
+    }
+    // Вторая линия после drop (#356): если в документ правили только
+    // уволенные — версию не создаём (см. office-save-guard.ts).
+    const check = await registeredEditorsCheck(this.sessions, this.userProfiles, body.key);
+    if (check.kind === 'unavailable') {
+      this.logger.warn(
+        { fileId, key: body.key, err: check.error },
+        'Office save: session registry unavailable, editor status check skipped',
+      );
+    }
+    if (check.kind === 'ok' && check.allDeactivated) {
+      this.logger.warn(
+        { fileId, key: body.key, users: check.editors },
+        'Office save rejected: all registered editors are deactivated',
+      );
+      await this.audit.append({
+        actorId: null,
+        action: 'files.office_save_rejected',
+        entityType: 'file',
+        entityId: file.id,
+        details: { key: body.key, reason: 'editors_deactivated', editors: check.editors },
+      });
       return;
     }
     const versions = await this.repository.findVersions(file.id);
@@ -359,15 +391,5 @@ export class OfficeCallbackService {
     if (!iso) return null;
     const ms = Date.parse(iso);
     return Number.isFinite(ms) ? BigInt(ms) : null;
-  }
-}
-
-/** Абсолютный http(s)-URL или null (иные схемы дают origin 'null' — тоже отказ). */
-function parseHttpUrl(raw: string): URL | null {
-  try {
-    const url = new URL(raw);
-    return url.protocol === 'http:' || url.protocol === 'https:' ? url : null;
-  } catch {
-    return null;
   }
 }

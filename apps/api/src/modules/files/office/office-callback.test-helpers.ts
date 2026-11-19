@@ -74,6 +74,8 @@ export interface Mocks {
   append: ReturnType<typeof vi.fn>;
   enqueuePdf: ReturnType<typeof vi.fn>;
   warnLog: ReturnType<typeof vi.fn>;
+  filterActiveUserIds: ReturnType<typeof vi.fn>;
+  editorsOf: ReturnType<typeof vi.fn>;
 }
 
 export interface Harness {
@@ -108,6 +110,8 @@ export function makeHarness(
     append: vi.fn(async () => undefined),
     enqueuePdf: vi.fn(async () => undefined),
     warnLog: vi.fn(),
+    filterActiveUserIds: vi.fn(async (ids: string[]) => ids),
+    editorsOf: vi.fn(async () => [] as string[]),
   };
   const repo = mocks as unknown as FilesRepository;
   const driver = mocks as unknown as MinioStorageDriver;
@@ -136,6 +140,8 @@ export function makeHarness(
     tokens,
     { enqueuePdf: mocks.enqueuePdf } as never,
     config,
+    mocks as never,
+    mocks as never,
     {
       setContext: vi.fn(),
       info: vi.fn(),

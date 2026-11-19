@@ -54,20 +54,26 @@ function makeService(
   configOverrides: Partial<OfficeConfig> = {},
   contributors: FileAccessContributor[] = [],
   versions: FileVersionRow[] = [],
-): { service: OfficeSessionService; repo: FilesRepository } {
+): {
+  service: OfficeSessionService;
+  repo: FilesRepository;
+  sessions: { register: ReturnType<typeof vi.fn> };
+} {
   const repo = {
     findById: vi.fn(async () => file),
     findVersions: vi.fn(async () => versions),
   } as unknown as FilesRepository;
   const config = makeConfig(configOverrides);
+  const sessions = { register: vi.fn(async () => undefined) };
   const service = new OfficeSessionService(
     repo,
     config,
     new OfficeTokenService(config),
     new SignedUrlService({ STORAGE_URL_SECRET: SECRET }),
     { contributors: () => contributors } as never,
+    sessions as never,
   );
-  return { service, repo };
+  return { service, repo, sessions };
 }
 
 describe('OfficeSessionService (#138)', () => {
@@ -150,6 +156,19 @@ describe('OfficeSessionService (#138)', () => {
     const session = await service.createSession(FILE_ID, makeUser(OTHER_ID), 'edit');
     expect(session.mode).toBe('view');
     expect(session.canEdit).toBe(false);
+  });
+
+  it('сессия правки регистрируется в реестре drop, просмотра — нет (#356)', async () => {
+    const { service, sessions } = makeService(makeFile());
+
+    const edit = await service.createSession(FILE_ID, makeUser(USER_ID), 'edit');
+    expect(edit.mode).toBe('edit');
+    expect(sessions.register).toHaveBeenCalledWith(USER_ID, `${FILE_ID}.v1`);
+
+    sessions.register.mockClear();
+    const view = await service.createSession(FILE_ID, makeUser(USER_ID), 'view');
+    expect(view.mode).toBe('view');
+    expect(sessions.register).not.toHaveBeenCalled();
   });
 
   it('edit без права контекста деградирует в view (не 403)', async () => {

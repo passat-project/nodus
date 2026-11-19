@@ -8,13 +8,17 @@ import { FilesController } from './files.controller.js';
 import { DiscoveryModule } from '@nestjs/core';
 import { FILE_OBJECT_READER } from '../../core/ports/file-object-reader.port.js';
 import { FileAccessRegistry } from '../../core/ports/file-access.registry.js';
+import { USER_PROFILE_READER } from '../../core/ports/user-profile.port.js';
+import { UserProfileProvider } from '../../core/ports/user-profile.provider.js';
 import { FilesRepository } from './files.repository.js';
 import { FileObjectReaderProvider } from './ports/file-object-reader.provider.js';
 import { MinioStorageDriver } from './storage/minio-storage.driver.js';
 import { OFFICE_CONFIG, getOfficeConfig } from './office/office.config.js';
 import { OfficeCallbackService } from './office/office-callback.service.js';
+import { OfficeCommandService } from './office/office-command.service.js';
 import { OfficeController } from './office/office.controller.js';
 import { OfficeSessionService } from './office/office-session.service.js';
+import { OfficeSessionsStore } from './office/office-sessions.store.js';
 import { OfficeTokenService } from './office/office-token.service.js';
 import { DERIVATIVES_CONFIG, getDerivativesConfig } from './derivatives/derivatives.config.js';
 import { GotenbergConverterProvider } from './derivatives/gotenberg-converter.provider.js';
@@ -32,6 +36,7 @@ import {
   LetterConfidentialTextHandler,
   LetterDeletedTextHandler,
 } from './events/letter-text-cache.handler.js';
+import { OfficeUserDeactivatedHandler } from './events/office-user-deactivated.handler.js';
 import { FileTextService } from './text/file-text.service.js';
 
 /**
@@ -63,6 +68,13 @@ import { FileTextService } from './text/file-text.service.js';
     FileStorageProvider,
     OfficeTokenService,
     OfficeSessionService,
+    OfficeSessionsStore,
+    OfficeCommandService,
+    OfficeUserDeactivatedHandler,
+    // Статус редакторов в колбэке сохранения (#356) — read-порт directory,
+    // без межмодульного импорта (I3).
+    UserProfileProvider,
+    { provide: USER_PROFILE_READER, useExisting: UserProfileProvider },
     // Текст вложений для ИИ-агента (#922): PDF/DOCX, кэш по версии файла.
     FileTextService,
     OfficeCallbackService,
