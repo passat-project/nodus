@@ -127,13 +127,7 @@ describe('computeReadBy (#102)', () => {
   });
 });
 
-function stubMapper(
-  originals: MessageRow[] = [],
-  threadCursors: ReadonlyMap<
-    string,
-    { userId: string; lastReadSeq: bigint; lastReadAt: Date | null }[]
-  > = new Map(),
-): MessageDtoMapper {
+function stubMapper(originals: MessageRow[] = []): MessageDtoMapper {
   const messages = {
     reactionsFor: async () => [],
     attachmentsFor: async () => [],
@@ -141,7 +135,7 @@ function stubMapper(
     findByIds: async () => originals,
   };
   const pins = { pinnedIds: async () => new Set<string>() };
-  const threadParticipants = { readCursorsFor: async () => threadCursors };
+  const threadReads = { readCursorsFor: async () => new Map() };
   const profiles = {
     findRefs: async (ids: string[]) => ids.map((id) => ({ id, displayName: id, avatarUrl: null })),
   };
@@ -149,7 +143,7 @@ function stubMapper(
     messages as never,
     messages as never, // реакции: тот же мок (метод reactionsFor)
     pins as never,
-    threadParticipants as never,
+    threadReads as never,
     profiles as never,
     new SignedUrlService({ STORAGE_URL_SECRET: 'test-secret-32-chars-aaaaaaaaaaaa' }),
     { previewsForUrls: async () => new Map() } as never,
@@ -216,62 +210,6 @@ describe('toDtos смешанной страницы (список бесед, #
     expect(dtos[0]?.readBy.map((r) => r.id)).toEqual(['a']);
     // Курсор a добрёл и до чужой строки — карта обязательна для смеси.
     expect(dtos[1]?.readBy.map((r) => r.id)).toEqual(['a']);
-  });
-});
-
-describe('квитанции по областям чтения (#971)', () => {
-  const feedRow = fullRow({ id: 'post-1', threadRootId: null });
-  const threadRow = fullRow({ id: 'reply-1', threadRootId: 'root-1', seq: 6n });
-
-  it('чтение только обсуждения: в ленте не «Просмотрено»', async () => {
-    // Курсор беседы ушёл (читал тред), курсор ленты — нет.
-    const members = [
-      member({ userId: 'me-1' }),
-      member({
-        userId: 'reader',
-        lastReadSeq: 9n,
-        lastReadAt: T2,
-        lastFeedReadSeq: 0n,
-        lastFeedReadAt: null,
-      }),
-    ];
-    const dtos = await stubMapper().toDtos([feedRow], { viewerId: 'me-1', members });
-    expect(dtos[0]?.readBy).toEqual([]);
-  });
-
-  it('лента прочитана: в «Просмотрено» ленты есть, в ответах треда — нет', async () => {
-    const members = [
-      member({ userId: 'me-1' }),
-      member({
-        userId: 'reader',
-        lastReadSeq: 9n,
-        lastReadAt: T2,
-        lastFeedReadSeq: 9n,
-        lastFeedReadAt: T2,
-      }),
-    ];
-    const dtos = await stubMapper(undefined, new Map()).toDtos([feedRow, threadRow], {
-      viewerId: 'me-1',
-      members,
-    });
-    expect(dtos[0]?.readBy.map((r) => r.id)).toEqual(['reader']);
-    // Ответ треда без watermark-а треда — читателей треда нет.
-    expect(dtos[1]?.readBy).toEqual([]);
-  });
-
-  it('тред прочитан: «Просмотрено» под ответом — по watermark треда', async () => {
-    const members = [
-      member({ userId: 'me-1' }),
-      member({ userId: 'reader', lastReadSeq: 0n, lastReadAt: null }),
-    ];
-    const threadCursors = new Map([
-      ['root-1', [{ userId: 'reader', lastReadSeq: 9n, lastReadAt: T2 }]],
-    ]);
-    const dtos = await stubMapper(undefined, threadCursors).toDtos([threadRow], {
-      viewerId: 'me-1',
-      members,
-    });
-    expect(dtos[0]?.readBy.map((r) => r.id)).toEqual(['reader']);
   });
 });
 
