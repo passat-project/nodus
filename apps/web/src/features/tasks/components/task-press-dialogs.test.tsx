@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PressRoundView, WorkflowTransition } from '@nodus/contracts';
 
 const mutateReturn = vi.fn();
-const mutateExclude = vi.fn();
 const mutateWithdraw = vi.fn();
 const mutateSubmit = vi.fn();
 
@@ -12,7 +11,6 @@ vi.mock('../api/press-api.js', () => ({
   useSubmitPress: () => ({ mutate: mutateSubmit, isPending: false, error: null }),
   useWithdrawPress: () => ({ mutate: mutateWithdraw, isPending: false }),
   useReturnPress: () => ({ mutate: mutateReturn, isPending: false }),
-  useExcludePress: () => ({ mutate: mutateExclude, isPending: false }),
 }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('../../../shared/workflow/transition-window/transition-window.js', () => ({
@@ -58,11 +56,13 @@ const round = (overrides: Partial<PressRoundView> = {}): PressRoundView =>
     pressed: 1,
     order: 'parallel',
     quorum: { kind: 'all' },
+    statusLabels: { waiting: '', submitted: '' },
     form: { enabled: false, sections: [] },
     entries: [
       {
         userId: 'u1',
         displayName: 'Борис',
+        avatarUrl: null,
         order: 0,
         state: 'pressed',
         pressedAt: '2026-11-10T10:00:00.000Z',
@@ -72,6 +72,7 @@ const round = (overrides: Partial<PressRoundView> = {}): PressRoundView =>
       {
         userId: 'u2',
         displayName: 'Админ',
+        avatarUrl: null,
         order: 1,
         state: 'waiting',
         pressedAt: null,
@@ -88,53 +89,19 @@ const round = (overrides: Partial<PressRoundView> = {}): PressRoundView =>
     ...overrides,
   }) as PressRoundView;
 
-describe('PressAnalyticsDialog (#434)', () => {
-  it('показывает статусы, CSV, возврат и снятие; включает режимы', () => {
+describe('окно «Статусы участников» (#965)', () => {
+  it('по умолчанию: таблица, колонка выбора, CSV и «Закрыть»', () => {
     render(<PressAnalyticsDialog taskId="task-1" press={round()} open onClose={() => void 0} />);
     expect(screen.getByText('Статусы участников · 1/2')).toBeTruthy();
     expect(screen.getByText('Борис')).toBeTruthy();
     expect(screen.getByText('Админ')).toBeTruthy();
+    // Колонка выбора видна сразу (canReturn), без отдельного режима.
+    expect(screen.getAllByRole('checkbox')).toHaveLength(2); // шапка + нажавший
     expect(screen.getByRole('button', { name: 'Выгрузить CSV' })).toBeTruthy();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Вернуть выбранным' }));
-    expect(screen.getByText('Причина возврата')).toBeTruthy();
-    expect(screen.getAllByRole('checkbox')).toHaveLength(2); // header + Борис
-    fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Снять участника' }));
-    expect(screen.getByText('Причина снятия')).toBeTruthy();
-    expect(screen.getAllByRole('checkbox')).toHaveLength(3); // header + оба
+    expect(screen.getByRole('button', { name: 'Закрыть' })).toBeTruthy();
   });
 
-  it('снятие: выбор, причина и вызов exclude', () => {
-    render(<PressAnalyticsDialog taskId="task-1" press={round()} open onClose={() => void 0} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Снять участника' }));
-    fireEvent.click(screen.getAllByRole('checkbox')[2]!);
-    fireEvent.change(screen.getByPlaceholderText('Почему участник больше не нужен'), {
-      target: { value: 'Уволен' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Снять · 1' }));
-    expect(mutateExclude).toHaveBeenCalledWith(
-      { userIds: ['u2'], reason: 'Уволен' },
-      expect.objectContaining({ onSuccess: expect.any(Function) }),
-    );
-  });
-
-  it('возврат: выбор нажатого и вызов return', () => {
-    render(<PressAnalyticsDialog taskId="task-1" press={round()} open onClose={() => void 0} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Вернуть выбранным' }));
-    fireEvent.click(screen.getAllByRole('checkbox')[1]!);
-    fireEvent.change(screen.getByPlaceholderText('Что нужно доработать'), {
-      target: { value: 'Уточнить' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Вернуть · 1' }));
-    expect(mutateReturn).toHaveBeenCalledWith(
-      { userIds: ['u1'], reason: 'Уточнить' },
-      expect.objectContaining({ onSuccess: expect.any(Function) }),
-    );
-  });
-
-  it('отзыв показывается нажавшему', () => {
+  it('отзыва и снятия участника в окне больше нет', () => {
     render(
       <PressAnalyticsDialog
         taskId="task-1"
@@ -143,8 +110,56 @@ describe('PressAnalyticsDialog (#434)', () => {
         onClose={() => void 0}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Отозвать отметку' }));
-    expect(mutateWithdraw).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Отозвать отметку' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Снять участника' })).toBeNull();
+  });
+
+  it('выбор строки показывает причину и возвращает на доработку', () => {
+    render(<PressAnalyticsDialog taskId="task-1" press={round()} open onClose={() => void 0} />);
+    fireEvent.click(screen.getAllByRole('checkbox')[1]!);
+    expect(screen.getByText('Причина возврата')).toBeTruthy();
+
+    fireEvent.change(screen.getByPlaceholderText('Что нужно доработать'), {
+      target: { value: 'Уточнить' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Вернуть на доработку · 1' }));
+    expect(mutateReturn).toHaveBeenCalledWith(
+      { userIds: ['u1'], reason: 'Уточнить' },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+  });
+
+  it('снятие выбора возвращает обычный футер', () => {
+    render(<PressAnalyticsDialog taskId="task-1" press={round()} open onClose={() => void 0} />);
+    fireEvent.click(screen.getAllByRole('checkbox')[1]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
+    expect(screen.getByRole('button', { name: 'Выгрузить CSV' })).toBeTruthy();
+  });
+
+  it('свои названия статусов кнопки видит таблица (#965)', () => {
+    render(
+      <PressAnalyticsDialog
+        taskId="task-1"
+        press={round({ statusLabels: { waiting: 'Ожидаем', submitted: 'Ознакомлен' } })}
+        open
+        onClose={() => void 0}
+      />,
+    );
+    expect(screen.getByText('Ознакомлен')).toBeTruthy();
+    expect(screen.getByText('Ожидаем')).toBeTruthy();
+    expect(screen.queryByText('Сдано')).toBeNull();
+  });
+
+  it('без canReturn колонки выбора нет', () => {
+    render(
+      <PressAnalyticsDialog
+        taskId="task-1"
+        press={round({ canReturn: false })}
+        open
+        onClose={() => void 0}
+      />,
+    );
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
   });
 
   it('pressHasWindow учитывает только настроенные разделы кнопки', () => {

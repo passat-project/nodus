@@ -23,6 +23,13 @@ export const userIds = {
   dubovik: uid(11),
 };
 
+/** Демо-фото для прототипов UI (#965): data-URI SVG — сеть не нужна,
+ *  живые фото сотрудников в публичный репозиторий не попадают. */
+function demoAvatar(initials: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" fill="#30363d"/><text x="24" y="31" font-family="Arial, sans-serif" font-size="18" font-weight="600" fill="#e8e8e6" text-anchor="middle">${initials}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
 function mk(
   n: number,
   displayName: string,
@@ -32,13 +39,14 @@ function mk(
   department: keyof typeof departmentIds,
   legalDepartment: keyof typeof departmentIds,
   status: UserListItem['status'] = 'active',
+  avatarUrl: string | null = null,
 ): UserListItem {
   const email = `user${n}@passatproekt.by`;
   return {
     id: uid(n),
     displayName,
     status,
-    avatarUrl: null,
+    avatarUrl,
     positionName,
     departmentName,
     email,
@@ -57,7 +65,17 @@ function mk(
  *  смена главы BIM-отдела пересчитает его подчинённых. */
 export const demoUserListItems: UserListItem[] = [
   mk(1, 'Александр Климович', 'БИМ-менеджер', 'BIM-отдел', 9, 'bim', 'legalGip'),
-  mk(2, 'Екатерина Поломар', 'Инженер-проектировщик', 'BIM-отдел', 1, 'bim', 'legalGip'),
+  mk(
+    2,
+    'Екатерина Поломар',
+    'Инженер-проектировщик',
+    'BIM-отдел',
+    1,
+    'bim',
+    'legalGip',
+    'active',
+    demoAvatar('ЕП'),
+  ),
   mk(3, 'Денис Клевантович', 'Главный специалист BIM', 'BIM-отдел', 1, 'bim', 'legalGip'),
   mk(4, 'Алина Воронина', 'Инженер-проектировщик', 'BIM-отдел', 1, 'bim', 'legalGip'),
   mk(5, 'Артём Маторин', 'Инженер-проектировщик', 'BIM-отдел', 1, 'bim', 'legalGip'),

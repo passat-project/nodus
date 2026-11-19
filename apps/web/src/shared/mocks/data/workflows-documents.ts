@@ -106,6 +106,7 @@ export const standardDocument: WorkflowDocument = {
         quorum: { kind: 'all' },
         order: 'parallel',
         excludeAuthor: true,
+        statusLabels: { waiting: '', submitted: '' },
       },
     },
     {

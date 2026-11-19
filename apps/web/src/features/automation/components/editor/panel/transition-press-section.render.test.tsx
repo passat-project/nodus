@@ -38,6 +38,7 @@ const press = {
   quorum: { kind: 'count' as const, count: 3 },
   order: 'parallel' as const,
   excludeAuthor: true,
+  statusLabels: { waiting: '', submitted: '' },
 };
 
 describe('TransitionPressSection (#434)', () => {
@@ -56,6 +57,7 @@ describe('TransitionPressSection (#434)', () => {
         quorum: { kind: 'all' },
         order: 'parallel',
         excludeAuthor: true,
+        statusLabels: { waiting: '', submitted: '' },
       },
     });
   });
@@ -89,6 +91,22 @@ describe('TransitionPressSection (#434)', () => {
 
     fireEvent.click(screen.getAllByRole('switch')[0]!);
     expect(patch).toHaveBeenCalledWith('t1', { press: null });
+  });
+
+  it('свои названия статусов правят конфиг кнопки (#965)', () => {
+    render(
+      <TransitionPressSection transition={transition(press)} readOnly={false} category="task" />,
+    );
+    const waiting = screen.getByLabelText(ui.automation.press.waitingLabel);
+    fireEvent.change(waiting, { target: { value: 'Ожидаем' } });
+    expect(patch).toHaveBeenCalledWith('t1', {
+      press: { ...press, statusLabels: { waiting: 'Ожидаем', submitted: '' } },
+    });
+    const submitted = screen.getByLabelText(ui.automation.press.submittedLabel);
+    fireEvent.change(submitted, { target: { value: 'Ознакомлен' } });
+    expect(patch).toHaveBeenCalledWith('t1', {
+      press: { ...press, statusLabels: { waiting: '', submitted: 'Ознакомлен' } },
+    });
   });
 
   it('readOnly блокирует переключатели', () => {

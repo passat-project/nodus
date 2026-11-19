@@ -26,6 +26,7 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks press roster (integration)', (
     quorum: { kind: 'all' },
     order: 'parallel',
     excludeAuthor: true,
+    statusLabels: { waiting: '', submitted: '' },
   };
   const form = { enabled: true, sections: [{ kind: 'result' as const }] };
   let workflowId: string;

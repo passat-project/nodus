@@ -1,4 +1,4 @@
-import type { TaskListItem, TransitionFormInput, WorkflowTransition } from '@nodus/contracts';
+﻿import type { TaskListItem, TransitionFormInput, WorkflowTransition } from '@nodus/contracts';
 import {
   effectiveWindowSections,
   ErrorCode,
@@ -24,7 +24,7 @@ import {
   taskDetailOf,
 } from '../../../../shared/mocks/data/tasks.js';
 import { addTaskLocks } from '../../../../shared/mocks/data/task-locks.js';
-import { currentAuthUser } from '../../../../shared/mocks/data/users.js';
+import { actorCanManageTask, getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import {
   applyForm,
   blockedByOf,
@@ -74,7 +74,7 @@ function applyCollectiveTransition(
   if (transition.form?.enabled) {
     addTaskLocks(task.id, transition.form.locks ?? [], {
       lockedAt: new Date().toISOString(),
-      lockedBy: currentAuthUser.id,
+      lockedBy: getMockActor().id,
       source: { kind: 'transition', transitionId: transition.id, name: transition.name },
     });
   }
@@ -89,7 +89,7 @@ export const tasksPressHandlers = [
   http.post('/api/v1/tasks/:id/press/submit', async ({ params, request }) => {
     const taskId = String(params.id);
     const task = findTask(taskId);
-    const current = pressOf(taskId, currentAuthUser.id, task?.assignee?.id === currentAuthUser.id);
+    const current = pressOf(taskId, getMockActor().id, task?.assignee?.id === getMockActor().id);
     if (!current) return notFound();
     if (!current.canSubmit) return noRights();
     const doc = task ? documentOfTask(task) : null;
@@ -121,13 +121,13 @@ export const tasksPressHandlers = [
     const lockedWrite = windowLockDenial(task, sections, parsed.data);
     if (lockedWrite) return lockedWrite;
     const view = transitionsOf(task).find((t) => t.id === transition.id);
-    const press = submitPress(taskId, currentAuthUser.id, parsed.data);
+    const press = submitPress(taskId, getMockActor().id, parsed.data);
     if (press?.completed) {
       applyCollectiveTransition(task, press.transitionId, parsed.data, view);
     }
     return HttpResponse.json({
       press: press?.completed ? null : press,
-      task: taskDetailOf(task),
+      task: taskDetailOf(task, getMockActor().id),
       transitions: transitionsOf(task),
     });
   }),
@@ -135,14 +135,14 @@ export const tasksPressHandlers = [
   http.post('/api/v1/tasks/:id/press/withdraw', ({ params }) => {
     const taskId = String(params.id);
     const task = findTask(taskId);
-    const current = pressOf(taskId, currentAuthUser.id, task?.assignee?.id === currentAuthUser.id);
+    const current = pressOf(taskId, getMockActor().id, task?.assignee?.id === getMockActor().id);
     if (!current) return notFound();
     if (!current.canWithdraw) return noRights();
-    const press = withdrawPress(taskId, currentAuthUser.id);
+    const press = withdrawPress(taskId, getMockActor().id);
     if (!task) return notFound();
     return HttpResponse.json({
       press,
-      task: taskDetailOf(task),
+      task: taskDetailOf(task, getMockActor().id),
       transitions: transitionsOf(task),
     });
   }),
@@ -150,8 +150,8 @@ export const tasksPressHandlers = [
   http.post('/api/v1/tasks/:id/press/return', async ({ params, request }) => {
     const taskId = String(params.id);
     const task = findTask(taskId);
-    const canManage = task?.assignee?.id === currentAuthUser.id;
-    const current = pressOf(taskId, currentAuthUser.id, canManage);
+    const canManage = task ? actorCanManageTask(task) : false;
+    const current = pressOf(taskId, getMockActor().id, canManage);
     if (!current) return notFound();
     if (!current.canReturn) return noRights();
     const parsed = pressReturnBodySchema.safeParse(await request.json().catch(() => ({})));
@@ -161,11 +161,11 @@ export const tasksPressHandlers = [
         { status: 400 },
       );
     }
-    const press = returnPress(taskId, parsed.data.userIds, parsed.data.reason, currentAuthUser.id);
+    const press = returnPress(taskId, parsed.data.userIds, parsed.data.reason, getMockActor().id);
     if (!task) return notFound();
     return HttpResponse.json({
       press,
-      task: taskDetailOf(task),
+      task: taskDetailOf(task, getMockActor().id),
       transitions: transitionsOf(task),
     });
   }),
@@ -173,8 +173,8 @@ export const tasksPressHandlers = [
   http.post('/api/v1/tasks/:id/press/exclude', async ({ params, request }) => {
     const taskId = String(params.id);
     const task = findTask(taskId);
-    const canManage = task?.assignee?.id === currentAuthUser.id;
-    const current = pressOf(taskId, currentAuthUser.id, canManage);
+    const canManage = task ? actorCanManageTask(task) : false;
+    const current = pressOf(taskId, getMockActor().id, canManage);
     if (!current) return notFound();
     if (!current.canExclude) return noRights();
     const parsed = pressExcludeBodySchema.safeParse(await request.json().catch(() => ({})));
@@ -184,7 +184,7 @@ export const tasksPressHandlers = [
         { status: 400 },
       );
     }
-    const press = excludePress(taskId, parsed.data.userIds, parsed.data.reason, currentAuthUser.id);
+    const press = excludePress(taskId, parsed.data.userIds, parsed.data.reason, getMockActor().id);
     if (!task) return notFound();
     if (press?.completed) {
       const view = transitionsOf(task).find((t) => t.id === press.transitionId);
@@ -192,7 +192,7 @@ export const tasksPressHandlers = [
     }
     return HttpResponse.json({
       press: press?.completed ? null : press,
-      task: taskDetailOf(task),
+      task: taskDetailOf(task, getMockActor().id),
       transitions: transitionsOf(task),
     });
   }),

@@ -29,6 +29,7 @@ const entry = (
 ): PressEntryView => ({
   userId,
   displayName: userRef(userId).displayName,
+  avatarUrl: userRef(userId).avatarUrl,
   order,
   state,
   pressedAt: state === 'pressed' ? new Date(Date.now() - order * 60_000).toISOString() : null,
@@ -49,6 +50,7 @@ const base = {
   cycle: 1,
   order: 'parallel' as const,
   quorum: { kind: 'all' as const },
+  statusLabels: { waiting: '', submitted: '' },
   form: { enabled: false, sections: [] },
 };
 
@@ -82,6 +84,9 @@ function seedRounds(): Map<string, MutableRound> {
         stageId: requestReviewStage.id,
         transitionId: REQUEST_ACK_TRANSITION_ID,
         transitionName: 'Ознакомлен',
+        // Демо своих названий статусов (#965): кнопка «Ознакомлен» переписала
+        // «Ждём»/«Сдано» под себя.
+        statusLabels: { waiting: 'Ожидаем', submitted: 'Ознакомлен' },
         entries: allUsers.map((userId, index) =>
           entry(userId, index, index < 6 && userId !== userIds.klimovich ? 'pressed' : 'waiting'),
         ),

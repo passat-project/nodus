@@ -42,6 +42,22 @@ export type PressQuorum = z.infer<typeof pressQuorumSchema>;
 export const pressOrderSchema = z.enum(['parallel', 'sequential']);
 export type PressOrder = z.infer<typeof pressOrderSchema>;
 
+/** Свои названия двух состояний отметки (#965): «Ждём» и «Сдано» можно
+ *  переписать под кнопку («Ожидаем»/«Ознакомлен»). Пусто — стандартный текст
+ *  интерфейса. Живёт в конфиге кнопки, снимком попадает в раунд — без миграции:
+ *  старые настройки парсятся с пустыми значениями. */
+export const pressStatusLabelsSchema = z
+  .object({
+    /** Своё название «Ждём»; пусто — стандартное. */
+    waiting: z.string().trim().max(24).default(''),
+    /** Своё название «Сдано»; пусто — стандартное. */
+    submitted: z.string().trim().max(24).default(''),
+  })
+  .strict();
+export type PressStatusLabels = z.infer<typeof pressStatusLabelsSchema>;
+
+export const EMPTY_PRESS_STATUS_LABELS: PressStatusLabels = { waiting: '', submitted: '' };
+
 /** Черновик настройки: пустые источники допустимы — их ловит публикация.
  *  Какие поля и блоки заполняет каждый участник, задаёт ОКНО КНОПКИ
  *  (`transition.form`, редактор «Редактировать окно», #496) — отдельной
@@ -51,8 +67,11 @@ export const pressConfigDraftSchema = z
     sources: z.array(pressSourceSchema).max(10).default([]),
     quorum: pressQuorumSchema,
     order: pressOrderSchema.default('parallel'),
-    /** Не учитывать автора (постановщика): он не утверждает своё. */
+    /** Не учитывать автора (постановщика): он не утверждает своё. Явно
+     *  добавленного соисполнителем автора не выкидывает (#965). */
     excludeAuthor: z.boolean().default(true),
+    /** Свои названия состояний «Ждём»/«Сдано» (#965). */
+    statusLabels: pressStatusLabelsSchema.default(EMPTY_PRESS_STATUS_LABELS),
   })
   .strict();
 export type PressConfigDraft = z.infer<typeof pressConfigDraftSchema>;
@@ -110,6 +129,9 @@ export function pressEntryResultOf(form: TransitionFormInput): PressEntryResult 
 export const pressEntryViewSchema = z.object({
   userId: z.uuid(),
   displayName: z.string().min(1),
+  /** Фото сотрудника: таблица и попап рисуют общий `PersonAvatar`
+   *  (фото, без фото — инициалы). Нет в старых ответах — инициалы. */
+  avatarUrl: z.string().nullable().optional(),
   order: z.number().int().min(0),
   state: pressEntryStateSchema,
   pressedAt: z.iso.datetime().nullable(),
@@ -130,6 +152,8 @@ export const pressRoundViewSchema = z.object({
   pressed: z.number().int().min(0),
   order: pressOrderSchema,
   quorum: pressQuorumSchema,
+  /** Свои названия «Ждём»/«Сдано» из конфига кнопки (пусто — стандартные). */
+  statusLabels: pressStatusLabelsSchema,
   /** Снимок окна кнопки на старте раунда: сдача проверяется и рисуется по нему. */
   form: transitionFormSchema,
   entries: z.array(pressEntryViewSchema),

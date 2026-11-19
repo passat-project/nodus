@@ -8,6 +8,7 @@ const press: PressConfig = {
   quorum: { kind: 'all' },
   order: 'parallel',
   excludeAuthor: true,
+  statusLabels: { waiting: '', submitted: '' },
 };
 const form: TransitionForm = {
   enabled: true,

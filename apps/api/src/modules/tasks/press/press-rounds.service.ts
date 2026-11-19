@@ -323,6 +323,13 @@ export class PressRoundsService {
       tx,
     );
     const names = new Map(refs.map((ref) => [ref.id, ref.displayName]));
-    return pressRoundViewOf(round, viewerId, (userId) => names.get(userId) ?? '—', canManage);
+    const avatars = new Map(refs.map((ref) => [ref.id, ref.avatarUrl ?? null]));
+    return pressRoundViewOf(
+      round,
+      viewerId,
+      (userId) => names.get(userId) ?? '—',
+      canManage,
+      (userId) => avatars.get(userId) ?? null,
+    );
   }
 }

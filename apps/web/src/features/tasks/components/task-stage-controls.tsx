@@ -13,7 +13,7 @@ import { cn } from '@nodus/ui/lib/utils';
 import type { LucideIcon } from 'lucide-react';
 
 import { gateReasonsText, useWorkflowTransitions } from '../api/transitions-api.js';
-import { useSubmitPress } from '../api/press-api.js';
+import { useSubmitPress, useWithdrawPress } from '../api/press-api.js';
 import { PauseGlyph } from '../../../shared/ui/pause-glyph.js';
 import { stageTone } from '../../../shared/ui/board/stage-tone.js';
 import { groupProcessButtons } from '../../../shared/workflow/process-buttons.js';
@@ -84,11 +84,18 @@ export function TaskActionBar({
   const runner = useTransitionRunner(task, onOpenSubtask);
   const actionRunner = useActionRunner(task);
   const submitPress = useSubmitPress(task.id);
+  const withdrawPress = useWithdrawPress(task.id);
   const [pressOpen, setPressOpen] = useState(false);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const press = task.press;
-  const pressedNames = press
-    ? press.entries.filter((entry) => entry.state === 'pressed').map((entry) => entry.displayName)
+  const pressedPeople = press
+    ? press.entries
+        .filter((entry) => entry.state === 'pressed')
+        .map((entry) => ({
+          userId: entry.userId,
+          displayName: entry.displayName,
+          avatarUrl: entry.avatarUrl,
+        }))
     : [];
   const pressTransition = press
     ? (transitions?.find((t) => t.id === press.transitionId) ?? null)
@@ -117,16 +124,18 @@ export function TaskActionBar({
   // Три слота (решение 16.11.2026): главная → второстепенные → действия.
   // «В меню» у перехода и у действия = «в конце списка»: значение `display`
   // в данных не меняется, опубликованные маршруты не мигрируются.
-  const orderedTransitions = [...visible, ...menu];
-  // Коллективная кнопка никогда не прячется в список: в слоте второстепенных
-  // она занимает видимое место первой, независимо от порядка в маршруте.
-  const secondary =
-    press && press.canSubmit
-      ? [
-          ...orderedTransitions.filter((t) => t.id === press.transitionId),
-          ...orderedTransitions.filter((t) => t.id !== press.transitionId),
-        ]
-      : orderedTransitions;
+  const orderedTransitions = [...(primary ? [primary] : []), ...visible, ...menu];
+  // Коллективная кнопка никогда не прячется в список: во второстепенных она
+  // всегда первая, независимо от порядка в маршруте (и от показа `primary`).
+  // Пока отметка сдана и её можно отозвать — на этом месте «Отозвать отметку»
+  // (#965: кнопка отзыва ушла из окна «Статусы участников» в нижнюю панель).
+  const pressIsPrimary = press != null && primary?.id === press.transitionId;
+  const secondarySource = press
+    ? [
+        ...orderedTransitions.filter((t) => t.id === press.transitionId),
+        ...orderedTransitions.filter((t) => t.id !== press.transitionId),
+      ]
+    : [...visible, ...menu];
   // Внутри слота действий обычные кнопки идут первыми, «в конце списка» —
   // последними (серверный порядок внутри групп сохраняется).
   const orderedActions = [
@@ -135,7 +144,7 @@ export function TaskActionBar({
   ];
   // Главная кнопка одна: переход сильнее; если переходов в панели нет —
   // главным становится первое действие (как было в #742).
-  const mainAction = !primary && secondary.length === 0 ? (orderedActions[0] ?? null) : null;
+  const mainAction = !primary && secondarySource.length === 0 ? (orderedActions[0] ?? null) : null;
   const slotActions = mainAction
     ? orderedActions.filter((action) => action.id !== mainAction.id)
     : orderedActions;
@@ -159,9 +168,19 @@ export function TaskActionBar({
 
   const transitionItem = (t: WorkflowTransition, main = false): ProcessSlotItem | null => {
     const isPress = press?.transitionId === t.id;
-    // Коллективная кнопка: уже нажавшему/не-участнику кнопку не показываем —
-    // прогресс остаётся в чипе «Статусы участников».
+    // Коллективная кнопка: участнику — сбор, нажавшему — отзыв на том же месте
+    // (#965), зрителям — чип прогресса «Статусы участников».
     if (isPress && press) {
+      if (press.canWithdraw) {
+        return {
+          id: t.id,
+          name: ui.tasks.press.withdraw,
+          icon: <Undo2 className="size-4 shrink-0" strokeWidth={1.75} />,
+          running: withdrawPress.isPending,
+          title: ui.tasks.press.withdraw,
+          onSelect: () => withdrawPress.mutate(),
+        };
+      }
       if (!press.canSubmit) return null;
       return {
         id: t.id,
@@ -172,7 +191,7 @@ export function TaskActionBar({
             name={t.name}
             pressed={press.pressed}
             total={press.total}
-            participants={pressedNames}
+            participants={pressedPeople}
             main={main}
             onPress={openPress}
             onOpenStatuses={() => setAnalyticsOpen(true)}
@@ -203,9 +222,10 @@ export function TaskActionBar({
   const cancelled = closed && task.stage.outcome === 'cancelled';
   const rejected = closed && task.stage.outcome === 'rejected';
   const negative = cancelled || rejected;
-  const primaryItem = primary ? transitionItem(primary, true) : null;
-  const secondaryItems = secondary
-    .map((t) => transitionItem(t))
+  const primaryItem =
+    primary && primary.id !== press?.transitionId ? transitionItem(primary, true) : null;
+  const secondaryItems = secondarySource
+    .map((t) => transitionItem(t, t.id === press?.transitionId && pressIsPrimary))
     .filter((item): item is ProcessSlotItem => item !== null);
   const noButtons =
     orderedActions.length === 0 && primaryItem === null && secondaryItems.length === 0 && !press;
@@ -269,7 +289,7 @@ export function TaskActionBar({
         <TaskPressStatus
           pressed={press.pressed}
           total={press.total}
-          participants={pressedNames}
+          participants={pressedPeople}
           onOpenStatuses={() => setAnalyticsOpen(true)}
         />
       ) : null}
