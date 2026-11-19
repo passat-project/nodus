@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { demoCustomFieldDefinitions } from './custom-fields.js';
 import { dictionaryById, itemsOf } from './dictionaries.js';
-import { fieldValueOf, printedFieldValueOf } from './numbering-store.js';
+import { fieldValueOf, printedCompanyValueOf, printedFieldValueOf } from './numbering-store.js';
 
 /**
  * Две семантики значения поля в мок-мире (#877, AUD-010; находка
@@ -42,5 +42,13 @@ describe('numbering-store: сырое и печатное значение по�
     const values = { [definition!.id]: '2026-11-19' };
     expect(fieldValueOf(values)(definition!.number)).toBe('2026-11-19');
     expect(printedFieldValueOf(values)(definition!.number)).toBeNull();
+  });
+
+  it('источник «Компания» печатает значение переменной, а не пусто', () => {
+    const definition = demoCustomFieldDefinitions.find(
+      (entry) => entry.isCompany && entry.type === 'number' && entry.companyValue !== null,
+    );
+    expect(definition, 'в демо-мире есть числовая переменная компании').toBeDefined();
+    expect(printedCompanyValueOf(definition!.number)).toBe(String(definition!.companyValue));
   });
 });

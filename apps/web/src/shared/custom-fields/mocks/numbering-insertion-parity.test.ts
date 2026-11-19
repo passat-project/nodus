@@ -126,4 +126,32 @@ describe('мок custom-fields: вставка номера без печатн�
     );
     expect(JSON.stringify(counter!.numbering?.rule)).toBe(before);
   });
+
+  it('PATCH без правила не перепроверяет сохранённую вставку (мок не строже сервера)', async () => {
+    const counter = demoCustomFieldDefinitions.find(
+      (entry) => entry.id === fieldIds.changeNumber && entry.type === 'counter',
+    );
+    expect(counter, 'демо-счётчик «Изм.» на месте').toBeDefined();
+    const saved = counter!.numbering;
+    expect(saved?.rule).toBeDefined();
+
+    // Старое правило (до AUD-010) с неподдержанной вставкой: сервер такое
+    // правило не перепроверяет на переименовании — и мок не должен.
+    const money = demoCustomFieldDefinitions.find((entry) => entry.type === 'money');
+    counter!.numbering = {
+      ...saved!,
+      rule: { ...saved!.rule, template: ruleWith(money!.number).template },
+    };
+    const name = counter!.name;
+    try {
+      const renamed = await fetch(`/api/v1/custom-fields/definitions/${fieldIds.changeNumber}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      expect(renamed.status).toBeLessThan(400);
+    } finally {
+      counter!.numbering = saved;
+    }
+  });
 });

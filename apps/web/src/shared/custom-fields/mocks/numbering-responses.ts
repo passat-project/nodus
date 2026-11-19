@@ -24,9 +24,13 @@ export function counterUpdateResponse(
   const nextRule = body.numbering ?? before;
   // Вставки без печатного значения не сохраняются (AUD-010, как сервер):
   // палитра их не предлагает, но старые правила и API-клиенты — не гарантия.
-  const unsupported = nextRule
-    ? unsupportedNumberInsertions(nextRule, demoCustomFieldDefinitions)
-    : [];
+  // Проверяем только ПРИСЛАННОЕ правило: сервер на PATCH без `numbering`
+  // (переименование и т.п.) сохранённую вставку не перепроверяет — мок не
+  // должен быть строже контракта (ADR-0001).
+  const unsupported =
+    body.numbering && nextRule
+      ? unsupportedNumberInsertions(nextRule, demoCustomFieldDefinitions)
+      : [];
   if (unsupported.length > 0) {
     return fail(
       ErrorCode.NUMBER_SEGMENT_UNSUPPORTED,
