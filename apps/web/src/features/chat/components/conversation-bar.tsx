@@ -261,7 +261,12 @@ export function ConversationBar({
           aria-label={`${peerLink.displayName}, ${ui.chat.openEmployeeCard}`}
           // Подсказка при наведении — человек, не название действия (#728).
           title={peerLink.displayName}
-          className="-ml-1 flex min-w-0 cursor-pointer items-center gap-3 rounded-lg px-1.5 py-1.5 text-left outline-none transition-colors hover:bg-accent/60 focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/40"
+          // Подложка расширяет кнопку на px-1.5 с обеих сторон, поэтому
+          // отрицательный отступ равен padding'у (-ml-1.5): аватар стоит на той
+          // же вертикали, что в шапках групп/«Заметок» (замер: avatar.x =
+          // header.x + px-4) — переключение бесед не двигает контент. Фокус —
+          // ring: `border-ring` без ширины границы невидим (border нет).
+          className="-ml-1.5 flex min-w-0 cursor-pointer items-center gap-3 rounded-lg px-1.5 py-1.5 text-left outline-none transition-colors hover:bg-accent/60 focus-visible:ring-1 focus-visible:ring-ring"
         >
           {head}
         </button>
