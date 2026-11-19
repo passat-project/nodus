@@ -17,6 +17,14 @@ const routes = [
   { parent: 'lab', child: 'deep', d: 'M0 200 V300', length: 240 },
 ];
 
+/** Широкая ступень: три ребра по 2400 px — база (1200 px/s) дала бы 6 с. */
+const longRoutes = [
+  { parent: 'main', child: 'a', d: 'M0 0 V100', length: 2400 },
+  { parent: 'a', child: 'b', d: 'M0 100 V200', length: 2400 },
+  { parent: 'b', child: 'c', d: 'M0 200 V300', length: 2400 },
+];
+const longTrail: DepartmentLink[] = [link('main', 'a'), link('a', 'b'), link('b', 'c')];
+
 let now = 0;
 let queue: FrameRequestCallback[] = [];
 
@@ -151,5 +159,37 @@ describe('StructureTrace (#768)', () => {
     );
     expect(paths()).toHaveLength(0);
     expect(dot()).toBeNull();
+  });
+
+  it('длинный маршрут укладывается в бюджет 0,8 с — широкие ступени не ждут (#973)', () => {
+    render(
+      <svg>
+        <StructureTrace routes={longRoutes} trail={longTrail} runKey="long" />
+      </svg>,
+    );
+
+    frames(300);
+    // Базовая скорость (1200 px/s) прошла бы лишь половину первого ребра.
+    expect(offsets()).toContain('1');
+
+    frames(600);
+    expect(offsets()).toEqual(['0', '0', '0']);
+    expect(dot()?.style.opacity).toBe('0');
+  });
+
+  it('короткий маршрут не замедлился: 240 px — прежние 0,2 с (#973)', () => {
+    render(
+      <svg>
+        <StructureTrace routes={routes} trail={[link('main', 'bim')]} runKey="short" />
+      </svg>,
+    );
+
+    frames(120);
+    const offset = Number.parseFloat(offsets()[0]!);
+    expect(offset).toBeGreaterThan(0);
+    expect(offset).toBeLessThan(1);
+
+    frames(120);
+    expect(offsets()).toEqual(['0']);
   });
 });
