@@ -263,11 +263,13 @@ export function SliderPanel({
   // держал содержимое растром масштаба источника, и текст/фото «мылились» до
   // первой перерисовки. Слушатель нативный: animationend всплывает и от
   // дочерних content-fade — фильтруем по target (анимация самой панели).
+  // Во время закрытия промоушен НЕ снимаем: он только что поставлен перед
+  // WAAPI-схлопыванием и должен жить до конца анимации.
   useEffect(() => {
     const el = panelRef.current;
     if (!el || !sourceRect) return;
     const onEnd = (event: AnimationEvent) => {
-      if (event.target === el) setFlipPromoted(false);
+      if (event.target === el && !closingRef.current) setFlipPromoted(false);
     };
     el.addEventListener('animationend', onEnd);
     return () => el.removeEventListener('animationend', onEnd);

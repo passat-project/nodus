@@ -93,11 +93,27 @@ describe('SliderPanel: закрытие схлопыванием в источн
   });
 
   it('закрытие промоутирует слой перед WAAPI и снимает его после (#969)', () => {
-    const { anims } = openWithSource();
+    Object.defineProperty(HTMLElement.prototype, 'animate', {
+      configurable: true,
+      value: () => ({ onfinish: null, oncancel: null }),
+    });
+    render(
+      <SliderPanel
+        title="Карточка"
+        onClose={vi.fn()}
+        sourceRect={{ x: 0, y: 0, width: 10, height: 10 }}
+      >
+        <div />
+      </SliderPanel>,
+    );
     const section = screen.getByRole('dialog');
-    expect(section.style.willChange).toBe('transform');
 
-    act(() => anims[0]?.onfinish?.());
+    // Раскрытие осело — промоушена больше нет.
+    fireEvent.animationEnd(section);
     expect(section.style.willChange).toBe('');
+
+    // Клик «Закрыть»: на время WAAPI-схлопывания слой снова промоутирован.
+    fireEvent.click(screen.getByRole('button', { name: ui.common.close }));
+    expect(section.style.willChange).toBe('transform');
   });
 });

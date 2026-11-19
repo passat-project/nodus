@@ -60,10 +60,11 @@ export function CardTabPanelLayer({
       {tabs.map((tab) => {
         if (!visited.has(tab.id)) return null;
         const area = areaOf.get(tab.id);
-        // Вкладка вне отрисованных областей (закрыта) — не рендерим: ей негде
-        // стоять, а «парковка в левой» и была источником мелькания.
-        if (!area) return null;
-        const active = area.active === tab.id;
+        // Вкладка вне отрисованных областей (скрыта из личного набора, ещё не
+        // разложена) остаётся СМОНТИРОВАННОЙ: панель паркуется в левой колонке
+        // и невидима — скролл/зум/черновик живут (критерий #959). Мелькание
+        // гасит `opacity: 0`, а не размонтирование.
+        const active = area ? area.active === tab.id : false;
         return (
           <div
             key={tab.id}
@@ -81,7 +82,9 @@ export function CardTabPanelLayer({
               // намеренно — он не отменяет IntersectionObserver (#770).
               !active && 'pointer-events-none invisible opacity-0',
             )}
-            style={{ left: area.left, width: area.width }}
+            style={
+              area ? { left: area.left, width: area.width } : { left: 0, width: widths[0] ?? 0 }
+            }
           >
             {/* Неактивная вкладка остаётся СМОНТИРОВАННОЙ (скролл/зум живы),
                 но `visibility:hidden` не отменяет IntersectionObserver и

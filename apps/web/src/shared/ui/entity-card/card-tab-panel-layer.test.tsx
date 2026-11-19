@@ -87,6 +87,21 @@ describe('CardTabPanelLayer: видимость поверхности вкла�
     expect(screen.getByTestId('probe-chat').textContent).toBe('hidden');
     expect(screen.getByTestId('probe-files').textContent).toBe('visible');
   });
+
+  it('посещённая вкладка вне отрисованных областей остаётся смонтированной (#959)', () => {
+    // Скрытие вкладки из личного набора сохраняет её в visited: панель обязана
+    // жить (скролл/зум/черновик), а не размонтироваться.
+    const hidden = createCardTabsState(
+      [{ id: 'area-1', tabs: ['chat', 'files'], active: 'chat' }],
+      { visited: ['chat', 'files', 'history'] },
+    );
+    renderLayer(hidden);
+
+    const panel = document.getElementById('card-tab-history-panel');
+    expect(panel).not.toBeNull();
+    expect(panel!.className).toContain('opacity-0');
+    expect(screen.getByTestId('probe-history').textContent).toBe('hidden');
+  });
 });
 
 describe('CardTabPanelLayer: панели не мелькают в чужой области (#959)', () => {
