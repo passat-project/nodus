@@ -22,6 +22,8 @@ function makeMember(overrides: Partial<MemberRow> = {}): MemberRow {
     role: 'owner',
     lastReadSeq: 0n,
     lastReadAt: null,
+    lastFeedReadSeq: 0n,
+    lastFeedReadAt: null,
     joinedAt: new Date('2026-09-24T09:00:00Z'),
     pinned: false,
     muted: false,
@@ -141,6 +143,7 @@ describe('MessagesService: send urgent (#100)', () => {
       eventBus as never,
       userProfiles as never,
       threadParticipants as never,
+      { advance: vi.fn(), readCursorsFor: vi.fn() } as never,
       stickersRepo as never,
       {
         applyMessageSent: vi.fn(async () => {}),

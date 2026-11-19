@@ -31,6 +31,7 @@ import { MessagesDeleteService } from './messages/messages-delete.service.js';
 import { MessagesService } from './messages/messages.service.js';
 import { MessageSearchSourceProvider } from './search/message-search-source.provider.js';
 import { ThreadParticipantsRepository } from './messages/thread-participants.repository.js';
+import { ThreadReadsRepository } from './messages/thread-reads.repository.js';
 import { ThumbnailQueue } from './messages/thumbnail.queue.js';
 import { ThumbnailService } from './messages/thumbnail.service.js';
 import { ThumbnailWorker } from './messages/thumbnail.worker.js';
@@ -162,6 +163,7 @@ import {
     MessagesReadStateRepository,
     MessagesReactionsRepository,
     ThreadParticipantsRepository,
+    ThreadReadsRepository,
     MessagesService,
     MessagesDeleteService,
     MessageActionsService,
