@@ -58,7 +58,7 @@ describe('UsersService: деактивация сотрудника', () => {
     countActiveDirectMembers: vi.fn(),
   };
   const membership = { effectiveRoleIds: vi.fn() };
-  const departmentsRepo = { clearHeadAndDeputy: vi.fn() };
+  const departmentsRepo = { clearHeadAndDeputy: vi.fn(), lockTree: vi.fn() };
   const managers = { recomputeUsers: vi.fn(), recomputeDepartments: vi.fn() };
   const tx = { run: vi.fn((cb: (t: string) => unknown) => cb('tx-handle')) };
   const eventBus = { emit: vi.fn() };
@@ -111,6 +111,7 @@ describe('UsersService: деактивация сотрудника', () => {
     await service.deactivateUser('user-1', actor());
 
     expect(departmentsRepo.clearHeadAndDeputy).toHaveBeenCalledWith('user-1', 'tx-handle');
+    expect(departmentsRepo.lockTree).toHaveBeenCalledWith('tx-handle');
     expect(managers.recomputeDepartments).toHaveBeenCalledWith(['dep-1', 'dep-2'], 'tx-handle');
     expect(eventBus.emit).toHaveBeenCalledWith(
       'tx-handle',

@@ -84,7 +84,7 @@ export class DepartmentsController {
     dto: CreateDepartmentDto,
     @GetUser() actor: AuthUser,
   ): Promise<DepartmentNode> {
-    return this.departmentsService.create(dto, actor.id);
+    return this.departmentsService.create(dto, actor);
   }
 
   @Patch(':id')

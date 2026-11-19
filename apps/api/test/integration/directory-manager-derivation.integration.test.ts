@@ -17,7 +17,7 @@ describe('Производный руководитель и профиль (#92
   const departmentIds: string[] = [];
 
   const createDepartment = async (body: Record<string, unknown>) => {
-    const response = await f.api(f.users.directory, 'POST', '/directory/departments', {
+    const response = await f.api(f.users.structureAdmin, 'POST', '/directory/departments', {
       body,
       key: randomUUID(),
     });
@@ -28,7 +28,7 @@ describe('Производный руководитель и профиль (#92
   };
 
   const patchDepartment = async (id: string, body: Record<string, unknown>) => {
-    const response = await f.api(f.users.directory, 'PATCH', `/directory/departments/${id}`, {
+    const response = await f.api(f.users.structureAdmin, 'PATCH', `/directory/departments/${id}`, {
       body,
       key: randomUUID(),
     });
@@ -37,7 +37,7 @@ describe('Производный руководитель и профиль (#92
   };
 
   const moveEmployee = async (userId: string, departmentId: string) => {
-    const response = await f.api(f.users.directory, 'PATCH', `/directory/users/${userId}`, {
+    const response = await f.api(f.users.structureAdmin, 'PATCH', `/directory/users/${userId}`, {
       body: { departmentId },
       key: randomUUID(),
     });
@@ -49,14 +49,14 @@ describe('Производный руководитель и профиль (#92
     // Читаем «админским» токеном набора: токены сотрудников после переводов
     // между отделами законно попадают в стоп-лист (#866: смена подразделения
     // обесценивает access-токены), а читать карточки в тесте это не мешает.
-    const response = await f.api(f.users.directory, 'GET', `/directory/users/${id}`);
+    const response = await f.api(f.users.structureAdmin, 'GET', `/directory/users/${id}`);
     expect(response.status).toBe(200);
     return userCardSchema.parse(await response.json());
   };
 
   const archiveDepartment = async (id: string) => {
     const response = await f.api(
-      f.users.directory,
+      f.users.structureAdmin,
       'POST',
       `/directory/departments/${id}/archive`,
       { key: randomUUID() },
@@ -113,7 +113,7 @@ describe('Производный руководитель и профиль (#92
     expect((await card(f.users.employee.id)).managerId).toBe(f.users.directory.id);
     // Ручное значение руководителя не применяется: поле производное.
     const response = await f.api(
-      f.users.directory,
+      f.users.structureAdmin,
       'PATCH',
       `/directory/users/${f.users.employee.id}`,
       { body: { managerId: f.users.manager.id }, key: randomUUID() },
@@ -128,7 +128,7 @@ describe('Производный руководитель и профиль (#92
     await patchDepartment(child!, { headId: f.users.limited.id });
 
     const deactivated = await f.api(
-      f.users.directory,
+      f.users.structureAdmin,
       'POST',
       `/directory/users/${f.users.limited.id}/deactivate`,
       { key: randomUUID() },
@@ -138,7 +138,11 @@ describe('Производный руководитель и профиль (#92
     // Читаем админским токеном набора: перевод карточкой законно отзывает
     // access-токены сотрудника (#866) — гонка с диспетчером outbox делала тест
     // флаки (карточка отдела не про права Кэрол).
-    const department = await f.api(f.users.directory, 'GET', `/directory/departments/${child}`);
+    const department = await f.api(
+      f.users.structureAdmin,
+      'GET',
+      `/directory/departments/${child}`,
+    );
     expect(department.status).toBe(200);
     expect(departmentNodeSchema.parse(await department.json()).headId).toBeNull();
     // Подчинённые «переехали» к главе родительского подразделения.
@@ -170,9 +174,9 @@ describe('Производный руководитель и профиль (#92
 
   it('себя уволить нельзя — 409 DIRECTORY_SELF_DEACTIVATE', async () => {
     const response = await f.api(
-      f.users.directory,
+      f.users.structureAdmin,
       'POST',
-      `/directory/users/${f.users.directory.id}/deactivate`,
+      `/directory/users/${f.users.structureAdmin.id}/deactivate`,
       { key: randomUUID() },
     );
     expect(response.status).toBe(409);
@@ -201,7 +205,11 @@ describe('Производный руководитель и профиль (#92
     const moved = await moveEmployee(f.users.employee.id, parent.id);
 
     expect(moved.departmentId).toBe(parent.id);
-    const headAfter = await f.api(f.users.directory, 'GET', `/directory/departments/${child.id}`);
+    const headAfter = await f.api(
+      f.users.structureAdmin,
+      'GET',
+      `/directory/departments/${child.id}`,
+    );
     expect(departmentNodeSchema.parse(await headAfter.json()).headId).toBeNull();
     // Подчинённые старого отдела переехали к главе активного предка.
     expect((await card(f.users.manager.id)).managerId).toBe(f.users.directory.id);
@@ -223,7 +231,11 @@ describe('Производный руководитель и профиль (#92
     await patchDepartment(child.id, { deputyId: f.users.manager.id });
     const deputyMoved = await moveEmployee(f.users.manager.id, parent.id);
     expect(deputyMoved.departmentId).toBe(parent.id);
-    const deputyAfter = await f.api(f.users.directory, 'GET', `/directory/departments/${child.id}`);
+    const deputyAfter = await f.api(
+      f.users.structureAdmin,
+      'GET',
+      `/directory/departments/${child.id}`,
+    );
     expect(departmentNodeSchema.parse(await deputyAfter.json()).deputyId).toBeNull();
   });
 
@@ -231,7 +243,7 @@ describe('Производный руководитель и профиль (#92
     // Регрессия: Prisma @db.Date принимала только Date — строка «yyyy-mm-dd»
     // валила PATCH в 500, и поля дат «не сохранялись».
     const cardResponse = await f.api(
-      f.users.directory,
+      f.users.structureAdmin,
       'PATCH',
       `/directory/users/${f.users.employee.id}`,
       {
@@ -245,7 +257,7 @@ describe('Производный руководитель и профиль (#92
     expect(card.hiredAt).toBe('2024-03-01');
     expect(card.workdayStart).toBe('09:30');
 
-    const self = f.users.directory;
+    const self = f.users.structureAdmin;
     const selfResponse = await f.api(self, 'PATCH', '/directory/users/me', {
       body: { birthDate: '1991-02-03', workdayStart: '08:45' },
       key: randomUUID(),
@@ -258,9 +270,9 @@ describe('Производный руководитель и профиль (#92
 
   it('self-edit: ФИО правится, структура и HR — отказ 400', async () => {
     // Не `employee`: его токен обесценен законным ROLE_ACCESS_CHANGED при
-    // переводе в другой отдел (отзыв access-токенов, #866/#923) — берём
-    // сотрудника, чьи роли в наборе не менялись.
-    const self = f.users.directory;
+    // переводе в другой отдел (отзыв access-токенов, #866/#923). Актор
+    // структуры (#946) в наборы глав/замов не попадает — его токен жив.
+    const self = f.users.structureAdmin;
     const renamed = await f.api(self, 'PATCH', '/directory/users/me', {
       body: { firstName: 'Переименован' },
       key: randomUUID(),

@@ -111,7 +111,7 @@ describe('DepartmentsService', () => {
             deputyId: null,
             sortOrder: 0,
           },
-          'admin-1',
+          actor(),
         ),
       ).rejects.toMatchObject({
         code: ErrorCode.DIRECTORY_REFERENCE_INVALID,

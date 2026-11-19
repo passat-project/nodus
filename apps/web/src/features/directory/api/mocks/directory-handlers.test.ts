@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import type { DepartmentNode } from '@nodus/contracts';
 
+import { DEPARTMENTS_TREE_PATH } from '../../../../shared/api/departments-list.js';
 import { demoPositions } from '../../../../shared/mocks/data/positions.js';
+import { userIds } from '../../../../shared/mocks/data/users.js';
 import { directoryHandlers } from './directory-handlers.js';
 
 /**
@@ -79,5 +82,50 @@ describe('моки должностей (#768)', () => {
     });
     expect(recreated.status).toBe(201);
     expect(((await recreated.json()) as { id: string }).id).not.toBe(createdId);
+  });
+});
+
+describe('моки подразделений: глава/зам — одно место (#946)', () => {
+  const DEPARTMENTS = '/api/v1/directory/departments';
+  const TREE = `/api/v1${DEPARTMENTS_TREE_PATH}?kind=management`;
+
+  const create = (body: Record<string, unknown>) =>
+    fetch(DEPARTMENTS, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  it('назначение главы переводит сотрудника; прежний узел теряет роль', async () => {
+    const response = await create({
+      name: 'Мок-перевод #946',
+      kind: 'management',
+      headId: userIds.karpovich,
+    });
+    expect(response.status).toBe(201);
+    const department = (await response.json()) as { id: string };
+
+    const tree = (await (await fetch(TREE)).json()) as DepartmentNode[];
+    const flatten = (nodes: DepartmentNode[]): DepartmentNode[] =>
+      nodes.flatMap((node) => [node, ...flatten(node.children)]);
+    const all = flatten(tree);
+    const createdNode = all.find((node) => node.id === department.id);
+    expect(createdNode?.memberCount).toBe(1);
+    expect(createdNode?.headName).toContain('Карпович');
+    // Прежний узел Карпович («Административное») остался без главы.
+    const previous = all.find((node) => node.name === 'Административное');
+    expect(previous?.headId).toBeNull();
+  });
+
+  it('глава и зам — один сотрудник → 400 как на сервере', async () => {
+    const response = await create({
+      name: 'Мок-дубль #946',
+      kind: 'management',
+      headId: userIds.polomar,
+      deputyId: userIds.polomar,
+    });
+
+    expect(response.status).toBe(400);
+    expect(((await response.json()) as { code: string }).code).toBe('VALIDATION_FAILED');
   });
 });
