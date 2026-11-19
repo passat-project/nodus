@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import type { DepartmentNode } from '@nodus/contracts';
+import { ErrorCode, type DepartmentNode } from '@nodus/contracts';
 
 import { DEPARTMENTS_TREE_PATH } from '../../../../shared/api/departments-list.js';
+import { demoDepartments } from '../../../../shared/mocks/data/departments.js';
 import { demoPositions } from '../../../../shared/mocks/data/positions.js';
 import { userIds } from '../../../../shared/mocks/data/users.js';
 import { directoryHandlers } from './directory-handlers.js';
@@ -16,6 +17,7 @@ import { directoryHandlers } from './directory-handlers.js';
  */
 const server = setupServer(...directoryHandlers);
 const URL = '/api/v1/directory/positions';
+const DEPARTMENTS_URL = '/api/v1/directory/departments';
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterEach(() => server.resetHandlers());
@@ -127,5 +129,33 @@ describe('моки подразделений: глава/зам — одно м
 
     expect(response.status).toBe(400);
     expect(((await response.json()) as { code: string }).code).toBe('VALIDATION_FAILED');
+  });
+});
+
+describe('моки подразделений (#982)', () => {
+  it('управленческое подразделение в корень не открепляется — 409 тем же кодом, что у API', async () => {
+    const bim = demoDepartments.find((department) => department.name === 'BIM-отдел');
+    expect(bim?.parentId).toBeTruthy();
+
+    const response = await fetch(`${DEPARTMENTS_URL}/${bim!.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ parentId: null }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(((await response.json()) as { code: string }).code).toBe(
+      ErrorCode.DIRECTORY_DEPARTMENT_ROOT_FORBIDDEN,
+    );
+    // Отказ ничего не мутировал: узел остался под прежним родителем.
+    const tree = (await (await fetch(`${DEPARTMENTS_URL}/tree?kind=management`)).json()) as {
+      id: string;
+      parentId: string | null;
+      children: unknown[];
+    }[];
+    type Node = { id: string; parentId: string | null; children: Node[] };
+    const flat = (nodes: Node[]): Node[] => nodes.flatMap((node) => [node, ...flat(node.children)]);
+    const stored = flat(tree as unknown as Node[]).find((node) => node.id === bim!.id);
+    expect(stored?.parentId).toBe(bim!.parentId);
   });
 });
