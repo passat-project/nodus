@@ -115,6 +115,8 @@ export function LettersTable({ box }: { box: LetterBox }) {
         ) : (
           <DataTable
             viewKey={viewKey}
+            /* Массовых действий у журнала писем нет — выбор строк не предлагаем (#962). */
+            selectable={false}
             defs={fields}
             rows={rows}
             rowKey={letterKey}

@@ -133,3 +133,28 @@ describe('DataTable: мемоизация строк (A6-4)', () => {
     expect(screen.getByText('Вторая (правка)')).toBeTruthy();
   });
 });
+
+describe('DataTable: выбор строк (#962)', () => {
+  it('без массовых действий чекбоксов нет, а строка по-прежнему открывается', () => {
+    const openRow = vi.fn();
+    render(
+      <DataTable
+        viewKey="test.rows"
+        defs={countingDefs(new Map())}
+        rows={ROWS}
+        rowKey={rowKey}
+        onOpenRow={openRow}
+        selectable={false}
+      />,
+    );
+
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+    fireEvent.click(screen.getByText('Первая'));
+    expect(openRow).toHaveBeenCalledTimes(1);
+  });
+
+  it('по умолчанию выбор предлагается (чекбоксы есть)', () => {
+    render(table(countingDefs(new Map())));
+    expect(screen.getAllByRole('checkbox').length).toBeGreaterThan(0);
+  });
+});

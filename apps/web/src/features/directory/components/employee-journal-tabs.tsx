@@ -89,6 +89,8 @@ export function EmployeeTasksTab({
       <div className="min-h-0 flex-1">
         <DataTable
           viewKey="directory.tasks"
+          /* Массовых действий нет — выбор строк не предлагаем (#962). */
+          selectable={false}
           defs={fields}
           rows={rows}
           rowKey={(task) => task.id}
@@ -138,6 +140,8 @@ export function EmployeeProjectsTab({ userId }: { userId: string }) {
       <div className="min-h-0 flex-1">
         <DataTable
           viewKey="directory.projects"
+          /* Массовых действий нет — выбор строк не предлагаем (#962). */
+          selectable={false}
           defs={fields}
           rows={rows}
           rowKey={(project) => project.id}
