@@ -69,6 +69,8 @@ function membershipOf(userId: string, role: string) {
     role,
     lastReadSeq: 0n,
     lastReadAt: null,
+    lastFeedReadSeq: 0n,
+    lastFeedReadAt: null,
     joinedAt: JOINED,
     pinned: false,
     muted: false,

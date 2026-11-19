@@ -53,6 +53,7 @@ import { AttachmentsRepository } from './attachments.repository.js';
 import { ThumbnailQueue } from './thumbnail.queue.js';
 import { warmMissingPreviews } from './preview-warmup.js';
 import { ThreadParticipantsRepository } from './thread-participants.repository.js';
+import { ThreadReadsRepository } from './thread-reads.repository.js';
 import { VaultWriteRepository } from '../vault/vault-write.repository.js';
 import { syncEditAttachments } from './messages-edit-attachments.js';
 import { StickersRepository, type StickerAttachmentRow } from '../stickers/stickers.repository.js';
@@ -91,6 +92,7 @@ export class MessagesService {
     private readonly eventBus: EventBus,
     @Inject(USER_PROFILE_READER) private readonly userProfiles: UserProfileReader,
     private readonly threadParticipants: ThreadParticipantsRepository,
+    private readonly threadReads: ThreadReadsRepository,
     private readonly stickersRepo: StickersRepository,
     private readonly vault: VaultWriteRepository,
     private readonly thumbnailQueue: ThumbnailQueue,
@@ -149,6 +151,9 @@ export class MessagesService {
    * threadRootId (раунд 3) — квитанция ИЗ ТРЕДА: сверх watermark беседы
    * («увидел где угодно = просмотрено») двигает watermark трэда НАБЛЮДАТЕЛЯ
    * (точка «есть новые» на посте гаснет); не-наблюдателю писать нечего.
+   * Квитанции «Просмотрено» при этом идут по своей области (#971): лента — по
+   * курсору ленты, ответы треда — по watermark трэда; чтение треда НЕ делает
+   * сотрудника просмотревшим ленту канала.
    */
   async readConversation(
     userId: string,
@@ -173,10 +178,16 @@ export class MessagesService {
         userId,
         target,
         tx,
+        // #971: квитанция треда двигает курсор беседы (бейдж непрочитанного),
+        // но не курсор ленты — «Просмотрено» ленты не пересекает границу треда.
+        { feed: threadRootId === undefined },
       );
       if (threadRootId !== undefined) {
         // Тихо: событие беседы ниже уже инвалидирует thread-state клиентам.
         await this.threadParticipants.advanceReadCursor(threadRootId, userId, target, tx);
+        // Квитанция «Просмотрено» ответов треда (#971): пишется любому
+        // участнику беседы, участие в треде (уведомления) не меняется.
+        await this.threadReads.advance(threadRootId, userId, target, tx);
       }
       if (advanced) {
         await this.eventBus.emit(

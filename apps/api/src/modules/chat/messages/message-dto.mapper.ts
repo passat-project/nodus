@@ -23,7 +23,8 @@ import { extractMessageUrls } from './link-extractor.js';
 import { LinkPreviewService } from '../link-previews/link-preview.service.js';
 import { normalizeUrl } from '../link-previews/url-normalize.js';
 import { toAttachmentDto, type AttachmentDtoRow } from './message-attachment.dto.js';
-import { computeReadAt, computeReadBy } from './message-read-receipts.js';
+import { computeReadAt, computeReadBy, type ReadCursor } from './message-read-receipts.js';
+import { ThreadReadsRepository } from './thread-reads.repository.js';
 import {
   buildForwardedFrom,
   buildReplyPreview,
@@ -53,6 +54,26 @@ export interface MessageDtoContext {
   membersByConversation?: ReadonlyMap<string, MemberRow[]>;
 }
 
+/** Курсоры чтения строки: ответ треда — watermark треда (#971), сообщение
+ *  ленты — курсор ЛЕНТЫ участников беседы (чтение обсуждения его не двигает). */
+function readCursorsFor(
+  row: MessageRow,
+  ctx: MessageDtoContext,
+  threadReaders: ReadonlyMap<string, readonly ReadCursor[]>,
+  feedByConversation: Map<string, ReadCursor[]>,
+): readonly ReadCursor[] {
+  if (row.threadRootId !== null) return threadReaders.get(row.threadRootId) ?? [];
+  const cached = feedByConversation.get(row.conversationId);
+  if (cached) return cached;
+  const cursors = membersFor(ctx, row.conversationId).map((m) => ({
+    userId: m.userId,
+    lastReadSeq: m.lastFeedReadSeq,
+    lastReadAt: m.lastFeedReadAt,
+  }));
+  feedByConversation.set(row.conversationId, cursors);
+  return cursors;
+}
+
 /** Курсоры прочтения строки: своя беседа в смешанной странице, иначе members. */
 function membersFor(ctx: MessageDtoContext, conversationId: string): MemberRow[] {
   return ctx.membersByConversation?.get(conversationId) ?? ctx.members;
@@ -71,6 +92,7 @@ export class MessageDtoMapper {
     private readonly messages: MessagesRepository,
     private readonly reactions: MessagesReactionsRepository,
     private readonly pins: MessagePinsRepository,
+    private readonly threadReads: ThreadReadsRepository,
     @Inject(USER_PROFILE_READER) private readonly userProfiles: UserProfileReader,
     private readonly signedUrls: SignedUrlService,
     private readonly linkPreviews: LinkPreviewService,
@@ -80,10 +102,19 @@ export class MessageDtoMapper {
     if (rows.length === 0) return [];
     const ids = rows.map((r) => r.id);
     const replyIds = [...new Set(rows.flatMap((r) => (r.replyToId ? [r.replyToId] : [])))];
+    // Квитанции (#971): ответы тредов считаются по watermark треда (батч одним
+    // запросом), сообщения ленты — по курсору ленты участников беседы.
+    const threadRootIds = [
+      ...new Set(rows.flatMap((r) => (r.threadRootId ? [r.threadRootId] : []))),
+    ];
+    const threadReaders = await this.threadReads.readCursorsFor(threadRootIds);
+    const feedByConversation = new Map<string, ReadCursor[]>();
+    const cursorsFor = (row: MessageRow): readonly ReadCursor[] =>
+      readCursorsFor(row, ctx, threadReaders, feedByConversation);
     // Прочитавшие своих сообщений (#102): батч в общий loadRefs.
     const readByRows = rows.map((row) => ({
       row,
-      readers: computeReadBy(row, membersFor(ctx, row.conversationId), ctx.viewerId),
+      readers: computeReadBy(row, cursorsFor(row), ctx.viewerId),
     }));
     const readerIds = new Set(readByRows.flatMap(({ readers }) => readers.map((r) => r.userId)));
     // Реакции читаются ДО refs: их userId попадают в общий батч профилей
@@ -136,7 +167,7 @@ export class MessageDtoMapper {
         deletedAt: row.deletedAt?.toISOString() ?? null,
         pinned: pinnedIds.has(row.id),
         forwardedFrom: buildForwardedFrom(row, refs),
-        readAt: computeReadAt(row, membersFor(ctx, row.conversationId), ctx.viewerId),
+        readAt: computeReadAt(row, cursorsFor(row), ctx.viewerId),
         readBy: readers.map(
           (reader): UserRef => refs.get(reader.userId) ?? fallbackRef(reader.userId),
         ),

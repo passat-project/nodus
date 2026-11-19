@@ -71,6 +71,7 @@ describe('MessagesService.list — курсор страницы', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
       { enqueue: vi.fn(async () => undefined) } as never,
       { canPost: vi.fn(async () => true) } as never,
     );

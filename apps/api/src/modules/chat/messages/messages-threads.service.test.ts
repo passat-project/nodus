@@ -56,6 +56,8 @@ function makeMember(overrides: Partial<MemberRow> = {}): MemberRow {
     role: 'member',
     lastReadSeq: 0n,
     lastReadAt: null,
+    lastFeedReadSeq: 0n,
+    lastFeedReadAt: null,
     joinedAt: new Date('2026-09-24T09:00:00Z'),
     pinned: false,
     muted: false,
@@ -99,6 +101,7 @@ describe('MessagesService: трэды раунда 3', () => {
     advanceReadCursor: vi.fn(),
     states: vi.fn(),
   };
+  const threadReads = { advance: vi.fn(), readCursorsFor: vi.fn() };
   const stickersRepo = {
     findSticker: vi.fn(),
     findPackAccessible: vi.fn(),
@@ -138,6 +141,7 @@ describe('MessagesService: трэды раунда 3', () => {
       eventBus as never,
       userProfiles as never,
       threadParticipants as never,
+      threadReads as never,
       stickersRepo as never,
       {
         applyMessageSent: vi.fn(async () => {}),
@@ -210,6 +214,19 @@ describe('MessagesService: трэды раунда 3', () => {
       );
       await service.readConversation(ME, CONV, 8, ROOT);
       expect(threadParticipants.advanceReadCursor).toHaveBeenCalledWith(ROOT, ME, 8n, TX);
+      // #971: квитанция треда пишет «Просмотрено» ответов треда и НЕ двигает
+      // курсор ленты — «Просмотрено» ленты канала не пересекает границу треда.
+      expect(threadReads.advance).toHaveBeenCalledWith(ROOT, ME, 8n, TX);
+      expect(repo.advanceReadCursor).toHaveBeenCalledWith(CONV, ME, 8n, TX, { feed: false });
+    });
+
+    it('квитанция ленты (без threadRootId) двигает и курсор ленты', async () => {
+      conversations.findLastSeq.mockResolvedValue(10n);
+      repo.advanceReadCursor.mockResolvedValue({ advanced: true, lastReadAt: null });
+      await service.readConversation(ME, CONV, 8);
+      expect(repo.advanceReadCursor).toHaveBeenCalledWith(CONV, ME, 8n, TX, { feed: true });
+      expect(threadParticipants.advanceReadCursor).not.toHaveBeenCalled();
+      expect(threadReads.advance).not.toHaveBeenCalled();
     });
 
     it('threadRootId не корень этой беседы → NOT_FOUND, watermark трэда не тронут', async () => {

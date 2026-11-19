@@ -50,6 +50,8 @@ function makeMember(overrides: Partial<MemberRow> = {}): MemberRow {
     role: 'member',
     lastReadSeq: 0n,
     lastReadAt: null,
+    lastFeedReadSeq: 0n,
+    lastFeedReadAt: null,
     joinedAt: new Date('2026-09-24T09:00:00Z'),
     pinned: false,
     muted: false,
@@ -98,6 +100,7 @@ describe('MessagesService', () => {
     advanceReadCursor: vi.fn(),
     states: vi.fn(),
   };
+  const threadReads = { advance: vi.fn(), readCursorsFor: vi.fn() };
   const stickersRepo = {
     findSticker: vi.fn(),
     findPackAccessible: vi.fn(),
@@ -142,6 +145,7 @@ describe('MessagesService', () => {
       eventBus as never,
       userProfiles as never,
       threadParticipants as never,
+      threadReads as never,
       stickersRepo as never,
       {
         applyMessageSent: vi.fn(async () => {}),
@@ -445,7 +449,7 @@ describe('MessagesService', () => {
       repo.advanceReadCursor.mockResolvedValue({ advanced: true, lastReadAt: null });
       const result = await service.readConversation(ME, CONV, 999);
       expect(result).toEqual({ upToSeq: 7 });
-      expect(repo.advanceReadCursor).toHaveBeenCalledWith(CONV, ME, 7n, TX);
+      expect(repo.advanceReadCursor).toHaveBeenCalledWith(CONV, ME, 7n, TX, { feed: true });
     });
 
     it('курсор двинулся → событие MESSAGE_READ с upToSeq и readAt из строки', async () => {

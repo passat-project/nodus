@@ -1,5 +1,16 @@
-import type { MemberRow } from '../conversations/conversations.repository.js';
 import type { MessageRow } from './message-row.js';
+
+/**
+ * Курсор чтения для квитанций «Просмотрено» (#971): у сообщения ленты — курсор
+ * ЛЕНТЫ участника (`lastFeedReadSeq/At`), у ответа треда — watermark треда
+ * (`thread_participants.lastReadSeq/At`). Один тип на обе области: квитанция
+ * «видел это сообщение в его ленте», а не «заглядывал куда-то рядом».
+ */
+export interface ReadCursor {
+  userId: string;
+  lastReadSeq: bigint;
+  lastReadAt: Date | null;
+}
 
 /**
  * Прочитанность СВОИХ сообщений (модель Битрикс24/Telegram, #102): прочитавшим
@@ -11,15 +22,15 @@ import type { MessageRow } from './message-row.js';
  */
 export function computeReadAt(
   row: Pick<MessageRow, 'authorId' | 'seq' | 'editedAt' | 'createdAt'>,
-  members: MemberRow[],
+  cursors: readonly ReadCursor[],
   viewerId: string,
 ): string | null {
   if (row.authorId !== viewerId) return null;
-  if (!members.some((m) => m.userId !== row.authorId)) {
+  if (!cursors.some((c) => c.userId !== row.authorId)) {
     return row.createdAt.toISOString(); // «Избранное» (одиночная беседа)
   }
   let firstReaderAt: Date | null = null;
-  for (const reader of readCursors(row, members)) {
+  for (const reader of readCursors(row, cursors)) {
     if (firstReaderAt === null || reader.lastReadAt < firstReaderAt) {
       firstReaderAt = reader.lastReadAt;
     }
@@ -30,19 +41,19 @@ export function computeReadAt(
 /** Прочитавшие своё сообщение (userId по возрастанию времени прочтения). */
 export function computeReadBy(
   row: Pick<MessageRow, 'authorId' | 'seq' | 'editedAt'>,
-  members: MemberRow[],
+  cursors: readonly ReadCursor[],
   viewerId: string,
 ): { userId: string; lastReadAt: Date }[] {
   if (row.authorId !== viewerId) return [];
-  return readCursors(row, members).sort((a, b) => a.lastReadAt.getTime() - b.lastReadAt.getTime());
+  return readCursors(row, cursors).sort((a, b) => a.lastReadAt.getTime() - b.lastReadAt.getTime());
 }
 
 function readCursors(
   row: Pick<MessageRow, 'authorId' | 'seq' | 'editedAt'>,
-  members: MemberRow[],
+  cursors: readonly ReadCursor[],
 ): { userId: string; lastReadAt: Date }[] {
   const readers: { userId: string; lastReadAt: Date }[] = [];
-  for (const other of members) {
+  for (const other of cursors) {
     if (other.userId === row.authorId) continue;
     const readCurrent = other.lastReadSeq >= row.seq;
     const readAfterEdit =
