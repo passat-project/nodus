@@ -155,9 +155,10 @@ export const ThreadPane = memo(function ThreadPane({
             conversationId={conversationId}
             scope={scope}
             messagesOfSelection={selection.getSelectedMessages}
-            /* #729: тред канала — ховер-кнопки «Ответить» нет: ответ на
-               новость живёт здесь, и вход в тред уже даёт «Обсудить». */
-            hideReplyButton
+            /* #968: окно обсуждения — язычок «Ответить» нужен и у корня
+               треда: цитата поста в ответе — ответ конкретному человеку,
+               а не второй вход в обсуждение (тот — в ленте канала). */
+            inThread
           >
             <ChatMessageItem
               message={message}
@@ -292,9 +293,9 @@ export const ThreadPane = memo(function ThreadPane({
                                       conversationId={conversationId}
                                       scope={scope}
                                       messagesOfSelection={selection.getSelectedMessages}
-                                      /* #729: тред канала — без ховер-кнопки
-                                         «Ответить» (ответы живут здесь же). */
-                                      hideReplyButton
+                                      /* #968: ответы треда — цитата соседнего
+                                         сообщения тем же композером треда. */
+                                      inThread
                                     >
                                       <ChatMessageItem
                                         message={message}
