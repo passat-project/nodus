@@ -248,7 +248,6 @@ export function CardTabAreas({
         groups={groups}
         tabs={tabs}
         widths={widths}
-        width={width}
         baseId={baseId}
         renderPanel={renderPanel}
       />
