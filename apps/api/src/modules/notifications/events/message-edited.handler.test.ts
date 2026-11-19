@@ -44,6 +44,7 @@ describe('MessageEditedHandler', () => {
     conversationState: vi.fn(),
     buildInsertsFromEditedEvent: vi.fn(),
     actorName: vi.fn(),
+    threadWatcherIds: vi.fn<(rootId: string) => Promise<string[]>>(async () => []),
   };
   const txRunner = { run: vi.fn((cb: (tx: string) => unknown) => cb(TX)) };
   const eventBus = { emit: vi.fn() };
@@ -116,6 +117,25 @@ describe('MessageEditedHandler', () => {
       user_id: string;
     }>;
     expect(inserts.map((i) => i.user_id)).toEqual([ALICE]);
+  });
+
+  it('правка в треде (#974): наблюдатели берутся у треда, якорь треда — в сборку', async () => {
+    const ROOT = '77777777-7777-7777-7777-777777777777';
+    service.threadWatcherIds.mockResolvedValue([ALICE]);
+    await handler.handle(makeEvent({ threadRootId: ROOT }));
+
+    expect(service.threadWatcherIds).toHaveBeenCalledWith(ROOT);
+    expect(service.buildInsertsFromEditedEvent.mock.calls[0]?.[2]).toEqual([ALICE]);
+    expect(service.buildInsertsFromEditedEvent.mock.calls[0]?.[0]).toMatchObject({
+      payload: expect.objectContaining({ threadRootId: ROOT }),
+    });
+  });
+
+  it('правка сообщения ленты: наблюдатели треда не запрашиваются (#974)', async () => {
+    await handler.handle(makeEvent());
+
+    expect(service.threadWatcherIds).not.toHaveBeenCalled();
+    expect(service.buildInsertsFromEditedEvent.mock.calls[0]?.[2]).toEqual([]);
   });
 
   it('повторная доставка события (0 созданных) — эмитов нет', async () => {
@@ -319,5 +339,86 @@ describe('NotificationsService.buildInsertsFromEditedEvent', () => {
       state,
     );
     expect(inserts.every((i) => i.kind === 'chat.message_edited')).toBe(true);
+  });
+
+  /** #974: правка ответа в обсуждении — только наблюдателям треда. */
+  describe('правка в треде (#974)', () => {
+    const BOB = '99999999-9999-9999-9999-999999999999';
+    const ROOT = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    const wideState = {
+      type: 'project_channel' as const,
+      title: 'Новости',
+      members: [
+        { userId: AUTHOR, muted: false },
+        { userId: ALICE, muted: false },
+        { userId: BOB, muted: false },
+      ],
+    };
+
+    it('приходит только наблюдателю, thread_root_id заполнен', () => {
+      const inserts = svc.buildInsertsFromEditedEvent(
+        {
+          id: EVENT_ID,
+          payload: {
+            conversationId: CONV,
+            messageId: MSG,
+            authorId: AUTHOR,
+            text: 'Правка в обсуждении',
+            seq: 9,
+            threadRootId: ROOT,
+          },
+        },
+        wideState,
+        [ALICE],
+      );
+      expect(inserts.map((i) => i.user_id)).toEqual([ALICE]);
+      expect(inserts[0]).toMatchObject({ kind: 'chat.message_edited', thread_root_id: ROOT });
+    });
+
+    it('новый @упомянутый в правке треда получает high, даже если не наблюдатель', () => {
+      const inserts = svc.buildInsertsFromEditedEvent(
+        {
+          id: EVENT_ID,
+          payload: {
+            conversationId: CONV,
+            messageId: MSG,
+            authorId: AUTHOR,
+            text: 'Текст с @[Боб](user:…)',
+            seq: 9,
+            threadRootId: ROOT,
+            mentionedUserIds: [BOB],
+            previousMentionedUserIds: [],
+          },
+        },
+        wideState,
+        [ALICE],
+      );
+      expect(inserts.find((i) => i.user_id === ALICE)).toMatchObject({
+        kind: 'chat.message_edited',
+      });
+      expect(inserts.find((i) => i.user_id === BOB)).toMatchObject({
+        kind: 'chat.mention',
+        priority: 'high',
+        thread_root_id: ROOT,
+      });
+    });
+
+    it('правка ленты — прежняя аудитория, thread_root_id пуст', () => {
+      const inserts = svc.buildInsertsFromEditedEvent(
+        {
+          id: EVENT_ID,
+          payload: {
+            conversationId: CONV,
+            messageId: MSG,
+            authorId: AUTHOR,
+            text: 'Правка поста',
+            seq: 9,
+          },
+        },
+        wideState,
+      );
+      expect(inserts.map((i) => i.user_id)).toEqual([ALICE, BOB]);
+      expect(inserts.every((i) => i.thread_root_id === null)).toBe(true);
+    });
   });
 });

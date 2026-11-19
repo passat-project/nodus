@@ -505,6 +505,9 @@ export class MessagesService {
             authorId: userId,
             text: updated.text,
             seq: Number(updated.seq),
+            // #974: правка ответа в обсуждении — уведомление только
+            // наблюдателям треда и с якорем треда (клик открывает обсуждение).
+            threadRootId: updated.threadRootId,
             mentionedUserIds: nextMentioned,
             previousMentionedUserIds: previousEver.filter((id) => id !== MENTION_ALL_ID),
             previousMentionedAll: previousEver.includes(MENTION_ALL_ID),
