@@ -117,10 +117,11 @@ function PlannedInput({
     onCommit(minutes);
   };
   return (
-    // Подсказка — со своим зарезервированным местом (#967, ревью админа
-    // 19.11): строка ошибки не должна двигать поле и окно. Место под одну
-    // строку занято всегда, поэтому появление подсказки ничего не сдвигает.
-    <div className="flex min-h-[3.125rem] flex-col gap-1">
+    // Подсказка — абсолютная (#967, ревью админа 19-20.11): строка ошибки не
+    // должна ни растить окно, ни поднимать поле относительно соседнего чипа
+    // «Чек-лист» — оба пузыря стоят в одной линии. Подсказка висит под
+    // пузырём в свободном зазоре над кнопками и на раскладку не влияет.
+    <div className="relative">
       <Input
         autoFocus
         data-esc-local
@@ -147,7 +148,7 @@ function PlannedInput({
         <span
           id={errorId}
           role="alert"
-          className="max-w-[16rem] text-label-xs leading-tight text-destructive"
+          className="pointer-events-none absolute top-full left-0 z-10 mt-1 text-label-xs leading-tight whitespace-nowrap text-destructive"
         >
           {ui.tasks.minutesInvalid}
         </span>
