@@ -1,3 +1,4 @@
+import { ArrowRightLeft, CircleAlert } from 'lucide-react';
 import { useRef, useState } from 'react';
 import type {
   DepartmentNode,
@@ -249,13 +250,44 @@ export function DepartmentDialog({
               users={deputyCandidates}
             />
           </Field>
-          {willTransfer ? (
-            <p className="text-xs text-muted-foreground">{ui.employees.leaderTransferHint}</p>
-          ) : null}
-          {samePerson ? (
-            <p className="text-xs text-destructive" role="alert">
-              {ui.employees.leaderSamePerson}
-            </p>
+          {willTransfer || samePerson ? (
+            // Заметки о ролях — ОДНА группа, прижатая к полю «Заместитель» на шаг
+            // метка→поле (близость = принадлежность): на сеточном gap-3 строки
+            // вставали как ещё два поля формы, и подсказка читалась пятой меткой.
+            // Внутри группы строки ближе друг к другу, чем к соседним полям;
+            // ошибка — последней, она объясняет заблокированную кнопку и стоит
+            // к ней ближе всех.
+            <div className="-mt-1.5 flex flex-col gap-1.5">
+              {willTransfer ? (
+                // Иконка перевода — из грамматики того же модуля (перенос в
+                // структуре): метки формы иконок не носят, поэтому строка не
+                // читается ещё одной подписью поля.
+                <p role="status" className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                  <ArrowRightLeft
+                    className="mt-0.5 size-3.5 shrink-0"
+                    strokeWidth={1.75}
+                    aria-hidden
+                  />
+                  <span className="min-w-0">{ui.employees.leaderTransferHint}</span>
+                </p>
+              ) : null}
+              {samePerson ? (
+                // Насыщенность отличает сообщение от красной подписи: без неё
+                // 13px-строка читалась меткой, хотя это причина недоступного
+                // «Сохранить».
+                <p
+                  role="alert"
+                  className="flex items-start gap-1.5 text-xs font-medium text-destructive"
+                >
+                  <CircleAlert
+                    className="mt-0.5 size-3.5 shrink-0"
+                    strokeWidth={1.75}
+                    aria-hidden
+                  />
+                  <span className="min-w-0">{ui.employees.leaderSamePerson}</span>
+                </p>
+              ) : null}
+            </div>
           ) : null}
         </div>
         <DialogFooter>
