@@ -117,7 +117,10 @@ function PlannedInput({
     onCommit(minutes);
   };
   return (
-    <div className="flex flex-col gap-1">
+    // Подсказка — со своим зарезервированным местом (#967, ревью админа
+    // 19.11): строка ошибки не должна двигать поле и окно. Место под одну
+    // строку занято всегда, поэтому появление подсказки ничего не сдвигает.
+    <div className="flex min-h-[3.125rem] flex-col gap-1">
       <Input
         autoFocus
         data-esc-local
@@ -141,7 +144,11 @@ function PlannedInput({
         className={cn('h-8 w-40 font-mono text-label-sm', invalid && 'border-destructive')}
       />
       {invalid ? (
-        <span id={errorId} role="alert" className="text-label-xs text-destructive">
+        <span
+          id={errorId}
+          role="alert"
+          className="max-w-[16rem] text-label-xs leading-tight text-destructive"
+        >
           {ui.tasks.minutesInvalid}
         </span>
       ) : null}
