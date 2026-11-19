@@ -70,6 +70,8 @@ describe.skipIf(!process.env.DATABASE_URL || !process.env.STORAGE_ACCESS_KEY)(
         new OfficeTokenService(officeConfig),
         { enqueuePdf: async () => undefined } as never,
         officeConfig,
+        { filterActiveUserIds: async (ids: string[]) => ids } as never,
+        { editorsOf: async () => [] } as never,
         logger as never,
       );
     }, 120_000);
