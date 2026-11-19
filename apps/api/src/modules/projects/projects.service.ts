@@ -357,19 +357,20 @@ export class ProjectsService {
    * Гард управления по СВЕЖЕЙ строке проекта под `FOR UPDATE` (#705): между
    * проверкой до транзакции и захватом строки проект могли архивировать или
    * снять актёра с роли руководства — мутация обязана опираться на состояние
-   * под замком, а не на прочитанное раньше.
+   * под замком, а не на прочитанное раньше. Возвращает провалидированную
+   * строку: гард и данные для дальнейших проверок — из одного чтения (#875).
    *
    * `archived: 'forbid'` — структура (узлы/формулы папок): архив запирает её
    * безусловно, как `loadForStructureManage`; по умолчанию — поля проекта
    * (архив правит только `project.manage`).
    */
-  async assertManageLocked(
+  async assertManageLocked<T extends { status: string; visibility: string }>(
     user: AuthUser,
     id: string,
-    locked: { status: string; visibility: string } | null,
+    locked: T | null,
     tx: TransactionClient,
     opts: { archived?: 'allow-manage' | 'forbid' } = {},
-  ): Promise<void> {
+  ): Promise<T> {
     if (!locked) throw DomainException.notFound('Project not found');
     if (locked.status === 'archived') {
       if (opts.archived === 'forbid') {
@@ -392,6 +393,7 @@ export class ProjectsService {
       throw DomainException.notFound('Project not found');
     }
     this.requireManagement(user, rows);
+    return locked;
   }
 
   /** Руководство проекта (manager/assistant) или глобальное project.manage. */

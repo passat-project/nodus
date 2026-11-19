@@ -13,7 +13,10 @@ const PROJECT = '00000000-0000-4000-8000-0000000000a1';
 const NODE = '00000000-0000-4000-8000-0000000000a2';
 
 function make() {
-  const tx = { $executeRaw: vi.fn(async () => 1), $queryRaw: vi.fn(async () => [{ id: PROJECT }]) };
+  const tx = {
+    $executeRaw: vi.fn(async () => 1),
+    $queryRaw: vi.fn(async () => [{ status: 'active', visibility: 'open', typeId: 'type-1' }]),
+  };
   const repo = new ProjectNodesRepository({} as never);
   return { repo, tx };
 }
@@ -37,12 +40,19 @@ describe('ProjectNodesRepository: локи узла (#646)', () => {
 
   it('lockStructure: строка проекта — первой, затем advisory структуры (#705)', async () => {
     const { repo, tx } = make();
-    await repo.lockStructure(tx as never, PROJECT);
+    const locked = await repo.lockStructure(tx as never, PROJECT);
+
+    // Свежая строка уходит гарду мутации (#875): архив/секретность/тип
+    // перепроверяются по состоянию под локом, а не по снимку до транзакции.
+    expect(locked).toEqual({ status: 'active', visibility: 'open', typeId: 'type-1' });
 
     expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
     const projectLock = sqlText(tx.$queryRaw.mock.calls[0] as unknown[]);
     expect(projectLock).toMatch(/projects/);
     expect(projectLock).toMatch(/FOR UPDATE/);
+    expect(projectLock).toMatch(/status/);
+    expect(projectLock).toMatch(/visibility/);
+    expect(projectLock).toMatch(/type_id/);
     // Строка проекта — строго ДО advisory: обратный порядок открывал ABBA (#705).
     expect(tx.$queryRaw.mock.invocationCallOrder[0]!).toBeLessThan(
       tx.$executeRaw.mock.invocationCallOrder[0]!,
@@ -51,5 +61,11 @@ describe('ProjectNodesRepository: локи узла (#646)', () => {
     const text = sqlText(tx.$executeRaw.mock.calls[0] as unknown[]);
     expect(text).toMatch(/pg_advisory_xact_lock/);
     expect(text).toMatch(/nodus:project_nodes:/);
+  });
+
+  it('lockStructure: проект исчез — null (гард ответит 404)', async () => {
+    const { repo, tx } = make();
+    tx.$queryRaw.mockResolvedValueOnce([]);
+    expect(await repo.lockStructure(tx as never, PROJECT)).toBeNull();
   });
 });

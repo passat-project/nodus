@@ -51,7 +51,8 @@ export class ProjectStructureMoveService {
   ): Promise<ProjectNode> {
     await loadForStructureManage(this.projects, user, projectId);
     return this.txRunner.run(async (tx) => {
-      await this.nodes.lockStructure(tx, projectId);
+      const locked = await this.nodes.lockStructure(tx, projectId);
+      await this.projects.assertManageLocked(user, projectId, locked, tx, { archived: 'forbid' });
       const tree = await this.nodes.listByProject(projectId, tx);
       const node = tree.find((entry) => entry.id === nodeId);
       if (!node) throw nodeInvalid(nodeId);
