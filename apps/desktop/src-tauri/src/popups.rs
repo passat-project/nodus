@@ -105,6 +105,9 @@ pub(crate) struct PopupStack {
     /// Окно «Скрыть все» живёт (флаг под мьютексом — гонка двух
     /// reposition_all успевала создать ОКНО-ДУБЛЬ, висевшее поверх стека).
     pub(crate) hide_all_live: bool,
+    /// Создание плашки уже в полёте (async-билд WebView2): повторные
+    /// reposition_all не плодят скрытые окна-дубли (#408).
+    pub(crate) hide_all_creating: bool,
     /// Плашка «Скрыть все» показана (ready/fallback) — как shown у попапов.
     pub(crate) hide_all_shown: bool,
     /// HWND плашки (0 — окна нет): гвард фокуса (#709) учитывает и её.
