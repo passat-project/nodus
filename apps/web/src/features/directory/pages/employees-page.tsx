@@ -254,6 +254,8 @@ export function EmployeesPage() {
         {tab === 'list' ? (
           <DataTable
             viewKey="directory.employees"
+            /* Массовых действий нет — выбор строк не предлагаем (#962). */
+            selectable={false}
             defs={defs}
             rows={rows}
             rowKey={(user) => user.id}

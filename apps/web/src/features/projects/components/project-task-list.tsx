@@ -36,6 +36,8 @@ export function ProjectTaskList({
   return (
     <DataTable
       viewKey="projects.tasks"
+      /* Массовых действий нет — выбор строк не предлагаем (#962). */
+      selectable={false}
       defs={fields}
       rows={rows}
       rowKey={(task) => task.id}

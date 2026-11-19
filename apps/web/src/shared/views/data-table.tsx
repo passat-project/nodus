@@ -31,6 +31,8 @@ interface DataTableRowProps<T> {
    *  таблицы, а не в каждой строке (стабильный примитив для memo). */
   rowKey: string;
   isSelected: boolean;
+  /** Журнал с массовыми действиями; без них выбор строк не предлагаем. */
+  selectable: boolean;
   fields: readonly ViewField<DataTableField<T>>[];
   gridTemplateColumns: string;
   onOpenRow: (row: T, rowEl: HTMLElement) => void;
@@ -61,6 +63,7 @@ function DataTableRowInner<T>({
   row,
   rowKey,
   isSelected,
+  selectable,
   fields,
   gridTemplateColumns,
   onOpenRow,
@@ -92,8 +95,9 @@ function DataTableRowInner<T>({
       )}
       style={{ gridTemplateColumns }}
     >
-      {/* Ведущая ячейка: чекбокс выбора + «шашка» меню (клики не
-      всплывают до строки — открытие карточки не срабатывает). */}
+      {/* Ведущая ячейка: чекбокс выбора (только в журналах с массовыми
+      действиями) + «шашка» меню (клики не всплывают до строки — открытие
+      карточки не срабатывает). */}
       <span
         role="cell"
         className="flex items-center gap-1"
@@ -104,11 +108,13 @@ function DataTableRowInner<T>({
           if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
         }}
       >
-        <Checkbox
-          checked={isSelected}
-          onCheckedChange={() => onToggle(rowKey)}
-          aria-label={ui.common.selectRow}
-        />
+        {selectable ? (
+          <Checkbox
+            checked={isSelected}
+            onCheckedChange={() => onToggle(rowKey)}
+            aria-label={ui.common.selectRow}
+          />
+        ) : null}
         <RowMenu items={rowMenu?.(row) ?? []} />
       </span>
       {fields.map((field) => (
@@ -185,6 +191,7 @@ export function DataTable<T>({
   rowDrag,
   emptyTitle = ui.common.empty,
   label,
+  selectable = true,
   selection: externalSelection,
 }: {
   viewKey: string;
@@ -213,6 +220,10 @@ export function DataTable<T>({
   /** Доступное имя таблицы — название списка. Без него имя — `emptyTitle`
    *  (у отфильтрованного списка «Ничего не найдено» звучало бы названием). */
   label?: string;
+  /** Журнал с массовыми действиями: чекбоксы строк и «выбрать все».
+   *  `false` — массовых операций нет, выбор не предлагаем (иначе интерфейс
+   *  обещает действие, которого нет, #962). */
+  selectable?: boolean;
   /** Внешнее управление выбором (островок массовых действий модуля): если не
    *  передан — таблица держит выбор сама. Один механизм во всех реестрах. */
   selection?: RowSelection;
@@ -334,6 +345,7 @@ export function DataTable<T>({
           sort={sort}
           headerChecked={headerChecked}
           hasActions={actions !== undefined}
+          showSelection={selectable}
           style={{ gridTemplateColumns }}
           onToggleAll={toggleAll}
           onResize={(fieldId, w) => setWidth(fieldId, w)}
@@ -349,6 +361,7 @@ export function DataTable<T>({
               row={row}
               rowKey={key}
               isSelected={selected.has(key)}
+              selectable={selectable}
               fields={layoutFields}
               gridTemplateColumns={gridTemplateColumns}
               onOpenRow={onOpenRow}
