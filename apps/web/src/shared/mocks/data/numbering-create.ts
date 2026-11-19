@@ -14,7 +14,13 @@ import {
 } from '@nodus/contracts';
 
 import { demoCustomFieldDefinitions } from './custom-fields.js';
-import { fieldValueOf, issueMockNumber, minskParts, segmentReaderOf } from './numbering-store.js';
+import {
+  fieldValueOf,
+  issueMockNumber,
+  minskParts,
+  printedFieldValueOf,
+  segmentReaderOf,
+} from './numbering-store.js';
 import { demoNodeKinds, findDemoNodeRow } from './project-nodes.js';
 import { demoProjectRows } from './projects.js';
 
@@ -90,7 +96,7 @@ export function placeOfNewProject(
     // Поле проекта у проекта-хоста — его собственное.
     field: (segment) =>
       segment.source === 'self' || segment.source === 'project'
-        ? (fieldValueOf(values)(segment.fieldNumber) ?? '')
+        ? (printedFieldValueOf(values)(segment.fieldNumber) ?? '')
         : '',
   };
 }

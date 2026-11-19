@@ -47,8 +47,7 @@ export function resolveLinkTarget(href: string, base: string): LinkTarget {
   }
   if (url.origin !== baseOrigin) return { kind: 'external', url: url.href };
 
-  const cards = parseCardStack(url.searchParams.get('cards') ?? undefined).filter((ref) =>
-    isCardId(ref.id),
-  );
+  // parseCardStack уже отбрасывает не-UUID id (#908): второй проверки нет.
+  const cards = parseCardStack(url.searchParams.get('cards') ?? undefined);
   return cards.length > 0 ? { kind: 'cards', cards } : { kind: 'default' };
 }

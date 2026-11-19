@@ -139,11 +139,23 @@ export function counterOnCreateOf(fieldId: string): readonly string[] {
   return definition?.type === 'counter' ? (definition.numbering?.onCreate ?? []) : [];
 }
 
-/** Значение поля по внутреннему номеру из значений записи — печатной
- *  грамматикой контракта (`numberInsertionText`, AUD-010): список печатает
- *  код варианта, число/длительность — строку числа, текст — как есть,
- *  остальные типы — пусто. Мок не расходится с сервером. */
+/** Сырое значение поля по внутреннему номеру из значений записи — id условия
+ *  счёта («Вести счёт отдельно для → значение поля»): у списка это UUID
+ *  варианта, а не код. Печать в номер — отдельная функция ниже. */
 export function fieldValueOf(values: Record<string, unknown>) {
+  return (fieldNumber: number): string | null => {
+    const definition = demoCustomFieldDefinitions.find((entry) => entry.number === fieldNumber);
+    if (!definition) return null;
+    const value = values[definition.id];
+    return typeof value === 'string' && value.length > 0 ? value : null;
+  };
+}
+
+/** Печатное значение поля-вставки (AUD-010) — грамматикой контракта
+ *  (`numberInsertionText`): список печатает код варианта, число/длительность —
+ *  строку числа, текст — как есть, остальные типы — пусто. Мок не расходится
+ *  с сервером. */
+export function printedFieldValueOf(values: Record<string, unknown>) {
   return (fieldNumber: number): string | null => {
     const definition = demoCustomFieldDefinitions.find((entry) => entry.number === fieldNumber);
     if (!definition) return null;
@@ -176,7 +188,7 @@ export function segmentReaderOf(
                   folders.find((folder) => folder.kindId === segment.nodeKindId)?.id ?? '',
                 )?.customFields ?? {})
               : {};
-    return fieldValueOf(source)(segment.fieldNumber) ?? '';
+    return printedFieldValueOf(source)(segment.fieldNumber) ?? '';
   };
 }
 
