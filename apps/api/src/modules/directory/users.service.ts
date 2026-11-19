@@ -206,6 +206,12 @@ export class UsersService {
       // назначением главы/зама — иначе встречные переводы/назначения одного
       // сотрудника могли бы оставить руководящую роль в чужом узле.
       if (departmentId !== undefined) await this.departments.lockTree(tx);
+      // #946: целевой узел — под FOR UPDATE до проверки активности: архивация
+      // не закоммитится между чтением isActive и записью department_id
+      // (порядок замков tree → node → users), TOCTOU «перевод в архивный узел» закрыт.
+      if (departmentId !== undefined && departmentId !== null) {
+        await this.departments.lockForUpdate(departmentId, tx);
+      }
       // Ссылки оргструктуры (#441): undefined — не трогаем, null — очистка.
       // Внутри транзакции — без окна TOCTOU между проверкой и записью.
       // Руководитель здесь не принимается (#923): производное поле, ниже

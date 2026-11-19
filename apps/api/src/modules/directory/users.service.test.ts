@@ -75,6 +75,7 @@ describe('UsersService: создание и правка сотрудника', 
   const departmentsRepo = {
     clearHeadAndDeputy: vi.fn(),
     lockTree: vi.fn(),
+    lockForUpdate: vi.fn(),
   };
   /** Производный руководитель (#923): пересчёт при смене подразделения. */
   const managers = { recomputeUsers: vi.fn(), recomputeDepartments: vi.fn() };

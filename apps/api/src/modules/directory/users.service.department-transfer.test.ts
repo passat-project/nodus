@@ -68,6 +68,7 @@ describe('UsersService.updateUser: перевод главы/зама (#923)', (
     clearHeadAndDeputy: vi.fn(),
     clearLeadershipIn: vi.fn(),
     lockTree: vi.fn(),
+    lockForUpdate: vi.fn(),
   };
   const managers = { recomputeUsers: vi.fn(), recomputeDepartments: vi.fn() };
   const positions = { findRef: vi.fn(), lockMany: vi.fn() };
@@ -90,6 +91,7 @@ describe('UsersService.updateUser: перевод главы/зама (#923)', (
     membership.effectiveRoleIds.mockResolvedValue([]);
     roles.lockByCodeForUpdate.mockResolvedValue(null);
     departmentsRepo.clearLeadershipIn.mockResolvedValue(null);
+    departmentsRepo.lockForUpdate.mockResolvedValue(true);
     departments.findRef.mockResolvedValue({ id: 'dep-new', kind: 'management', isActive: true });
     users.findCardById.mockResolvedValue(cardRow());
     users.findDepartmentId.mockResolvedValue('dep-old');
@@ -132,6 +134,8 @@ describe('UsersService.updateUser: перевод главы/зама (#923)', (
     );
     // #946: перевод сериализован advisory-локом дерева с назначениями узлов.
     expect(departmentsRepo.lockTree).toHaveBeenCalledWith('tx-handle');
+    // Целевой узел под FOR UPDATE — архивация не проскочит между проверкой и записью.
+    expect(departmentsRepo.lockForUpdate).toHaveBeenCalledWith('dep-new', 'tx-handle');
     expect(managers.recomputeUsers).toHaveBeenCalledWith(['user-1'], 'tx-handle');
     expect(managers.recomputeDepartments).not.toHaveBeenCalled();
     expect(departmentEvents()).toEqual([]);
