@@ -149,7 +149,10 @@ export class ProjectStructureService {
   ): Promise<ProjectNode[]> {
     const { row: project } = await loadForStructureManage(this.projects, user, projectId);
     return this.txRunner.run(async (tx) => {
-      await this.nodes.lockStructure(tx, projectId);
+      // Гард до транзакции мог устареть (#875): архив/снятие руководства
+      // между проверкой и локом — решение принимаем по свежей строке, как #705.
+      const locked = await this.nodes.lockStructure(tx, projectId);
+      await this.projects.assertManageLocked(user, projectId, locked, tx, { archived: 'forbid' });
       const tree = await this.nodes.listByProject(projectId, tx);
       const kind = await assertKindAlive(this.kinds, this.types, tx, project.typeId, body.kindId);
       const parent = assertParent(tree, body.parentId);
@@ -242,7 +245,8 @@ export class ProjectStructureService {
   ): Promise<ProjectNode> {
     const { row: project } = await loadForStructureManage(this.projects, user, projectId);
     return this.txRunner.run(async (tx) => {
-      await this.nodes.lockStructure(tx, projectId);
+      const locked = await this.nodes.lockStructure(tx, projectId);
+      await this.projects.assertManageLocked(user, projectId, locked, tx, { archived: 'forbid' });
       const tree = await this.nodes.listByProject(projectId, tx);
       // Чтение ВНУТРИ tx после лока (F2): гонка двух PATCH сериализуется.
       // Строковый лок узла — против bulk-уборки значений удалённого атрибута
@@ -373,7 +377,8 @@ export class ProjectStructureService {
   async remove(user: AuthUser, projectId: string, nodeId: string): Promise<void> {
     await loadForStructureManage(this.projects, user, projectId);
     await this.txRunner.run(async (tx) => {
-      await this.nodes.lockStructure(tx, projectId);
+      const locked = await this.nodes.lockStructure(tx, projectId);
+      await this.projects.assertManageLocked(user, projectId, locked, tx, { archived: 'forbid' });
       const node = await this.nodes.findInProject(projectId, nodeId, tx);
       if (!node) throw nodeInvalid(nodeId);
       const tree = await this.nodes.listByProject(projectId, tx);
