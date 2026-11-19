@@ -159,9 +159,13 @@ export function printedFieldValueOf(values: Record<string, unknown>) {
   return (fieldNumber: number): string | null => {
     const definition = demoCustomFieldDefinitions.find((entry) => entry.number === fieldNumber);
     if (!definition) return null;
+    const dictionaryId = definition.settings.dictionaryId;
     const text = numberInsertionText(definition.type, values[definition.id], (id) => {
       const item = itemById(id);
-      return item ? (item.code ?? item.name) : undefined;
+      // Как сервер: код берётся только из справочника ЭТОГО поля (мёртвый
+      // вариант чужого списка — пустая вставка, а не чужой код).
+      if (!item || item.dictionaryId !== dictionaryId) return undefined;
+      return item.code ?? item.name;
     });
     return text.length > 0 ? text : null;
   };

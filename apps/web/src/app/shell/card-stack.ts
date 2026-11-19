@@ -15,6 +15,8 @@
  * мессенджер-карточки меняет беседу без ремаунта панели.
  */
 
+import { isEntityId } from '../../shared/lib/entity-id.js';
+
 export type CardKind = 'task' | 'project' | 'letter' | 'employee' | 'counterparty' | 'messenger';
 
 export interface CardRef {
@@ -36,14 +38,13 @@ export function cardRefToString(ref: CardRef): string {
   return `${ref.kind}:${ref.id}`;
 }
 
-/** id карточки — строгий UUID. Deep-link приходит из письма, чата и адресной
- *  строки (недоверенный вход), а клиентский GET карточки строится подстановкой
- *  id в путь API: `task:../directory/users` без проверки уводил запрос в чужой
- *  маршрут. Мусор отбрасывается так же, как неизвестный вид (#908). */
-const CARD_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
+/** id карточки — строгий UUID (канон `shared/lib/entity-id.ts`). Deep-link
+ *  приходит из письма, чата и адресной строки (недоверенный вход), а
+ *  клиентский GET карточки строится подстановкой id в путь API:
+ *  `task:../directory/users` без проверки уводил запрос в чужой маршрут. Мусор
+ *  отбрасывается так же, как неизвестный вид (#908). */
 export function isCardId(value: string): boolean {
-  return CARD_ID_RE.test(value);
+  return isEntityId(value);
 }
 
 export function cardRefFromString(raw: string): CardRef | null {
