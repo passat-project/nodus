@@ -1,5 +1,5 @@
 import { ListChecks, Timer } from 'lucide-react';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type { CreationChip } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Input } from '@nodus/ui/components/input';
@@ -100,24 +100,51 @@ function PlannedInput({
   const [text, setText] = useState(
     value !== null ? formatDuration(value, ui.tasks.hoursShort, ui.tasks.minutesShort) : '',
   );
-  const commit = () => onCommit(parseDuration(text));
+  const [invalid, setInvalid] = useState(false);
+  const errorId = useId();
+  // Неверный ввод не стираем молча (#963): держим текст, показываем причину.
+  const commit = () => {
+    const raw = text.trim();
+    if (!raw) {
+      onCommit(null);
+      return;
+    }
+    const minutes = parseDuration(raw);
+    if (minutes === null) {
+      setInvalid(true);
+      return;
+    }
+    onCommit(minutes);
+  };
   return (
-    <Input
-      autoFocus
-      data-esc-local
-      value={text}
-      onChange={(e) => setText(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          commit();
-        }
-        if (e.key === 'Escape') onCancel();
-      }}
-      placeholder={ui.tasks.plannedPlaceholder}
-      aria-label={ui.tasks.plannedTime}
-      className="h-8 w-40 font-mono text-label-sm"
-    />
+    <div className="flex flex-col gap-1">
+      <Input
+        autoFocus
+        data-esc-local
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          setInvalid(false);
+        }}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            commit();
+          }
+          if (e.key === 'Escape') onCancel();
+        }}
+        placeholder={ui.tasks.plannedPlaceholder}
+        aria-label={ui.tasks.plannedTime}
+        aria-invalid={invalid || undefined}
+        aria-describedby={invalid ? errorId : undefined}
+        className={cn('h-8 w-40 font-mono text-label-sm', invalid && 'border-destructive')}
+      />
+      {invalid ? (
+        <span id={errorId} role="alert" className="text-label-xs text-destructive">
+          {ui.tasks.minutesInvalid}
+        </span>
+      ) : null}
+    </div>
   );
 }
