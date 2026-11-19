@@ -2,7 +2,7 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement, type ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useAssigneeTasks, useMemberProjects, userRelationsKeys } from './user-relations.js';
 
@@ -95,5 +95,83 @@ describe('useMemberProjects — серверный поиск (#956)', () => {
       wrapper: wrapper(client),
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('добор страниц вкладок карточки сотрудника (#913)', () => {
+  function client() {
+    return new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  }
+
+  const page = (items: { id: string }[], nextCursor: string | null) =>
+    jsonResponse({ items, nextCursor });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('задачи: цикл по nextCursor — все строки, порядок сервера, без дублей', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(page([{ id: 't1' }, { id: 't2' }], 'c2'))
+      .mockResolvedValueOnce(page([{ id: 't3' }], 'c3'))
+      // Дубль t2 на последней странице не должен появиться второй раз.
+      .mockResolvedValueOnce(page([{ id: 't2' }, { id: 't4' }], null));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useAssigneeTasks('u-1'), {
+      wrapper: wrapper(client()),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data?.items.map((item) => item.id)).toEqual(['t1', 't2', 't3', 't4']);
+    expect(result.current.data?.nextCursor).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('cursor=c2');
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain('cursor=c3');
+  });
+
+  it('проекты: вторая страница тоже попадает в выдачу', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(page([{ id: 'p1' }], 'next'))
+      .mockResolvedValueOnce(page([{ id: 'p2' }], null));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useMemberProjects('u-1'), {
+      wrapper: wrapper(client()),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data?.items.map((item) => item.id)).toEqual(['p1', 'p2']);
+  });
+
+  it('«вечный» курсор не зацикливает: предохранитель 50 страниц', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () => page([{ id: crypto.randomUUID() }], 'always'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useAssigneeTasks('u-1'), {
+      wrapper: wrapper(client()),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(fetchMock).toHaveBeenCalledTimes(50);
+    expect(result.current.data?.items).toHaveLength(50);
+  });
+
+  it('ошибка второй страницы видна: запрос падает, обрезанный список не выдаётся', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(page([{ id: 't1' }], 'c2'))
+      .mockResolvedValueOnce(new Response(null, { status: 500 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useAssigneeTasks('u-1'), {
+      wrapper: wrapper(client()),
+    });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.data).toBeUndefined();
   });
 });

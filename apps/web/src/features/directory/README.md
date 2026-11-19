@@ -240,7 +240,11 @@ DIRECTORY_POSITION_EXISTS`). В строке «шашка» меню (три г�
   (`components/employee-card-work-tabs.tsx`) — журналы Задачи
   (`GET /tasks?assigneeId=&scope=all`) и Проекты
   (`GET /projects?memberId=&scope=all`) со
-  счётчиками: ПОЛНОЦЕННЫЕ журналы на shared-реестрах
+  счётчиками полного объёма: `shared/api/user-relations.ts` добирает ВСЕ
+  страницы по `nextCursor` (предохранитель 50 страниц), поэтому вкладка и
+  счётчик видят все задачи/проекты сотрудника, а не первые 100 (#913); ошибка
+  любой страницы показывается состоянием таблицы, обрезанный список за полный
+  не выдаётся. Журналы — ПОЛНОЦЕННЫЕ на shared-реестрах
   (`useTaskTableFields()` / `useProjectTableFields()`, ключи видов
   `directory.tasks` / `directory.projects`) — шапка вкладки-списка
   `CardTabToolbar` (h-14, px-6, как в карточке проекта #736) вокруг
