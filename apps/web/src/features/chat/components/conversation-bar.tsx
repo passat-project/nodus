@@ -214,7 +214,7 @@ export function ConversationBar({
     // сторон; сама кнопка усекает длинное название (многоточие).
     <div
       className={
-        canEditInfo ? '-mx-1.5 truncate text-sm font-semibold' : 'truncate text-sm font-semibold'
+        peerLink ? 'truncate text-sm font-semibold' : '-mx-1.5 truncate text-sm font-semibold'
       }
     >
       {canEditInfo ? (

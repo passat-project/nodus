@@ -49,7 +49,7 @@ import { EmployeeProfileTab } from './employee-profile-tab.js';
  * буфер сужений: рельса и панель сужают его до пола, дальше — левую зону).
  * Кнопки «Написать сообщение» нет — чат уже здесь.
  */
-export function EmployeeCard({ userId }: { userId: string }) {
+export function EmployeeCard({ userId, dormant = false }: { userId: string; dormant?: boolean }) {
   const { data: card, isLoading } = useUserCard(userId);
   const { data: usersData } = useUsersList();
   const tasksQuery = useAssigneeTasks(userId);
@@ -78,17 +78,18 @@ export function EmployeeCard({ userId }: { userId: string }) {
   }
   // Живая карточка: клик по аватару/шапке ДРУГОГО представления того же
   // сотрудника при уже верхней карточке (openCard — no-op) тоже переключает
-  // на «Задачи» — иначе пристойка оставалась бы непотреблённой.
-  useEffect(
-    () =>
-      subscribeEmployeeCardTab(() => {
-        const nextTab = takeEmployeeCardTab(userId);
-        if (!nextTab) return;
-        setTab(nextTab);
-        setVisited((prev) => (prev.includes(nextTab) ? prev : [...prev, nextTab]));
-      }),
-    [userId],
-  );
+  // на «Задачи» — иначе пристойка оставалась бы непотреблённой. Спящая
+  // (нижняя в стеке) карточка НЕ потребляет пристойку: новая карточка того же
+  // сотрудника монтируется сверху и должна получить «Задачи» сама.
+  useEffect(() => {
+    if (dormant) return;
+    return subscribeEmployeeCardTab(() => {
+      const nextTab = takeEmployeeCardTab(userId);
+      if (!nextTab) return;
+      setTab(nextTab);
+      setVisited((prev) => (prev.includes(nextTab) ? prev : [...prev, nextTab]));
+    });
+  }, [userId, dormant]);
   // Личный диалог — find-or-create (POST, #343): открытие ПРОФИЛЯ не должно
   // молча создавать диалог. Запрос уходит только после первого открытия
   // вкладки «Чат» (до этого данные не нужны ни ленте, ни панели беседы).

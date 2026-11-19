@@ -197,6 +197,20 @@ describe('EmployeeCard — анатомия #750', () => {
     expect(screen.getByRole('tab', { name: /^Задачи/ }).getAttribute('aria-selected')).toBe('true');
   });
 
+  it('спящая (нижняя в стеке) карточка не съедает пристойку новой верхней (#972)', () => {
+    const { rerender } = render(<EmployeeCard userId={OTHER} dormant />);
+    act(() => stageEmployeeCardTab(OTHER, 'tasks'));
+    // Нижняя карточка не подписана — пристойка ждёт новую верхнюю.
+    expect(screen.getByRole('tab', { name: /^Чат/ }).getAttribute('aria-selected')).toBe('true');
+
+    rerender(<EmployeeCard userId={OTHER} />);
+    expect(screen.getByRole('tab', { name: /^Чат/ }).getAttribute('aria-selected')).toBe('true');
+
+    // Проснувшаяся верхняя карточка подписана и реагирует на новый клик.
+    act(() => stageEmployeeCardTab(OTHER, 'tasks'));
+    expect(screen.getByRole('tab', { name: /^Задачи/ }).getAttribute('aria-selected')).toBe('true');
+  });
+
   it('смена сотрудника берёт свежую пристойку (иначе — чат)', () => {
     const { rerender } = render(<EmployeeCard userId={OTHER} />);
     stageEmployeeCardTab(THIRD, 'tasks');
