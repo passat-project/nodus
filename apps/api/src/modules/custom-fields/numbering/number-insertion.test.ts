@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { isNumberInsertionType } from '@nodus/contracts';
+
 import type { DictionaryReader } from '../../dictionaries/ports/dictionary-reader.port.js';
 import type { FieldDefinitionRow } from '../definitions/definition.mapper.js';
 import {
   insertionCodeCache,
-  isNumberInsertionType,
   loadInsertionCodes,
   numberInsertionValue,
 } from './number-insertion.js';

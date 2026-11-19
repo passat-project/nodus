@@ -1,6 +1,6 @@
 import { HttpResponse } from 'msw';
 import type { CustomFieldDefinition, UpdateCustomFieldBody } from '@nodus/contracts';
-import { ErrorCode, errorMessages } from '@nodus/contracts';
+import { ErrorCode, errorMessages, unsupportedNumberInsertions } from '@nodus/contracts';
 
 import { demoCustomFieldDefinitions } from '../../mocks/data/custom-fields.js';
 import type { NumberingFailure } from '../../mocks/data/numbering-create.js';
@@ -22,6 +22,19 @@ export function counterUpdateResponse(
 ) {
   const before = definition.numbering?.rule ?? null;
   const nextRule = body.numbering ?? before;
+  // Вставки без печатного значения не сохраняются (AUD-010, как сервер):
+  // палитра их не предлагает, но старые правила и API-клиенты — не гарантия.
+  const unsupported = nextRule
+    ? unsupportedNumberInsertions(nextRule, demoCustomFieldDefinitions)
+    : [];
+  if (unsupported.length > 0) {
+    return fail(
+      ErrorCode.NUMBER_SEGMENT_UNSUPPORTED,
+      errorMessages[ErrorCode.NUMBER_SEGMENT_UNSUPPORTED],
+      422,
+      { segments: unsupported },
+    );
+  }
   if (
     body.numbering &&
     before &&

@@ -1,4 +1,5 @@
 import type { NumberTemplateSegment } from '@nodus/contracts';
+import { numberInsertionText } from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import type {
@@ -14,21 +15,9 @@ import type { FieldDefinitionRow } from '../definitions/definition.mapper.js';
  * (как формулы, #632), число и длительность — строку числа, текст — как есть.
  * У остальных типов (ссылки, деньги, дата, флаги, составные) печатного вида
  * нет: вставка пуста, а правило с такой вставкой не сохраняется
- * (`NUMBER_SEGMENT_UNSUPPORTED`).
+ * (`NUMBER_SEGMENT_UNSUPPORTED`). Закрытый список типов — общий с вебом и
+ * моками (`@nodus/contracts`, `NUMBER_INSERTION_FIELD_TYPES`).
  */
-
-/** Типы, у которых есть печатное значение для номера. */
-const PRINTABLE_TYPES: ReadonlySet<string> = new Set([
-  'text',
-  'long_text',
-  'number',
-  'duration',
-  'enum',
-]);
-
-export function isNumberInsertionType(type: string): boolean {
-  return PRINTABLE_TYPES.has(type);
-}
 
 /** Загруженные варианты списков: id варианта → печатная строка, и какие
  *  справочники уже прочитаны (шаблон может вставлять несколько полей одного
@@ -52,21 +41,8 @@ export function numberInsertionValue(
   raw: unknown,
   codes: ReadonlyMap<string, string>,
 ): string {
-  if (!field || raw === null || raw === undefined) return '';
-  switch (field.type) {
-    case 'text':
-    case 'long_text':
-      return typeof raw === 'string' ? raw : '';
-    case 'number':
-    case 'duration':
-      return typeof raw === 'number' && Number.isFinite(raw) ? String(raw) : '';
-    case 'enum':
-      // UUID варианта в номер не печатается никогда: мёртвый вариант (нет в
-      // справочнике) даёт пустую вставку, а не внутренний id.
-      return typeof raw === 'string' && raw.length > 0 ? (codes.get(raw) ?? '') : '';
-    default:
-      return '';
-  }
+  if (!field) return '';
+  return numberInsertionText(field.type, raw, (id) => codes.get(id));
 }
 
 /** Варианты списков, вставленных в шаблон: печатная строка — код, без кода

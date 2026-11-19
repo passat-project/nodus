@@ -10,9 +10,15 @@ import type {
   NumberTemplateFieldReader,
   TaskListItem,
 } from '@nodus/contracts';
-import { numberCountKey, numberPeriodKey, renderNumberTemplate } from '@nodus/contracts';
+import {
+  numberCountKey,
+  numberInsertionText,
+  numberPeriodKey,
+  renderNumberTemplate,
+} from '@nodus/contracts';
 
 import { demoCustomFieldDefinitions } from './custom-fields.js';
+import { itemById } from './dictionaries.js';
 import { fieldIds } from './field-ids.js';
 import { findDemoNodeRow } from './project-nodes.js';
 import { demoProjectRows } from './projects.js';
@@ -133,12 +139,19 @@ export function counterOnCreateOf(fieldId: string): readonly string[] {
   return definition?.type === 'counter' ? (definition.numbering?.onCreate ?? []) : [];
 }
 
-/** Значение поля по внутреннему номеру из значений записи. */
+/** Значение поля по внутреннему номеру из значений записи — печатной
+ *  грамматикой контракта (`numberInsertionText`, AUD-010): список печатает
+ *  код варианта, число/длительность — строку числа, текст — как есть,
+ *  остальные типы — пусто. Мок не расходится с сервером. */
 export function fieldValueOf(values: Record<string, unknown>) {
   return (fieldNumber: number): string | null => {
     const definition = demoCustomFieldDefinitions.find((entry) => entry.number === fieldNumber);
-    const value = definition ? values[definition.id] : undefined;
-    return typeof value === 'string' && value ? value : null;
+    if (!definition) return null;
+    const text = numberInsertionText(definition.type, values[definition.id], (id) => {
+      const item = itemById(id);
+      return item ? (item.code ?? item.name) : undefined;
+    });
+    return text.length > 0 ? text : null;
   };
 }
 
