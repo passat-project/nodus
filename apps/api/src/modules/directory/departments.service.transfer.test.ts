@@ -189,9 +189,22 @@ describe('DepartmentsService: назначение главы/зама пере�
 
     expect(users.findDepartmentId).toHaveBeenCalledWith('u-1', 'tx-handle');
     expect(users.update).toHaveBeenCalledWith('u-1', { departmentId: 'new-dep' }, 'tx-handle');
+    // #946: создание с главой сериализовано advisory-локом дерева.
+    expect(departments.lockTree).toHaveBeenCalledWith('tx-handle');
     expect(emitted('directory.user.updated')).toEqual([
       { userId: 'u-1', changedFields: ['departmentId'] },
     ]);
+  });
+
+  it('архивный узел: назначение главы отклоняется, сотрудник не переведён (#946)', async () => {
+    departments.findById.mockResolvedValue(row('archived', null, { isActive: false }));
+
+    await expect(service.update('archived', { headId: 'u-1' }, actor())).rejects.toMatchObject({
+      code: ErrorCode.CONFLICT,
+      details: { departmentId: 'archived', reason: 'archived' },
+    });
+    expect(departments.update).not.toHaveBeenCalled();
+    expect(users.findDepartmentId).not.toHaveBeenCalled();
   });
 
   it('юридическая структура формальная: назначение не переводит сотрудника', async () => {

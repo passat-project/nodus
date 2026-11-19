@@ -77,6 +77,7 @@ describe('UsersService: ссылки оргструктуры (#441)', () => {
     findParentChain: vi.fn(),
     findNamesByIds: vi.fn(),
     clearHeadAndDeputy: vi.fn(),
+    lockTree: vi.fn(),
   };
   const managers = { recomputeUsers: vi.fn(), recomputeDepartments: vi.fn() };
   const positions = { findRef: vi.fn(), lockMany: vi.fn() };

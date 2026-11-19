@@ -67,6 +67,7 @@ describe('UsersService.updateUser: перевод главы/зама (#923)', (
     findNamesByIds: vi.fn(),
     clearHeadAndDeputy: vi.fn(),
     clearLeadershipIn: vi.fn(),
+    lockTree: vi.fn(),
   };
   const managers = { recomputeUsers: vi.fn(), recomputeDepartments: vi.fn() };
   const positions = { findRef: vi.fn(), lockMany: vi.fn() };
@@ -129,6 +130,8 @@ describe('UsersService.updateUser: перевод главы/зама (#923)', (
       'user-1',
       'tx-handle',
     );
+    // #946: перевод сериализован advisory-локом дерева с назначениями узлов.
+    expect(departmentsRepo.lockTree).toHaveBeenCalledWith('tx-handle');
     expect(managers.recomputeUsers).toHaveBeenCalledWith(['user-1'], 'tx-handle');
     expect(managers.recomputeDepartments).not.toHaveBeenCalled();
     expect(departmentEvents()).toEqual([]);
@@ -226,6 +229,7 @@ describe('UsersService.updateUser: перевод главы/зама (#923)', (
     expect(users.findDepartmentId).not.toHaveBeenCalled();
     expect(departmentsRepo.clearLeadershipIn).not.toHaveBeenCalled();
     expect(managers.recomputeUsers).not.toHaveBeenCalled();
+    expect(departmentsRepo.lockTree).not.toHaveBeenCalled();
   });
 
   it('перевод вместе с другими полями — одно событие user.updated (#946)', async () => {

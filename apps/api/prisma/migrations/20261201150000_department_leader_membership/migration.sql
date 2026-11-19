@@ -14,9 +14,9 @@
 --
 -- Архивные и юридические подразделения не трогаем: правило — про активную
 -- управленческую структуру, юридическая (`kind='legal'`) — формальная
--- (ADR-0053). Токены: access-TTL 900 c; изменения действующих ролей от
--- перевода применяются при ближайшем refresh/входе (событие из SQL-миграции
--- не эмитится — разовая чистка, не рантайм-путь #866).
+-- (ADR-0053). Отзыв токенов: на каждого переведённого в outbox кладётся
+-- `directory.user.updated` с `changedFields ['departmentId']` — подписчик auth
+-- обесценивает access-токены (#866); старые права не живут до TTL 900 c.
 
 -- 1. Уволенный не может оставаться главой/замом активного подразделения.
 UPDATE departments d
@@ -36,59 +36,72 @@ WHERE u.id = d.deputy_id
   AND d.is_active;
 
 -- 2–3. Одна роль на сотрудника; сохранённая роль переводит его в подразделение.
-WITH ranked AS (
-  SELECT
-    a.department_id,
-    a.user_id,
-    a.role,
-    row_number() OVER (
-      PARTITION BY a.user_id
-      ORDER BY
-        (u.department_id = a.department_id) DESC,
-        (a.role = 'head') DESC,
-        d.sort_order ASC,
-        d.name ASC,
-        a.department_id ASC
-    ) AS rn
-  FROM (
-    SELECT id AS department_id, head_id AS user_id, 'head'::text AS role
-    FROM departments
-    WHERE kind = 'management' AND is_active AND head_id IS NOT NULL
-    UNION ALL
-    SELECT id, deputy_id, 'deputy'::text
-    FROM departments
-    WHERE kind = 'management' AND is_active AND deputy_id IS NOT NULL
-  ) a
-  JOIN departments d ON d.id = a.department_id
-  JOIN users u ON u.id = a.user_id
-),
-cleared_head AS (
-  UPDATE departments d
-  SET head_id = NULL, updated_at = now()
-  FROM ranked r
-  WHERE r.rn > 1 AND r.role = 'head' AND d.id = r.department_id
-  RETURNING d.id
-),
-cleared_deputy AS (
-  UPDATE departments d
-  SET deputy_id = NULL, updated_at = now()
-  FROM ranked r
-  WHERE r.rn > 1 AND r.role = 'deputy' AND d.id = r.department_id
-  RETURNING d.id
-),
-moved AS (
-  UPDATE users u
-  SET department_id = r.department_id, updated_at = now()
-  FROM ranked r
-  WHERE r.rn = 1
-    AND u.id = r.user_id
-    AND u.department_id IS DISTINCT FROM r.department_id
-  RETURNING u.id
-)
+-- Роли материализуются во временную таблицу: по ней же эмитятся события отзыва
+-- access-токенов для переведённых (подписчик auth, #866).
+CREATE TEMP TABLE leader_roles AS
 SELECT
-  (SELECT count(*) FROM cleared_head) AS cleared_heads,
-  (SELECT count(*) FROM cleared_deputy) AS cleared_deputies,
-  (SELECT count(*) FROM moved) AS moved_users;
+  a.department_id,
+  a.user_id,
+  a.role,
+  row_number() OVER (
+    PARTITION BY a.user_id
+    ORDER BY
+      (u.department_id = a.department_id) DESC,
+      (a.role = 'head') DESC,
+      d.sort_order ASC,
+      d.name ASC,
+      a.department_id ASC
+  ) AS rn
+FROM (
+  SELECT id AS department_id, head_id AS user_id, 'head'::text AS role
+  FROM departments
+  WHERE kind = 'management' AND is_active AND head_id IS NOT NULL
+  UNION ALL
+  SELECT id, deputy_id, 'deputy'::text
+  FROM departments
+  WHERE kind = 'management' AND is_active AND deputy_id IS NOT NULL
+) a
+JOIN departments d ON d.id = a.department_id
+JOIN users u ON u.id = a.user_id;
+
+UPDATE departments d
+SET head_id = NULL, updated_at = now()
+FROM leader_roles r
+WHERE r.rn > 1 AND r.role = 'head' AND d.id = r.department_id;
+
+UPDATE departments d
+SET deputy_id = NULL, updated_at = now()
+FROM leader_roles r
+WHERE r.rn > 1 AND r.role = 'deputy' AND d.id = r.department_id;
+
+CREATE TEMP TABLE moved_leaders AS
+SELECT r.user_id
+FROM leader_roles r
+JOIN users u ON u.id = r.user_id
+WHERE r.rn = 1 AND u.department_id IS DISTINCT FROM r.department_id;
+
+UPDATE users u
+SET department_id = r.department_id, updated_at = now()
+FROM leader_roles r
+WHERE r.rn = 1
+  AND u.id = r.user_id
+  AND u.department_id IS DISTINCT FROM r.department_id;
+
+-- Отзыв access-токенов (#866): перевод меняет действующие роли от
+-- подразделения. Подписчик auth обесценивает токены по `user.updated` с
+-- `departmentId`; событие кладём в штатный outbox SQL-ом, потому что сервисный
+-- путь на выкатке не выполняется (иначе старые права жили бы до TTL 900 c).
+INSERT INTO events (id, type, aggregate_type, aggregate_id, payload)
+SELECT
+  gen_random_uuid(),
+  'directory.user.updated',
+  'user',
+  m.user_id,
+  jsonb_build_object('userId', m.user_id, 'changedFields', jsonb_build_array('departmentId'))
+FROM moved_leaders m;
+
+DROP TABLE moved_leaders;
+DROP TABLE leader_roles;
 
 -- 4. Пересчёт производного руководителя (#923, ADR-0053) после переводов.
 WITH RECURSIVE

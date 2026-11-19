@@ -19,7 +19,7 @@ describe('Назначение главы/зама переводит в под�
   const userIds: string[] = [];
 
   const createDepartment = async (body: Record<string, unknown>) => {
-    const response = await f.api(f.users.directory, 'POST', '/directory/departments', {
+    const response = await f.api(f.users.structureAdmin, 'POST', '/directory/departments', {
       body,
       key: randomUUID(),
     });
@@ -30,7 +30,7 @@ describe('Назначение главы/зама переводит в под�
   };
 
   const patchDepartment = async (id: string, body: Record<string, unknown>) => {
-    const response = await f.api(f.users.directory, 'PATCH', `/directory/departments/${id}`, {
+    const response = await f.api(f.users.structureAdmin, 'PATCH', `/directory/departments/${id}`, {
       body,
       key: randomUUID(),
     });
@@ -38,13 +38,13 @@ describe('Назначение главы/зама переводит в под�
   };
 
   const readDepartment = async (id: string) => {
-    const response = await f.api(f.users.directory, 'GET', `/directory/departments/${id}`);
+    const response = await f.api(f.users.structureAdmin, 'GET', `/directory/departments/${id}`);
     expect(response.status).toBe(200);
     return departmentNodeSchema.parse(await response.json());
   };
 
   const card = async (id: string) => {
-    const response = await f.api(f.users.directory, 'GET', `/directory/users/${id}`);
+    const response = await f.api(f.users.structureAdmin, 'GET', `/directory/users/${id}`);
     expect(response.status).toBe(200);
     return userCardSchema.parse(await response.json());
   };
@@ -215,5 +215,28 @@ describe('Назначение главы/зама переводит в под�
           ((event.payload as { userIds?: string[] }).userIds ?? []).includes(f.users.limited.id),
       ),
     ).toBe(true);
+  });
+
+  it('архивный узел: назначение главы отклоняется, сотрудник не переведён (#946)', async () => {
+    const node = await createDepartment({
+      name: `Архив-назначение ${f.runId}`,
+      kind: 'management',
+    });
+    const archived = await f.api(
+      f.users.structureAdmin,
+      'POST',
+      `/directory/departments/${node.id}/archive`,
+      { key: randomUUID() },
+    );
+    expect(archived.status).toBe(204);
+    const before = (await card(f.users.employee.id)).departmentId;
+
+    const response = await patchDepartment(node.id, { headId: f.users.employee.id });
+
+    expect(response.status).toBe(409);
+    expect((response.body as { details?: { reason?: string } }).details).toMatchObject({
+      reason: 'archived',
+    });
+    expect((await card(f.users.employee.id)).departmentId).toBe(before);
   });
 });

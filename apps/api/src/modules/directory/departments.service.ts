@@ -88,6 +88,12 @@ export class DepartmentsService {
       await this.ensureExists(dto.parentId);
     }
     return this.tx.run(async (tx) => {
+      // #946: назначение главы/зама сериализуется advisory-локом дерева с
+      // правкой узлов и переводом карточкой — иначе два встречных назначения
+      // одного сотрудника оставили бы роли в двух узлах при одном членстве.
+      if (dto.kind === 'management' && (dto.headId || dto.deputyId)) {
+        await this.departments.lockTree(tx);
+      }
       // Ссылки оргструктуры (#441): руководитель/зам — только активные
       // сотрудники, родитель — подразделение того же вида структуры. Внутри
       // транзакции — без окна TOCTOU между проверкой и записью. Замок
@@ -163,6 +169,14 @@ export class DepartmentsService {
         throw DomainException.notFound('Department not found');
       }
       const locked = (await this.departments.findById(id, tx)) ?? current;
+      // #946: в архивный узел не назначают — перевод вёл бы сотрудника в
+      // подразделение вне активного дерева (мимо ReferenceGuard активности).
+      if (!locked.isActive && (dto.headId != null || dto.deputyId != null)) {
+        throw new DomainException(ErrorCode.CONFLICT, 'Department is archived', {
+          departmentId: id,
+          reason: 'archived',
+        });
+      }
       // #946: глава и зам — разные люди; проверка по ИТОГОВОМУ состоянию
       // (присланное поле + текущее) — частичная правка не должна оставить
       // одного человека в двух ролях одного узла.
