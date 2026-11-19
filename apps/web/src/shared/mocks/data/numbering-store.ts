@@ -14,6 +14,7 @@ import { numberCountKey, numberPeriodKey, renderNumberTemplate } from '@nodus/co
 
 import { demoCustomFieldDefinitions } from './custom-fields.js';
 import { fieldIds } from './field-ids.js';
+import { fieldValueOf, printedCompanyValueOf, printedFieldValueOf } from './numbering-print.js';
 import { findDemoNodeRow } from './project-nodes.js';
 import { demoProjectRows } from './projects.js';
 import { nodeIds } from './project-node-ids.js';
@@ -133,14 +134,9 @@ export function counterOnCreateOf(fieldId: string): readonly string[] {
   return definition?.type === 'counter' ? (definition.numbering?.onCreate ?? []) : [];
 }
 
-/** Значение поля по внутреннему номеру из значений записи. */
-export function fieldValueOf(values: Record<string, unknown>) {
-  return (fieldNumber: number): string | null => {
-    const definition = demoCustomFieldDefinitions.find((entry) => entry.number === fieldNumber);
-    const value = definition ? values[definition.id] : undefined;
-    return typeof value === 'string' && value ? value : null;
-  };
-}
+/** Значения полей для нумерации: сырое (id условия счёта) и печатное
+ *  (вставка в номер) — две семантики в `numbering-print.ts`. */
+export { fieldValueOf, printedCompanyValueOf, printedFieldValueOf } from './numbering-print.js';
 
 /** Читатель полей-вставок номера по месту записи (как порты сервера). */
 export function segmentReaderOf(
@@ -150,6 +146,7 @@ export function segmentReaderOf(
   parentValues: Record<string, unknown> = {},
 ): NumberTemplateFieldReader {
   return (segment) => {
+    if (segment.source === 'company') return printedCompanyValueOf(segment.fieldNumber) ?? '';
     const project = demoProjectRows.find((row) => row.id === projectId);
     const source: Record<string, unknown> =
       segment.source === 'self'
@@ -158,12 +155,10 @@ export function segmentReaderOf(
           ? (project?.customFields ?? {})
           : segment.source === 'parent_task'
             ? parentValues
-            : segment.source === 'folder'
-              ? (findDemoNodeRow(
-                  folders.find((folder) => folder.kindId === segment.nodeKindId)?.id ?? '',
-                )?.customFields ?? {})
-              : {};
-    return fieldValueOf(source)(segment.fieldNumber) ?? '';
+            : (findDemoNodeRow(
+                folders.find((folder) => folder.kindId === segment.nodeKindId)?.id ?? '',
+              )?.customFields ?? {});
+    return printedFieldValueOf(source)(segment.fieldNumber) ?? '';
   };
 }
 

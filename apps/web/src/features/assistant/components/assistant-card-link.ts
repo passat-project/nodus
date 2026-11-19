@@ -7,6 +7,8 @@
  * строка в id — отказ (path traversal в аутентифицированный GET).
  */
 
+import { isEntityId } from '../../../shared/lib/entity-id.js';
+
 /** Виды, которые присылает сервер (`ui.open_entity`) и понимает мост каркаса. */
 const CARD_KINDS = new Set([
   'task',
@@ -17,9 +19,6 @@ const CARD_KINDS = new Set([
   'conversation',
   'messenger',
 ]);
-
-/** id карточки — строгий UUID (как в каноне `app/shell/link-target.ts`). */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface AssistantCardRef {
   kind: string;
@@ -37,6 +36,6 @@ export function cardRefFromHref(href: string): AssistantCardRef | null {
   if (separator <= 0) return null;
   const kind = ref.slice(0, separator);
   const id = ref.slice(separator + 1);
-  if (!CARD_KINDS.has(kind) || !UUID_RE.test(id)) return null;
+  if (!CARD_KINDS.has(kind) || !isEntityId(id)) return null;
   return { kind, id };
 }

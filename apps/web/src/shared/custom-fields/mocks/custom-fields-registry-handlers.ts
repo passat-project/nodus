@@ -9,6 +9,7 @@ import {
   CUSTOM_FIELD_LIMITS,
   ErrorCode,
   reorderCustomFieldsBodySchema,
+  unsupportedNumberInsertions,
 } from '@nodus/contracts';
 
 import {
@@ -191,6 +192,15 @@ export const registryHandlers = [
         return error(ErrorCode.NUMBER_TRIGGER_INVALID, 'Invalid create trigger', 422, {
           targets: triggers,
         });
+      }
+      const unsupported = unsupportedNumberInsertions(body.numbering, demoCustomFieldDefinitions);
+      if (unsupported.length > 0) {
+        return error(
+          ErrorCode.NUMBER_SEGMENT_UNSUPPORTED,
+          'Number insertion type has no printable value',
+          422,
+          { segments: unsupported },
+        );
       }
     }
     demoCustomFieldDefinitions.push(definition);

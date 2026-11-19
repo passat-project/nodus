@@ -1,4 +1,4 @@
-import { cardRefFromString, parseCardStack, type CardRef } from './card-stack.js';
+import { cardRefFromString, isCardId, parseCardStack, type CardRef } from './card-stack.js';
 
 /** Куда ведёт ссылка из интерфейса портала (классификация для перехватчика).
  *
@@ -18,15 +18,11 @@ export type LinkTarget =
 /** Канонический URI сущности `portal://<вид>/<id>` (api-conventions). */
 const PORTAL_URI_RE = /^portal:\/\/([a-z_]+)\/(.+)$/i;
 
-/** id карточки — строгий UUID: произвольная строка из href не должна попадать
- *  в путь API карточки (клиентский GET строится подстановкой id). */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export function resolveLinkTarget(href: string, base: string): LinkTarget {
   const portal = PORTAL_URI_RE.exec(href);
   if (portal) {
     const id = portal[2]!;
-    if (!UUID_RE.test(id)) return { kind: 'default' };
+    if (!isCardId(id)) return { kind: 'default' };
     const ref = cardRefFromString(`${portal[1]!.toLowerCase()}:${id}`);
     return ref ? { kind: 'cards', cards: [ref] } : { kind: 'default' };
   }
@@ -51,8 +47,7 @@ export function resolveLinkTarget(href: string, base: string): LinkTarget {
   }
   if (url.origin !== baseOrigin) return { kind: 'external', url: url.href };
 
-  const cards = parseCardStack(url.searchParams.get('cards') ?? undefined).filter((ref) =>
-    UUID_RE.test(ref.id),
-  );
+  // parseCardStack уже отбрасывает не-UUID id (#908): второй проверки нет.
+  const cards = parseCardStack(url.searchParams.get('cards') ?? undefined);
   return cards.length > 0 ? { kind: 'cards', cards } : { kind: 'default' };
 }

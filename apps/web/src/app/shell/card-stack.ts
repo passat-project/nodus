@@ -15,6 +15,8 @@
  * мессенджер-карточки меняет беседу без ремаунта панели.
  */
 
+import { isEntityId } from '../../shared/lib/entity-id.js';
+
 export type CardKind = 'task' | 'project' | 'letter' | 'employee' | 'counterparty' | 'messenger';
 
 export interface CardRef {
@@ -36,12 +38,21 @@ export function cardRefToString(ref: CardRef): string {
   return `${ref.kind}:${ref.id}`;
 }
 
+/** id карточки — строгий UUID (канон `shared/lib/entity-id.ts`). Deep-link
+ *  приходит из письма, чата и адресной строки (недоверенный вход), а
+ *  клиентский GET карточки строится подстановкой id в путь API:
+ *  `task:../directory/users` без проверки уводил запрос в чужой маршрут. Мусор
+ *  отбрасывается так же, как неизвестный вид (#908). */
+export function isCardId(value: string): boolean {
+  return isEntityId(value);
+}
+
 export function cardRefFromString(raw: string): CardRef | null {
   const sep = raw.indexOf(':');
   if (sep <= 0) return null;
   const kind = raw.slice(0, sep);
   const id = raw.slice(sep + 1);
-  if (!KINDS.includes(kind) || id.length === 0) return null;
+  if (!KINDS.includes(kind) || !isCardId(id)) return null;
   return { kind: kind as CardKind, id };
 }
 
@@ -54,9 +65,12 @@ export function parseCardStack(raw: unknown): CardRef[] {
     .filter((ref): ref is CardRef => ref !== null);
 }
 
-/** Сериализация стека; пустой стек → undefined (параметр исчезает из URL). */
+/** Сериализация стека; пустой стек → undefined (параметр исчезает из URL).
+ *  Не-UUID id в URL не попадают и из внутренних вызовов (мост карточек):
+ *  запись мусора в адрес = тот же недоверенный вход при следующем открытии. */
 export function serializeCardStack(cards: readonly CardRef[]): string | undefined {
-  return cards.length > 0 ? cards.map(cardRefToString).join(',') : undefined;
+  const valid = cards.filter((ref) => KINDS.includes(ref.kind) && isCardId(ref.id));
+  return valid.length > 0 ? valid.map(cardRefToString).join(',') : undefined;
 }
 
 export function sameCard(a: CardRef, b: CardRef): boolean {

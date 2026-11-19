@@ -1,4 +1,5 @@
 import {
+  isNumberInsertionType,
   numberContainerKey,
   numberContainerReachable,
   numberCreateTriggerProblem,
@@ -49,6 +50,18 @@ const render = (template: readonly NumberTemplateSegment[], seq: number, at: Num
 
 export function fill(text: string, values: Record<string, string>): string {
   return text.replace(/\{(\w+)\}/g, (match, key: string) => values[key] ?? match);
+}
+
+/**
+ * Кандидат в палитру вставок номера (#877): не сам атрибут, не счётчик и
+ * только печатный тип (`NUMBER_INSERTION_FIELD_TYPES`). Список типов общий с
+ * сервером и моками — интерфейс не предлагает то, что сервер отвергнет.
+ */
+export function insertableNumberField(
+  entry: { id: string; type: string },
+  selfId: string | undefined,
+): boolean {
+  return entry.id !== selfId && entry.type !== 'counter' && isNumberInsertionType(entry.type);
 }
 
 /** Пример номера: следующий номер нового счёта (или заданный следующий). */

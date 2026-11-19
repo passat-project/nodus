@@ -57,6 +57,12 @@ describe('resolveLinkTarget', () => {
       kind: 'external',
       url: 'https://example.com/doc?x=1',
     });
+    // Внешний origin с валидным `?cards=` — всё равно внешняя ссылка (порядок
+    // проверок: origin раньше разбора стека) — #908.
+    expect(resolveLinkTarget(`https://evil.example/?cards=task:${TASK}`, BASE)).toEqual({
+      kind: 'external',
+      url: `https://evil.example/?cards=task:${TASK}`,
+    });
   });
 
   it('свой origin без ?cards= — штатная навигация', () => {
