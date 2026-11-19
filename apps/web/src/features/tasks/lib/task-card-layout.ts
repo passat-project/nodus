@@ -31,6 +31,7 @@ export const MIN_TASK_MAIN_W = ROW_MAIN_MIN_W;
 
 export {
   SHRINK_ORDER,
+  chatColumnPx,
   chatColumnWidth,
   rowMinWidths,
   rowMinWidthsCss,

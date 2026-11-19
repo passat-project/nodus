@@ -125,6 +125,11 @@ export function SliderPanel({
   const panelRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const [closing, setClosing] = useState(false);
+  // Промоушен слоя — ТОЛЬКО на время FLIP-раскрытия (#969): постоянный
+  // `will-change: transform` оставлял содержимое карточки растром масштаба
+  // источника, и зона «мылилась» до первой paint-инвалидации. Снимается по
+  // animationend раскрытия; на закрытии ставится снова перед WAAPI.
+  const [flipPromoted, setFlipPromoted] = useState(Boolean(sourceRect));
   // Слот действий шапки: карточка переносит сюда свои кнопки порталом
   // (#735/#746) — хост стека не знает их состояния.
   const [headerActionsHost, setHeaderActionsHost] = useState<HTMLDivElement | null>(null);
@@ -155,6 +160,9 @@ export function SliderPanel({
     }
     closingRef.current = true;
     setClosing(true);
+    // Промоушен на время схлопывания: композитор не пересоздаёт слой
+    // каждый кадр, закрытие остаётся плавным; после — снимаем (#969).
+    el.style.willChange = 'transform';
     const dst = el.getBoundingClientRect();
     const to = `translate(${sourceRect.x - dst.x}px, ${sourceRect.y - dst.y}px) scale(${sourceRect.width / dst.width}, ${sourceRect.height / dst.height})`;
     const anim = el.animate(
@@ -172,6 +180,7 @@ export function SliderPanel({
     const finishClose = () => {
       if (closed) return;
       closed = true;
+      el.style.willChange = '';
       closeRef.current();
     };
     anim.onfinish = finishClose;
@@ -250,6 +259,20 @@ export function SliderPanel({
     };
   }, []);
 
+  // Раскрытие осело — снимаем промоушен слоя (#969): постоянный `will-change`
+  // держал содержимое растром масштаба источника, и текст/фото «мылились» до
+  // первой перерисовки. Слушатель нативный: animationend всплывает и от
+  // дочерних content-fade — фильтруем по target (анимация самой панели).
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el || !sourceRect) return;
+    const onEnd = (event: AnimationEvent) => {
+      if (event.target === el) setFlipPromoted(false);
+    };
+    el.addEventListener('animationend', onEnd);
+    return () => el.removeEventListener('animationend', onEnd);
+  }, [sourceRect]);
+
   /** FLIP-переменные раскрытия: геометрия панели детерминирована (inset-2
    *  внутри хоста, чей правый край = левый край служебной полосы, ADR-0009 +
    *  план R4), поэтому дельты считаются без замеров; анимация — CSS @keyframes
@@ -293,7 +316,7 @@ export function SliderPanel({
                маркеру исключает её из «поверхность перекрыта». */
             data-card-surface=""
             aria-labelledby={title && !headerContent ? `${id}-title` : undefined}
-            style={flipStyle}
+            style={{ ...(flipStyle ?? {}), willChange: flipPromoted ? 'transform' : undefined }}
             className={cn(
               'slider-shadow absolute inset-2 z-20 flex flex-col overflow-hidden rounded-2xl border border-border bg-card text-card-foreground',
               sourceRect ? 'slider-expand' : 'slider-pop',

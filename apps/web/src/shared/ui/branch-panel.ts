@@ -82,6 +82,19 @@ export function chatColumnWidth(
   return Math.max(floor, Math.min(chatW - shrink, ceiling));
 }
 
+/** Целая ширина колонки чата (px) — для рендера и коммита перетаскивания
+ *  (#969): дробная ширина при DPR 1.25/масштабе интерфейса даёт слою
+ *  полупиксельное смещение — текст «мылится» до перерисовки. Сумма колонок
+ *  ряда от округления не зависит: профиль — `1fr`, чат — `auto`. */
+export function chatColumnPx(
+  chatW: number,
+  shrink: number,
+  floor: number,
+  ceiling = Number.POSITIVE_INFINITY,
+): number {
+  return Math.round(chatColumnWidth(chatW, shrink, floor, ceiling));
+}
+
 /**
  * Потолок колонки чата карточки сотрудника (#750): профиль слева не уже
  * минимума данных, поэтому чат не забирает больше, чем ряд минус СТОЯЩИЕ
