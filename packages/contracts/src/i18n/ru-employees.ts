@@ -148,6 +148,7 @@ export const employeesStrings = {
   locateMe: 'Найти меня',
   renamePosition: 'Переименовать',
   managerPlaceholder: 'Начните вводить имя',
+  departmentSearchPlaceholder: 'Начните вводить название подразделения',
   loadErrorRetry: 'Повторить',
   notSelected: 'Не выбрано',
   clearSelection: 'Очистить выбор',

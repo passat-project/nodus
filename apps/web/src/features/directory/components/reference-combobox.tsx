@@ -47,6 +47,10 @@ export function ReferenceCombobox({
   ariaLabel,
   placeholder,
   allowClear = true,
+  /** Направление списка: `auto` — вниз, при нехватке места вверх (страховка
+   *  у края окна, #981); `bottom` — строго вниз, как у полей
+   *  «Руководитель/Заместитель» и «Вышестоящее подразделение» (#982). */
+  placement = 'auto',
   className,
 }: {
   value: string | null;
@@ -57,6 +61,7 @@ export function ReferenceCombobox({
   placeholder?: string;
   /** «Не выбрано» и крестик сброса; обязательный выбор — false. */
   allowClear?: boolean;
+  placement?: 'auto' | 'bottom';
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -71,6 +76,9 @@ export function ReferenceCombobox({
     onChange(id);
     setText('');
     setOpen(false);
+    // Программное закрытие не проходит через onOpenChange: гард указателя
+    // обязан сброситься здесь, иначе он «съест» следующий клик мимо списка.
+    fromPointer.current = false;
     // Фокус — самому полю: ref висит на обёртке-`div`, `.focus()` на ней no-op.
     anchorRef.current?.querySelector('input')?.focus();
   }
@@ -110,6 +118,7 @@ export function ReferenceCombobox({
                 event.stopPropagation();
                 setOpen(false);
                 setText('');
+                fromPointer.current = false;
                 return;
               }
               if (event.key === 'ArrowDown' && !open) {
@@ -139,9 +148,9 @@ export function ReferenceCombobox({
       <PopoverContent
         align="start"
         side="bottom"
-        // Переворот — только при нехватке места снизу (страховка у края окна);
-        // в штатном диалоге список раскрывается вниз.
-        avoidCollisions
+        // `auto` — переворот только при нехватке места снизу (страховка у края
+        // окна, #981); `bottom` — строго вниз, как у полей руководителя (#982).
+        avoidCollisions={placement === 'auto'}
         onOpenAutoFocus={(event) => event.preventDefault()}
         className="w-(--radix-popover-trigger-width) overflow-hidden p-1"
         onPointerDown={() => {

@@ -152,6 +152,16 @@ export class DepartmentsService {
       if (!current) {
         throw DomainException.notFound('Department not found');
       }
+      // Повтор правила корня (#982) на состоянии ПОСЛЕ лока: ранняя проверка —
+      // быстрый путь без сериализации переносов, эта закрывает interleaving,
+      // когда узел успели переставить между чтением и локом.
+      if (dto.parentId === null && current.kind === 'management' && current.parentId !== null) {
+        throw new DomainException(
+          ErrorCode.DIRECTORY_DEPARTMENT_ROOT_FORBIDDEN,
+          'Management department cannot be detached to root',
+          { id },
+        );
+      }
       // #441: ссылки оргструктуры — руководитель/зам только активные
       // сотрудники; родитель — подразделение того же вида структуры (иначе
       // поддерево выпадает из дерева своего вида). Новый родитель берётся под
