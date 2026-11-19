@@ -7,6 +7,7 @@ import type { ChatMessage } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 
 import { ChatMessageItem } from './chat-message.js';
+import { takeEmployeeCardTab } from './employee-card-nav.js';
 import { buildMessageRuns } from './message-groups.js';
 import { MessageAuthorAvatar } from './message-avatar.js';
 import { MessageRunView } from './message-run.js';
@@ -54,7 +55,11 @@ const message = (overrides: Partial<ChatMessage> = {}): ChatMessage => ({
   ...overrides,
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  // Пристойка стартовой вкладки (#972) — модуль-level: чистим между тестами.
+  takeEmployeeCardTab(AUTHOR.id);
+});
 
 describe('MessageAuthorAvatar — чужое сообщение открывает карточку сотрудника (#728)', () => {
   it('аватар вне серии — кнопка: подсказка = имя, aria-label = имя + действие', () => {
@@ -96,6 +101,8 @@ describe('MessageAuthorAvatar — чужое сообщение открывае
     expect(ref).toEqual({ kind: 'employee', id: AUTHOR.id });
     // Карточка «растёт» из аватара: rect вьюпорта, а не undefined.
     expect(rect).toMatchObject({ x: expect.any(Number), width: expect.any(Number) });
+    // Из мессенджера профиль открывается вкладкой «Задачи» (#972).
+    expect(takeEmployeeCardTab(AUTHOR.id)).toBe('tasks');
     close();
   });
 
@@ -145,6 +152,7 @@ describe('Аватар серии (лента мессенджера) — тот
     );
     fireEvent.click(button!);
     expect(opener.mock.calls[0]![0]).toEqual({ kind: 'employee', id: AUTHOR.id });
+    expect(takeEmployeeCardTab(AUTHOR.id)).toBe('tasks');
     close();
   });
 

@@ -101,7 +101,7 @@ function EmployeeEntry({ id, source, onClose, dormant }: EntryProps) {
       fadeContent={false}
       dormant={dormant}
     >
-      <EmployeeCard userId={id} />
+      <EmployeeCard userId={id} dormant={dormant} />
     </SliderPanel>
   );
 }

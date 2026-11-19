@@ -5,6 +5,7 @@ import type { ConversationListItem, ConversationMember } from '@nodus/contracts'
 import { ui } from '@nodus/contracts';
 
 import { MemberRow } from './conversation-member-row.js';
+import { takeEmployeeCardTab } from './employee-card-nav.js';
 import { registerCardBridge } from '../lib/card-bridge.js';
 
 /**
@@ -69,6 +70,8 @@ describe('MemberRow — переход в карточку сотрудника 
     expect(opener.mock.calls[0]![0]).toEqual({ kind: 'employee', id: 'u-1' });
     // rect источника — сама строка (карточка растёт из неё)
     expect(opener.mock.calls[0]![1]).toMatchObject({ width: expect.any(Number) });
+    // Из мессенджера карточка стартует «Задачами» (#972).
+    expect(takeEmployeeCardTab('u-1')).toBe('tasks');
     close();
   });
 
@@ -107,6 +110,7 @@ describe('MemberRow — переход в карточку сотрудника 
     );
     fireEvent.click(container.querySelector('button[data-slot="member-person"]')!);
     expect(opener.mock.calls[0]![0]).toEqual({ kind: 'employee', id: 'u-2' });
+    expect(takeEmployeeCardTab('u-2')).toBe('tasks');
     close();
   });
 });
