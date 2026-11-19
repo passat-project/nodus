@@ -2,8 +2,8 @@
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
-import { openCardViaBridge } from '../lib/card-bridge.js';
 import { PersonAvatar } from '../ui/person-avatar.js';
+import { openEmployeeCardFromChat } from './employee-card-nav.js';
 
 /**
  * Аватар автора сообщения (#728): у ЧУЖОГО сообщения — настоящая кнопка
@@ -12,6 +12,8 @@ import { PersonAvatar } from '../ui/person-avatar.js';
  * (shared-element) и при закрытии возвращает в чат на то же место (лента живёт
  * под карточкой, скролл/фокус не пересоздаются). Подсказка (`title`) — имя
  * человека: наведение на аватар должно называть автора, а не действие.
+ * Открытие из мессенджера (#972) — вкладкой «Задачи» (employee-card-nav):
+ * профиль не дублирует диалог, из которого пришли.
  *
  * Своё сообщение — пассивная аватарка: свой профиль открывается из топбара,
  * карточка самого себя в ленте — лишний шаг (рекомендация issue #728).
@@ -64,10 +66,7 @@ export function MessageAuthorAvatar({
       title={author.displayName}
       onClick={(event) => {
         event.stopPropagation();
-        openCardViaBridge(
-          { kind: 'employee', id: author.id },
-          event.currentTarget.getBoundingClientRect(),
-        );
+        openEmployeeCardFromChat(author.id, event.currentTarget.getBoundingClientRect());
       }}
       className={cn(
         // w-fit: кнопка обнимает круг аватара — фокус-рамка идёт по

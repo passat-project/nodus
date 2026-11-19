@@ -11,18 +11,19 @@ import {
 import { NodeChip } from '@nodus/ui/components/node-chip';
 import { cn } from '@nodus/ui/lib/utils';
 
-import { openCardViaBridge } from '../lib/card-bridge.js';
 import { withoutPatronymic } from '../lib/format.js';
 import { PersonAvatar } from '../ui/person-avatar.js';
 import { canManageSettings, canRemoveMembers } from './conversations.js';
+import { openEmployeeCardFromChat } from './employee-card-nav.js';
 import { useRemoveMember, useUpdateMemberRole } from './manage-api.js';
 
 /**
  * Строка участника беседы (#186): аватар + имя с ролью и меню «⋯»; вынесена
  * из панели (I5). С #728 строка — переход в карточку сотрудника (стек поверх
- * мессенджера, rect — сама строка): личный диалог живёт в карточке. Своя
- * строка — пассивная (свой профиль открывается из топбара), меню действий
- * остаётся сиблингом кнопки — вложенных интерактивов нет.
+ * мессенджера, rect — сама строка): личный диалог живёт в карточке; с #972
+ * карточка из мессенджера открывается вкладкой «Задачи». Своя строка —
+ * пассивная (свой профиль открывается из топбара), меню действий остаётся
+ * сиблингом кнопки — вложенных интерактивов нет.
  */
 
 /** Чип роли строки участника: владелец/модератор; участник — без чипа. */
@@ -113,10 +114,7 @@ export function MemberRow({
           // Подсказка при наведении — имя участника, не название действия.
           title={member.user.displayName}
           onClick={(event) =>
-            openCardViaBridge(
-              { kind: 'employee', id: member.user.id },
-              event.currentTarget.getBoundingClientRect(),
-            )
+            openEmployeeCardFromChat(member.user.id, event.currentTarget.getBoundingClientRect())
           }
           className={cn(
             personClass,
