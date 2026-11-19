@@ -15,7 +15,7 @@ const NODE = '00000000-0000-4000-8000-0000000000a2';
 function make() {
   const tx = {
     $executeRaw: vi.fn(async () => 1),
-    $queryRaw: vi.fn(async () => [{ status: 'active', visibility: 'open' }]),
+    $queryRaw: vi.fn(async () => [{ status: 'active', visibility: 'open', typeId: 'type-1' }]),
   };
   const repo = new ProjectNodesRepository({} as never);
   return { repo, tx };
@@ -42,9 +42,9 @@ describe('ProjectNodesRepository: локи узла (#646)', () => {
     const { repo, tx } = make();
     const locked = await repo.lockStructure(tx as never, PROJECT);
 
-    // Свежая строка уходит гарду мутации (#875): архив/секретность
+    // Свежая строка уходит гарду мутации (#875): архив/секретность/тип
     // перепроверяются по состоянию под локом, а не по снимку до транзакции.
-    expect(locked).toEqual({ status: 'active', visibility: 'open' });
+    expect(locked).toEqual({ status: 'active', visibility: 'open', typeId: 'type-1' });
 
     expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
     const projectLock = sqlText(tx.$queryRaw.mock.calls[0] as unknown[]);
@@ -52,6 +52,7 @@ describe('ProjectNodesRepository: локи узла (#646)', () => {
     expect(projectLock).toMatch(/FOR UPDATE/);
     expect(projectLock).toMatch(/status/);
     expect(projectLock).toMatch(/visibility/);
+    expect(projectLock).toMatch(/type_id/);
     // Строка проекта — строго ДО advisory: обратный порядок открывал ABBA (#705).
     expect(tx.$queryRaw.mock.invocationCallOrder[0]!).toBeLessThan(
       tx.$executeRaw.mock.invocationCallOrder[0]!,

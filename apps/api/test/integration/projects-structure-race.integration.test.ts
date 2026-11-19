@@ -28,7 +28,8 @@ describe.skipIf(!process.env.DATABASE_URL)('projects: гонка архивац�
       const rows = await s.fx.prisma.$queryRaw<{ waiting: bigint }[]>`
         SELECT count(*)::bigint AS waiting
         FROM pg_stat_activity
-        WHERE state = 'active'
+        WHERE datname = current_database()
+          AND state = 'active'
           AND wait_event_type = 'Lock'
           AND query ILIKE '%FROM "projects"%'
           AND query ILIKE '%FOR UPDATE%'

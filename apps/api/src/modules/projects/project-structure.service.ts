@@ -151,10 +151,12 @@ export class ProjectStructureService {
     return this.txRunner.run(async (tx) => {
       // Гард до транзакции мог устареть (#875): архив/снятие руководства
       // между проверкой и локом — решение принимаем по свежей строке, как #705.
-      const locked = await this.nodes.lockStructure(tx, projectId);
-      await this.projects.assertManageLocked(user, projectId, locked, tx, { archived: 'forbid' });
+      const lockedRow = await this.nodes.lockStructure(tx, projectId);
+      const locked = await this.projects.assertManageLocked(user, projectId, lockedRow, tx, {
+        archived: 'forbid',
+      });
       const tree = await this.nodes.listByProject(projectId, tx);
-      const kind = await assertKindAlive(this.kinds, this.types, tx, project.typeId, body.kindId);
+      const kind = await assertKindAlive(this.kinds, this.types, tx, locked.typeId, body.kindId);
       const parent = assertParent(tree, body.parentId);
       if (body.names.length > NODE_LIMITS.nodesPerProject - tree.length) {
         throw limitError('nodes_per_project', NODE_LIMITS.nodesPerProject);
@@ -176,7 +178,7 @@ export class ProjectStructureService {
       // Счётчики «при создании» (#630): место пачки — общий родитель; нет
       // места — 409 до создания, номера не тратятся.
       const target = this.nodeNumberTarget(
-        project,
+        { ...project, typeId: locked.typeId },
         tree,
         parent?.id ?? null,
         kind.id,
@@ -245,8 +247,10 @@ export class ProjectStructureService {
   ): Promise<ProjectNode> {
     const { row: project } = await loadForStructureManage(this.projects, user, projectId);
     return this.txRunner.run(async (tx) => {
-      const locked = await this.nodes.lockStructure(tx, projectId);
-      await this.projects.assertManageLocked(user, projectId, locked, tx, { archived: 'forbid' });
+      const lockedRow = await this.nodes.lockStructure(tx, projectId);
+      const locked = await this.projects.assertManageLocked(user, projectId, lockedRow, tx, {
+        archived: 'forbid',
+      });
       const tree = await this.nodes.listByProject(projectId, tx);
       // Чтение ВНУТРИ tx после лока (F2): гонка двух PATCH сериализуется.
       // Строковый лок узла — против bulk-уборки значений удалённого атрибута
@@ -256,7 +260,7 @@ export class ProjectStructureService {
       if (!node) throw nodeInvalid(nodeId);
       const kindChanged = body.kindId !== undefined && body.kindId !== node.kindId;
       const kind = kindChanged
-        ? await assertKindAlive(this.kinds, this.types, tx, project.typeId, body.kindId!)
+        ? await assertKindAlive(this.kinds, this.types, tx, locked.typeId, body.kindId!)
         : await kindOf(this.kinds, tx, node.kindId);
       const patch: {
         name?: string;
@@ -277,7 +281,13 @@ export class ProjectStructureService {
         };
         numberPlan = await this.numberIssue.planOnCreate(
           tx,
-          this.nodeNumberTarget(project, tree, node.parentId, kind.id, planValues),
+          this.nodeNumberTarget(
+            { ...project, typeId: locked.typeId },
+            tree,
+            node.parentId,
+            kind.id,
+            planValues,
+          ),
           {
             source: 'type_change',
             values: planValues,
