@@ -37,7 +37,6 @@ vi.mock('../api/press-api.js', () => ({
   useSubmitPress: () => ({ mutate: state.submit }),
   useWithdrawPress: () => ({ mutate: state.withdraw, isPending: false }),
   useReturnPress: () => ({ mutate: vi.fn(), isPending: false }),
-  useExcludePress: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 vi.mock('./task-press-dialogs.js', () => ({
   PressAnalyticsDialog: () => null,

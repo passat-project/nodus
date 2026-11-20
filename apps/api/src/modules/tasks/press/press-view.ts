@@ -59,8 +59,6 @@ export function pressRoundViewOf(
       (myEntry.state === 'waiting' || myEntry.state === 'returned'),
     canWithdraw: !completed && myEntry?.state === 'pressed',
     canReturn: canManage && !completed && entries.some((entry) => entry.state === 'pressed'),
-    canExclude:
-      canManage && !completed && entries.filter((entry) => entry.state !== 'excluded').length > 1,
     completed,
   };
 }

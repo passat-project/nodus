@@ -84,7 +84,6 @@ const round = (overrides: Partial<PressRoundView> = {}): PressRoundView =>
     canSubmit: false,
     canWithdraw: false,
     canReturn: true,
-    canExclude: true,
     completed: false,
     ...overrides,
   }) as PressRoundView;

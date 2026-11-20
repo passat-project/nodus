@@ -10,14 +10,7 @@ import { STANDARD_COMPLETE_TRANSITION_ID } from './workflows-documents.js';
 
 type MutableRound = Omit<
   PressRoundView,
-  | 'pressed'
-  | 'total'
-  | 'myEntry'
-  | 'canSubmit'
-  | 'canWithdraw'
-  | 'canReturn'
-  | 'canExclude'
-  | 'completed'
+  'pressed' | 'total' | 'myEntry' | 'canSubmit' | 'canWithdraw' | 'canReturn' | 'completed'
 > & {
   completed: boolean;
 };
@@ -157,10 +150,6 @@ export function pressOf(
     canWithdraw: !round.completed && myEntry?.state === 'pressed',
     canReturn:
       canManage && !round.completed && round.entries.some((entry) => entry.state === 'pressed'),
-    canExclude:
-      canManage &&
-      !round.completed &&
-      round.entries.filter((entry) => entry.state !== 'excluded').length > 1,
     completed: round.completed,
     entries: round.entries.map((e) => ({ ...e })),
   };
@@ -209,24 +198,6 @@ export function returnPress(
     const target = round.entries.find((e) => e.userId === userId);
     if (!target || target.state !== 'pressed') continue;
     target.state = 'returned';
-    target.returnReason = reason;
-  }
-  round.completed = isQuorum(round);
-  return pressOf(taskId, viewerId);
-}
-
-export function excludePress(
-  taskId: string,
-  userIdsToExclude: readonly string[],
-  reason: string,
-  viewerId: string,
-): PressRoundView | null {
-  const round = rounds.get(taskId);
-  if (!round) return null;
-  for (const userId of userIdsToExclude) {
-    const target = round.entries.find((e) => e.userId === userId);
-    if (!target || target.state === 'excluded') continue;
-    target.state = 'excluded';
     target.returnReason = reason;
   }
   round.completed = isQuorum(round);

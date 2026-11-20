@@ -2,7 +2,6 @@
 import {
   effectiveWindowSections,
   ErrorCode,
-  pressExcludeBodySchema,
   pressReturnBodySchema,
   pressSubmitBodySchema,
   ui,
@@ -10,7 +9,6 @@ import {
 import { http, HttpResponse } from 'msw';
 
 import {
-  excludePress,
   pressOf,
   returnPress,
   submitPress,
@@ -165,33 +163,6 @@ export const tasksPressHandlers = [
     if (!task) return notFound();
     return HttpResponse.json({
       press,
-      task: taskDetailOf(task, getMockActor().id),
-      transitions: transitionsOf(task),
-    });
-  }),
-
-  http.post('/api/v1/tasks/:id/press/exclude', async ({ params, request }) => {
-    const taskId = String(params.id);
-    const task = findTask(taskId);
-    const canManage = task ? actorCanManageTask(task) : false;
-    const current = pressOf(taskId, getMockActor().id, canManage);
-    if (!current) return notFound();
-    if (!current.canExclude) return noRights();
-    const parsed = pressExcludeBodySchema.safeParse(await request.json().catch(() => ({})));
-    if (!parsed.success) {
-      return HttpResponse.json(
-        { code: ErrorCode.VALIDATION_FAILED, message: 'Invalid body' },
-        { status: 400 },
-      );
-    }
-    const press = excludePress(taskId, parsed.data.userIds, parsed.data.reason, getMockActor().id);
-    if (!task) return notFound();
-    if (press?.completed) {
-      const view = transitionsOf(task).find((t) => t.id === press.transitionId);
-      applyCollectiveTransition(task, press.transitionId, {}, view);
-    }
-    return HttpResponse.json({
-      press: press?.completed ? null : press,
       task: taskDetailOf(task, getMockActor().id),
       transitions: transitionsOf(task),
     });

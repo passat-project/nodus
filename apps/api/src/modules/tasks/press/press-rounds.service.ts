@@ -2,7 +2,6 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { pressConfigSchema, TASK_EVENTS, ui, type PressRoundView } from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
-import { DomainException } from '../../../core/errors/domain-exception.js';
 import { EventBus } from '../../../core/events/event-bus.js';
 import {
   USER_PROFILE_READER,
@@ -12,9 +11,14 @@ import {
   WORKFLOW_PRESS_READER,
   type WorkflowPressReader,
 } from '../../workflows/ports/workflow-press-reader.port.js';
+import {
+  WORKFLOW_RECORD_WRITER,
+  type WorkflowRecordWriter,
+} from '../../workflows/ports/workflow-record-writer.port.js';
 import { audienceIds } from '../access/task-access.js';
 import { TasksRepository } from '../tasks/tasks.repository.js';
 import { PROJECT_READER, type ProjectReader } from '../../projects/ports/project-reader.port.js';
+import { PressEvents } from './press-events.service.js';
 import { PressRepository } from './press.repository.js';
 import { PressSourcesService } from './press-sources.service.js';
 import { pressRoundViewOf } from './press-view.js';
@@ -48,8 +52,10 @@ export class PressRoundsService {
     private readonly tasks: TasksRepository,
     @Inject(PROJECT_READER) private readonly projects: ProjectReader,
     private readonly events: EventBus,
+    private readonly pressEvents: PressEvents,
     @Inject(WORKFLOW_PRESS_READER) private readonly pressReader: WorkflowPressReader,
     @Inject(USER_PROFILE_READER) private readonly users: UserProfileReader,
+    @Inject(WORKFLOW_RECORD_WRITER) private readonly records: WorkflowRecordWriter,
   ) {}
 
   /** Вызывается в транзакции создания задачи и смены стадии. `notify` — только
@@ -208,46 +214,77 @@ export class PressRoundsService {
     await this.repo.cancelOpenRound(tx, 'task', taskId, new Date());
   }
 
-  /** Снятие участника при открытом раунде запрещено (#434, security): иначе
-   *  снятый сохраняет доступ через `pressTaskIds`, может закрыть задачу и
-   *  одновременно блокирует кворум «все». Состав раунда — снимок на старте;
-   *  сначала завершают сбор. */
-  async assertCanRemove(
+  /** Снятие участника при открытом раунде (#434, security): снятый теряет
+   *  доступ через `pressTaskIds` только после `excluded` — поэтому состав
+   *  сбора приводится к составу задачи сразу, в той же транзакции (#965). */
+  async syncRoster(
     tx: TransactionClient,
     taskId: string,
-    userIds: readonly string[],
+    reason: string,
+    actorId: string | null = null,
   ): Promise<void> {
-    if (userIds.length === 0) return;
     const round = await this.repo.findOpenRound(tx, 'task', taskId);
     if (!round) return;
-    const wanted = new Set(userIds);
-    const blocked = round.entries
-      .filter((entry) => wanted.has(entry.userId) && entry.state !== 'excluded')
-      .map((entry) => entry.userId);
-    if (blocked.length > 0) {
-      throw DomainException.conflict('Press round is open for these participants', {
-        userIds: blocked,
-      });
-    }
-  }
-
-  /** Добавленный участник входит в открытый раунд отметкой «ждём» (#434):
-   *  источник раунда решается заново, но только для этого человека. */
-  async syncAdded(tx: TransactionClient, taskId: string, userId: string): Promise<void> {
-    const round = await this.repo.findOpenRound(tx, 'task', taskId);
-    if (!round) return;
-    const existing = round.entries.find((entry) => entry.userId === userId);
-    if (existing) {
-      if (existing.state === 'excluded') {
-        await this.repo.updateEntry(tx, existing.id, { state: 'waiting', returnReason: null });
-      }
-      return;
-    }
     const config = pressConfigSchema.parse(round.config);
     const resolved = await this.sources.resolve(tx, taskId, config);
-    if (!resolved.some((entry) => entry.userId === userId)) return;
-    const order = Math.max(-1, ...round.entries.map((entry) => entry.order)) + 1;
-    await this.repo.addEntry(tx, round.id, userId, order);
+    const eligible = new Set(resolved.map((entry) => entry.userId));
+    const stale = round.entries.filter(
+      (entry) => entry.state !== 'excluded' && !eligible.has(entry.userId),
+    );
+    const added = resolved.filter(
+      (entry) => !round.entries.some((existing) => existing.userId === entry.userId),
+    );
+    if (stale.length === 0 && added.length === 0) return;
+
+    await this.tasks.lock(tx, taskId);
+    const task = await this.tasks.findWithParticipants(taskId, tx);
+    for (const entry of stale) {
+      // Результат НЕ стирается: вклад остаётся в таблице и CSV (#965,
+      // решение владельца 20.11.2026), человек лишь выходит из кворума.
+      await this.repo.updateEntry(tx, entry.id, {
+        state: 'excluded',
+        returnReason: reason,
+        timeEntryId: null,
+      });
+      await this.records.write(tx, {
+        entityKind: 'task',
+        entityId: taskId,
+        transitionId: round.transitionId,
+        stageId: round.stageId,
+        actorId,
+        recordKind: 'exclude',
+        participantId: entry.userId,
+        comment: reason,
+      });
+    }
+
+    let order = Math.max(-1, ...round.entries.map((entry) => entry.order));
+    for (const entry of added) {
+      order += 1;
+      await this.repo.addEntry(tx, round.id, entry.userId, order);
+    }
+
+    const fresh = await this.repo.findRoundById(tx, round.id);
+    if (!fresh) return;
+    await this.pressEvents.updated(tx, task, actorId ?? task.assigneeId, fresh, config);
+
+    const total = fresh.entries.filter((entry) => entry.state !== 'excluded').length;
+    const pressed = fresh.entries.filter((entry) => entry.state === 'pressed').length;
+    const required =
+      config.quorum.kind === 'all'
+        ? total
+        : config.quorum.kind === 'any'
+          ? 1
+          : Math.min(config.quorum.count, total);
+    this.logger.log(
+      `Сбор ${taskId}: состав синхронизирован (снято ${stale.length}, добавлено ${added.length}); ${pressed}/${required}`,
+    );
+    if (total === 0 || pressed < required) return;
+    // Переход «от имени» не выполняем — как при деактивации (#434, В3).
+    await this.repo.completeRound(tx, round.id, new Date());
+    await this.pressEvents.completionBlocked(tx, task, actorId, fresh, [
+      ui.tasks.press.quorumAfterRemovalReason,
+    ]);
   }
 
   /** Есть ли открытый раунд (#434): false — источники пусты или задача

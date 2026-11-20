@@ -63,7 +63,7 @@ describe('PressSourcesService (#434)', () => {
     ]);
   });
 
-  it('роль «ответственный + соисполнители» и исключение автора', async () => {
+  it('роль «ответственный + соисполнители»: автор-соисполнитель остаётся (#965)', async () => {
     const { sources } = service({ creatorId: 'co1' });
     await expect(
       sources.resolve(
@@ -73,8 +73,16 @@ describe('PressSourcesService (#434)', () => {
       ),
     ).resolves.toEqual([
       { userId: 'assignee', order: 0 },
-      { userId: 'co2', order: 1 },
+      { userId: 'co1', order: 1 },
+      { userId: 'co2', order: 2 },
     ]);
+  });
+
+  it('автор без роли соисполнителя исключается настройкой', async () => {
+    const { sources } = service({ creatorId: 'co1' });
+    await expect(
+      sources.resolve({} as never, 't1', config([{ kind: 'role', roles: ['assignee'] }])),
+    ).resolves.toEqual([{ userId: 'assignee', order: 0 }]);
   });
 
   it('поле «Сотрудники» разворачивается в людей', async () => {

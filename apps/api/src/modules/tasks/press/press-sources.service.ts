@@ -61,7 +61,15 @@ export class PressSourcesService {
       for (const id of ids) if (!ordered.includes(id)) ordered.push(id);
     }
     const visible = await this.visibleOnly(tx, task, ordered);
-    const filtered = config.excludeAuthor ? visible.filter((id) => id !== task.creatorId) : visible;
+    // «Не учитывать автора» не выкидывает постановщика, который явно добавлен
+    // соисполнителем: он несёт свою часть работы и сдаёт её (#965).
+    const authorIsCoexecutor = task.participants.some(
+      (participant) => participant.userId === task.creatorId && participant.role === 'coexecutor',
+    );
+    const filtered =
+      config.excludeAuthor && !authorIsCoexecutor
+        ? visible.filter((id) => id !== task.creatorId)
+        : visible;
     return filtered.map((userId, order) => ({ userId, order }));
   }
 

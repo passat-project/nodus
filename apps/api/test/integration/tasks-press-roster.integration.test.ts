@@ -116,17 +116,22 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks press roster (integration)', (
     );
     expect(carolView.press).toMatchObject({ total: 2, canSubmit: true });
 
+    // Снятие при открытом сборе разрешено (#965): Борис выбывает из кворума,
+    // его отметка (если была) остаётся в истории; Каролина остаётся одна.
     const removed = await fx.api(alice, 'DELETE', `/tasks/${task.id}/participants/${bob.id}`, {
       key: `press-roster-remove-${fx.runId}`,
     });
-    expect(removed.status).toBe(409);
-
-    // Раунд не сломан: Борис сдаёт, Каролина закрывает кворум.
-    const submitted = await fx.api(bob, 'POST', `/tasks/${task.id}/press/submit`, {
-      body: { result: { text: 'Борис', messageIds: [] } },
-      key: `press-roster-submit-${fx.runId}`,
+    expect(removed.status).toBe(200);
+    const afterRemoval = taskDetailSchema.parse(
+      await (await fx.api(alice, 'GET', `/tasks/${task.id}`)).json(),
+    );
+    expect(afterRemoval.press).toMatchObject({ total: 1, pressed: 0 });
+    expect(afterRemoval.press?.entries.find((entry) => entry.userId === bob.id)).toMatchObject({
+      state: 'excluded',
+      returnReason: 'Выбыл из задачи',
     });
-    expect(submitted.status).toBe(200);
+
+    // Каролина закрывает кворум одна.
     const closed = await fx.api(fx.users.carol, 'POST', `/tasks/${task.id}/press/submit`, {
       body: { result: { text: 'Каролина', messageIds: [] } },
       key: `press-roster-close-${fx.runId}`,

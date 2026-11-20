@@ -9,6 +9,7 @@ import {
   participantLockKey,
   requiredCreateKeys,
   TASK_EVENTS,
+  ui,
   type AuthUser,
   type TaskDetail,
   type TaskParticipantAddBody,
@@ -90,19 +91,15 @@ export class ParticipantsService {
       if (fresh.projectId) {
         await this.projects.assertMembersAllowed(fresh.projectId, [body.userId]);
       }
-      // Смена роли участника при открытом раунде — это снятие/добавление:
-      // снимок состава не переписываем на ходу (#434, security).
-      const currentRole = fresh.participants.find((p) => p.userId === body.userId)?.role;
-      if (currentRole && currentRole !== body.role) {
-        await this.press.assertCanRemove(tx, taskId, [body.userId]);
-      }
+      // Смена роли при открытом сборе — это выпадение/вхождение в источники:
+      // состав раунда приводится к составу задачи после записи роли (#965).
       // Замок записи (#496, Р4): закреплённые «Соисполнители»/«Наблюдатели»
       // меняет только постановщик (или task.edit_locked) с причиной.
       await this.assertParticipantLocked(tx, fresh, body.role, user, body.lockReason);
       await this.repo.assignRole(tx, taskId, body.userId, body.role);
-      // Открытый раунд сбора (#434): добавленный участник входит в снимок
-      // отметкой «ждём», если источник кнопки его теперь включает.
-      await this.press.syncAdded(tx, taskId, body.userId);
+      // Состав сбора следует за составом задачи (#965): добавленный входит
+      // отметкой «ждём», выпавший из источников — снимается с причиной.
+      await this.press.syncRoster(tx, taskId, ui.tasks.press.rosterChangedReason, user.id);
       await this.afterChange(
         tx,
         user.id,
@@ -145,9 +142,6 @@ export class ParticipantsService {
             'coexecutor' | 'observer' | undefined);
       // Замок записи (#496, Р4): снятие закреплённых участников — с причиной.
       await this.assertParticipantLocked(tx, fresh, role, user, lockReason);
-      // Снятый не должен сохранить доступ к карточке и право закрыть задачу
-      // через открытый раунд (#434, security): пока сбор идёт — снятие ждёт.
-      await this.press.assertCanRemove(tx, taskId, [userId]);
       const count = await this.repo.remove(
         tx,
         taskId,
@@ -162,6 +156,9 @@ export class ParticipantsService {
       // Обязательные при создании участники (#432, Р5): снятие последнего
       // соисполнителя/наблюдателя запрещено — форма типа требует хотя бы одного.
       await this.assertRequiredKept(tx, row.typeId, taskId, role);
+      // Выбывший снимается с открытого сбора с причиной; его результат
+      // остаётся в истории и CSV (#965, решение владельца 20.11.2026).
+      await this.press.syncRoster(tx, taskId, ui.tasks.press.removedFromTaskReason, user.id);
       await this.afterChange(tx, user.id, taskId, [], [userId], lockReason);
     });
     // Снявший себя наблюдатель может потерять видимость — тогда ответ пустой.
