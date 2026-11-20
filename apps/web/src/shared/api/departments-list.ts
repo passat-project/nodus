@@ -34,7 +34,8 @@ export interface DepartmentOption {
   depth: number;
   isActive: boolean;
   headId: string | null;
-  deputyId: string | null;
+  /** Заместители подразделения (#817): их несколько. */
+  deputyIds: string[];
 }
 
 export function flattenDepartments(
@@ -48,7 +49,7 @@ export function flattenDepartments(
       depth,
       isActive: node.isActive,
       headId: node.headId,
-      deputyId: node.deputyId,
+      deputyIds: node.deputyIds,
     },
     ...flattenDepartments(node.children, depth + 1),
   ]);

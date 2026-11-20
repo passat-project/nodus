@@ -12,7 +12,7 @@ function legalRow(members: number, legalMembers: number) {
     kind: 'legal',
     parentId: null,
     headId: null,
-    deputyId: null,
+    deputyIds: [],
     sortOrder: 0,
     isActive: true,
     head: null,

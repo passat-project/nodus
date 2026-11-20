@@ -61,11 +61,11 @@ export function useCreateDepartment(kind: OrgUnitKind) {
         kind: body.kind ?? kind,
         parentId: body.parentId ?? null,
         headId: body.headId ?? null,
-        deputyId: body.deputyId ?? null,
+        deputyIds: body.deputyIds ?? [],
         sortOrder: body.sortOrder ?? 0,
         isActive: true,
         headName: null,
-        deputyName: null,
+        deputies: [],
         memberCount: 0,
         children: [],
       };

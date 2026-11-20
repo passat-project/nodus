@@ -122,7 +122,7 @@ describe('UsersService: деактивация сотрудника', () => {
     expect(eventBus.emit).toHaveBeenCalledWith(
       'tx-handle',
       'directory.department.updated',
-      { departmentId: 'dep-2', changedFields: ['deputyId'] },
+      { departmentId: 'dep-2', changedFields: ['deputyIds'] },
       expect.objectContaining({ actorId: 'admin-1' }),
     );
   });

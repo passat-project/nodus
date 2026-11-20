@@ -22,11 +22,11 @@ const node: DepartmentNode = {
   kind: 'management',
   parentId: null,
   headId: null,
-  deputyId: null,
+  deputyIds: [],
   sortOrder: 0,
   isActive: true,
   headName: null,
-  deputyName: null,
+  deputies: [],
   memberCount: 1,
   children: [],
 };
@@ -68,8 +68,8 @@ describe('дерево подразделений: контракт /tree (#540)
       parentId: node.id,
     };
     expect(flattenDepartments([{ ...node, children: [child] }])).toEqual([
-      { id: node.id, name: 'Управление', depth: 0, isActive: true, headId: null, deputyId: null },
-      { id: child.id, name: 'Отдел', depth: 1, isActive: true, headId: null, deputyId: null },
+      { id: node.id, name: 'Управление', depth: 0, isActive: true, headId: null, deputyIds: [] },
+      { id: child.id, name: 'Отдел', depth: 1, isActive: true, headId: null, deputyIds: [] },
     ]);
   });
 });

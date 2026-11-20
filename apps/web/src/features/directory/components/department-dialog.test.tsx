@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { DepartmentNode, UserListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 
 import { DepartmentDialog } from './department-dialog.js';
+
+/** Пикер замов (#817) тянет справочник через useQuery — нужен провайдер. */
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
 /**
  * Окно отдела (#768, пакет 17.11.2026): Radix ставит фокус в первое поле и
@@ -16,6 +20,46 @@ import { DepartmentDialog } from './department-dialog.js';
 vi.mock('../api/directory-api.js', () => ({
   useCreateDepartment: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateDepartment: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
+/** Пикер замов (#817) ищет сотрудников через useUsersSearch — в тесте без сети. */
+vi.mock('../../../shared/api/users-list.js', () => ({
+  useUsersSearch: () => ({
+    data: {
+      items: [
+        {
+          id: 'u-1',
+          displayName: 'Иванов Иван',
+          status: 'active',
+          avatarUrl: null,
+          positionName: null,
+          departmentName: null,
+          email: 'u-1@test.local',
+          managerId: null,
+          departmentId: null,
+          legalDepartmentId: null,
+          positionId: null,
+          legalPositionId: null,
+        },
+        {
+          id: 'u-2',
+          displayName: 'Петров Пётр',
+          status: 'active',
+          avatarUrl: null,
+          positionName: null,
+          departmentName: null,
+          email: 'u-2@test.local',
+          managerId: null,
+          departmentId: null,
+          legalDepartmentId: null,
+          positionId: null,
+          legalPositionId: null,
+        },
+      ],
+      nextCursor: null,
+    },
+    isFetching: false,
+  }),
 }));
 
 const person = (id: string, displayName: string, status: UserListItem['status']): UserListItem => ({
@@ -39,11 +83,11 @@ const editing: DepartmentNode = {
   kind: 'management',
   parentId: null,
   headId: null,
-  deputyId: null,
+  deputyIds: [],
   sortOrder: 0,
   isActive: true,
   headName: null,
-  deputyName: null,
+  deputies: [],
   memberCount: 0,
   children: [],
 };
@@ -56,24 +100,26 @@ function dialog(
   kind: 'management' | 'legal' = 'management',
 ) {
   return (
-    <DepartmentDialog
-      open={open}
-      onOpenChange={vi.fn()}
-      kind={kind}
-      parentId={null}
-      editing={editingNode}
-      users={users}
-      departmentOptions={[
-        {
-          id: 'dep-1',
-          name: 'Проектный отдел',
-          depth: 0,
-          isActive: true,
-          headId: null,
-          deputyId: null,
-        },
-      ]}
-    />
+    <QueryClientProvider client={queryClient}>
+      <DepartmentDialog
+        open={open}
+        onOpenChange={vi.fn()}
+        kind={kind}
+        parentId={null}
+        editing={editingNode}
+        users={users}
+        departmentOptions={[
+          {
+            id: 'dep-1',
+            name: 'Проектный отдел',
+            depth: 0,
+            isActive: true,
+            headId: null,
+            deputyIds: [],
+          },
+        ]}
+      />
+    </QueryClientProvider>
   );
 }
 
@@ -160,7 +206,10 @@ describe('DepartmentDialog: фокус и списки (#768)', () => {
     fireEvent.click(screen.getByLabelText(ui.employees.fieldHead));
     fireEvent.click(screen.getByRole('button', { name: /Иванов Иван/ }));
 
-    expect(screen.getByText(ui.employees.leaderTransferHint)).toBeTruthy();
+    // Подсказка называет человека и его прежнее место (#817): «без подразделения».
+    expect(
+      screen.getByText(new RegExp(`Иванов Иван.*${ui.employees.leaderTransferIntoOne}`)),
+    ).toBeTruthy();
   });
 
   it('юрструктура формальная: подсказки о переводе нет (#946)', async () => {
@@ -169,20 +218,39 @@ describe('DepartmentDialog: фокус и списки (#768)', () => {
     fireEvent.click(screen.getByLabelText(ui.employees.fieldHead));
     fireEvent.click(screen.getByRole('button', { name: /Иванов Иван/ }));
 
-    expect(screen.queryByText(ui.employees.leaderTransferHint)).toBeNull();
+    expect(screen.queryByText(new RegExp(ui.employees.leaderTransferFromOne))).toBeNull();
   });
 
   it('глава и зам — один сотрудник: сообщение и сохранение заблокировано (#946)', async () => {
-    await mount();
-
-    fireEvent.click(screen.getByLabelText(ui.employees.fieldHead));
-    fireEvent.click(screen.getByRole('button', { name: /Иванов Иван/ }));
-    fireEvent.click(screen.getByLabelText(ui.employees.fieldDeputy));
-    fireEvent.click(screen.getByRole('button', { name: /Иванов Иван/ }));
+    // Состояние узла, где глава уже в списке замов (дефект данных или правка):
+    // форма обязана показать причину и заблокировать сохранение (#817).
+    const clash: DepartmentNode = {
+      ...editing,
+      headId: 'u-1',
+      deputyIds: ['u-1'],
+      deputies: [{ id: 'u-1', displayName: 'Иванов Иван' }],
+    };
+    await mount(clash);
 
     expect(screen.getByRole('alert').textContent).toBe(ui.employees.leaderSamePerson);
     expect(
       (screen.getByRole('button', { name: ui.common.save }) as HTMLButtonElement).disabled,
     ).toBe(true);
+  });
+
+  it('клик по пустому месту поля замов не снимает чипы (#817)', async () => {
+    const withDeputies: DepartmentNode = {
+      ...editing,
+      deputyIds: ['u-1'],
+      deputies: [{ id: 'u-1', displayName: 'Иванов Иван' }],
+    };
+    await mount(withDeputies);
+
+    const field = document.querySelector('[data-slot="department-deputies"]');
+    expect(field).toBeTruthy();
+    // Поле не внутри <label>: клик по пустому месту не «нажимает» крестик чипа.
+    expect(field!.closest('label')).toBeNull();
+    fireEvent.click(field!);
+    expect(screen.getByText('Иванов Иван')).toBeTruthy();
   });
 });

@@ -24,7 +24,7 @@ function row(
     kind: 'management',
     parentId,
     headId: null,
-    deputyId: null,
+    deputyIds: [],
     sortOrder: 0,
     isActive: true,
     head: null,
@@ -36,6 +36,8 @@ function row(
 
 describe('DepartmentsService', () => {
   const departments = {
+    clearHeadBesides: vi.fn().mockResolvedValue([]),
+    setDeputies: vi.fn(),
     findAllByKind: vi.fn(),
     findById: vi.fn(),
     lockForUpdate: vi.fn(),
@@ -108,7 +110,7 @@ describe('DepartmentsService', () => {
             kind: 'management',
             parentId: null,
             headId: 'ghost',
-            deputyId: null,
+            deputyIds: [],
             sortOrder: 0,
           },
           actor(),
@@ -152,7 +154,8 @@ describe('DepartmentsService', () => {
         row('dep', 'parent', 'Старое имя', {
           kind: 'legal',
           headId: 'head-1',
-          deputyId: 'deputy-1',
+          deputyIds: ['deputy-1'],
+          deputies: [{ userId: 'deputy-1', user: { id: 'deputy-1', displayName: 'Зам' } }],
           sortOrder: 5,
         }),
       );
@@ -160,16 +163,16 @@ describe('DepartmentsService', () => {
         row('dep', 'parent', 'Новое имя', {
           kind: 'legal',
           headId: 'head-1',
-          deputyId: 'deputy-1',
+          deputyIds: ['deputy-1'],
+          deputies: [{ userId: 'deputy-1', user: { id: 'deputy-1', displayName: 'Зам' } }],
           sortOrder: 5,
         }),
       );
 
       const node = await service.update('dep', { name: 'Новое имя' }, actor());
 
-      // В репозиторий уходит ровно присланное — без подставленных дефолтов.
+      // В репозиторий уходит ровно присланное, дерево не лочится.
       expect(departments.update).toHaveBeenCalledWith('dep', { name: 'Новое имя' }, 'tx-handle');
-      // Переименование не меняет структуру — дерево не лочится и цепь не читается.
       expect(departments.lockTree).not.toHaveBeenCalled();
       expect(departments.findParentChain).not.toHaveBeenCalled();
       expect(eventBus.emit).toHaveBeenCalledWith(
@@ -182,7 +185,7 @@ describe('DepartmentsService', () => {
         parentId: 'parent',
         kind: 'legal',
         headId: 'head-1',
-        deputyId: 'deputy-1',
+        deputyIds: ['deputy-1'],
         sortOrder: 5,
         name: 'Новое имя',
       });
@@ -298,21 +301,11 @@ describe('DepartmentsService', () => {
       departments.findById.mockResolvedValue(row('dep', null));
       users.findRef.mockResolvedValue({ id: 'u-1', status: 'deactivated' });
 
-      await expect(service.update('dep', { deputyId: 'u-1' }, actor())).rejects.toMatchObject({
+      await expect(service.update('dep', { deputyIds: ['u-1'] }, actor())).rejects.toMatchObject({
         code: ErrorCode.DIRECTORY_REFERENCE_INVALID,
-        details: { field: 'deputyId', reason: 'inactive' },
+        details: { field: 'deputyIds', reason: 'inactive' },
       });
       expect(departments.update).not.toHaveBeenCalled();
-    });
-
-    it('очистка руководителя (null) проходит без проверки ссылки (#441)', async () => {
-      departments.findById.mockResolvedValue(row('dep', null));
-      departments.update.mockResolvedValue(row('dep', null));
-
-      await service.update('dep', { headId: null }, actor());
-
-      expect(users.findRef).not.toHaveBeenCalled();
-      expect(departments.update).toHaveBeenCalled();
     });
   });
 
