@@ -1,131 +1,10 @@
-import { useRef, useState } from 'react';
-import { Check } from 'lucide-react';
+import { useState } from 'react';
 import type { Position } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@nodus/ui/components/dialog';
-import { Input } from '@nodus/ui/components/input';
-import { Popover, PopoverAnchor, PopoverContent } from '@nodus/ui/components/popover';
 
-/**
- * Выбор целевой должности автокомплитом (#768, вердикт 13.11.2026): поле с
- * вводом фильтрует список с клавиатуры, список раскрывается ТОЛЬКО ВНИЗ
- * (`side="bottom"`, авто-переворот Radix отключён) и ограничен высотой с
- * прокруткой. Radix Select в диалоге переворачивался вверх и не давал поиска.
- */
-function PositionCombobox({
-  value,
-  targets,
-  onChange,
-}: {
-  value: string | null;
-  targets: readonly Position[];
-  onChange: (id: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [text, setText] = useState('');
-  const fromPointer = useRef(false);
-  const anchorRef = useRef<HTMLDivElement>(null);
-  const selected = targets.find((target) => target.id === value) ?? null;
-  const q = text.trim().toLocaleLowerCase('ru');
-  const filtered = q
-    ? targets.filter((target) => target.name.toLocaleLowerCase('ru').includes(q))
-    : targets;
-
-  function choose(id: string) {
-    onChange(id);
-    setText('');
-    setOpen(false);
-    // Фокус — самому полю: ref висит на обёртке-`div`, и `.focus()` на ней
-    // no-op (неинтерактивный элемент) — клавиатурный сценарий рвался.
-    anchorRef.current?.querySelector('input')?.focus();
-  }
-
-  return (
-    <Popover
-      open={open}
-      onOpenChange={(next) => {
-        // Указательный гард Radix: клик по варианту не закрывает поповер
-        // раньше выбора (pointer-down dismiss).
-        if (!next && fromPointer.current) {
-          fromPointer.current = false;
-          return;
-        }
-        setOpen(next);
-        if (!next) setText('');
-      }}
-    >
-      <div ref={anchorRef} className="relative">
-        <PopoverAnchor asChild>
-          <Input
-            value={open ? text : (selected?.name ?? '')}
-            placeholder={ui.employees.positionReassignSearch}
-            aria-label={ui.employees.positionReassignTarget}
-            // Список открывается по клику/вводу/ArrowDown, НЕ по фокусу:
-            // окно ставит фокус программно, и список «мигал» при открытии.
-            onClick={() => setOpen(true)}
-            onChange={(event) => {
-              setText(event.target.value);
-              setOpen(true);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape' && open) {
-                // Esc закрывает список, а не диалог.
-                event.stopPropagation();
-                setOpen(false);
-                setText('');
-                return;
-              }
-              if (event.key === 'ArrowDown' && !open) {
-                event.preventDefault();
-                setOpen(true);
-                return;
-              }
-              if (event.key === 'Enter' && open && filtered[0]) {
-                event.preventDefault();
-                choose(filtered[0].id);
-              }
-            }}
-            className="h-8 text-sm"
-          />
-        </PopoverAnchor>
-      </div>
-      <PopoverContent
-        align="start"
-        side="bottom"
-        // Всегда вниз: у поля достаточно места под ним, а переворот вверх в
-        // диалоге читался как «список уехал» (вердикт 13.11.2026).
-        avoidCollisions={false}
-        onOpenAutoFocus={(event) => event.preventDefault()}
-        onPointerDown={() => {
-          fromPointer.current = true;
-        }}
-        className="w-(--radix-popover-trigger-width) overflow-hidden p-1"
-      >
-        <div className="max-h-60 overflow-y-auto">
-          {filtered.length === 0 && (
-            <span className="block px-2 py-1.5 text-xs text-muted-foreground">
-              {ui.filters.notFound}
-            </span>
-          )}
-          {filtered.map((target) => (
-            <button
-              key={target.id}
-              type="button"
-              onClick={() => choose(target.id)}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
-            >
-              <span className="min-w-0 flex-1 truncate">{target.name}</span>
-              {target.id === value && (
-                <Check className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-              )}
-            </button>
-          ))}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
+import { ReferenceCombobox } from './reference-combobox.js';
 
 /**
  * Переназначение сотрудников перед удалением должности (#768): ВСЕ сотрудники,
@@ -175,7 +54,15 @@ export function ReassignPositionDialog({
             <span className="text-xs font-medium text-muted-foreground">
               {ui.employees.positionReassignTarget}
             </span>
-            <PositionCombobox value={targetId} targets={targets} onChange={setTargetId} />
+            <ReferenceCombobox
+              value={targetId}
+              onChange={setTargetId}
+              options={targets.map((target) => ({ id: target.id, label: target.name }))}
+              ariaLabel={ui.employees.positionReassignTarget}
+              placeholder={ui.employees.positionReassignSearch}
+              // Обязательный выбор: «Не выбрано» тут — пустое действие.
+              allowClear={false}
+            />
           </label>
         )}
         <DialogFooter>

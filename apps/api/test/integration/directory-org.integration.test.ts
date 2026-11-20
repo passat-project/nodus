@@ -133,6 +133,27 @@ describe('оргструктура: частичная правка (#492)', () 
     expect(stored).toMatchObject({ parentId: null, headId: null, kind: 'legal', sortOrder: 5 });
   });
 
+  it('управленческое подразделение в корень не открепляется (#982): 409, база не меняется', async () => {
+    const parent = await createDepartment({
+      name: `Орг-упр-корень ${f.runId}`,
+      kind: 'management',
+    });
+    const child = await createDepartment({
+      name: `Орг-упр-ребёнок ${f.runId}`,
+      parentId: parent.id,
+      kind: 'management',
+    });
+
+    const response = await patch(`/directory/departments/${child.id}`, { parentId: null });
+
+    expect(response.status).toBe(409);
+    const error = apiErrorResponseSchema.parse(await response.json());
+    expect(error.code).toBe(ErrorCode.DIRECTORY_DEPARTMENT_ROOT_FORBIDDEN);
+    expect(error.details).toMatchObject({ id: child.id });
+    const stored = await f.prisma.department.findUniqueOrThrow({ where: { id: child.id } });
+    expect(stored.parentId).toBe(parent.id);
+  });
+
   it('переименование юридической должности сохраняет вид и порядок', async () => {
     const position = await createPosition({
       name: `Инженер-проектировщик ${f.runId}`,

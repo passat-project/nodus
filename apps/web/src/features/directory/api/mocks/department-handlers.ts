@@ -2,6 +2,7 @@ import { http, HttpResponse } from 'msw';
 import {
   createDepartmentSchema,
   departmentTreeQuerySchema,
+  ErrorCode,
   updateDepartmentSchema,
   type Department,
   type UserListItem,
@@ -110,6 +111,19 @@ export function departmentHandlers(state: DepartmentMockState) {
         return HttpResponse.json(
           { code: 'NOT_FOUND', message: 'Department not found' },
           { status: 404 },
+        );
+      // Паритет с сервером (#982): управленческий узел в корень не открепляется.
+      if (
+        parsed.data.parentId === null &&
+        current.kind === 'management' &&
+        current.parentId !== null
+      )
+        return HttpResponse.json(
+          {
+            code: ErrorCode.DIRECTORY_DEPARTMENT_ROOT_FORBIDDEN,
+            message: 'Management department cannot be detached to root',
+          },
+          { status: 409 },
         );
       const next: Department = { ...current, ...parsed.data };
       if (sameLeaders(next.headId, next.deputyId)) return sameLeaderError();

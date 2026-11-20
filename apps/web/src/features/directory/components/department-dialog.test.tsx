@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { DepartmentNode, UserListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -13,9 +13,14 @@ import { DepartmentDialog } from './department-dialog.js';
  * списком сразу после открытия, а Esc закрывал окно вместо списка.
  */
 
+const mutations = vi.hoisted(() => ({
+  create: { mutate: vi.fn(), isPending: false },
+  update: { mutate: vi.fn(), isPending: false },
+}));
+
 vi.mock('../api/directory-api.js', () => ({
-  useCreateDepartment: () => ({ mutate: vi.fn(), isPending: false }),
-  useUpdateDepartment: () => ({ mutate: vi.fn(), isPending: false }),
+  useCreateDepartment: () => mutations.create,
+  useUpdateDepartment: () => mutations.update,
 }));
 
 const person = (id: string, displayName: string, status: UserListItem['status']): UserListItem => ({
@@ -54,13 +59,14 @@ function dialog(
   open: boolean,
   editingNode: DepartmentNode | null = editing,
   kind: 'management' | 'legal' = 'management',
+  parentId: string | null = null,
 ) {
   return (
     <DepartmentDialog
       open={open}
       onOpenChange={vi.fn()}
       kind={kind}
-      parentId={null}
+      parentId={parentId}
       editing={editingNode}
       users={users}
       departmentOptions={[
@@ -68,6 +74,22 @@ function dialog(
           id: 'dep-1',
           name: 'Проектный отдел',
           depth: 0,
+          isActive: true,
+          headId: null,
+          deputyId: null,
+        },
+        {
+          id: 'dep-2',
+          name: 'Административное',
+          depth: 1,
+          isActive: true,
+          headId: 'u-1',
+          deputyId: null,
+        },
+        {
+          id: 'dep-3',
+          name: 'BIM-отдел',
+          depth: 2,
           isActive: true,
           headId: null,
           deputyId: null,
@@ -82,14 +104,19 @@ function dialog(
 async function mount(
   editingNode: DepartmentNode | null = editing,
   kind: 'management' | 'legal' = 'management',
+  parentId: string | null = null,
 ) {
-  const view = render(dialog(false, editingNode, kind));
-  view.rerender(dialog(true, editingNode, kind));
+  const view = render(dialog(false, editingNode, kind, parentId));
+  view.rerender(dialog(true, editingNode, kind, parentId));
   await screen.findByRole('dialog');
   return view;
 }
 
 afterEach(cleanup);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe('DepartmentDialog: фокус и списки (#768)', () => {
   it('фокус в названии — каретка в конце, без выделения', async () => {
@@ -184,5 +211,60 @@ describe('DepartmentDialog: фокус и списки (#768)', () => {
     expect(
       (screen.getByRole('button', { name: ui.common.save }) as HTMLButtonElement).disabled,
     ).toBe(true);
+  });
+});
+
+describe('DepartmentDialog: вышестоящее подразделение (#982)', () => {
+  it('у главной карточки поля «Вышестоящее подразделение» нет', async () => {
+    await mount({ ...editing, parentId: null });
+
+    expect(screen.queryByLabelText(ui.employees.parentDepartment)).toBeNull();
+  });
+
+  it('при создании без родителя поля нет; под карточкой — имя родителя текстом', async () => {
+    const view = await mount(null);
+    expect(screen.queryByLabelText(ui.employees.parentDepartment)).toBeNull();
+    view.unmount();
+
+    const under: DepartmentNode = { ...editing, id: 'dep-2', name: 'Административное' };
+    const { unmount } = await mount(null, 'management', under.id);
+    expect(screen.getByText('Административное')).toBeTruthy();
+    expect(screen.queryByRole('combobox', { name: ui.employees.parentDepartment })).toBeNull();
+    unmount();
+  });
+
+  it('пункта «Нет вышестоящего подразделения» нет; выбор родителя уходит в PATCH', async () => {
+    // Обычное подразделение: текущий родитель — «Административное», кандидат —
+    // «BIM-отдел». Открепить в корень нельзя — пункта сброса нет вовсе.
+    const child: DepartmentNode = { ...editing, parentId: 'dep-2' };
+    await mount(child);
+
+    const parent = screen.getByRole('combobox', { name: ui.employees.parentDepartment });
+    fireEvent.click(parent);
+
+    expect(screen.queryByText('Нет вышестоящего подразделения')).toBeNull();
+    // «Не выбрано» и крестик сброса у обязательного выбора не рисуются.
+    expect(screen.queryByText(ui.employees.notSelected)).toBeNull();
+
+    fireEvent.change(parent, { target: { value: 'BIM' } });
+    fireEvent.click(screen.getByRole('option', { name: /BIM-отдел/ }));
+    fireEvent.click(screen.getByRole('button', { name: ui.common.save }));
+
+    expect(mutations.update.mutate).toHaveBeenCalledWith(
+      { id: 'dep-1', patch: { parentId: 'dep-3' } },
+      expect.anything(),
+    );
+  });
+
+  it('Esc закрывает список, а не окно', async () => {
+    await mount({ ...editing, parentId: 'dep-2' });
+    const parent = screen.getByRole('combobox', { name: ui.employees.parentDepartment });
+
+    fireEvent.click(parent);
+    expect(screen.getByRole('option', { name: /BIM-отдел/ })).toBeTruthy();
+
+    fireEvent.keyDown(parent, { key: 'Escape' });
+    expect(screen.queryByRole('option', { name: /BIM-отдел/ })).toBeNull();
+    expect(screen.getByText(ui.employees.editDepartmentTitle)).toBeTruthy();
   });
 });

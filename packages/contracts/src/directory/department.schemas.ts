@@ -72,6 +72,11 @@ export type CreateDepartmentDto = z.infer<typeof createDepartmentSchema>;
  * management↔legal «усыпляло»/реактивировало привязки ролей в обход bind (#490);
  * права подразделения считает только management-цепочка. Неизвестные ключи
  * zod отбрасывает.
+ *
+ * `parentId: null` у управленческого не-корня — не открепление в корень, а
+ * ошибка (`DIRECTORY_DEPARTMENT_ROOT_FORBIDDEN`, 409): корень структуры один,
+ * у главной карточки компании родителя нет вовсе (#982). Юридической
+ * структуре можно — там корней несколько.
  */
 export const updateDepartmentSchema = z
   .object({

@@ -216,8 +216,8 @@ describe('PositionsPanel (#768)', () => {
 
     const field = screen.getByPlaceholderText(ui.employees.positionReassignSearch);
     fireEvent.change(field, { target: { value: 'инж' } });
-    expect(screen.getByRole('button', { name: /Инженер/ })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /BIM-мастер/ })).toBeNull();
+    expect(screen.getByRole('option', { name: /Инженер/ })).toBeTruthy();
+    expect(screen.queryByRole('option', { name: /BIM-мастер/ })).toBeNull();
 
     fireEvent.keyDown(field, { key: 'Enter' });
     fireEvent.click(screen.getByRole('button', { name: ui.employees.positionReassignAction }));
@@ -234,10 +234,10 @@ describe('PositionsPanel (#768)', () => {
 
     const field = screen.getByPlaceholderText(ui.employees.positionReassignSearch);
     fireEvent.focus(field);
-    expect(screen.queryByRole('button', { name: /Инженер/ })).toBeNull();
+    expect(screen.queryByRole('option', { name: /Инженер/ })).toBeNull();
 
     fireEvent.keyDown(field, { key: 'ArrowDown' });
-    expect(screen.getByRole('button', { name: /Инженер/ })).toBeTruthy();
+    expect(screen.getByRole('option', { name: /Инженер/ })).toBeTruthy();
   });
 
   it('пустой справочник — подпись «Должностей пока нет»', () => {

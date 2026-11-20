@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UserCard } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -24,7 +24,12 @@ const hooks = vi.hoisted(() => ({
 vi.mock('../api/directory-api.js', () => ({
   useUpdateMyProfile: () => hooks.updateSelf,
   useUpdateUser: () => hooks.updateUser,
-  usePositions: () => ({ data: [] }),
+  usePositions: () => ({
+    data: [
+      { id: 'pos-1', name: 'БИМ-менеджер', kind: 'management', sortOrder: 0 },
+      { id: 'pos-2', name: 'ГИП', kind: 'management', sortOrder: 1 },
+    ],
+  }),
 }));
 
 vi.mock('../../../shared/api/departments-list.js', () => ({
@@ -153,5 +158,38 @@ describe('EmployeeProfileDialog (#923)', () => {
     const option = screen.getByRole('option', { name: 'BIM-отдел' });
     // Уровни дерева списку не рисуются — отступа по глубине нет.
     expect(option.getAttribute('style') ?? '').not.toContain('padding-left');
+  });
+
+  it('«Должность» — тот же комбобокс с поиском, выбранное значение в поле (#981)', () => {
+    render(
+      <EmployeeProfileDialog open onOpenChange={vi.fn()} card={card()} users={[]} canManage />,
+    );
+    const position = screen.getByRole('combobox', { name: ui.employees.position });
+    fireEvent.click(position);
+    fireEvent.change(position, { target: { value: 'гип' } });
+
+    expect(screen.queryByRole('option', { name: 'БИМ-менеджер' })).toBeNull();
+    fireEvent.click(screen.getByRole('option', { name: 'ГИП' }));
+    expect((position as HTMLInputElement).value).toBe('ГИП');
+
+    fireEvent.click(
+      within(position.parentElement as HTMLElement).getByRole('button', {
+        name: ui.employees.clearSelection,
+      }),
+    );
+    expect((position as HTMLInputElement).value).toBe('');
+  });
+
+  it('секции: Личные данные → Контакты → Структура → Работа (#981)', () => {
+    render(
+      <EmployeeProfileDialog open onOpenChange={vi.fn()} card={card()} users={[]} canManage />,
+    );
+    const headings = screen.getAllByRole('heading', { level: 3 }).map((node) => node.textContent);
+    expect(headings).toEqual([
+      ui.employees.sectionPersonal,
+      ui.employees.sectionContacts,
+      ui.employees.sectionStructure,
+      ui.employees.sectionWork,
+    ]);
   });
 });
