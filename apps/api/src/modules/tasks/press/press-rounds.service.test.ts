@@ -310,6 +310,20 @@ describe('PressRoundsService: состав сбора следует за зад
     expect(repo.addEntry).not.toHaveBeenCalled();
   });
 
+  it('вернувшийся в задачу снова в кворуме', async () => {
+    const excluded = entryFixture('u1', 0);
+    excluded.state = 'excluded';
+    const { service, repo } = rosterSetup([excluded], [{ userId: 'u1', order: 0 }]);
+
+    await service.syncRoster({} as never, 't1', 'Состав задачи изменён', 'assignee');
+
+    expect(repo.updateEntry).toHaveBeenCalledWith({}, 'e-u1', {
+      state: 'waiting',
+      returnReason: null,
+      result: null,
+    });
+  });
+
   it('кворум собрался снятием — раунд закрывается, переход не выполняется сам', async () => {
     const { service, repo, pressEvents } = rosterSetup(
       [entryFixture('u1', 0, 'pressed'), entryFixture('u2', 1, 'waiting')],

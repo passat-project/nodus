@@ -231,10 +231,14 @@ export class PressRoundsService {
     const stale = round.entries.filter(
       (entry) => entry.state !== 'excluded' && !eligible.has(entry.userId),
     );
+    // Вернувшегося в задачу нельзя оставить «снятым»: он снова в кворуме.
+    const restored = round.entries.filter(
+      (entry) => entry.state === 'excluded' && eligible.has(entry.userId),
+    );
     const added = resolved.filter(
       (entry) => !round.entries.some((existing) => existing.userId === entry.userId),
     );
-    if (stale.length === 0 && added.length === 0) return;
+    if (stale.length === 0 && added.length === 0 && restored.length === 0) return;
 
     await this.tasks.lock(tx, taskId);
     const task = await this.tasks.findWithParticipants(taskId, tx);
@@ -259,6 +263,15 @@ export class PressRoundsService {
     }
 
     let order = Math.max(-1, ...round.entries.map((entry) => entry.order));
+    for (const entry of restored) {
+      // Вернулся — сдаёт заново: старый результат остаётся только в журнале,
+      // иначе строка «Ждём» показывала бы чужую давность (#965).
+      await this.repo.updateEntry(tx, entry.id, {
+        state: 'waiting',
+        returnReason: null,
+        result: null,
+      });
+    }
     for (const entry of added) {
       order += 1;
       await this.repo.addEntry(tx, round.id, entry.userId, order);
@@ -277,7 +290,7 @@ export class PressRoundsService {
           ? 1
           : Math.min(config.quorum.count, total);
     this.logger.log(
-      `Сбор ${taskId}: состав синхронизирован (снято ${stale.length}, добавлено ${added.length}); ${pressed}/${required}`,
+      `Сбор ${taskId}: состав синхронизирован (снято ${stale.length}, добавлено ${added.length}, возвращено ${restored.length}); ${pressed}/${required}`,
     );
     if (total === 0 || pressed < required) return;
     // Переход «от имени» не выполняем — как при деактивации (#434, В3).
