@@ -116,4 +116,19 @@ describe('SliderPanel: закрытие схлопыванием в источн
     fireEvent.click(screen.getByRole('button', { name: ui.common.close }));
     expect(section.style.willChange).toBe('transform');
   });
+
+  it('закрытие в первые 430 мс не снимает промоушен: animationend раскрытия при closing игнорируется (#969)', () => {
+    // openWithSource кликает «Закрыть» сразу после маунта — окно «закрытие
+    // во время раскрытия», в котором animationend раскрытия ещё придёт.
+    const { anims } = openWithSource();
+    const section = screen.getByRole('dialog');
+    expect(section.style.willChange).toBe('transform');
+
+    fireEvent.animationEnd(section);
+    // Промоушен нужен WAAPI-схлопыванию — событие раскрытия его не снимает.
+    expect(section.style.willChange).toBe('transform');
+
+    act(() => anims[0]?.onfinish?.());
+    expect(section.style.willChange).toBe('');
+  });
 });
