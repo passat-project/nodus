@@ -60,11 +60,11 @@ const node: DepartmentNode = {
   kind: 'management',
   parentId: null,
   headId: HEAD_ID,
-  deputyId: DEPUTY_ID,
+  deputyIds: [DEPUTY_ID],
   sortOrder: 0,
   isActive: true,
   headName: HEAD_ID,
-  deputyName: DEPUTY_ID,
+  deputies: [{ id: DEPUTY_ID, displayName: DEPUTY_ID }],
   memberCount: 0,
   children: [],
 };

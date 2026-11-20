@@ -6,7 +6,11 @@ import type { TransactionClient } from '../../core/database/transaction-runner.j
 
 const departmentInclude = {
   head: { select: { displayName: true } },
-  deputy: { select: { displayName: true } },
+  /** Заместители (#817): порядок показа — sortOrder, имя — для DTO. */
+  deputies: {
+    orderBy: { sortOrder: 'asc' },
+    include: { user: { select: { id: true, displayName: true } } },
+  },
   // Юридические подразделения связаны через legalDepartmentId, а не
   // departmentId: счётчик берём из своего отношения, иначе у legal всегда 0.
   _count: {
@@ -88,6 +92,29 @@ export class DepartmentsRepository {
     return client.department.update({ where: { id }, data, include: departmentInclude });
   }
 
+  /**
+   * Полный набор заместителей узла (#817): «ПОЛНЫЙ список» из PATCH —
+   * отсутствующие строки удаляются, новые добавляются с порядком = позиции в
+   * массиве, существующие сохраняют/получают новый sortOrder. Один человек —
+   * одно место (UNIQUE user_id): конфликт по чужому отделу ловится сервисом.
+   */
+  async setDeputies(
+    departmentId: string,
+    userIds: readonly string[],
+    tx: TransactionClient,
+  ): Promise<void> {
+    await tx.departmentDeputy.deleteMany({
+      where: { departmentId, userId: { notIn: [...userIds] } },
+    });
+    for (const [index, userId] of userIds.entries()) {
+      await tx.departmentDeputy.upsert({
+        where: { departmentId_userId: { departmentId, userId } },
+        create: { departmentId, userId, sortOrder: index },
+        update: { sortOrder: index },
+      });
+    }
+  }
+
   /** Цепочка родителей (для проверки циклов при смене parentId). Внутри
    *  транзакции передаётся `tx` — под lockTree проверка видит зафиксированное
    *  состояние конкурента (#544). */
@@ -148,59 +175,97 @@ export class DepartmentsRepository {
   }
 
   /**
-   * Снять сотрудника с ролей главы/зама во всех подразделениях (#923):
-   * уволенный не может оставаться руководителем. Строки читаются под
-   * `FOR UPDATE` — параллельная смена главы сериализуется. Возвращает
-   * затронутые подразделения: по ним пересчитываются производные руководители
-   * поддерева и эмитятся `directory.department.updated`.
+   * Снять сотрудника с ролей главы и заместителя во всех подразделениях
+   * (#923, #817): уволенный не может оставаться руководителем. Строки
+   * читаются под `FOR UPDATE` — параллельная смена главы сериализуется.
+   * Возвращает затронутые подразделения: по ним пересчитываются производные
+   * руководители поддерева и эмитятся `directory.department.updated`.
    */
   async clearHeadAndDeputy(
     userId: string,
     tx: TransactionClient,
   ): Promise<{ id: string; head: boolean; deputy: boolean }[]> {
-    const rows = await tx.$queryRaw<
-      { id: string; headId: string | null; deputyId: string | null }[]
-    >(Prisma.sql`
-      SELECT id, head_id AS "headId", deputy_id AS "deputyId"
-      FROM departments
-      WHERE head_id = ${userId}::uuid OR deputy_id = ${userId}::uuid
-      FOR UPDATE
-    `);
+    const rows = await tx.$queryRaw<{ id: string; headId: string | null; deputy: boolean }[]>(
+      Prisma.sql`
+        SELECT d.id, d.head_id AS "headId",
+               EXISTS (
+                 SELECT 1 FROM department_deputies dd
+                 WHERE dd.department_id = d.id AND dd.user_id = ${userId}::uuid
+               ) AS deputy
+        FROM departments d
+        WHERE d.head_id = ${userId}::uuid
+           OR EXISTS (
+             SELECT 1 FROM department_deputies dd
+             WHERE dd.department_id = d.id AND dd.user_id = ${userId}::uuid
+           )
+        FOR UPDATE OF d
+      `,
+    );
     if (rows.length === 0) return [];
     await tx.department.updateMany({ where: { headId: userId }, data: { headId: null } });
-    await tx.department.updateMany({ where: { deputyId: userId }, data: { deputyId: null } });
+    await tx.departmentDeputy.deleteMany({ where: { userId } });
     return rows.map((row) => ({
       id: row.id,
       head: row.headId === userId,
-      deputy: row.deputyId === userId,
+      deputy: row.deputy,
     }));
   }
 
   /**
-   * Снять сотрудника с ролей главы/зама только в ОДНОМ подразделении (#923,
-   * перевод): один сотрудник — одно место в управленческой структуре, поэтому
-   * руководитель, ушедший в другой отдел, не остаётся главой прежнего. Строка
-   * читается под `FOR UPDATE` — параллельная смена главы сериализуется.
-   * Возвращает снятые роли (для `changedFields` события) или `null`, если
-   * сотрудник в этом подразделении никем не руководил.
+   * Снять роль главы с сотрудника во всех узлах, кроме указанного (#817):
+   * один человек — глава только одного подразделения. Вызывается ДО записи
+   * нового `head_id` (иначе уникальный индекс `departments_head_id_key`
+   * отклонит UPDATE), `keepDepartmentId = null` — при создании узла.
+   * Возвращает затронутые узлы (пересчёт руководителей и событие).
+   */
+  async clearHeadBesides(
+    userId: string,
+    keepDepartmentId: string | null,
+    tx: TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`
+      SELECT id FROM departments
+      WHERE head_id = ${userId}::uuid
+        AND (${keepDepartmentId}::uuid IS NULL OR id <> ${keepDepartmentId}::uuid)
+      FOR UPDATE
+    `);
+    if (rows.length === 0) return [];
+    await tx.department.updateMany({
+      where: {
+        headId: userId,
+        ...(keepDepartmentId ? { id: { not: keepDepartmentId } } : {}),
+      },
+      data: { headId: null },
+    });
+    return rows.map((row) => row.id);
+  }
+
+  /**
+   * Снять сотрудника с ролей главы/заместителя только в ОДНОМ подразделении
+   * (#923, перевод): один сотрудник — одно место в управленческой структуре,
+   * поэтому руководитель, ушедший в другой отдел, не остаётся главой или замом
+   * прежнего. Строка читается под `FOR UPDATE`. Возвращает снятые роли (для
+   * `changedFields` события) или `null`, если сотрудник тут никем не руководил.
    */
   async clearLeadershipIn(
     departmentId: string,
     userId: string,
     tx: TransactionClient,
   ): Promise<{ head: boolean; deputy: boolean } | null> {
-    const rows = await tx.$queryRaw<{ headId: string | null; deputyId: string | null }[]>(
-      Prisma.sql`
-        SELECT head_id AS "headId", deputy_id AS "deputyId"
-        FROM departments
-        WHERE id = ${departmentId}::uuid
-        FOR UPDATE
-      `,
-    );
+    const rows = await tx.$queryRaw<{ headId: string | null; deputy: boolean }[]>(Prisma.sql`
+      SELECT d.head_id AS "headId",
+             EXISTS (
+               SELECT 1 FROM department_deputies dd
+               WHERE dd.department_id = d.id AND dd.user_id = ${userId}::uuid
+             ) AS deputy
+      FROM departments d
+      WHERE d.id = ${departmentId}::uuid
+      FOR UPDATE OF d
+    `);
     const row = rows[0];
     if (!row) return null;
     const head = row.headId === userId;
-    const deputy = row.deputyId === userId;
+    const deputy = row.deputy;
     if (!head && !deputy) return null;
     if (head) {
       await tx.department.updateMany({
@@ -209,10 +274,7 @@ export class DepartmentsRepository {
       });
     }
     if (deputy) {
-      await tx.department.updateMany({
-        where: { id: departmentId, deputyId: userId },
-        data: { deputyId: null },
-      });
+      await tx.departmentDeputy.deleteMany({ where: { departmentId, userId } });
     }
     return { head, deputy };
   }

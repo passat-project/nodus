@@ -20,7 +20,7 @@ export const demoDepartments: Department[] = [
     kind: 'management',
     parentId: null,
     headId: userIds.shaiderova,
-    deputyId: null,
+    deputyIds: [],
     sortOrder: 0,
     isActive: true,
   },
@@ -30,7 +30,7 @@ export const demoDepartments: Department[] = [
     kind: 'management',
     parentId: departmentIds.company,
     headId: userIds.vinnichek,
-    deputyId: userIds.kuralenya,
+    deputyIds: [userIds.kuralenya],
     sortOrder: 0,
     isActive: true,
   },
@@ -40,7 +40,7 @@ export const demoDepartments: Department[] = [
     kind: 'management',
     parentId: departmentIds.project,
     headId: userIds.klimovich,
-    deputyId: userIds.klevantovich,
+    deputyIds: [userIds.klevantovich],
     sortOrder: 0,
     isActive: true,
   },
@@ -50,7 +50,7 @@ export const demoDepartments: Department[] = [
     kind: 'management',
     parentId: departmentIds.company,
     headId: userIds.karpovich,
-    deputyId: null,
+    deputyIds: [],
     sortOrder: 1,
     isActive: true,
   },
@@ -60,7 +60,7 @@ export const demoDepartments: Department[] = [
     kind: 'legal',
     parentId: null,
     headId: userIds.shaiderova,
-    deputyId: null,
+    deputyIds: [],
     sortOrder: 0,
     isActive: true,
   },
@@ -70,7 +70,7 @@ export const demoDepartments: Department[] = [
     kind: 'legal',
     parentId: departmentIds.legalCompany,
     headId: userIds.klevantovich,
-    deputyId: userIds.klimovich,
+    deputyIds: [userIds.klimovich],
     sortOrder: 0,
     isActive: true,
   },
@@ -84,8 +84,8 @@ export function departmentOfUser(user: UserListItem, kind: OrgUnitKind): string 
 /**
  * Лес корней DepartmentNode для вида (контракт GET /directory/departments/tree?kind=):
  * children рекурсивно по parentId (сортировка sortOrder), memberCount —
- * НЕ-рекурсивно (прикреплённые к подразделению), денормализованные имена
- * руководителя/зама — для UI без второго запроса.
+ * НЕ-рекурсивно (прикреплённые к подразделению), денормализованные
+ * руководитель/заместители — для UI без второго запроса.
  */
 export function buildDepartmentTree(
   kind: OrgUnitKind,
@@ -104,7 +104,10 @@ export function buildDepartmentTree(
     return {
       ...department,
       headName: nameOf(department.headId),
-      deputyName: nameOf(department.deputyId),
+      deputies: department.deputyIds.map((deputyId) => ({
+        id: deputyId,
+        displayName: nameOf(deputyId) ?? '',
+      })),
       // Штат подразделения (#723): как `memberCount` API
       // (`departments.repository.ts` — `members: { where: { status: 'active' } }`),
       // уволенные в число не входят, но остаются видимыми в панели.

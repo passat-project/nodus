@@ -24,12 +24,14 @@ export function profileSubordinates(args: {
 
   const deputyIds = new Set<string>();
   for (const department of departments) {
-    if (department.headId !== userId || department.deputyId === null) continue;
-    const deputy = byId.get(department.deputyId);
-    // Уволенный зам в подчинённых не показывается (сервер снимает ссылку при
-    // увольнении; проверка — страховка от рассинхрона данных).
-    if (!deputy || deputy.id === userId || deputy.status !== 'active') continue;
-    deputyIds.add(deputy.id);
+    if (department.headId !== userId) continue;
+    for (const deputyId of department.deputyIds) {
+      const deputy = byId.get(deputyId);
+      // Уволенный зам в подчинённых не показывается (сервер снимает ссылку при
+      // увольнении; проверка — страховка от рассинхрона данных).
+      if (!deputy || deputy.id === userId || deputy.status !== 'active') continue;
+      deputyIds.add(deputy.id);
+    }
   }
 
   const list: UserListItem[] = [];

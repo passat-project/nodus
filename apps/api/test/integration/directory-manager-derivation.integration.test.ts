@@ -228,7 +228,7 @@ describe('Производный руководитель и профиль (#92
     ).toBe(true);
 
     // Зам — та же логика: роль живёт в своём подразделении.
-    await patchDepartment(child.id, { deputyId: f.users.manager.id });
+    await patchDepartment(child.id, { deputyIds: [f.users.manager.id] });
     const deputyMoved = await moveEmployee(f.users.manager.id, parent.id);
     expect(deputyMoved.departmentId).toBe(parent.id);
     const deputyAfter = await f.api(
@@ -236,7 +236,7 @@ describe('Производный руководитель и профиль (#92
       'GET',
       `/directory/departments/${child.id}`,
     );
-    expect(departmentNodeSchema.parse(await deputyAfter.json()).deputyId).toBeNull();
+    expect(departmentNodeSchema.parse(await deputyAfter.json()).deputyIds).toEqual([]);
   });
 
   it('даты профиля сохраняются: день рождения, дата приёма, начало дня (#923)', async () => {

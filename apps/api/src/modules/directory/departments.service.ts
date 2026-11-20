@@ -18,33 +18,21 @@ import { EventBus } from '../../core/events/event-bus.js';
 import { RoleAssignmentGuard } from './role-assignment-guard.service.js';
 import { ReferenceGuard } from './reference-guard.service.js';
 import { DepartmentsRepository, type DepartmentRow } from './departments.repository.js';
+import { deputyIdsOf, toNode, uniqueIds } from './departments.node.js';
 import { ManagerDerivationService } from './manager-derivation.service.js';
 import { RoleAudienceRepository } from './role-audience.repository.js';
 import { UsersRepository } from './users.repository.js';
-import { transferUserToDepartment, type UserTransferDeps } from './users-transfer.js';
-
-function toNode(row: DepartmentRow, children: DepartmentNode[]): DepartmentNode {
-  return {
-    id: row.id,
-    name: row.name,
-    kind: row.kind,
-    parentId: row.parentId,
-    headId: row.headId,
-    deputyId: row.deputyId,
-    sortOrder: row.sortOrder,
-    isActive: row.isActive,
-    headName: row.head?.displayName ?? null,
-    deputyName: row.deputy?.displayName ?? null,
-    memberCount: row.kind === 'legal' ? row._count.legalMembers : row._count.members,
-    children,
-  };
-}
+import {
+  assertDistinctLeaders,
+  clearHeadElsewhere,
+  transferLeaders,
+  type LeadersDeps,
+} from './departments-leaders.js';
 
 /**
  * Оргструктура: дерево подразделений (управленческое и юридическое).
- * Узел — руководитель (head) и постоянный заместитель (deputy) — эпик M2.
- * Перенос подразделения меняет роли сотрудников поддерева — под bind-правилом
- * #490 (появившиеся роли — только из прав актора).
+ * Узел — руководитель (head) и заместители (deputies, #817; их несколько).
+ * Перенос подразделения меняет роли сотрудников поддерева — под bind #490.
  */
 @Injectable()
 export class DepartmentsService {
@@ -82,19 +70,19 @@ export class DepartmentsService {
   }
 
   async create(dto: CreateDepartmentDto, actor: AuthUser): Promise<DepartmentNode> {
-    // #946: глава и зам — разные люди (одно место — одна роль).
-    this.assertDistinctLeaders(dto.headId, dto.deputyId);
+    const deputies = uniqueIds(dto.deputyIds);
+    // #946/#817: глава и заместители — разные люди (одно место — одна роль).
+    assertDistinctLeaders(dto.headId, deputies);
     if (dto.parentId) {
       await this.ensureExists(dto.parentId);
     }
     return this.tx.run(async (tx) => {
-      // #946: назначение главы/зама сериализуется advisory-локом дерева с
-      // правкой узлов и переводом карточкой — иначе два встречных назначения
-      // одного сотрудника оставили бы роли в двух узлах при одном членстве.
-      if (dto.kind === 'management' && (dto.headId || dto.deputyId)) {
+      // #946: назначение главы/замов сериализуется advisory-локом дерева —
+      // иначе встречные назначения одного сотрудника оставят роли в двух узлах.
+      if (dto.kind === 'management' && (dto.headId || deputies.length > 0)) {
         await this.departments.lockTree(tx);
       }
-      // Ссылки оргструктуры (#441): руководитель/зам — только активные
+      // Ссылки оргструктуры (#441): руководитель/замы — только активные
       // сотрудники, родитель — подразделение того же вида структуры. Внутри
       // транзакции — без окна TOCTOU между проверкой и записью. Замок
       // родителя сериализует с архивацией (непустой узел не архивируется).
@@ -102,40 +90,51 @@ export class DepartmentsService {
         await this.departments.lockForUpdate(dto.parentId, tx);
       }
       await this.references.ensureActiveUser(dto.headId, 'headId', tx);
-      await this.references.ensureActiveUser(dto.deputyId, 'deputyId', tx);
+      await this.references.ensureActiveUsers(deputies, 'deputyIds', tx);
       await this.references.ensureDepartment(dto.parentId, dto.kind, 'parentId', tx);
-      const created = await this.departments.create(dto, tx);
-      // #946: назначение главы/зама ПЕРЕВОДИТ сотрудника в это подразделение
+      const fields = { ...dto };
+      delete (fields as { deputyIds?: unknown }).deputyIds;
+      // #817: снимаем роль главы с других узлов ДО записи нового head_id —
+      // иначе уникальный индекс отклонит INSERT и клиент получит 409.
+      if (dto.kind === 'management' && dto.headId) {
+        await clearHeadElsewhere(this.leaderDeps(), null, dto.headId, actor, tx);
+      }
+      const created = await this.withHeadConflict(() =>
+        this.departments.create(fields as typeof dto, tx),
+      );
+      // #946: назначение главы/замов переводит сотрудников в это подразделение
       // в той же транзакции (правило владельца 18.11.2026, одно место).
       if (created.kind === 'management') {
-        await this.transferLeaders(created.id, dto.headId, dto.deputyId, actor, tx);
+        await transferLeaders(this.leaderDeps(), created.id, dto.headId, deputies, actor, tx);
       }
+      if (deputies.length > 0) {
+        await this.departments.setDeputies(created.id, deputies, tx);
+      }
+      const row =
+        deputies.length > 0
+          ? ((await this.departments.findById(created.id, tx)) ?? created)
+          : created;
       await this.eventBus.emit(
         tx,
         DIRECTORY_EVENTS.DEPARTMENT_CREATED,
-        { departmentId: created.id, kind: created.kind },
+        { departmentId: created.id, kind: created.kind, deputyIds: deputies },
         { actorId: actor.id, aggregateType: 'department', aggregateId: created.id },
       );
-      return toNode(created, []);
+      return toNode(row, []);
     });
   }
 
   async update(id: string, dto: UpdateDepartmentDto, actor: AuthUser): Promise<DepartmentNode> {
     return this.tx.run(async (tx) => {
-      // #544: смена parentId сериализуется advisory-локом дерева — проверка
-      // цикла и мутация видят зафиксированное состояние конкурента. Строчный
-      // FOR UPDATE не спасает: параллельные переносы лочат РАЗНЫЕ строки.
-      // #946: тем же локом сериализуются назначения главы/зама — перевод
-      // трогает строку старого узла, и встречные назначения одного сотрудника
-      // в два узла иначе могли бы дать дедлок двух строк departments.
-      if (dto.parentId !== undefined || dto.headId !== undefined || dto.deputyId !== undefined) {
+      // #544/#946: смена parentId и назначения главы/замов — под локом дерева.
+      if (dto.parentId !== undefined || dto.headId !== undefined || dto.deputyIds !== undefined) {
         await this.departments.lockTree(tx);
       }
       const current = await this.departments.findById(id, tx);
       if (!current) {
         throw DomainException.notFound('Department not found');
       }
-      // #441: ссылки оргструктуры — руководитель/зам только активные
+      // #441: ссылки оргструктуры — руководитель/замы только активные
       // сотрудники; родитель — подразделение того же вида структуры (иначе
       // поддерево выпадает из дерева своего вида). Новый родитель берётся под
       // FOR UPDATE (порядок: дерево → родитель → узел), чтобы архивация не
@@ -147,7 +146,6 @@ export class DepartmentsService {
         }
       }
       await this.references.ensureActiveUser(dto.headId, 'headId', tx);
-      await this.references.ensureActiveUser(dto.deputyId, 'deputyId', tx);
       await this.references.ensureDepartment(dto.parentId, current.kind, 'parentId', tx);
       // #544: цикл — под локом дерева и в той же транзакции (чтение через tx).
       let newParentChain: string[] = [];
@@ -169,33 +167,58 @@ export class DepartmentsService {
         throw DomainException.notFound('Department not found');
       }
       const locked = (await this.departments.findById(id, tx)) ?? current;
+      const nextDeputies = dto.deputyIds === undefined ? null : uniqueIds(dto.deputyIds);
+      if (nextDeputies !== null) {
+        const currentIds = new Set(deputyIdsOf(locked));
+        await this.references.ensureActiveUsers(
+          nextDeputies.filter((deputyId) => !currentIds.has(deputyId)),
+          'deputyIds',
+          tx,
+        );
+      }
       // #946: в архивный узел не назначают — перевод вёл бы сотрудника в
       // подразделение вне активного дерева (мимо ReferenceGuard активности).
-      if (!locked.isActive && (dto.headId != null || dto.deputyId != null)) {
+      if (
+        !locked.isActive &&
+        (dto.headId != null || (nextDeputies !== null && nextDeputies.length > 0))
+      ) {
         throw new DomainException(ErrorCode.CONFLICT, 'Department is archived', {
           departmentId: id,
           reason: 'archived',
         });
       }
-      // #946: глава и зам — разные люди; проверка по ИТОГОВОМУ состоянию
+      // #946/#817: глава и замы — разные люди; проверка по ИТОГОВОМУ состоянию
       // (присланное поле + текущее) — частичная правка не должна оставить
       // одного человека в двух ролях одного узла.
-      this.assertDistinctLeaders(
+      assertDistinctLeaders(
         dto.headId !== undefined ? dto.headId : locked.headId,
-        dto.deputyId !== undefined ? dto.deputyId : locked.deputyId,
+        nextDeputies ?? deputyIdsOf(locked),
       );
       const beforeByIds = await this.escalationSnapshot(id, locked, dto, tx);
       const oldParentId = locked.parentId;
-      const updated = await this.departments.update(id, dto, tx);
-      // #946: назначенный глава/зам — член ЭТОГО подразделения: перевод в той
-      // же транзакции, роль старого узла снимает ядро перевода (одно место).
+      const fields = { ...dto };
+      delete (fields as { deputyIds?: unknown }).deputyIds;
+      // #817: прежний узел теряет сотрудника-главу ДО записи нового head_id —
+      // уникальный индекс не даст сохранить второго главу, даже если перевод
+      // в целевой узел окажется no-op (он уже там).
+      if (locked.kind === 'management' && dto.headId) {
+        await clearHeadElsewhere(this.leaderDeps(), id, dto.headId, actor, tx);
+      }
+      let updated = await this.withHeadConflict(() => this.departments.update(id, fields, tx));
+      // #946: назначенные глава/замы — члены ЭТОГО подразделения. Перевод идёт
+      // ДО setDeputies: он снимает прежнюю роль/строку зама в старом узле, иначе
+      // UNIQUE(user_id) в department_deputies отклонит вставку (409 у клиента).
       if (locked.kind === 'management') {
-        await this.transferLeaders(id, dto.headId, dto.deputyId, actor, tx);
+        await transferLeaders(this.leaderDeps(), id, dto.headId, nextDeputies ?? [], actor, tx);
+      }
+      if (nextDeputies !== null) {
+        await this.departments.setDeputies(id, nextDeputies, tx);
+        updated = (await this.departments.findById(id, tx)) ?? updated;
       }
       // #923: руководитель сотрудника — производное поле от дерева. Смена
-      // главы/зама/родителя меняет ближайшего главу у сотрудников поддерева —
+      // главы/замов/родителя меняет ближайшего главу у сотрудников поддерева —
       // пересчитываем в той же транзакции, до события и bind-проверки.
-      if (dto.headId !== undefined || dto.deputyId !== undefined || dto.parentId !== undefined) {
+      if (dto.headId !== undefined || dto.deputyIds !== undefined || dto.parentId !== undefined) {
         await this.managers.recomputeDepartments([id], tx);
       }
       if (beforeByIds !== null) {
@@ -299,45 +322,32 @@ export class DepartmentsService {
     return this.guard.snapshotEffectiveRoles(userIds, tx);
   }
 
-  /** #946: назначение главы/зама переводит сотрудника в подразделение —
-   *  в той же транзакции, тем же ядром, что правка карточки (одно место). */
-  private async transferLeaders(
-    departmentId: string,
-    headId: string | null | undefined,
-    deputyId: string | null | undefined,
-    actor: AuthUser,
-    tx: TransactionClient,
-  ): Promise<void> {
-    const userIds = [...new Set([headId, deputyId])].filter(
-      (userId): userId is string => typeof userId === 'string' && userId.length > 0,
-    );
-    for (const userId of userIds) {
-      await transferUserToDepartment({ userId, departmentId, actor }, tx, this.transferDeps());
-    }
-  }
-
-  /** #946: глава и зам одного узла — разные сотрудники (400). */
-  private assertDistinctLeaders(
-    headId: string | null | undefined,
-    deputyId: string | null | undefined,
-  ): void {
-    if (!headId || !deputyId) return;
-    if (headId.toLowerCase() !== deputyId.toLowerCase()) return;
-    throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Head and deputy must differ', {
-      field: 'deputyId',
-      reason: 'same_as_head',
-    });
-  }
-
-  /** Зависимости транзакционного ядра перевода (#946). */
-  private transferDeps(): UserTransferDeps {
+  private leaderDeps(): LeadersDeps {
     return {
-      users: this.users,
       departments: this.departments,
+      users: this.users,
       managers: this.managers,
       guard: this.guard,
       eventBus: this.eventBus,
     };
+  }
+
+  /** #817: гонка двух назначений главы — БД отклонила уникальный индекс.
+   *  Отдаём понятный 409 (`details.headId`), а не «голый» конфликт. */
+  private async withHeadConflict<T>(write: () => Promise<T>): Promise<T> {
+    try {
+      return await write();
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      const target = JSON.stringify((error as { meta?: { target?: unknown } }).meta?.target ?? '');
+      if (code === 'P2002' && target.includes('head_id')) {
+        throw new DomainException(ErrorCode.CONFLICT, 'Head already leads another department', {
+          field: 'headId',
+          reason: 'another_department',
+        });
+      }
+      throw error;
+    }
   }
 
   private async ensureExists(id: string): Promise<void> {
