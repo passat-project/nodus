@@ -48,6 +48,10 @@ overrides:
   # замену percent-encoded последовательностей, 29.10.2026): транзитивно из
   # minio > query-string (S3-клиент); патч 0.5.1.
   decode-uri-component@<0.5.1: 0.5.1
+  # effect high GHSA-7589-6fvf-x4pw (ReDoS в компиляции Schema.TemplateLiteral,
+  # 20.11.2026): транзитивно из prisma > @prisma/config (CLI/клиент Prisma,
+  # dev-инструментарий и клиент, не наш HTTP-рантайм) — патч 3.22.1.
+  effect@<3.22.1: 3.22.1
 
 # pnpm 11: install-скрипты зависимостей блокируются, если пакет не разрешён явно.
 # esbuild (транспиляция Vite/Vitest) и unrs-resolver (резолвер
