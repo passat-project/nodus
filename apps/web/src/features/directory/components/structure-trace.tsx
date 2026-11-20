@@ -14,6 +14,11 @@ interface TraceSegment {
 const EMPTY_SEGMENTS: TraceSegment[] = [];
 const EMPTY_TRAIL: readonly DepartmentLink[] = [];
 
+/** Бюджет пробега ВСЕГО нового хвоста, сек (#973): на широкой ступени рёбра
+ *  доходят до 3–5 тыс. px, и канонная скорость 1200 px/s давала 2.5–4 с
+ *  ожидания (при зуме < 100% длины в координатах полотна ещё больше). */
+const TRACE_MAX_S = 0.8;
+
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 
 /**
@@ -21,8 +26,10 @@ const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
  * выбранному отделу бежит точка-импульс и закрашивает за собой линию.
  *
  * Скорость — канон `edgeDurations().draw` (1200 px/s, минимум 0.15 с), как у
- * импульса модулей; точка и закрашиваемая часть линии ведутся ОДНИМ прогрессом
- * на кадре — отдельных скоростей/таймеров нет.
+ * импульса модулей; но весь НОВЫЙ хвост укладывается в бюджет `TRACE_MAX_S`
+ * (0,8 с) — длинные рёбра ужимаются пропорционально, относительные скорости
+ * сохраняются (#973). Точка и закрашиваемая часть линии ведутся ОДНИМ
+ * прогрессом на кадре — отдельных скоростей/таймеров нет.
  *
  * Маршруты сравниваются: общий префикс уже закрашен и заново не проходится,
  * точка появляется у карточки расхождения (нижний порт — конец префикса) и
@@ -136,7 +143,14 @@ export function StructureTrace({
 
     if (dot) dot.style.opacity = '0';
     const tail = segments.slice(paintedCount);
-    const durations = tail.map((segment) => edgeDurations(segment.length).draw);
+    // Канонная скорость рёбер (`edgeDurations` — 1200 px/s, минимум 0.15 с),
+    // но суммарный пробег хвоста ограничен бюджетом: длинные рёбра ужимаются
+    // ПРОПОРЦИОНАЛЬНО, поэтому относительные скорости сохраняются, а точка и
+    // линия по-прежнему ведутся одним прогрессом (#973).
+    const baseDurations = tail.map((segment) => edgeDurations(segment.length).draw);
+    const baseTotal = baseDurations.reduce((sum, duration) => sum + duration, 0);
+    const scale = baseTotal > TRACE_MAX_S ? TRACE_MAX_S / baseTotal : 1;
+    const durations = baseDurations.map((duration) => duration * scale);
     const delays: number[] = [];
     let total = 0;
     for (const duration of durations) {
