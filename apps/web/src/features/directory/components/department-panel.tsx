@@ -223,7 +223,10 @@ export function DepartmentPanel({
           <DialogTitle className="text-base font-semibold text-foreground">
             {ui.employees.archiveDepartmentTitle}
           </DialogTitle>
-          <p className="text-sm text-muted-foreground">{ui.employees.archiveDepartmentText}</p>
+          <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+            <p>{ui.employees.archiveDepartmentText}</p>
+            <p>{ui.employees.archiveDepartmentRolesText}</p>
+          </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setArchiveOpen(false)}>
               {ui.common.cancel}

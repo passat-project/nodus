@@ -8,6 +8,7 @@ import { EventDispatcher } from '../../src/core/events/event-dispatcher.js';
 import { REDIS_CLIENT } from '../../src/core/redis/redis.module.js';
 import { IdentityLoader } from '../../src/modules/auth/identity.loader.js';
 import { TokenService } from '../../src/modules/auth/token.service.js';
+import { RoleAudienceRepository } from '../../src/modules/directory/role-audience.repository.js';
 import { dispatchOwnEvent, eventIdOf } from './outbox-test-utils.js';
 import { setupRolesFixture } from './roles-fixtures.js';
 
@@ -122,6 +123,73 @@ describe('Отзыв токенов при изменении оргструкт
     await deliverAccessChanged(roleId);
     expect((await f.api(employeeWith(token), 'GET', '/auth/me')).status).toBe(401);
     await clearRevoke();
+  });
+
+  it('архивный узел не даёт ролей, но роль активного предка и прямая роль действуют (#879)', async () => {
+    const parent = await createDepartment({
+      name: `Орг-права родитель ${f.runId}`,
+      kind: 'management',
+    });
+    const child = await createDepartment({
+      name: `Орг-права архив ${f.runId}`,
+      kind: 'management',
+      parentId: parent.id,
+    });
+    const parentRoleId = await f.createRole('Роль-предок', [Permission.CUSTOM_FIELD_MANAGE]);
+    const childRoleId = await f.createRole('Роль-архив', [Permission.DICTIONARY_MANAGE]);
+    const directRoleId = await f.createRole('Роль-личная', [Permission.WORKFLOW_MANAGE]);
+    await bindRoleToDepartment(parentRoleId, parent.id);
+    await bindRoleToDepartment(childRoleId, child.id);
+    await f.prisma.userRole.create({
+      data: { userId: f.users.employee.id, roleId: directRoleId },
+    });
+    await f.prisma.user.update({
+      where: { id: f.users.employee.id },
+      data: { departmentId: child.id },
+    });
+
+    const identity = f.app.get(IdentityLoader);
+    const audience = f.app.get(RoleAudienceRepository);
+    const before = await identity.load(f.users.employee.id);
+    expect(before).not.toBeNull();
+    expect(before!.permissions).toEqual(
+      expect.arrayContaining([
+        Permission.CUSTOM_FIELD_MANAGE,
+        Permission.DICTIONARY_MANAGE,
+        Permission.WORKFLOW_MANAGE,
+      ]),
+    );
+    // Аудитория отзыва до архивации совпадает с фактическими правами.
+    expect(await audience.roleUserIds(parentRoleId)).toContain(f.users.employee.id);
+    expect(await audience.roleUserIds(childRoleId)).toContain(f.users.employee.id);
+    const parentEventsBefore = await f.eventsFor(parentRoleId, 'directory.role.access_changed');
+
+    const archived = await f.api(
+      f.users.directory,
+      'POST',
+      `/directory/departments/${child.id}/archive`,
+      { key: randomUUID() },
+    );
+    expect(archived.status).toBe(204);
+
+    const after = await identity.load(f.users.employee.id);
+    expect(after).not.toBeNull();
+    // Роль активного предка и прямая роль остаются, роль архивного узла — нет.
+    expect(after!.permissions).toContain(Permission.CUSTOM_FIELD_MANAGE);
+    expect(after!.permissions).not.toContain(Permission.DICTIONARY_MANAGE);
+    expect(after!.permissions).toContain(Permission.WORKFLOW_MANAGE);
+    expect(await audience.roleUserIds(parentRoleId)).toContain(f.users.employee.id);
+    expect(await audience.roleUserIds(childRoleId)).not.toContain(f.users.employee.id);
+
+    // Архивация отзывает только аудиторию ролей самого узла, не предков.
+    const parentEventsAfter = await f.eventsFor(parentRoleId, 'directory.role.access_changed');
+    expect(parentEventsAfter).toHaveLength(parentEventsBefore.length);
+    const childEvents = await f.eventsFor(childRoleId, 'directory.role.access_changed');
+    expect(
+      childEvents.some((event) =>
+        ((event.payload as { userIds?: string[] }).userIds ?? []).includes(f.users.employee.id),
+      ),
+    ).toBe(true);
   });
 
   it('перенос подразделения отзывает токен сотрудника, потерявшего роль предка', async () => {
