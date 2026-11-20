@@ -30,6 +30,7 @@ function defaultPress(): PressConfigDraft {
     quorum: { kind: 'all' },
     order: 'parallel',
     excludeAuthor: true,
+    statusLabels: { waiting: '', submitted: '' },
   };
 }
 
@@ -124,6 +125,38 @@ export function TransitionPressSection({
       </PanelField>
 
       <p className="text-xs text-muted-foreground">{ui.automation.press.windowHint}</p>
+
+      <PanelField label={ui.automation.press.statusLabelsTitle}>
+        <div className="grid grid-cols-2 gap-2">
+          <Input
+            value={press.statusLabels.waiting}
+            placeholder={ui.tasks.press.waiting}
+            aria-label={ui.automation.press.waitingLabel}
+            maxLength={24}
+            disabled={readOnly}
+            onChange={(event) =>
+              set({
+                ...press,
+                statusLabels: { ...press.statusLabels, waiting: event.target.value },
+              })
+            }
+          />
+          <Input
+            value={press.statusLabels.submitted}
+            placeholder={ui.tasks.press.submitted}
+            aria-label={ui.automation.press.submittedLabel}
+            maxLength={24}
+            disabled={readOnly}
+            onChange={(event) =>
+              set({
+                ...press,
+                statusLabels: { ...press.statusLabels, submitted: event.target.value },
+              })
+            }
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">{ui.automation.press.statusLabelsHint}</p>
+      </PanelField>
 
       <SwitchRow
         title={ui.automation.press.excludeAuthorLabel}

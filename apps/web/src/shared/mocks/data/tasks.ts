@@ -21,6 +21,7 @@ import { fieldLocksDto } from './task-locks.js';
 import { QUICK_WORKFLOW_ID, REQUEST_WORKFLOW_ID, STANDARD_WORKFLOW_ID } from './workflows.js';
 import { quickProcessType } from './task-stages.js';
 import { currentAuthUser, userIds, userRef } from './users.js';
+import { getMockActor } from '../mock-actor.js';
 
 export * from './task-stages.js';
 export * from './personal-stages.js';
@@ -154,7 +155,16 @@ export const detailsExtra: Record<
   },
 };
 
-export function taskDetailOf(task: TaskListItem): TaskDetail {
+export function taskDetailOf(
+  task: TaskListItem,
+  viewerId: string = currentAuthUser.id,
+): TaskDetail {
+  // Право правки как на сервере (`taskAccess.canEdit`): постановщик,
+  // ответственный или `task.manage_any` — от него зависит вид окна сбора (#965).
+  const pressCanManage =
+    task.assignee?.id === viewerId ||
+    task.creator?.id === viewerId ||
+    getMockActor().permissions.includes('task.manage_any');
   const extra = detailsExtra[task.id] ?? {
     description: 'Описание уточняется постановщиком.',
     observers: [],
@@ -181,9 +191,8 @@ export function taskDetailOf(task: TaskListItem): TaskDetail {
     acceptRequired: extra.acceptRequired ?? false,
     result: extra.result ?? null,
     press:
-      pressOf(task.id, currentAuthUser.id, task.assignee?.id === currentAuthUser.id)?.stageId ===
-      task.stage.id
-        ? pressOf(task.id, currentAuthUser.id, task.assignee?.id === currentAuthUser.id)
+      pressOf(task.id, viewerId, pressCanManage)?.stageId === task.stage.id
+        ? pressOf(task.id, viewerId, pressCanManage)
         : null,
     completedAt: closed ? task.updatedAt : null,
     // Состав карточки по типу (#432): блоки, названия ролей, обязательные поля.

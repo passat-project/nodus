@@ -10,14 +10,7 @@ import { STANDARD_COMPLETE_TRANSITION_ID } from './workflows-documents.js';
 
 type MutableRound = Omit<
   PressRoundView,
-  | 'pressed'
-  | 'total'
-  | 'myEntry'
-  | 'canSubmit'
-  | 'canWithdraw'
-  | 'canReturn'
-  | 'canExclude'
-  | 'completed'
+  'pressed' | 'total' | 'myEntry' | 'canSubmit' | 'canWithdraw' | 'canReturn' | 'completed'
 > & {
   completed: boolean;
 };
@@ -29,6 +22,7 @@ const entry = (
 ): PressEntryView => ({
   userId,
   displayName: userRef(userId).displayName,
+  avatarUrl: userRef(userId).avatarUrl,
   order,
   state,
   pressedAt: state === 'pressed' ? new Date(Date.now() - order * 60_000).toISOString() : null,
@@ -49,6 +43,7 @@ const base = {
   cycle: 1,
   order: 'parallel' as const,
   quorum: { kind: 'all' as const },
+  statusLabels: { waiting: '', submitted: '' },
   form: { enabled: false, sections: [] },
 };
 
@@ -82,6 +77,9 @@ function seedRounds(): Map<string, MutableRound> {
         stageId: requestReviewStage.id,
         transitionId: REQUEST_ACK_TRANSITION_ID,
         transitionName: 'Ознакомлен',
+        // Демо своих названий статусов (#965): кнопка «Ознакомлен» переписала
+        // «Ждём»/«Сдано» под себя.
+        statusLabels: { waiting: 'Ожидаем', submitted: 'Ознакомлен' },
         entries: allUsers.map((userId, index) =>
           entry(userId, index, index < 6 && userId !== userIds.klimovich ? 'pressed' : 'waiting'),
         ),
@@ -152,10 +150,6 @@ export function pressOf(
     canWithdraw: !round.completed && myEntry?.state === 'pressed',
     canReturn:
       canManage && !round.completed && round.entries.some((entry) => entry.state === 'pressed'),
-    canExclude:
-      canManage &&
-      !round.completed &&
-      round.entries.filter((entry) => entry.state !== 'excluded').length > 1,
     completed: round.completed,
     entries: round.entries.map((e) => ({ ...e })),
   };
@@ -204,24 +198,6 @@ export function returnPress(
     const target = round.entries.find((e) => e.userId === userId);
     if (!target || target.state !== 'pressed') continue;
     target.state = 'returned';
-    target.returnReason = reason;
-  }
-  round.completed = isQuorum(round);
-  return pressOf(taskId, viewerId);
-}
-
-export function excludePress(
-  taskId: string,
-  userIdsToExclude: readonly string[],
-  reason: string,
-  viewerId: string,
-): PressRoundView | null {
-  const round = rounds.get(taskId);
-  if (!round) return null;
-  for (const userId of userIdsToExclude) {
-    const target = round.entries.find((e) => e.userId === userId);
-    if (!target || target.state === 'excluded') continue;
-    target.state = 'excluded';
     target.returnReason = reason;
   }
   round.completed = isQuorum(round);

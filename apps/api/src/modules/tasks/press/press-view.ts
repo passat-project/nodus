@@ -17,11 +17,13 @@ export function pressRoundViewOf(
   viewerId: string,
   displayNameOf: (userId: string) => string,
   canManage = false,
+  avatarUrlOf: (userId: string) => string | null = () => null,
 ): PressRoundView {
   const config = pressConfigSchema.parse(round.config);
   const entries = round.entries.map((entry) => ({
     userId: entry.userId,
     displayName: displayNameOf(entry.userId),
+    avatarUrl: avatarUrlOf(entry.userId),
     order: entry.order,
     state: entry.state as PressRoundView['entries'][number]['state'],
     pressedAt: entry.pressedAt?.toISOString() ?? null,
@@ -46,6 +48,7 @@ export function pressRoundViewOf(
     pressed: active.filter((entry) => entry.state === 'pressed').length,
     order: config.order,
     quorum: config.quorum,
+    statusLabels: config.statusLabels,
     form: transitionFormSchema.parse(round.form),
     entries,
     myEntry,
@@ -56,8 +59,6 @@ export function pressRoundViewOf(
       (myEntry.state === 'waiting' || myEntry.state === 'returned'),
     canWithdraw: !completed && myEntry?.state === 'pressed',
     canReturn: canManage && !completed && entries.some((entry) => entry.state === 'pressed'),
-    canExclude:
-      canManage && !completed && entries.filter((entry) => entry.state !== 'excluded').length > 1,
     completed,
   };
 }

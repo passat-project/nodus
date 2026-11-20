@@ -61,6 +61,7 @@ describe('ProcessTypesRepository.copyTypeBindings (#432, #631)', () => {
       quorum: { kind: 'all' },
       order: 'parallel',
       excludeAuthor: true,
+      statusLabels: { waiting: '', submitted: '' },
     };
     const source = {
       stages: [

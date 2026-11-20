@@ -8,6 +8,7 @@ import type { TaskDetail, WorkflowTransition } from '@nodus/contracts';
 const state = vi.hoisted(() => ({
   transitions: [] as WorkflowTransition[],
   submit: vi.fn(),
+  withdraw: vi.fn(),
 }));
 
 const mocks = vi.hoisted(() => ({
@@ -34,9 +35,8 @@ vi.mock('./task-action-runner.js', () => ({
 }));
 vi.mock('../api/press-api.js', () => ({
   useSubmitPress: () => ({ mutate: state.submit }),
-  useWithdrawPress: () => ({ mutate: vi.fn() }),
+  useWithdrawPress: () => ({ mutate: state.withdraw, isPending: false }),
   useReturnPress: () => ({ mutate: vi.fn(), isPending: false }),
-  useExcludePress: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 vi.mock('./task-press-dialogs.js', () => ({
   PressAnalyticsDialog: () => null,
@@ -55,6 +55,7 @@ afterEach(() => {
   mocks.transitionRun.mockClear();
   state.transitions = [];
   state.submit.mockClear();
+  state.withdraw.mockClear();
 });
 
 const transition = (outcome: 'success' | 'cancelled' | 'rejected' | null): WorkflowTransition =>
@@ -156,6 +157,29 @@ describe('TaskActionBar: итог «Отклонена» (#430)', () => {
       />,
     );
     expect(screen.getByRole('button', { name: /Статусы участников: 1 \/ 2/ })).toBeTruthy();
+  });
+
+  it('отзыв отметки — на месте кнопки сбора в нижней панели (#965)', () => {
+    const pressTask = {
+      ...task,
+      stage: { name: 'В работе', systemState: 'active', outcome: null },
+      press: {
+        transitionId: 'tp',
+        transitionName: 'Завершить',
+        pressed: 1,
+        total: 3,
+        canSubmit: false,
+        canWithdraw: true,
+        entries: [],
+        form: { enabled: false, sections: [] },
+      },
+    } as unknown as TaskDetail;
+    state.transitions = [transitionOf('tp', 'Завершить', 'button')];
+    render(<TaskActionBar task={pressTask} showTime={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Отозвать отметку' }));
+    expect(state.withdraw).toHaveBeenCalledTimes(1);
+    // Кнопка сбора не дублируется: на её месте именно отзыв.
+    expect(screen.queryByRole('button', { name: 'Завершить' })).toBeNull();
   });
 });
 

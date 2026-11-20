@@ -1,15 +1,17 @@
-import type { PressEntryView, PressRoundView } from '@nodus/contracts';
+import type { PressEntryView, PressRoundView, PressStatusLabels } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 
 import { formatDateTimeShort } from '../../../shared/lib/format.js';
 
-/** Подписи и выгрузка аналитики сбора отметок (#434). */
-export function pressStateLabel(entry: PressEntryView): string {
+/** Подписи и выгрузка аналитики сбора отметок (#434).
+ *  «Ждём» и «Сдано» можно переписать в настройке кнопки (#965): пусто —
+ *  стандартный текст интерфейса. */
+export function pressStateLabel(entry: PressEntryView, labels?: PressStatusLabels): string {
   switch (entry.state) {
     case 'pressed':
-      return ui.tasks.press.submitted;
+      return labels?.submitted || ui.tasks.press.submitted;
     case 'waiting':
-      return ui.tasks.press.waiting;
+      return labels?.waiting || ui.tasks.press.waiting;
     case 'returned':
       return ui.tasks.press.returned;
     case 'excluded':
@@ -43,14 +45,15 @@ export function downloadPressCsv(press: PressRoundView): void {
     ],
     ...press.entries.map((entry) => [
       entry.displayName,
-      pressStateLabel(entry),
+      pressStateLabel(entry, press.statusLabels),
       entry.pressedAt ? formatDateTimeShort(entry.pressedAt) : '',
       entry.result?.text ?? '',
       entry.returnReason ?? '',
     ]),
   ];
   const csv = rows.map((row) => row.map(csvCell).join(';')).join('\n');
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  // BOM: Excel открывает русский текст без кракозябр (#965).
+  const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }));
   const link = document.createElement('a');
   link.href = url;
   link.download = `${ui.tasks.press.csvFileName}-${press.cycle}.csv`;

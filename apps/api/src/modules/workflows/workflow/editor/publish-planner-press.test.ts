@@ -13,6 +13,7 @@ const PRESS: PressConfig = {
   quorum: { kind: 'all' },
   order: 'parallel',
   excludeAuthor: true,
+  statusLabels: { waiting: '', submitted: '' },
 };
 
 const stages: {

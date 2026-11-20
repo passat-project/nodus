@@ -23,6 +23,7 @@ import { changedLockKeys, lockDenial } from '../../../../shared/mocks/data/task-
 import { demoStages } from '../../../../shared/mocks/data/task-stages.js';
 import { findDemoNodeRow } from '../../../../shared/mocks/data/project-nodes.js';
 import { userRef } from '../../../../shared/mocks/data/users.js';
+import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import { applyDemoPatch } from '../../../../shared/mocks/data/custom-fields-rules.js';
 import { mockLockedFieldError } from '../../../../shared/custom-fields/formula/formula-mocks.js';
 import { taskDetailWithFormulas } from '../../../../shared/custom-fields/formula/formula-dto.js';
@@ -98,7 +99,7 @@ export const tasksHandlers = [
         .find((t) => t.id === params.id);
     if (!task) return notFound('Task not found');
     // Формулы типа (#632) — поверх клонированного DTO, не в сторе задач.
-    return HttpResponse.json(taskDetailWithFormulas(task));
+    return HttpResponse.json(taskDetailWithFormulas(task, getMockActor().id));
   }),
 
   /** Ветка задачи для панели-навигатора: дерево от корневого предка. */
@@ -169,7 +170,7 @@ export const tasksHandlers = [
       const counterWrite = counterWriteResponse(body.customFields ?? {});
       if (counterWrite) return counterWrite;
       // Закреплённое окном поле (#496, Р4): 422 FIELD_LOCKED или правка с причиной.
-      const current = taskDetailOf(task);
+      const current = taskDetailOf(task, getMockActor().id);
       const locked = lockDenial(
         task,
         changedLockKeys(

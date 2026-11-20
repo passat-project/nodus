@@ -38,13 +38,23 @@ describe('CSV аналитики сбора (#434)', () => {
     expect(pressStateLabel(state('returned'))).toBe('Возвращено');
     expect(pressStateLabel(state('excluded'))).toBe('Снято');
     expect(pressStateLabel(state('withdrawn'))).toBe('Отозвано');
+    // Свои названия кнопки (#965): пусто — стандартное, иначе — своё.
+    expect(pressStateLabel(state('pressed'), { waiting: '', submitted: 'Ознакомлен' })).toBe(
+      'Ознакомлен',
+    );
+    expect(pressStateLabel(state('waiting'), { waiting: 'Ожидаем', submitted: '' })).toBe(
+      'Ожидаем',
+    );
+    expect(pressStateLabel(state('returned'), { waiting: 'Ожидаем', submitted: 'Сдал' })).toBe(
+      'Возвращено',
+    );
     expect(pressStateClass(state('pressed'))).toContain('success');
     expect(pressStateClass(state('returned'))).toContain('warning');
     expect(pressStateClass(state('waiting'))).toContain('accent');
     expect(pressStateClass(state('excluded'))).toContain('muted');
   });
 
-  it('CSV-файл: заголовки, строки, имя с циклом и клик по ссылке', () => {
+  it('CSV-файл: BOM, заголовки, строки, имя с циклом и клик по ссылке', async () => {
     const create = vi.fn((blob: Blob) => {
       void blob;
       return 'blob:test';
@@ -87,6 +97,11 @@ describe('CSV аналитики сбора (#434)', () => {
     expect(revoke).toHaveBeenCalledWith('blob:test');
     const blob = create.mock.calls[0]?.[0];
     expect(blob?.type).toContain('text/csv');
+    // BOM проверяем по байтам: `blob.text()` декодирует UTF-8 и BOM срезает.
+    const bytes = new Uint8Array(await blob!.arrayBuffer());
+    expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    const text = await blob!.text();
+    expect(text).toContain('Иванов');
     click.mockRestore();
   });
 });

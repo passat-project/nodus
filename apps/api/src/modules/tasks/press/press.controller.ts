@@ -4,11 +4,9 @@ import { z } from 'zod';
 import {
   ErrorCode,
   pressExecuteResultSchema,
-  pressExcludeBodySchema,
   pressReturnBodySchema,
   pressSubmitBodySchema,
   type AuthUser,
-  type PressExcludeBody,
   type PressExecuteResult,
   type PressReturnBody,
   type PressSubmitBody,
@@ -117,27 +115,6 @@ export class TaskPressController {
   ): Promise<PressExecuteResult> {
     await this.query.visibleRow(user, id);
     await this.admin.returnEntries(user, id, body);
-    return this.result(user, id);
-  }
-
-  @Post(':id/press/exclude')
-  @HttpCode(200)
-  @Audit({ action: 'task.press_exclude', entity: 'task' })
-  @ApiOperation({ summary: 'Снять участников с открытого сбора (ответственный)' })
-  @ApiOkResponse({ standardSchema: pressExecuteResultSchema })
-  @ApiErrors(400, 401, 403, 404, 409)
-  @ApiIdempotencyKey()
-  async excludeSelected(
-    @GetUser() user: AuthUser,
-    @Param('id', uuid) id: string,
-    @Body({
-      schema: pressExcludeBodySchema,
-      pipes: [new ZodValidationPipe(pressExcludeBodySchema)],
-    })
-    body: PressExcludeBody,
-  ): Promise<PressExecuteResult> {
-    await this.query.visibleRow(user, id);
-    await this.admin.excludeEntries(user, id, body);
     return this.result(user, id);
   }
 

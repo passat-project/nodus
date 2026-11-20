@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 
 import { PressAdminService } from './press-admin.service.js';
 
@@ -68,7 +68,6 @@ function setup(state = 'pressed') {
     updated: vi.fn(async () => void 0),
     returned: vi.fn(async () => void 0),
   };
-  const engine = { execute: vi.fn(async () => ({ stage: {}, recordId: 'rec' })) };
   const service = new PressAdminService(
     { run: vi.fn(async (fn: (tx: unknown) => unknown) => fn({})) } as never,
     repo as never,
@@ -77,9 +76,8 @@ function setup(state = 'pressed') {
     { lockProject: vi.fn() } as never,
     records as never,
     pressEvents as never,
-    engine as never,
   );
-  return { service, repo, rounds, tasks, records, pressEvents, engine, round };
+  return { service, repo, rounds, tasks, records, pressEvents, round };
 }
 
 describe('PressAdminService (#434)', () => {
@@ -132,98 +130,5 @@ describe('PressAdminService (#434)', () => {
       }),
     ).rejects.toThrow();
     expect(round.entries[0]?.state).toBe('waiting');
-  });
-
-  it('снятие: excluded + причина + журнал', async () => {
-    const { service, repo, records, round } = setup('waiting');
-    repo.findOpenRound.mockResolvedValue({
-      ...round,
-      entries: [entry('waiting', 'e1', 'u1', 0), entry('waiting', 'e2', 'u2', 1)],
-    });
-    const view = await service.excludeEntries({ id: 'assignee', permissions: [] } as never, 't1', {
-      userIds: ['u2'],
-      reason: 'Уволен',
-    });
-    expect(view).not.toBeNull();
-    expect(repo.updateEntry).toHaveBeenCalledWith(
-      expect.anything(),
-      'e2',
-      expect.objectContaining({ state: 'excluded', returnReason: 'Уволен' }),
-    );
-    expect(records.write).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ recordKind: 'exclude', participantId: 'u2' }),
-    );
-  });
-
-  it('снятие последнего активного участника запрещено', async () => {
-    const { service, round } = setup('waiting');
-    await expect(
-      service.excludeEntries({ id: 'assignee', permissions: [] } as never, 't1', {
-        userIds: ['u1'],
-        reason: 'Причина',
-      }),
-    ).rejects.toThrow();
-    expect(round.entries[0]?.state).toBe('waiting');
-  });
-
-  it('снятие ждущего при собранном кворуме выполняет переход', async () => {
-    const { service, repo, engine, round } = setup('waiting');
-    repo.findOpenRound.mockResolvedValue({
-      ...round,
-      entries: [entry('pressed', 'e1', 'assignee', 0), entry('waiting', 'e2', 'u1', 1)],
-    });
-    const view = await service.excludeEntries({ id: 'assignee', permissions: [] } as never, 't1', {
-      userIds: ['u1'],
-      reason: 'Уволен',
-    });
-    expect(view).toBeNull();
-    expect(repo.completeRound).toHaveBeenCalled();
-    expect(engine.execute).toHaveBeenCalledWith(
-      expect.anything(),
-      't1',
-      'task',
-      expect.objectContaining({ id: 'assignee' }),
-      { transitionId: 'tr1' },
-      { pressCompletion: true },
-    );
-  });
-
-  it('кворум снятием: итогом становится последняя сданная отметка (решение 3A)', async () => {
-    const { service, repo, engine, round } = setup('waiting');
-    const pressed = (id: string, userId: string, order: number, text: string, day: number) => ({
-      ...entry('pressed', id, userId, order),
-      pressedAt: new Date(`2026-01-0${day}T10:00:00.000Z`),
-      result: { text, messageIds: [], fileCount: 0, minutes: null, date: null },
-      input: { result: { text, messageIds: [] }, comment: `Комментарий ${text}` },
-    });
-    repo.findOpenRound.mockResolvedValue({
-      ...round,
-      entries: [
-        pressed('e1', 'assignee', 0, 'Первый', 1),
-        pressed('e2', 'u2', 1, 'Второй', 2),
-        entry('waiting', 'e3', 'u3', 2),
-      ],
-    } as never);
-
-    await service.excludeEntries({ id: 'assignee', permissions: [] } as never, 't1', {
-      userIds: ['u3'],
-      reason: 'Выбыл',
-    });
-
-    expect(engine.execute).toHaveBeenLastCalledWith(
-      expect.anything(),
-      't1',
-      'task',
-      expect.anything(),
-      { transitionId: 'tr1' },
-      {
-        pressCompletion: true,
-        form: {
-          result: { text: 'Второй', messageIds: [] },
-          comment: 'Комментарий Второй',
-        },
-      },
-    );
   });
 });

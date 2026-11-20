@@ -55,8 +55,7 @@ function setup(opts: { placementStage?: string } = {}) {
     ),
   };
   const press = {
-    assertCanRemove: vi.fn(),
-    syncAdded: vi.fn(),
+    syncRoster: vi.fn(),
     ensureForStage: vi.fn(async () => ({
       transitionId: null,
       roundStarted: false,

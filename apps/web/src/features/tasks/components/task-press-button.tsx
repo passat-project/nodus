@@ -6,19 +6,23 @@ import { Popover, PopoverContent, PopoverTrigger } from '@nodus/ui/components/po
 import { cn } from '@nodus/ui/lib/utils';
 
 import { PressRing } from './task-press.js';
+import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
+
+/** Участник сбора для попапа кольца: имя + фото (#965). */
+export interface PressPerson {
+  userId: string;
+  displayName: string;
+  avatarUrl?: string | null;
+}
 
 function PressStatusContent({
-  pressed,
-  total,
   participants = [],
   onOpenStatuses,
   onMouseEnter,
   onMouseLeave,
   onOpenAutoFocus,
 }: {
-  pressed: number;
-  total: number;
-  participants?: readonly string[];
+  participants?: readonly PressPerson[];
   onOpenStatuses: () => void;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
@@ -33,26 +37,16 @@ function PressStatusContent({
       onMouseLeave={onMouseLeave}
       onOpenAutoFocus={onOpenAutoFocus}
     >
-      <div className="flex items-baseline justify-between px-1.5 py-1">
-        <span className="text-xs text-muted-foreground">{ui.tasks.press.progressLabel}</span>
-        <span className="font-mono text-sm tabular-nums">
-          {pressed} / {total}
-        </span>
-      </div>
       {participants.length > 0 ? (
-        <div className="flex flex-wrap gap-1 px-1.5 pb-1.5">
-          {participants.slice(0, 8).map((name, index) => (
-            <span
-              key={`${name}-${index}`}
-              title={name}
-              className="inline-flex size-5 items-center justify-center rounded-full bg-accent text-[10px] font-medium text-foreground"
-            >
-              {name
-                .split(/\s+/)
-                .slice(0, 2)
-                .map((part) => part[0])
-                .join('')}
-            </span>
+        <div className="flex flex-wrap gap-1 px-1 pb-1.5">
+          {participants.slice(0, 8).map((person) => (
+            <PersonAvatar
+              key={person.userId}
+              name={person.displayName}
+              avatarUrl={person.avatarUrl}
+              className="size-6"
+              decorative
+            />
           ))}
         </div>
       ) : null}
@@ -83,7 +77,7 @@ export function TaskPressStatus({
 }: {
   pressed: number;
   total: number;
-  participants?: readonly string[];
+  participants?: readonly PressPerson[];
   onOpenStatuses: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -130,8 +124,6 @@ export function TaskPressStatus({
         </button>
       </PopoverTrigger>
       <PressStatusContent
-        pressed={pressed}
-        total={total}
         participants={participants}
         onOpenStatuses={() => {
           setOpen(false);
@@ -151,8 +143,8 @@ export function TaskPressStatus({
  * Коллективная кнопка (#434): название нажимается, кольцо прогресса —
  * отдельная зона статусов участников. Кольцо не вложено в кнопку нажатия
  * (невалидный HTML и конфликт кликов): две соседние кнопки в одной пилюле.
- * Наведение на кольцо открывает поповер с прогрессом и входом «Статусы
- * участников»; клик по названию выполняет обычное нажатие.
+ * Наведение на кольцо открывает поповер с фото нажавших и входом «Статусы
+ * участников» (#965: без строки «Прогресс» и дублирующего счётчика).
  */
 export function TaskPressButton({
   name,
@@ -166,7 +158,7 @@ export function TaskPressButton({
   name: string;
   pressed: number;
   total: number;
-  participants?: readonly string[];
+  participants?: readonly PressPerson[];
   main: boolean;
   onPress: () => void;
   onOpenStatuses: () => void;
@@ -233,8 +225,6 @@ export function TaskPressButton({
           </button>
         </PopoverTrigger>
         <PressStatusContent
-          pressed={pressed}
-          total={total}
           participants={participants}
           onOpenStatuses={() => {
             setOpen(false);
