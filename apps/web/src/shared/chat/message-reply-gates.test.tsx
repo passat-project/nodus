@@ -19,9 +19,9 @@ import { useSelectionStore } from './selection-store.js';
 
 /**
  * #729: гейты скрытия язычка «Ответить». Язычок — вторая точка входа пункта
- * ПКМ-меню, но он есть только там, где ответ — ЦИТАТА в композер: каналы
- * (лента, пост, панель обсуждения), режим выделения, летящий темп, окно
- * «Избранного», системные строки и надгробия его не получают.
+ * ПКМ-меню, но он есть только там, где ответ — ЦИТАТА в композер: чаты и
+ * (с #968) окно обсуждения. Лента канала, режим выделения, летящий темп,
+ * окно «Избранного», системные строки и надгробия его не получают.
  */
 
 const SCOPE = 'conversation:conv-1';
@@ -101,13 +101,13 @@ function renderBuffer({
   mine = false,
   replyMode,
   variant,
-  hideReplyButton,
+  inThread,
 }: {
   message: ChatMessage;
   mine?: boolean;
   replyMode?: 'quote' | 'thread';
   variant?: 'source-window';
-  hideReplyButton?: boolean;
+  inThread?: boolean;
 }) {
   return render(
     <QueryClientProvider client={queryClient}>
@@ -119,7 +119,7 @@ function renderBuffer({
           scope={SCOPE}
           replyMode={replyMode}
           variant={variant}
-          hideReplyButton={hideReplyButton}
+          inThread={inThread}
         >
           <ChatMessageItem message={message} mine={mine} />
         </MessageMenu>
@@ -152,10 +152,21 @@ describe('Язычок «Ответить» (#729): только там, где 
     expect(screen.queryByRole('button', { name: ui.chat.replyToMessage })).toBeNull();
   });
 
-  it('тред канала (quote + hideReplyButton): язычка нет и внутри обсуждения', () => {
-    renderBuffer({ message: msg({ threadRootId: 'root-9' }), hideReplyButton: true });
+  it('тред канала (quote + inThread): язычок есть и ставит цитату', () => {
+    // #968 (решение владельца 19.11.2026): внутри обсуждения цитата — ответ
+    // конкретному человеку, а не дубль «Обсудить» (та кнопка — в ленте).
+    renderBuffer({ message: msg({ threadRootId: 'root-9' }), inThread: true });
 
-    expect(screen.queryByRole('button', { name: ui.chat.replyToMessage })).toBeNull();
+    fireEvent.click(replyButton());
+
+    expect(useChatDrafts.getState().drafts[SCOPE]?.reply?.messageId).toBe('m1');
+  });
+
+  it('тред канала с типом из кэша: язычок есть, тип «канал» его не гасит', () => {
+    seedConversation('project_channel');
+    renderBuffer({ message: msg({ threadRootId: 'root-9' }), inThread: true });
+
+    expect(replyButton()).toBeTruthy();
   });
 
   it('канал из кэша бесед: язычка нет, даже если хост не передал флаг', () => {

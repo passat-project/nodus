@@ -35,6 +35,8 @@ export interface MessageEditedInsertEvent {
     authorId: string;
     text: string;
     seq: number;
+    /** Ответ треда — правка уходит только наблюдателям треда (#974). */
+    threadRootId?: string | null;
     mentionedUserIds?: string[];
     previousMentionedUserIds?: string[];
     previousMentionedAll?: boolean;
@@ -96,6 +98,7 @@ export function buildInsertsFromMessageEvent(
 export function buildInsertsFromEditedEvent(
   event: MessageEditedInsertEvent,
   state: ChatConversationState,
+  threadWatcherIds: readonly string[] = [],
 ): NotificationInsert[] {
   const text = stripMentionTokens(event.payload.text ?? '');
   const mentioned = new Set(event.payload.mentionedUserIds ?? []);
@@ -103,8 +106,19 @@ export function buildInsertsFromEditedEvent(
   const everDirect = new Set(event.payload.previousMentionedUserIds ?? []);
   const hadAllBefore = event.payload.previousMentionedAll === true;
   const directNew = new Set(event.payload.directMentionedUserIds ?? []);
+  const threadRootId = event.payload.threadRootId ?? null;
+  const watchers = new Set(threadWatcherIds);
+  // #974: правка ответа в обсуждении — только наблюдателям треда (иначе
+  // правка в канале на 170 человек будила всех); правка ленты — как раньше,
+  // всем членам беседы. Новый @упомянутый получает уведомление в любом случае.
+  const audience = new Set<string>(
+    threadRootId === null
+      ? state.members.map((m) => m.userId)
+      : state.members.filter((m) => watchers.has(m.userId)).map((m) => m.userId),
+  );
+  for (const userId of mentioned) audience.add(userId);
   return state.members
-    .filter((m) => m.userId !== event.payload.authorId)
+    .filter((m) => m.userId !== event.payload.authorId && audience.has(m.userId))
     .map((m) => {
       // Первый личный тэг — high (broadcast в истории его НЕ глушит,
       // вердикт владельца 10.10: «@Все → @Анна — Анне высший»); или
@@ -128,7 +142,7 @@ export function buildInsertsFromEditedEvent(
         conversation_id: event.payload.conversationId,
         conversation_title: state.title,
         message_id: event.payload.messageId,
-        thread_root_id: null,
+        thread_root_id: threadRootId,
         event_id: event.id,
       };
     });

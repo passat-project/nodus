@@ -1,24 +1,16 @@
 import { http, HttpResponse } from 'msw';
 import {
-  createDepartmentSchema,
   createInvitationSchema,
   createPositionSchema,
-  departmentTreeQuerySchema,
   ErrorCode,
   listUsersQuerySchema,
   reassignPositionSchema,
-  updateDepartmentSchema,
   updateMyProfileSchema,
   updatePositionSchema,
   updateUserSchema,
 } from '@nodus/contracts';
 
-import {
-  buildDepartmentTree,
-  demoDepartments,
-  departmentOfUser,
-} from '../../../../shared/mocks/data/departments.js';
-import { DEPARTMENTS_TREE_PATH } from '../../../../shared/api/departments-list.js';
+import { demoDepartments, departmentOfUser } from '../../../../shared/mocks/data/departments.js';
 import {
   demoPresence,
   demoUserCards,
@@ -27,15 +19,15 @@ import {
 import { demoPositions } from '../../../../shared/mocks/data/positions.js';
 import { demoRoles } from '../../../../shared/mocks/data/roles.js';
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
+import { departmentHandlers } from './department-handlers.js';
 
 /**
  * MSW-слой справочника (ADR-0001): контракты — источник формы ответов.
- * Дерево отделов (GET /directory/departments/tree?kind=) и фильтр людей по
- * отделу (принадлежность в ТОЙ структуре, к которой относится отдел —
- * семантика контракта listUsersQuerySchema.departmentId, #84) — образец для
- * бэкенд-агента: UI сверстан по этим контрактам и есть ТЗ на эндпоинты.
- * Создание/правка отдела (POST/PATCH — канон методов api-conventions)
- * живут в локальном сторе на время сессии (concept-state), zod-валидация тел —
+ * Дерево отделов и их CRUD — `department-handlers.ts` (общий concept-state
+ * `departmentState`/`userState`); фильтр людей по отделу — принадлежность в ТОЙ
+ * структуре, к которой относится отдел (семантика
+ * listUsersQuerySchema.departmentId, #84). Создание/правка справочников живут
+ * в локальном сторе на время сессии (concept-state), zod-валидация тел —
  * схемами contracts.
  */
 let departmentState = demoDepartments;
@@ -175,45 +167,17 @@ export const directoryHandlers = [
     }
     return HttpResponse.json({ items, nextCursor: null });
   }),
-  http.get(`/api/v1${DEPARTMENTS_TREE_PATH}`, ({ request }) => {
-    const url = new URL(request.url);
-    const query = departmentTreeQuerySchema.safeParse(Object.fromEntries(url.searchParams));
-    const kind = query.success ? query.data.kind : 'management';
-    // Дерево — из concept-state (departmentState), иначе POST/PATCH теряются
-    // на рефетче после оптимистичной мутации (валидация 24.09).
-    return HttpResponse.json(buildDepartmentTree(kind, userState, departmentState));
-  }),
-  http.post('/api/v1/directory/departments', async ({ request }) => {
-    const parsed = createDepartmentSchema.safeParse(await request.json());
-    if (!parsed.success)
-      return HttpResponse.json(
-        { code: 'VALIDATION_FAILED', message: 'Invalid department payload' },
-        { status: 400 },
-      );
-    const department = {
-      id: crypto.randomUUID(),
-      isActive: true,
-      ...parsed.data,
-    };
-    departmentState = [...departmentState, department];
-    return HttpResponse.json(department, { status: 201 });
-  }),
-  http.patch('/api/v1/directory/departments/:id', async ({ params, request }) => {
-    const parsed = updateDepartmentSchema.safeParse(await request.json());
-    if (!parsed.success)
-      return HttpResponse.json(
-        { code: 'VALIDATION_FAILED', message: 'Invalid department patch' },
-        { status: 400 },
-      );
-    const current = departmentState.find((d) => d.id === params.id);
-    if (!current)
-      return HttpResponse.json(
-        { code: 'NOT_FOUND', message: 'Department not found' },
-        { status: 404 },
-      );
-    const next = { ...current, ...parsed.data };
-    departmentState = departmentState.map((d) => (d.id === next.id ? next : d));
-    return HttpResponse.json(next);
+  // Подразделения (#84, #946): дерево и CRUD — отдельный модуль моков,
+  // состояние то же (concept-state основной сессии).
+  ...departmentHandlers({
+    getDepartments: () => departmentState,
+    setDepartments: (next) => {
+      departmentState = next;
+    },
+    getUsers: () => userState,
+    setUsers: (next) => {
+      userState = next;
+    },
   }),
   http.get('/api/v1/directory/presence', () => HttpResponse.json(demoPresence)),
   /** Саморедактирование профиля (#923): только self-поля по строгому

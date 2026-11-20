@@ -218,8 +218,9 @@ export class NotificationsService {
   buildInsertsFromEditedEvent(
     event: MessageEditedInsertEvent,
     state: ChatConversationState,
+    threadWatcherIds: readonly string[] = [],
   ): NotificationInsert[] {
-    return buildInsertsFromEditedEvent(event, state);
+    return buildInsertsFromEditedEvent(event, state, threadWatcherIds);
   }
 
   /** Обёртки порта чата для хендлеров (мокируются в тестах). */

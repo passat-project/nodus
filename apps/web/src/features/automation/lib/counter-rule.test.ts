@@ -12,6 +12,7 @@ import {
   createTriggerReason,
   DEFAULT_COUNTER_RULE,
   fill,
+  insertableNumberField,
   minskMoment,
   ruleShort,
   unreachableReason,
@@ -162,5 +163,24 @@ describe('counter-draft (#630): совместимость привязок', ()
       ),
     ).toEqual(['letter']);
     expect(triggerProblems(draft(), hostOf)).toEqual([]);
+  });
+});
+
+describe('insertableNumberField: палитра вставок номера (#877)', () => {
+  it('печатные типы вставляются', () => {
+    for (const type of ['text', 'long_text', 'number', 'duration', 'enum']) {
+      expect(insertableNumberField({ id: 'f1', type }, undefined), type).toBe(true);
+    }
+  });
+
+  it('дата, деньги и ссылка не предлагаются — сервер их отвергнет', () => {
+    for (const type of ['date', 'money', 'link', 'bool', 'user', 'multienum']) {
+      expect(insertableNumberField({ id: 'f1', type }, undefined), type).toBe(false);
+    }
+  });
+
+  it('сам атрибут и счётчики не вставляются', () => {
+    expect(insertableNumberField({ id: 'f1', type: 'text' }, 'f1')).toBe(false);
+    expect(insertableNumberField({ id: 'f2', type: 'counter' }, 'f1')).toBe(false);
   });
 });

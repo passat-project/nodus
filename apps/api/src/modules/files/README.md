@@ -125,6 +125,18 @@ fileAccessContext` (`chat`, `letter`), DiscoveryService находит его с
   не шаблон). Откат транзакции/дедуп удаляют объект попытки (компенсация);
   нарушение unique(fileObjectId,version) (P2002) трактуется как «уже
   сохранено» и подтверждается.
+  **Деактивация сотрудника (#356):** открытые сессии правки регистрируются
+  в Redis (`nodus:office:sessions:<userId>` / `nodus:office:documents:<key>`,
+  TTL 7 суток); подписчик `directory.user.deactivated` шлёт Document Server
+  команду `drop` (Command Service, JWT в теле, `/command` с фолбэком на
+  старый `/coauthoring/CommandService.ashx`) по каждому ключу — уволенный
+  теряет право правки, остальные соавторы сессию не теряют. Сеть/5xx —
+  событие повторяется диспетчером; постоянные ошибки (`5`/`6`) логируются
+  и аудируются (`files.office_drop_failed`). Вторая линия — колбэк
+  сохранения не создаёт версию и пишет аудит `files.office_save_rejected`,
+  если все зарегистрированные редакторы деактивированы (`body.users` для
+  status 2/6 несёт только последнего редактора, поэтому для решения не
+  используется; Redis недоступен — fail-open).
   `GET /files/office-config` —
   публичные параметры движка (фолбэки реестра); `GET /files/:id/versions` —
   история с подписанными ссылками. Правка — при `OFFICE_EDIT_ENABLED`
@@ -192,8 +204,10 @@ derivative/pdf` по подписи (ресурс `${id}:deriv:pdf`, выдаё�
   ONLYOFFICE, outbox-запись в транзакции версии (I9). Жизненный цикл загрузки
   — деталь потребителя (событие chat `message_sent` уже несёт вложения).
 - Аудит: `files.office_save` (actor null — система, детали: версия/статус);
-  действия пользователей — на эндпоинтах потребителя
-  (`chat.attachment_upload`/`chat.attachment_cancel`).
+  `files.office_save_rejected` (версия не создана — все редакторы
+  деактивированы); `files.office_drop_failed` (постоянный отказ Command
+  Service при деактивации); действия пользователей — на эндпоинтах
+  потребителя (`chat.attachment_upload`/`chat.attachment_cancel`).
 
 ## Тесты
 

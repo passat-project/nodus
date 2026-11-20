@@ -14,6 +14,7 @@ import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { avatarIssueMessage, validateAvatarFile } from '../../../shared/chat/avatar-upload.js';
 import { ChatPanelToggle } from '../../../shared/chat/chat-side-panel.js';
+import { openEmployeeCardFromChat } from '../../../shared/chat/employee-card-nav.js';
 import { buildSubtitle, findPeer, memberName } from '../../../shared/chat/conversation-subtitle.js';
 import {
   canAddMembers,
@@ -44,6 +45,10 @@ import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
  * название переименовывается кликом (inline, Enter/Esc), подпись групп/каналов —
  * кнопка «N участников» (панель участников), слева от тоггла — добавление
  * участников (право addMembers).
+ *
+ * #972: в личном чате (кроме «Избранного») шапка «аватар + имя + статус» —
+ * единый переход в карточку собеседника; стартовая вкладка карточки — «Задачи»
+ * (профиль не дублирует диалог, из которого пришли).
  *
  * Подпись живая (realtime #104): «печатает…» перекрывает типовой подзаголовок;
  * в direct статус собеседника — из WS presence (до этого — статичная строка).
@@ -113,6 +118,11 @@ export function ConversationBar({
 
   const typingName = typingVisible ? memberName(conversation, typing.userId) : null;
   const isFavorites = isNotesConversation(conversation, meId);
+  // Личный чат (кроме «Избранного»): шапка «аватар + имя + статус» — один
+  // переход в карточку собеседника (#972), стартовая вкладка — «Задачи».
+  // Группы/каналы не входят: там аватар и название редактируются, а профиля
+  // одного человека нет; «Заметки» — чат с собой, собеседника тоже нет.
+  const peerLink = conversation.type === 'direct' && !isFavorites ? peer : null;
   // Кнопка сущности беседы — ВЗАИМОИСКЛЮЧАЮЩЕ: чат задачи → «Открыть задачу»,
   // канал проекта → «Открыть проект» (#753), чат письма → «Открыть письмо»
   // (#754). Беседа без привязки (старые данные/моки) — без кнопки: мёртвых
@@ -132,51 +142,136 @@ export function ConversationBar({
             }
           : null;
 
+  const avatarNode = isFavorites ? (
+    <NotesGlyph className="size-9 shrink-0" />
+  ) : canEditInfo ? (
+    // Аватар беседы при праве changeInfo: клик — выбор файла (загрузка/
+    // смена), ПКМ — меню с заменой и удалением (канон контекстных меню).
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <button
+          type="button"
+          onClick={pickAvatarFile}
+          title={conversation.avatarUrl ? ui.common.avatarChange : ui.common.avatarUpload}
+          aria-label={conversation.avatarUrl ? ui.common.avatarChange : ui.common.avatarUpload}
+          className="group relative size-9 shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-port"
+        >
+          <PersonAvatar
+            name={title}
+            avatarUrl={conversationAvatarUrl(conversation, meId)}
+            decorative
+            className="size-full"
+          />
+          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+            <Camera className="size-4" strokeWidth={1.75} aria-hidden />
+          </span>
+        </button>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onClick={pickAvatarFile}>
+          {conversation.avatarUrl ? ui.common.avatarChange : ui.common.avatarUpload}
+        </ContextMenuItem>
+        {conversation.avatarUrl ? (
+          <ContextMenuItem variant="destructive" onClick={() => removeAvatar.mutate()}>
+            {ui.common.avatarRemove}
+          </ContextMenuItem>
+        ) : null}
+      </ContextMenuContent>
+    </ContextMenu>
+  ) : (
+    <PersonAvatar
+      name={title}
+      avatarUrl={conversationAvatarUrl(conversation, meId)}
+      decorative
+      className="size-9 shrink-0"
+    />
+  );
+
+  const titleNode = editingTitle ? (
+    <input
+      value={titleDraft}
+      onChange={(e) => setTitleDraft(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commitTitle();
+        if (e.key === 'Escape') {
+          // Переименование гасит Esc само — карточка/слайдер под ним
+          // не закрывается (канон инлайн-редакторов).
+          e.preventDefault();
+          e.stopPropagation();
+          setEditingTitle(false);
+        }
+      }}
+      onBlur={() => setEditingTitle(false)}
+      autoFocus
+      aria-label={ui.chat.renameTitle}
+      title={ui.chat.titleSaveHint}
+      maxLength={128}
+      className="w-full rounded-md border border-port bg-transparent px-1.5 py-0.5 text-sm font-semibold outline-none"
+    />
+  ) : (
+    // -mx на усечённой ОБЁРТКЕ, не на кнопке: граница клипа (truncate)
+    // раздвигается на ширину ховер-пилюли, и её скругления видны с обеих
+    // сторон; сама кнопка усекает длинное название (многоточие).
+    <div
+      className={
+        peerLink ? 'truncate text-sm font-semibold' : '-mx-1.5 truncate text-sm font-semibold'
+      }
+    >
+      {canEditInfo ? (
+        <button
+          type="button"
+          onClick={startEditing}
+          title={ui.chat.renameTitle}
+          className="block w-fit max-w-full truncate rounded px-1.5 py-0.5 text-left hover:bg-accent"
+        >
+          {title}
+        </button>
+      ) : (
+        title
+      )}
+    </div>
+  );
+
+  const head = (
+    <>
+      {avatarNode}
+      <div className="min-w-0">
+        {titleNode}
+        <div className="truncate text-xs font-medium text-muted-foreground">
+          {buildSubtitle(conversation, meId, {
+            typingName,
+            peerOnline,
+            onOpenMembers,
+          })}
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
-      {isFavorites ? (
-        <NotesGlyph className="size-9 shrink-0" />
-      ) : canEditInfo ? (
-        // Аватар беседы при праве changeInfo: клик — выбор файла (загрузка/
-        // смена), ПКМ — меню с заменой и удалением (канон контекстных меню).
-        <ContextMenu>
-          <ContextMenuTrigger asChild>
-            <button
-              type="button"
-              onClick={pickAvatarFile}
-              title={conversation.avatarUrl ? ui.common.avatarChange : ui.common.avatarUpload}
-              aria-label={conversation.avatarUrl ? ui.common.avatarChange : ui.common.avatarUpload}
-              className="group relative size-9 shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-port"
-            >
-              <PersonAvatar
-                name={title}
-                avatarUrl={conversationAvatarUrl(conversation, meId)}
-                decorative
-                className="size-full"
-              />
-              <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-                <Camera className="size-4" strokeWidth={1.75} aria-hidden />
-              </span>
-            </button>
-          </ContextMenuTrigger>
-          <ContextMenuContent>
-            <ContextMenuItem onClick={pickAvatarFile}>
-              {conversation.avatarUrl ? ui.common.avatarChange : ui.common.avatarUpload}
-            </ContextMenuItem>
-            {conversation.avatarUrl ? (
-              <ContextMenuItem variant="destructive" onClick={() => removeAvatar.mutate()}>
-                {ui.common.avatarRemove}
-              </ContextMenuItem>
-            ) : null}
-          </ContextMenuContent>
-        </ContextMenu>
+      {peerLink ? (
+        <button
+          type="button"
+          data-slot="direct-header"
+          onClick={(event) =>
+            openEmployeeCardFromChat(peerLink.id, event.currentTarget.getBoundingClientRect())
+          }
+          // Скринридер: имя человека + действие (действие — из i18n).
+          aria-label={`${peerLink.displayName}, ${ui.chat.openEmployeeCard}`}
+          // Подсказка при наведении — человек, не название действия (#728).
+          title={peerLink.displayName}
+          // Подложка расширяет кнопку на px-1.5 с обеих сторон, поэтому
+          // отрицательный отступ равен padding'у (-ml-1.5): аватар стоит на той
+          // же вертикали, что в шапках групп/«Заметок» (замер: avatar.x =
+          // header.x + px-4) — переключение бесед не двигает контент. Фокус —
+          // ring: `border-ring` без ширины границы невидим (border нет).
+          className="-ml-1.5 flex min-w-0 cursor-pointer items-center gap-3 rounded-lg px-1.5 py-1.5 text-left outline-none transition-colors hover:bg-accent/60 focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          {head}
+        </button>
       ) : (
-        <PersonAvatar
-          name={title}
-          avatarUrl={conversationAvatarUrl(conversation, meId)}
-          decorative
-          className="size-9 shrink-0"
-        />
+        head
       )}
       {canEditInfo ? (
         <input
@@ -189,55 +284,6 @@ export function ConversationBar({
           tabIndex={-1}
         />
       ) : null}
-      <div className="min-w-0">
-        {editingTitle ? (
-          <input
-            value={titleDraft}
-            onChange={(e) => setTitleDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') commitTitle();
-              if (e.key === 'Escape') {
-                // Переименование гасит Esc само — карточка/слайдер под ним
-                // не закрывается (канон инлайн-редакторов).
-                e.preventDefault();
-                e.stopPropagation();
-                setEditingTitle(false);
-              }
-            }}
-            onBlur={() => setEditingTitle(false)}
-            autoFocus
-            aria-label={ui.chat.renameTitle}
-            title={ui.chat.titleSaveHint}
-            maxLength={128}
-            className="w-full rounded-md border border-port bg-transparent px-1.5 py-0.5 text-sm font-semibold outline-none"
-          />
-        ) : (
-          // -mx на усечённой ОБЁРТКЕ, не на кнопке: граница клипа (truncate)
-          // раздвигается на ширину ховер-пилюли, и её скругления видны с обеих
-          // сторон; сама кнопка усекает длинное название (многоточие).
-          <div className="-mx-1.5 truncate text-sm font-semibold">
-            {canEditInfo ? (
-              <button
-                type="button"
-                onClick={startEditing}
-                title={ui.chat.renameTitle}
-                className="block w-fit max-w-full truncate rounded px-1.5 py-0.5 text-left hover:bg-accent"
-              >
-                {title}
-              </button>
-            ) : (
-              title
-            )}
-          </div>
-        )}
-        <div className="truncate text-xs font-medium text-muted-foreground">
-          {buildSubtitle(conversation, meId, {
-            typingName,
-            peerOnline,
-            onOpenMembers,
-          })}
-        </div>
-      </div>
       <div className="ml-auto flex shrink-0 items-center gap-2">
         {linkedCard ? (
           <OpenCardButton label={linkedCard.label} onClick={() => openCard(linkedCard.ref)} />

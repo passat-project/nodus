@@ -73,9 +73,9 @@ describe('UsersService: создание и правка сотрудника', 
   const departments = { findRef: vi.fn() };
   /** Репозиторий подразделений (#923 — снятие главы/зама; read-сценарии). */
   const departmentsRepo = {
-    findParentChain: vi.fn(),
-    findNamesByIds: vi.fn(),
     clearHeadAndDeputy: vi.fn(),
+    lockTree: vi.fn(),
+    lockForUpdate: vi.fn(),
   };
   /** Производный руководитель (#923): пересчёт при смене подразделения. */
   const managers = { recomputeUsers: vi.fn(), recomputeDepartments: vi.fn() };

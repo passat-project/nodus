@@ -358,13 +358,17 @@ export function cachedConversation(
 
 /** Личный диалог с сотрудником (карточка сотрудника — чат всегда справа):
  *  find-or-create на стороне API (POST — у вызова есть побочный эффект,
- *  #343), клиент читает как query: повтор идемпотентен. */
-export function useDirectConversation(userId: string) {
+ *  #343), клиент читает как query: повтор идемпотентен.
+ *
+ *  `enabled: false` — карточка сотрудника открыта на другой вкладке (#972):
+ *  открытие профиля не создаёт диалог молча, find-or-create уходит только
+ *  при первом показе вкладки «Чат». */
+export function useDirectConversation(userId: string, options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: chatKeys.direct(userId),
     queryFn: () =>
       api<ConversationListItem>(`/chat/conversations/direct/${userId}`, { method: 'POST' }),
-    enabled: userId.length > 0,
+    enabled: userId.length > 0 && (options.enabled ?? true),
     // 404 — уволенный без истории переписки (#343): ответ окончательный.
     retry: (failureCount, error) =>
       !(error instanceof ApiError && error.status === 404) && failureCount < 1,

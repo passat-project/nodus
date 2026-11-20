@@ -9,9 +9,13 @@
  *  Парсер вид-независим: какие виды разворачивать превью — решает реестр
  *  link-previews (фичи регистрируют свои компоненты). */
 
-const UUID = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
-const LINK_RE = new RegExp(`portal://([a-z_]+)/(${UUID})|https?://\\S*cards=\\S*`, 'g');
-const CARD_REF_RE = new RegExp(`([a-z_]+):(${UUID})`, 'g');
+import { ENTITY_ID_PATTERN } from '../lib/entity-id.js';
+
+const LINK_RE = new RegExp(
+  `portal://([a-z_]+)/(${ENTITY_ID_PATTERN})|https?://\\S*cards=\\S*`,
+  'g',
+);
+const CARD_REF_RE = new RegExp(`([a-z_]+):(${ENTITY_ID_PATTERN})`, 'g');
 
 export type MessageSegment =
   { kind: 'text'; value: string } | { kind: 'entity'; entity: string; id: string };

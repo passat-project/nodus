@@ -17,6 +17,7 @@ import { useProcessTypes } from '../../api/automation-api.js';
 import {
   counterPreviewOf,
   fill,
+  insertableNumberField,
   ruleShort,
   unreachableReason,
   type ContainerNames,
@@ -44,10 +45,11 @@ const idsOf = (bindings: CustomFieldBindings) => [
   ...bindings.nodeKindIds,
 ];
 
-/** Атрибуты, которые можно вставить в номер: не счётчики и не формульные
- *  «глобальные» — только значения записей. */
+/** Атрибуты, которые можно вставить в номер: не счётчики, только значения
+ *  записей и только печатные типы (AUD-010, общий список `@nodus/contracts`) —
+ *  палитра не предлагает то, что сервер отвергнет при сохранении. */
 const insertable = (entry: CustomFieldDefinition, self: string | undefined) =>
-  entry.id !== self && entry.type !== 'counter';
+  insertableNumberField(entry, self);
 
 /**
  * Счётчик в окне атрибута (#630, модель v3): одна строка-сводка правила

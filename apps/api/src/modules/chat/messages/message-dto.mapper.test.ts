@@ -18,12 +18,19 @@ function row(overrides: Partial<ReadAtRow> = {}): ReadAtRow {
 }
 
 function member(overrides: Partial<MemberRow> = {}): MemberRow {
+  // Квитанции ленты (#971) по умолчанию совпадают с курсором беседы: тесты
+  // #102 продолжают проверять прежнюю семантику, разделение — отдельными
+  // кейсами ниже.
+  const lastReadSeq = overrides.lastReadSeq ?? 0n;
+  const lastReadAt = overrides.lastReadAt ?? null;
   return {
     conversationId: 'conv-1',
     userId: 'peer-1',
     role: 'member',
-    lastReadSeq: 0n,
-    lastReadAt: null,
+    lastReadSeq,
+    lastReadAt,
+    lastFeedReadSeq: lastReadSeq,
+    lastFeedReadAt: lastReadAt,
     joinedAt: T0,
     pinned: false,
     muted: false,
@@ -128,6 +135,7 @@ function stubMapper(originals: MessageRow[] = []): MessageDtoMapper {
     findByIds: async () => originals,
   };
   const pins = { pinnedIds: async () => new Set<string>() };
+  const threadReads = { readCursorsFor: async () => new Map() };
   const profiles = {
     findRefs: async (ids: string[]) => ids.map((id) => ({ id, displayName: id, avatarUrl: null })),
   };
@@ -135,6 +143,7 @@ function stubMapper(originals: MessageRow[] = []): MessageDtoMapper {
     messages as never,
     messages as never, // реакции: тот же мок (метод reactionsFor)
     pins as never,
+    threadReads as never,
     profiles as never,
     new SignedUrlService({ STORAGE_URL_SECRET: 'test-secret-32-chars-aaaaaaaaaaaa' }),
     { previewsForUrls: async () => new Map() } as never,

@@ -67,6 +67,8 @@ describe('UsersService.updateUser: перевод главы/зама (#923)', (
     findNamesByIds: vi.fn(),
     clearHeadAndDeputy: vi.fn(),
     clearLeadershipIn: vi.fn(),
+    lockTree: vi.fn(),
+    lockForUpdate: vi.fn(),
   };
   const managers = { recomputeUsers: vi.fn(), recomputeDepartments: vi.fn() };
   const positions = { findRef: vi.fn(), lockMany: vi.fn() };
@@ -89,6 +91,7 @@ describe('UsersService.updateUser: перевод главы/зама (#923)', (
     membership.effectiveRoleIds.mockResolvedValue([]);
     roles.lockByCodeForUpdate.mockResolvedValue(null);
     departmentsRepo.clearLeadershipIn.mockResolvedValue(null);
+    departmentsRepo.lockForUpdate.mockResolvedValue(true);
     departments.findRef.mockResolvedValue({ id: 'dep-new', kind: 'management', isActive: true });
     users.findCardById.mockResolvedValue(cardRow());
     users.findDepartmentId.mockResolvedValue('dep-old');
@@ -129,6 +132,10 @@ describe('UsersService.updateUser: перевод главы/зама (#923)', (
       'user-1',
       'tx-handle',
     );
+    // #946: перевод сериализован advisory-локом дерева с назначениями узлов.
+    expect(departmentsRepo.lockTree).toHaveBeenCalledWith('tx-handle');
+    // Целевой узел под FOR UPDATE — архивация не проскочит между проверкой и записью.
+    expect(departmentsRepo.lockForUpdate).toHaveBeenCalledWith('dep-new', 'tx-handle');
     expect(managers.recomputeUsers).toHaveBeenCalledWith(['user-1'], 'tx-handle');
     expect(managers.recomputeDepartments).not.toHaveBeenCalled();
     expect(departmentEvents()).toEqual([]);
@@ -226,5 +233,23 @@ describe('UsersService.updateUser: перевод главы/зама (#923)', (
     expect(users.findDepartmentId).not.toHaveBeenCalled();
     expect(departmentsRepo.clearLeadershipIn).not.toHaveBeenCalled();
     expect(managers.recomputeUsers).not.toHaveBeenCalled();
+    expect(departmentsRepo.lockTree).not.toHaveBeenCalled();
+  });
+
+  it('перевод вместе с другими полями — одно событие user.updated (#946)', async () => {
+    await service.updateUser(
+      'user-1',
+      { departmentId: 'dep-new', mobilePhone: '+375291234567' },
+      actor,
+    );
+
+    const userEvents = (
+      eventBus.emit.mock.calls as unknown as [string, string, { changedFields: string[] }][]
+    )
+      .filter((call) => call[1] === 'directory.user.updated')
+      .map((call) => call[2]);
+    expect(userEvents).toEqual([
+      { userId: 'user-1', changedFields: ['departmentId', 'mobilePhone'] },
+    ]);
   });
 });

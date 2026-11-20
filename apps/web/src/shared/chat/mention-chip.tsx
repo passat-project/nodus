@@ -3,15 +3,16 @@ import type { CSSProperties, ReactNode } from 'react';
 import { parseMentionSegments } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
-import { openCardViaBridge } from '../lib/card-bridge.js';
 import { personTone, personToneVar } from '../ui/person-tone.js';
+import { openEmployeeCardFromChat } from './employee-card-nav.js';
 
 /**
  * Чип @упоминания (#176, модель Slack): inline-токен `@[текст](user:id)`
  * рендерится пилюлей персонального цвета упомянутого (#180 — тон
  * идентичности человека; палитра --name-1..7 текстопригодна на пузырях
- * обеих тем). Клик в ленте — карточка сотрудника; токен из текста убирается
- * парсером (contracts), чип — его визуальная замена.
+ * обеих тем). Клик в ленте — карточка сотрудника (с #972 — вкладкой
+ * «Задачи»); токен из текста убирается парсером (contracts), чип — его
+ * визуальная замена.
  *
  * Контраст по поверхности (#224, ревизия приёмки): персональный тон на
  * СВОЁМ цветном пузыре давал «синее на синем». На пузыре variant=default
@@ -57,7 +58,7 @@ export function MentionChip({ id, label }: { id: string; label: string }) {
       data-slot="mention-chip"
       onClick={(e) => {
         e.stopPropagation();
-        if (id !== 'all') openCardViaBridge({ kind: 'employee', id });
+        if (id !== 'all') openEmployeeCardFromChat(id);
       }}
       style={chipStyle(id)}
       className={cn(

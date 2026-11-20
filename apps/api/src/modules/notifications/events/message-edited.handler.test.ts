@@ -44,6 +44,7 @@ describe('MessageEditedHandler', () => {
     conversationState: vi.fn(),
     buildInsertsFromEditedEvent: vi.fn(),
     actorName: vi.fn(),
+    threadWatcherIds: vi.fn<(rootId: string) => Promise<string[]>>(async () => []),
   };
   const txRunner = { run: vi.fn((cb: (tx: string) => unknown) => cb(TX)) };
   const eventBus = { emit: vi.fn() };

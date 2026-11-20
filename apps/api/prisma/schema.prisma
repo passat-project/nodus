@@ -381,9 +381,16 @@ model ConversationMember {
   userId         String    @map("user_id") @db.Uuid
   /// owner | admin | member.
   role           String
+  /// Курсор БЕСЕДЫ (бейдж непрочитанного): двигается и лентой, и тредом
+  /// («увидел где угодно»). Квитанции «Просмотрено» живут на курсоре ленты.
   lastReadSeq    BigInt    @default(0) @map("last_read_seq")
-  /// Момент последнего продвижения курсора (для readAt и «правка → непрочитано»).
+  /// Момент последнего продвижения курсора беседы (для «правка → непрочитано»).
   lastReadAt     DateTime? @map("last_read_at") @db.Timestamptz()
+  /// Курсор ЛЕНТЫ (квитанции «Просмотрено» сообщений беседы/канала, #971):
+  /// двигают только квитанции ленты — чтение обсуждения (треда) его не трогает.
+  lastFeedReadSeq BigInt    @default(0) @map("last_feed_read_seq")
+  /// Момент последнего продвижения курсора ленты (правки: «прочитал после»).
+  lastFeedReadAt  DateTime? @map("last_feed_read_at") @db.Timestamptz()
   pinned         Boolean   @default(false)
   muted          Boolean   @default(false)
   /// «Посмотреть позже»: гасится своей отправкой/пересылкой (мок-семантика).
@@ -456,6 +463,7 @@ model Message {
   threadRoot         Message?            @relation("ThreadTree", fields: [threadRootId], references: [id], onDelete: Restrict)
   threadReplies      Message[]           @relation("ThreadTree")
   threadParticipants ThreadParticipant[] @relation("ThreadParticipants")
+  threadReads        ThreadRead[]        @relation("ThreadReads")
   reactions          MessageReaction[]
   messagePins        ConversationPin[]
   attachments        MessageAttachment[]
@@ -526,7 +534,8 @@ model ThreadParticipant {
   source       String
   /// Watermark трэда (точка «есть новые» на посте, раунд 3): чужие ответы
   /// с seq > lastReadSeq — непрочитанные; двигается квитанцией из треда
-  /// (POST /read c threadRootId), GREATEST — не откатывается.
+  /// (POST /read c threadRootId), GREATEST — не откатывается. Квитанции
+  /// «Просмотрено» ответов треда живут отдельно (ThreadRead, #971).
   lastReadSeq  BigInt   @default(0) @map("last_read_seq")
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
@@ -535,6 +544,25 @@ model ThreadParticipant {
   @@id([threadRootId, userId])
   @@index([userId])
   @@map("thread_participants")
+}
+
+/// Квитанция чтения треда (#971): «видел ответы этого обсуждения» — для
+/// «Просмотрено» ответов треда. Пишется ЛЮБЫМ участником беседы при квитанции
+/// из треда (не только наблюдателям), поэтому отделена от ThreadParticipant
+/// (участие = уведомления; молчаливый читатель наблюдателем не становится).
+model ThreadRead {
+  threadRootId String    @map("thread_root_id") @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  /// Watermark чтения треда: ответы с seq > lastReadSeq непрочитанны; GREATEST,
+  /// не откатывается. Время — для правила «прочитал после правки».
+  lastReadSeq  BigInt    @default(0) @map("last_read_seq")
+  lastReadAt   DateTime? @map("last_read_at") @db.Timestamptz()
+
+  threadRoot Message @relation("ThreadReads", fields: [threadRootId], references: [id], onDelete: Cascade)
+
+  @@id([threadRootId, userId])
+  @@index([userId])
+  @@map("thread_reads")
 }
 
 /// Вложение сообщения (Ф6 — после #57: файлы/MinIO). Загруженное-но-не-

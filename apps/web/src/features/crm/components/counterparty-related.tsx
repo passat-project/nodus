@@ -69,6 +69,8 @@ export function CounterpartyLettersTab({
       <div className="min-h-0 flex-1">
         <DataTable
           viewKey={LETTERS_VIEW}
+          /* Массовых действий нет — выбор строк не предлагаем (#962). */
+          selectable={false}
           defs={fields}
           rows={rows}
           rowKey={letterKey}
@@ -120,6 +122,8 @@ export function CounterpartyProjectsTab({
       <div className="min-h-0 flex-1">
         <DataTable
           viewKey={PROJECTS_VIEW}
+          /* Массовых действий нет — выбор строк не предлагаем (#962). */
+          selectable={false}
           defs={fields}
           rows={rows}
           rowKey={(project) => project.id}

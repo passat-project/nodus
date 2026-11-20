@@ -8,6 +8,7 @@ import { FileAccessRegistry } from '../../../core/ports/file-access.registry.js'
 import type { FileObjectRow } from '../files.repository.js';
 import { FilesRepository } from '../files.repository.js';
 import { OFFICE_CONFIG, type OfficeConfig } from './office.config.js';
+import { OfficeSessionsStore } from './office-sessions.store.js';
 import { OfficeTokenService } from './office-token.service.js';
 
 /**
@@ -25,6 +26,7 @@ export class OfficeSessionService {
     private readonly tokens: OfficeTokenService,
     private readonly signedUrls: SignedUrlService,
     private readonly fileAccess: FileAccessRegistry,
+    private readonly sessions: OfficeSessionsStore,
   ) {}
 
   /** Общий резолвер прав (сессия и список версий): NOT_FOUND прячет чужие
@@ -146,6 +148,11 @@ export class OfficeSessionService {
       },
     };
     const token = await this.tokens.sign({ document, editorConfig });
+    // Реестр для drop при деактивации (#356): только правка — просмотр
+    // сохранять не может, держать его ключи незачем.
+    if (effectiveMode === 'edit') {
+      await this.sessions.register(user.id, document.key);
+    }
 
     return {
       fileId: file.id,

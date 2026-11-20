@@ -15,6 +15,8 @@ interface MessageEditedPayload {
   authorId?: string;
   text?: string;
   seq?: number;
+  /** Ответ треда (#974): правка уходит только наблюдателям обсуждения. */
+  threadRootId?: string | null;
   /** Дифф упоминаний правки (#239): пусто у событий до #239. */
   mentionedUserIds?: string[];
   previousMentionedUserIds?: string[];
@@ -56,6 +58,11 @@ export class MessageEditedHandler implements DomainEventHandler<MessageEditedPay
 
     const state = await this.service.conversationState(payload.conversationId);
     if (!state) return; // беседа исчезла — журналимое событие потеряло источник
+    // #974: правка ответа в обсуждении — только наблюдателям треда (как у
+    // отправки); правка сообщения ленты — всем членам беседы.
+    const watchers = payload.threadRootId
+      ? await this.service.threadWatcherIds(payload.threadRootId)
+      : [];
     const inserts = this.service.buildInsertsFromEditedEvent(
       {
         id: event.id,
@@ -65,6 +72,7 @@ export class MessageEditedHandler implements DomainEventHandler<MessageEditedPay
           authorId: payload.authorId,
           text: payload.text ?? '',
           seq: payload.seq,
+          threadRootId: payload.threadRootId ?? null,
           mentionedUserIds: payload.mentionedUserIds ?? [],
           previousMentionedUserIds: payload.previousMentionedUserIds ?? [],
           previousMentionedAll: payload.previousMentionedAll ?? false,
@@ -72,6 +80,7 @@ export class MessageEditedHandler implements DomainEventHandler<MessageEditedPay
         },
       },
       state,
+      watchers,
     );
     if (inserts.length === 0) return;
     const actorName = await this.service.actorName(payload.authorId);

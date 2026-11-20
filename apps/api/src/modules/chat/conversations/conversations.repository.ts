@@ -15,8 +15,12 @@ export interface MemberRow {
   conversationId: string;
   userId: string;
   role: string;
+  /** Курсор беседы (непрочитанное): лента + тред. */
   lastReadSeq: bigint;
   lastReadAt: Date | null;
+  /** Курсор ленты (квитанции «Просмотрено» сообщений беседы, #971). */
+  lastFeedReadSeq: bigint;
+  lastFeedReadAt: Date | null;
   joinedAt: Date;
   pinned: boolean;
   muted: boolean;
@@ -238,6 +242,7 @@ export class ConversationsRepository {
     const rows = await client.$queryRaw<MemberRow[]>(Prisma.sql`
       SELECT conversation_id AS "conversationId", user_id AS "userId", role,
              last_read_seq AS "lastReadSeq", last_read_at as "lastReadAt",
+             last_feed_read_seq AS "lastFeedReadSeq", last_feed_read_at as "lastFeedReadAt",
              joined_at as "joinedAt", pinned, muted, snoozed, hidden
       FROM conversation_members
       WHERE conversation_id = ${conversationId}::uuid AND user_id = ${userId}::uuid
@@ -263,6 +268,7 @@ export class ConversationsRepository {
     return client.$queryRaw<MemberRow[]>(Prisma.sql`
       SELECT conversation_id AS "conversationId", user_id AS "userId", role,
              last_read_seq AS "lastReadSeq", last_read_at as "lastReadAt",
+             last_feed_read_seq AS "lastFeedReadSeq", last_feed_read_at as "lastFeedReadAt",
              joined_at as "joinedAt", pinned, muted, snoozed, hidden
       FROM conversation_members
       WHERE conversation_id = ANY(${conversationIds}::uuid[])

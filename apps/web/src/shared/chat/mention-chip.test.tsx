@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { registerCardBridge } from '../lib/card-bridge.js';
+import { takeEmployeeCardTab } from './employee-card-nav.js';
 import { MentionSnippet } from './mention-chip.js';
 import { MessageText } from './message-text.js';
 
@@ -33,6 +34,8 @@ describe('MessageText — токен упоминания (#176)', () => {
     fireEvent.click(container.querySelector('button')!);
     // Реф + rect источника (#728): чип упоминания rect не передаёт.
     expect(opener).toHaveBeenCalledWith({ kind: 'employee', id: UUID_A }, undefined);
+    // Из мессенджера карточка стартует «Задачами» (#972).
+    expect(takeEmployeeCardTab(UUID_A)).toBe('tasks');
     close();
   });
 

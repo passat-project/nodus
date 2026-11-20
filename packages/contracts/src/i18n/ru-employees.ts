@@ -27,6 +27,9 @@ export const employeesStrings = {
   fieldDepartmentName: 'Название',
   fieldHead: 'Руководитель',
   fieldDeputy: 'Заместитель',
+  /* #946: назначение главы/зама переводит сотрудника в подразделение. */
+  leaderTransferHint: 'Сотрудник будет переведён в это подразделение',
+  leaderSamePerson: 'Руководитель и заместитель не могут быть одним сотрудником',
   collapseDepartment: 'Свернуть подразделения',
   expandDepartment: 'Развернуть подразделения',
   zoomReset: 'Сбросить масштаб',

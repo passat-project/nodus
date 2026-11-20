@@ -217,7 +217,7 @@ describe('ProjectsService (#52, #631 Р9/Р10)', () => {
     });
   });
 
-  describe('assertManageLocked (#705): гард по свежей строке под FOR UPDATE', () => {
+  describe('assertManageLocked (#705): гард по свежей строке под FOR UPDATE (#875)', () => {
     it('строки проекта нет под замком — 404', async () => {
       await expect(
         kit.service.assertManageLocked(user(CREATOR), ID, null, {} as never),
@@ -236,14 +236,15 @@ describe('ProjectsService (#52, #631 Р9/Р10)', () => {
         ),
       ).rejects.toMatchObject({ code: ErrorCode.FORBIDDEN });
 
+      const archived = { status: 'archived', visibility: 'open' } as const;
       await expect(
         kit.service.assertManageLocked(
           user(HELPER, [Permission.PROJECT_MANAGE]),
           ID,
-          { status: 'archived', visibility: 'open' },
+          archived,
           {} as never,
         ),
-      ).resolves.toBeUndefined();
+      ).resolves.toBe(archived);
 
       await expect(
         kit.service.assertManageLocked(
@@ -268,14 +269,15 @@ describe('ProjectsService (#52, #631 Р9/Р10)', () => {
         ),
       ).rejects.toMatchObject({ code: ErrorCode.FORBIDDEN });
 
+      const active = { status: 'active', visibility: 'open' } as const;
       await expect(
         kit.service.assertManageLocked(
           user(CREATOR, [Permission.PROJECT_MANAGE]),
           ID,
-          { status: 'active', visibility: 'open' },
+          active,
           {} as never,
         ),
-      ).resolves.toBeUndefined();
+      ).resolves.toBe(active);
 
       expect(participantsRepo.rowsOfProject).toHaveBeenCalledWith(ID, {});
     });
@@ -292,14 +294,15 @@ describe('ProjectsService (#52, #631 Р9/Р10)', () => {
         ),
       ).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND });
 
+      const secret = { status: 'active', visibility: 'secret' } as const;
       await expect(
         kit.service.assertManageLocked(
           user(CREATOR, [Permission.PROJECT_MANAGE, Permission.PROJECT_VIEW_SECRET]),
           ID,
-          { status: 'active', visibility: 'secret' },
+          secret,
           {} as never,
         ),
-      ).resolves.toBeUndefined();
+      ).resolves.toBe(secret);
     });
   });
 });

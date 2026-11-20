@@ -50,12 +50,16 @@ const editing: DepartmentNode = {
 
 const users = [person('u-1', 'Иванов Иван', 'active'), person('u-2', 'Петров Пётр', 'active')];
 
-function dialog(open: boolean, editingNode: DepartmentNode | null = editing) {
+function dialog(
+  open: boolean,
+  editingNode: DepartmentNode | null = editing,
+  kind: 'management' | 'legal' = 'management',
+) {
   return (
     <DepartmentDialog
       open={open}
       onOpenChange={vi.fn()}
-      kind="management"
+      kind={kind}
       parentId={null}
       editing={editingNode}
       users={users}
@@ -75,9 +79,12 @@ function dialog(open: boolean, editingNode: DepartmentNode | null = editing) {
 
 /** Окно открывается из закрытого состояния — как на странице: черновик
  *  наполняется на открытии (`prevOpen`), затем Radix ставит фокус. */
-async function mount(editingNode: DepartmentNode | null = editing) {
-  const view = render(dialog(false, editingNode));
-  view.rerender(dialog(true, editingNode));
+async function mount(
+  editingNode: DepartmentNode | null = editing,
+  kind: 'management' | 'legal' = 'management',
+) {
+  const view = render(dialog(false, editingNode, kind));
+  view.rerender(dialog(true, editingNode, kind));
   await screen.findByRole('dialog');
   return view;
 }
@@ -145,5 +152,37 @@ describe('DepartmentDialog: фокус и списки (#768)', () => {
     fireEvent.keyDown(head, { key: 'ArrowDown' });
 
     expect(screen.getByRole('button', { name: /Иванов Иван/ })).toBeTruthy();
+  });
+
+  it('выбор главы из другого подразделения — подсказка о переводе (#946)', async () => {
+    await mount();
+
+    fireEvent.click(screen.getByLabelText(ui.employees.fieldHead));
+    fireEvent.click(screen.getByRole('button', { name: /Иванов Иван/ }));
+
+    expect(screen.getByText(ui.employees.leaderTransferHint)).toBeTruthy();
+  });
+
+  it('юрструктура формальная: подсказки о переводе нет (#946)', async () => {
+    await mount(editing, 'legal');
+
+    fireEvent.click(screen.getByLabelText(ui.employees.fieldHead));
+    fireEvent.click(screen.getByRole('button', { name: /Иванов Иван/ }));
+
+    expect(screen.queryByText(ui.employees.leaderTransferHint)).toBeNull();
+  });
+
+  it('глава и зам — один сотрудник: сообщение и сохранение заблокировано (#946)', async () => {
+    await mount();
+
+    fireEvent.click(screen.getByLabelText(ui.employees.fieldHead));
+    fireEvent.click(screen.getByRole('button', { name: /Иванов Иван/ }));
+    fireEvent.click(screen.getByLabelText(ui.employees.fieldDeputy));
+    fireEvent.click(screen.getByRole('button', { name: /Иванов Иван/ }));
+
+    expect(screen.getByRole('alert').textContent).toBe(ui.employees.leaderSamePerson);
+    expect(
+      (screen.getByRole('button', { name: ui.common.save }) as HTMLButtonElement).disabled,
+    ).toBe(true);
   });
 });

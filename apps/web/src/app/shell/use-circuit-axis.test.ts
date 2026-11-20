@@ -126,7 +126,7 @@ describe('useCircuitAxisY: ось шелла', () => {
 
 describe('useCircuitAxisY: карточка мессенджера', () => {
   it('уже открытая карточка (окно ассистента открыли позже) — замер сразу', () => {
-    router.searchStr = '?cards=messenger:abc';
+    router.searchStr = '?cards=messenger:30000000-0000-4000-8000-000000000004';
     mountBar('data-card-topbar', 90);
     render(createElement(Probe));
     expect(axisText()).toBe('90');
@@ -138,7 +138,7 @@ describe('useCircuitAxisY: карточка мессенджера', () => {
     const { rerender } = render(createElement(Probe));
     expect(axisText()).toBe('64');
 
-    router.searchStr = '?cards=messenger:abc';
+    router.searchStr = '?cards=messenger:30000000-0000-4000-8000-000000000004';
     mountBar('data-card-topbar', 90);
     rerender(createElement(Probe));
     // Пока карточка раскрывается — ось шелла, перемеры подавлены.
@@ -156,7 +156,7 @@ describe('useCircuitAxisY: карточка мессенджера', () => {
   });
 
   it('карточка закрывается: сразу назад на ось шелла, без ожидания', () => {
-    router.searchStr = '?cards=messenger:abc';
+    router.searchStr = '?cards=messenger:30000000-0000-4000-8000-000000000004';
     useShellStore.setState({ cardClosing: true });
     mountBar('data-topbar', 64);
     render(createElement(Probe));
@@ -164,7 +164,7 @@ describe('useCircuitAxisY: карточка мессенджера', () => {
   });
 
   it('карточка без хедера — ось null, а не чужой низ', () => {
-    router.searchStr = '?cards=messenger:abc';
+    router.searchStr = '?cards=messenger:30000000-0000-4000-8000-000000000004';
     render(createElement(Probe));
     expect(axisText()).toBe('null');
   });

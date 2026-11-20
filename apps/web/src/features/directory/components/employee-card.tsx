@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ui } from '@nodus/contracts';
 import { Empty, EmptyTitle } from '@nodus/ui/components/empty';
 import { Skeleton } from '@nodus/ui/components/skeleton';
@@ -9,6 +9,10 @@ import { useDepartmentsList } from '../../../shared/api/departments-list.js';
 import { useAssigneeTasks, useMemberProjects } from '../../../shared/api/user-relations.js';
 import { ApiError } from '../../../shared/api-client.js';
 import { useDirectConversation } from '../../../shared/chat/chat-queries.js';
+import {
+  subscribeEmployeeCardTab,
+  takeEmployeeCardTab,
+} from '../../../shared/chat/employee-card-nav.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { chatCeiling, chatColumnWidth } from '../../../shared/ui/branch-panel.js';
 import {
@@ -37,37 +41,59 @@ import { EmployeeProfileTab } from './employee-profile-tab.js';
  * рабочая зона: полоса вкладок карточек «Чат» (своя карточка — «Избранное»),
  * «Задачи», «Проекты» со счётчиками и контентом, который монтируется при
  * первом показе и живёт скрытым (`EmployeeCardWorkTabs`, канон карточки
- * задачи). Личный диалог (find-or-create) — вкладка «Чат»; панель беседы —
+ * задачи). Личный диалог (find-or-create) — вкладка «Чат», запрос уходит
+ * только при первом её открытии (#972): открытие профиля из мессенджера
+ * начинается с «Задач» и не создаёт диалог молча; панель беседы —
  * полновысотный сиблинг, её тоггл — в полосе вкладок и только у чата; ширина
  * правой зоны — перегородка с памятью, профиль забирает остаток (чат —
  * буфер сужений: рельса и панель сужают его до пола, дальше — левую зону).
  * Кнопки «Написать сообщение» нет — чат уже здесь.
  */
-export function EmployeeCard({ userId }: { userId: string }) {
+export function EmployeeCard({ userId, dormant = false }: { userId: string; dormant?: boolean }) {
   const { data: card, isLoading } = useUserCard(userId);
   const { data: usersData } = useUsersList();
   const tasksQuery = useAssigneeTasks(userId);
   const projectsQuery = useMemberProjects(userId, { enabled: projectsAvailable() });
-  const directQuery = useDirectConversation(userId);
   const meId = useAuthStore((s) => s.user?.id);
   // Активная вкладка правой зоны (память не вводим — личные настройки/engine,
-  // #744/#746; дефолт всегда чат). Профиль слева — вне вкладок.
-  const [tab, setTab] = useState<EmployeeWorkTab>('chat');
+  // #744/#746). Дефолт — чат, но внешнее открытие из мессенджера (#972)
+  // пристаивает «Задачи»: профиль должен открываться как профиль, а не
+  // копией текущего диалога. Пристойка одноразовая (employee-card-nav).
+  const [tab, setTab] = useState<EmployeeWorkTab>(() => takeEmployeeCardTab(userId) ?? 'chat');
   // Окно профиля — одно на карточку (#923); кнопка в нижней полосе левой зоны.
   const [editOpen, setEditOpen] = useState(false);
   // Вкладка после первого показа не размонтируется: скролл/фильтры журналов
   // и черновик чата живут.
-  const [visited, setVisited] = useState<readonly EmployeeWorkTab[]>(['chat']);
+  const [visited, setVisited] = useState<readonly EmployeeWorkTab[]>(() => [tab]);
   // Подмена сотрудника в той же карточке стека (replaceTop) — вкладки
   // принадлежали прежнему человеку: сброс в рендер-тайме (канон React, как у
-  // мессенджер-карточки).
+  // мессенджер-карточки); стартовая — из свежей пристойки.
   const [prevUserId, setPrevUserId] = useState(userId);
   if (prevUserId !== userId) {
     setPrevUserId(userId);
-    setTab('chat');
-    setVisited(['chat']);
+    const nextTab = takeEmployeeCardTab(userId) ?? 'chat';
+    setTab(nextTab);
+    setVisited([nextTab]);
     setEditOpen(false);
   }
+  // Живая карточка: клик по аватару/шапке ДРУГОГО представления того же
+  // сотрудника при уже верхней карточке (openCard — no-op) тоже переключает
+  // на «Задачи» — иначе пристойка оставалась бы непотреблённой. Спящая
+  // (нижняя в стеке) карточка НЕ потребляет пристойку: новая карточка того же
+  // сотрудника монтируется сверху и должна получить «Задачи» сама.
+  useEffect(() => {
+    if (dormant) return;
+    return subscribeEmployeeCardTab(() => {
+      const nextTab = takeEmployeeCardTab(userId);
+      if (!nextTab) return;
+      setTab(nextTab);
+      setVisited((prev) => (prev.includes(nextTab) ? prev : [...prev, nextTab]));
+    });
+  }, [userId, dormant]);
+  // Личный диалог — find-or-create (POST, #343): открытие ПРОФИЛЯ не должно
+  // молча создавать диалог. Запрос уходит только после первого открытия
+  // вкладки «Чат» (до этого данные не нужны ни ленте, ни панели беседы).
+  const directQuery = useDirectConversation(userId, { enabled: visited.includes('chat') });
   const panel = useChatSidePanel();
   // Панель беседы видна ТОЛЬКО на вкладке чата: уход на журнал её прячет,
   // panel.open не сбрасывается — возврат восстанавливает открытое состояние.

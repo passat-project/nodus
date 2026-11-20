@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { StrictMode } from 'react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UserCard, UserListItem } from '@nodus/contracts';
 
 import { useAuthStore } from '../../../shared/auth-store.js';
+import { stageEmployeeCardTab } from '../../../shared/chat/employee-card-nav.js';
 import { EmployeeCard } from './employee-card.js';
 
 /** Карточка сотрудника (#750): профиль — постоянная левая зона, справа
@@ -17,7 +19,7 @@ const ME = '11111111-1111-4111-8111-111111111111';
 const OTHER = '22222222-2222-4222-8222-222222222222';
 const THIRD = '33333333-3333-4333-8333-333333333333';
 
-const state = vi.hoisted(() => ({ loading: false }));
+const state = vi.hoisted(() => ({ loading: false, directEnabled: [] as boolean[] }));
 
 const CARD = {
   id: OTHER,
@@ -54,7 +56,10 @@ vi.mock('../../../shared/api/user-relations.js', () => ({
   useMemberProjects: () => ({ data: { items: [] }, isLoading: false }),
 }));
 vi.mock('../../../shared/chat/chat-queries.js', () => ({
-  useDirectConversation: () => ({ data: { id: 'conv-1' } }),
+  useDirectConversation: (_userId: string, options?: { enabled?: boolean }) => {
+    state.directEnabled.push(options?.enabled ?? true);
+    return { data: { id: 'conv-1' } };
+  },
 }));
 vi.mock('../../../shared/chat/conversation-pane.js', () => ({
   ConversationPane: () => <div>лента диалога</div>,
@@ -88,6 +93,7 @@ vi.mock('../../../shared/chat/chat-side-panel.js', async () => {
 
 beforeEach(() => {
   state.loading = false;
+  state.directEnabled = [];
   useAuthStore.setState({
     user: { id: ME, email: 'me@nodus.by', displayName: 'Я Сам', permissions: [] },
   });
@@ -156,5 +162,60 @@ describe('EmployeeCard — анатомия #750', () => {
 
     rerender(<EmployeeCard userId={THIRD} />);
     expect(screen.getByRole('tab', { name: /^Чат/ }).getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('открытие из мессенджера: старт с «Задач», диалог — только после «Чата» (#972)', () => {
+    stageEmployeeCardTab(OTHER, 'tasks');
+    render(<EmployeeCard userId={OTHER} />);
+
+    expect(screen.getByRole('tab', { name: /^Задачи/ }).getAttribute('aria-selected')).toBe('true');
+    // Чат не монтировался — ленты диалога нет.
+    expect(screen.queryByText('лента диалога')).toBeNull();
+    // find-or-create молчит: профиль открыт, вкладку «Чат» никто не открывал.
+    expect(state.directEnabled.at(-1)).toBe(false);
+
+    fireEvent.click(screen.getByRole('tab', { name: /^Чат/ }));
+    expect(state.directEnabled.at(-1)).toBe(true);
+    expect(screen.getByText('лента диалога')).not.toBeNull();
+  });
+
+  it('StrictMode не теряет пристойку (двойной рендер карточки)', () => {
+    stageEmployeeCardTab(OTHER, 'tasks');
+    render(
+      <StrictMode>
+        <EmployeeCard userId={OTHER} />
+      </StrictMode>,
+    );
+    expect(screen.getByRole('tab', { name: /^Задачи/ }).getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('уже открытая карточка переключается на «Задачи» по подписке (#972)', () => {
+    render(<EmployeeCard userId={OTHER} />);
+    expect(screen.getByRole('tab', { name: /^Чат/ }).getAttribute('aria-selected')).toBe('true');
+
+    act(() => stageEmployeeCardTab(OTHER, 'tasks'));
+    expect(screen.getByRole('tab', { name: /^Задачи/ }).getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('спящая (нижняя в стеке) карточка не съедает пристойку новой верхней (#972)', () => {
+    const { rerender } = render(<EmployeeCard userId={OTHER} dormant />);
+    act(() => stageEmployeeCardTab(OTHER, 'tasks'));
+    // Нижняя карточка не подписана — пристойка ждёт новую верхнюю.
+    expect(screen.getByRole('tab', { name: /^Чат/ }).getAttribute('aria-selected')).toBe('true');
+
+    rerender(<EmployeeCard userId={OTHER} />);
+    expect(screen.getByRole('tab', { name: /^Чат/ }).getAttribute('aria-selected')).toBe('true');
+
+    // Проснувшаяся верхняя карточка подписана и реагирует на новый клик.
+    act(() => stageEmployeeCardTab(OTHER, 'tasks'));
+    expect(screen.getByRole('tab', { name: /^Задачи/ }).getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('смена сотрудника берёт свежую пристойку (иначе — чат)', () => {
+    const { rerender } = render(<EmployeeCard userId={OTHER} />);
+    stageEmployeeCardTab(THIRD, 'tasks');
+
+    rerender(<EmployeeCard userId={THIRD} />);
+    expect(screen.getByRole('tab', { name: /^Задачи/ }).getAttribute('aria-selected')).toBe('true');
   });
 });
