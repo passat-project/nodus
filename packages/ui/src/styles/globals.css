@@ -573,10 +573,13 @@
  * декомпозитят всю анимацию (web.dev, animations-overview). */
 @utility slider-expand {
   transform-origin: top left;
-  /* Слой промоутирован ДО первого кадра анимации: первый запуск без фриза
-   * (без will-change браузер создаёт композитный слой на старте анимации). */
-  will-change: transform;
-  animation: slider-expand 430ms cubic-bezier(0.3, 1.16, 0.45, 1) both;
+  /* `will-change` здесь НЕ объявляется: постоянный промоушен держал содержимое
+   * карточки растром масштаба источника — текст/фото «мылились» до первой
+   * paint-инвалидации (Chromium re-rastering, #969). Промоушен ставится
+   * inline в SliderPanel только на время раскрытия и снимается по animationend.
+   * `backwards` (а не `both`): до старта — from-состояние, после конца —
+   * естественные стили, завершённая анимация не держит слой. */
+  animation: slider-expand 430ms cubic-bezier(0.3, 1.16, 0.45, 1) backwards;
 }
 @keyframes slider-expand {
   from {
@@ -589,7 +592,8 @@
 
 /* Раскрытие без источника (прямая ссылка, палитра): сдержанный scale-fade. */
 @utility slider-pop {
-  animation: slider-pop 220ms ease-out both;
+  /* `backwards`: завершённая анимация не держит слой отдельным композитом. */
+  animation: slider-pop 220ms ease-out backwards;
 }
 @keyframes slider-pop {
   from {
@@ -618,9 +622,12 @@
   animation: soft-fade 240ms ease-out 300ms both;
 }
 
-/* Контент панели наливается после формы (задержка 160 мс). */
+/* Контент панели наливается после формы (задержка 160 мс). `backwards`:
+ * после конца анимации зона возвращается в обычный поток отрисовки и не
+ * остаётся отдельным композитным слоем — иначе текст на нём терял
+ * LCD-сглаживание и «застревал» (content-fade + fill-mode both, #969). */
 @utility content-fade {
-  animation: soft-fade 200ms ease-out 160ms both;
+  animation: soft-fade 200ms ease-out 160ms backwards;
 }
 @keyframes soft-fade {
   from {

@@ -59,4 +59,76 @@ describe('SliderPanel: закрытие схлопыванием в источн
     act(() => anims[0]?.oncancel?.());
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it('после раскрытия промоушен снимается — слой перерисовывается в 1:1 (#969)', () => {
+    render(
+      <SliderPanel
+        title="Карточка"
+        onClose={vi.fn()}
+        sourceRect={{ x: 0, y: 0, width: 10, height: 10 }}
+      >
+        <div />
+      </SliderPanel>,
+    );
+    const section = screen.getByRole('dialog');
+    expect(section.style.willChange).toBe('transform');
+
+    // Чужие анимации (content-fade зон) промоушен не снимают: событие
+    // приходит с дочернего элемента, а не с самой панели.
+    const header = section.querySelector('header');
+    fireEvent.animationEnd(header ?? section);
+    expect(section.style.willChange).toBe('transform');
+
+    fireEvent.animationEnd(section);
+    expect(section.style.willChange).toBe('');
+  });
+
+  it('открытие без источника — постоянного промоушена нет (#969)', () => {
+    render(
+      <SliderPanel title="Карточка" onClose={vi.fn()}>
+        <div />
+      </SliderPanel>,
+    );
+    expect(screen.getByRole('dialog').style.willChange).toBe('');
+  });
+
+  it('закрытие промоутирует слой перед WAAPI и снимает его после (#969)', () => {
+    Object.defineProperty(HTMLElement.prototype, 'animate', {
+      configurable: true,
+      value: () => ({ onfinish: null, oncancel: null }),
+    });
+    render(
+      <SliderPanel
+        title="Карточка"
+        onClose={vi.fn()}
+        sourceRect={{ x: 0, y: 0, width: 10, height: 10 }}
+      >
+        <div />
+      </SliderPanel>,
+    );
+    const section = screen.getByRole('dialog');
+
+    // Раскрытие осело — промоушена больше нет.
+    fireEvent.animationEnd(section);
+    expect(section.style.willChange).toBe('');
+
+    // Клик «Закрыть»: на время WAAPI-схлопывания слой снова промоутирован.
+    fireEvent.click(screen.getByRole('button', { name: ui.common.close }));
+    expect(section.style.willChange).toBe('transform');
+  });
+
+  it('закрытие в первые 430 мс не снимает промоушен: animationend раскрытия при closing игнорируется (#969)', () => {
+    // openWithSource кликает «Закрыть» сразу после маунта — окно «закрытие
+    // во время раскрытия», в котором animationend раскрытия ещё придёт.
+    const { anims } = openWithSource();
+    const section = screen.getByRole('dialog');
+    expect(section.style.willChange).toBe('transform');
+
+    fireEvent.animationEnd(section);
+    // Промоушен нужен WAAPI-схлопыванию — событие раскрытия его не снимает.
+    expect(section.style.willChange).toBe('transform');
+
+    act(() => anims[0]?.onfinish?.());
+    expect(section.style.willChange).toBe('');
+  });
 });
