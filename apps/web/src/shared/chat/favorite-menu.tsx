@@ -1,5 +1,5 @@
 import { ArrowUpRight, CheckSquare, Copy, Forward, Star, X } from 'lucide-react';
-import { useRef, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import type { ChatMessage, FavoriteCard } from '@nodus/contracts';
 import { stripMentionTokens, ui } from '@nodus/contracts';
 import {
@@ -15,6 +15,7 @@ import { useChatHostNavigation } from './chat-host.js';
 import { useForwardDialog } from './dialog-stores.js';
 import { useRemoveFavorite } from './favorites-api.js';
 import { useJumpStore } from './jump-store.js';
+import { closeMenuThenRun } from './menu-close.js';
 import { useSelectionStore } from './selection-store.js';
 import { copyMessagesAsText } from './use-selection-keys.js';
 
@@ -48,6 +49,9 @@ export function FavoriteMenu({
 }) {
   const remove = useRemoveFavorite();
   const nav = useChatHostNavigation();
+  /** #273: меню управляемое — closeFirst-пункт закрывает его ЯВНО, а не
+   *  через неявный handleSelect Radix. */
+  const [menuOpen, setMenuOpen] = useState(false);
   const triggerRef = useRef<HTMLSpanElement>(null);
   const inSourceWindow = scope !== undefined;
   const hasSelection = useSelectionStore(
@@ -64,14 +68,14 @@ export function FavoriteMenu({
     else toast(ui.chat.jumpNotFound);
   }
 
-  /** #132 р.2: смена режима селекта — после ухода меню (без морфинга
-   *  содержимого в анимации закрытия). */
+  /** #132 р.2 / #273: смена режима селекта — меню закрывается ЯВНО, действие
+   *  после анимации закрытия (без морфинга содержимого). */
   function runAfterClose(run: () => void) {
-    window.setTimeout(run, 170);
+    closeMenuThenRun(() => setMenuOpen(false), run);
   }
 
   return (
-    <ContextMenu>
+    <ContextMenu open={menuOpen} onOpenChange={setMenuOpen}>
       <ContextMenuTrigger asChild>
         <span
           ref={triggerRef}

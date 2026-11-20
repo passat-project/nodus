@@ -75,6 +75,21 @@ describe('FavoriteMenu: окно-источник «Избранного» (#237
     expect(screen.getByRole('menuitem', { name: ui.chat.menu.select })).toBeTruthy();
   });
 
+  // Исход после анимации; механизм явного закрытия закреплён
+  // menu-close.test.ts и wiring-проверкой в message-menu.test.tsx.
+  it('окно-источник: «Выбрать» закрывает меню и включает селект после анимации (#273)', async () => {
+    renderMenu({ scope: 'notes-source:src-conv' });
+    await openMenu();
+
+    fireEvent.click(screen.getByRole('menuitem', { name: ui.chat.menu.select }));
+
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    await waitFor(() => {
+      expect(useSelectionStore.getState().scope).toBe('notes-source:src-conv');
+      expect(useSelectionStore.getState().ids).toEqual(['orig-1']);
+    });
+  });
+
   it('режим селекта: батч-набор; пересылка — оригиналы из беседы-источника', async () => {
     useSelectionStore.getState().enter('notes-source:src-conv', 'orig-1');
     useSelectionStore.getState().toggle('notes-source:src-conv', 'orig-2', false);
