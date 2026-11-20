@@ -17,11 +17,11 @@ const node = (
   kind: 'management',
   parentId: null,
   headId: null,
-  deputyId: null,
+  deputyIds: [],
   sortOrder: 0,
   isActive: true,
   headName: null,
-  deputyName: null,
+  deputies: [],
   memberCount: 0,
   children,
   ...overrides,
@@ -61,13 +61,13 @@ const tree = (): DepartmentNode[] => [
     [
       node('bim', [node('lab', [], { headId: 'h-lab' })], {
         headId: 'h-bim',
-        deputyId: 'd-bim',
+        deputyIds: ['d-bim'],
       }),
       node('build'),
     ],
     {
       headId: 'h-main',
-      deputyId: 'd-main',
+      deputyIds: ['d-main'],
     },
   ),
 ];
@@ -159,7 +159,7 @@ describe('buildDepartmentCardStats (#768)', () => {
   });
 
   it('зам, совпадающий с руководителем, не дублируется; отделы в футере', () => {
-    const roots = [node('main', [node('a'), node('b')], { headId: 'both', deputyId: 'both' })];
+    const roots = [node('main', [node('a'), node('b')], { headId: 'both', deputyIds: ['both'] })];
     const stats = buildDepartmentCardStats(roots, [person('both', { departmentId: 'main' })], {
       mainId: 'main',
       activeDepartmentIds: idsOf(roots),

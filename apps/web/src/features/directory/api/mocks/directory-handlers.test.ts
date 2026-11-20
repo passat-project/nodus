@@ -124,7 +124,7 @@ describe('моки подразделений: глава/зам — одно м
       name: 'Мок-дубль #946',
       kind: 'management',
       headId: userIds.polomar,
-      deputyId: userIds.polomar,
+      deputyIds: [userIds.polomar],
     });
 
     expect(response.status).toBe(400);

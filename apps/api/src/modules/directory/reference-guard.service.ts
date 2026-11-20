@@ -40,6 +40,18 @@ export class ReferenceGuard {
     if (user.status !== 'active') this.fail(field, 'inactive');
   }
 
+  /** Пачка активных сотрудников (заместители подразделения, #817): первый
+   *  неактивный/несуществующий — отказ с тем же `details { field, reason }`. */
+  async ensureActiveUsers(
+    ids: readonly string[],
+    field: string,
+    tx?: TransactionClient,
+  ): Promise<void> {
+    for (const id of ids) {
+      await this.ensureActiveUser(id, field, tx);
+    }
+  }
+
   /** Активное подразделение нужного вида структуры (departmentId/legalDepartmentId). */
   async ensureDepartment(
     id: string | null | undefined,

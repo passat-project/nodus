@@ -30,7 +30,7 @@ function row(
     kind: 'management',
     parentId,
     headId: null,
-    deputyId: null,
+    deputyIds: [],
     sortOrder: 0,
     isActive: true,
     head: null,
@@ -42,6 +42,9 @@ function row(
 
 describe('DepartmentsService: назначение главы/зама переводит сотрудника (#946)', () => {
   const departments = {
+    clearHeadBesides: vi.fn().mockResolvedValue([]),
+    clearDeputiesBesides: vi.fn().mockResolvedValue([]),
+    setDeputies: vi.fn(),
     findAllByKind: vi.fn(),
     findById: vi.fn(),
     lockForUpdate: vi.fn(),
@@ -126,9 +129,9 @@ describe('DepartmentsService: назначение главы/зама пере�
 
   it('правка зама переводит так же', async () => {
     departments.findById.mockResolvedValue(row('dep', null));
-    departments.update.mockResolvedValue(row('dep', null, { deputyId: 'u-1' }));
+    departments.update.mockResolvedValue(row('dep', null, { deputyIds: ['u-1'] }));
 
-    await service.update('dep', { deputyId: 'u-1' }, actor());
+    await service.update('dep', { deputyIds: ['u-1'] }, actor());
 
     expect(users.update).toHaveBeenCalledWith('u-1', { departmentId: 'dep' }, 'tx-handle');
     expect(emitted('directory.user.updated')).toEqual([
@@ -154,10 +157,10 @@ describe('DepartmentsService: назначение главы/зама пере�
     departments.findById.mockResolvedValue(row('dep', null));
 
     await expect(
-      service.update('dep', { headId: 'u-1', deputyId: 'U-1' }, actor()),
+      service.update('dep', { headId: 'u-1', deputyIds: ['U-1'] }, actor()),
     ).rejects.toMatchObject({
       code: ErrorCode.VALIDATION_FAILED,
-      details: { field: 'deputyId', reason: 'same_as_head' },
+      details: { field: 'deputyIds', reason: 'same_as_head' },
     });
     expect(departments.update).not.toHaveBeenCalled();
   });
@@ -181,7 +184,7 @@ describe('DepartmentsService: назначение главы/зама пере�
         kind: 'management',
         parentId: null,
         headId: 'u-1',
-        deputyId: null,
+        deputyIds: [],
         sortOrder: 0,
       },
       actor(),
@@ -216,7 +219,7 @@ describe('DepartmentsService: назначение главы/зама пере�
         kind: 'legal',
         parentId: null,
         headId: 'u-1',
-        deputyId: null,
+        deputyIds: [],
         sortOrder: 0,
       },
       actor(),
@@ -252,5 +255,105 @@ describe('DepartmentsService: назначение главы/зама пере�
     expect(emitted('directory.role.access_changed')).toEqual([
       { roleId: 'role-read', reason: 'membership', userIds: ['u-1'] },
     ]);
+  });
+
+  it('несколько замов: список ставится целиком, каждый переводится (#817)', async () => {
+    departments.findById.mockResolvedValue(
+      row('dep', null, {
+        deputies: [
+          { userId: 'd-1', user: { id: 'd-1', displayName: 'Первый Зам' } },
+          { userId: 'd-2', user: { id: 'd-2', displayName: 'Второй Зам' } },
+        ],
+      }),
+    );
+    departments.update.mockResolvedValue(row('dep', null));
+
+    await service.update('dep', { deputyIds: ['d-1', 'd-2'] }, actor());
+
+    expect(departments.setDeputies).toHaveBeenCalledWith('dep', ['d-1', 'd-2'], 'tx-handle');
+    // Каждый зам — член своего отдела: перевод в той же транзакции.
+    expect(users.update).toHaveBeenCalledWith('d-1', { departmentId: 'dep' }, 'tx-handle');
+    expect(users.update).toHaveBeenCalledWith('d-2', { departmentId: 'dep' }, 'tx-handle');
+    expect(emitted('directory.department.updated')).toContainEqual({
+      departmentId: 'dep',
+      changedFields: ['deputyIds'],
+    });
+  });
+
+  it('глава в списке замов → 400 (details.deputyIds), записи нет (#817)', async () => {
+    departments.findById.mockResolvedValue(row('dep', null, { headId: 'u-1' }));
+
+    await expect(service.update('dep', { deputyIds: ['U-1'] }, actor())).rejects.toMatchObject({
+      code: ErrorCode.VALIDATION_FAILED,
+      details: { field: 'deputyIds', reason: 'same_as_head' },
+    });
+    expect(departments.setDeputies).not.toHaveBeenCalled();
+    expect(departments.update).not.toHaveBeenCalled();
+  });
+
+  it('дубли в списке замов схлопываются, лишние строки снимаются (#817)', async () => {
+    departments.findById.mockResolvedValue(row('dep', null, { deputies: [] }));
+    departments.update.mockResolvedValue(row('dep', null));
+    users.findRef.mockResolvedValue({ id: 'd-1', status: 'active' });
+
+    await service.update('dep', { deputyIds: ['d-1', 'd-1'] }, actor());
+
+    expect(departments.setDeputies).toHaveBeenCalledWith('dep', ['d-1'], 'tx-handle');
+  });
+
+  it('глава уже состоит в узле — прежний отдел теряет его как главу (#817)', async () => {
+    // Перевод — no-op (сотрудник уже здесь), но человек не может быть главой
+    // двух узлов: прежняя роль снимается точечно.
+    departments.findById.mockResolvedValue(row('dep', null, { headId: 'u-1' }));
+    departments.update.mockResolvedValue(row('dep', null, { headId: 'u-1' }));
+    users.findDepartmentId.mockResolvedValue('dep');
+    departments.clearHeadBesides.mockResolvedValue(['dep-old']);
+
+    await service.update('dep', { headId: 'u-1' }, actor());
+
+    expect(departments.clearHeadBesides).toHaveBeenCalledWith('u-1', 'dep', 'tx-handle');
+    expect(emitted('directory.department.updated')).toContainEqual({
+      departmentId: 'dep-old',
+      changedFields: ['headId'],
+    });
+    expect(managers.recomputeDepartments).toHaveBeenCalledWith(['dep-old'], 'tx-handle');
+  });
+
+  it('прежний глава снимается ДО записи нового head_id (#817)', async () => {
+    departments.findById.mockResolvedValue(row('dep', null));
+    departments.update.mockResolvedValue(row('dep', null, { headId: 'u-1' }));
+    departments.clearHeadBesides.mockResolvedValue(['dep-old']);
+
+    await service.update('dep', { headId: 'u-1' }, actor());
+
+    // Порядок важен: иначе уникальный индекс departments_head_id_key отклонит
+    // UPDATE и клиент получит 409 «конфликт состояния».
+    const clearOrder = departments.clearHeadBesides.mock.invocationCallOrder[0]!;
+    const updateOrder = departments.update.mock.invocationCallOrder[0]!;
+    expect(clearOrder).toBeLessThan(updateOrder);
+  });
+
+  it('перевод замов идёт до вставки строк заместителей (#817)', async () => {
+    departments.findById.mockResolvedValue(row('dep', null, { deputies: [] }));
+    departments.update.mockResolvedValue(row('dep', null));
+    users.findDepartmentId.mockResolvedValue('dep-old');
+
+    await service.update('dep', { deputyIds: ['d-1'] }, actor());
+
+    // Иначе UNIQUE(user_id) в department_deputies отклонит вставку, пока
+    // сотрудник ещё числится замом прежнего отдела (409 у клиента).
+    const transferOrder = users.update.mock.invocationCallOrder[0]!;
+    const insertOrder = departments.setDeputies.mock.invocationCallOrder[0]!;
+    expect(transferOrder).toBeLessThan(insertOrder);
+  });
+
+  it('очистка руководителя (null) проходит без проверки ссылки (#441)', async () => {
+    departments.findById.mockResolvedValue(row('dep', null));
+    departments.update.mockResolvedValue(row('dep', null));
+
+    await service.update('dep', { headId: null }, actor());
+
+    expect(users.findRef).not.toHaveBeenCalled();
+    expect(departments.update).toHaveBeenCalled();
   });
 });
