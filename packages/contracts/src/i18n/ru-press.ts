@@ -34,6 +34,7 @@ export const pressStrings = {
     rosterChangedReason: 'Состав задачи изменён',
     assigneeChangedReason: 'Сменился ответственный',
     quorumAfterRemovalReason: 'Кворум собран после снятия участника — нажмите кнопку',
+    resultRetained: 'результат сохранён',
     excludedReason: 'Снят',
     returnedReason: 'Возврат',
     taskNumberPrefix: 'ПП-',

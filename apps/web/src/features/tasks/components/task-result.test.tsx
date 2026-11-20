@@ -81,8 +81,8 @@ describe('Результат задачи из отметок сбора (#965)'
     expect(screen.getByText('Проверил смежные разделы')).toBeTruthy();
     expect(screen.getByText(/Анна Ночная/)).toBeTruthy();
     expect(screen.getByText(/Борис Ночной/)).toBeTruthy();
-    // Выбывший подписан причиной — видно, что вклад его.
-    expect(screen.getByText('Выбыл из задачи')).toBeTruthy();
+    // Выбывший подписан пометкой — видно, что вклад его и он сохранён.
+    expect(screen.getByText('результат сохранён')).toBeTruthy();
     // Правка итога недоступна: он собран из отметок.
     expect(screen.queryByRole('button', { name: /Изменить/i })).toBeNull();
   });

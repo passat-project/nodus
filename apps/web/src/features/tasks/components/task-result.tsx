@@ -98,9 +98,9 @@ export function TaskResultSection({ task }: { task: TaskDetail }) {
                 />
                 {withoutPatronymic(entry.displayName)} ·{' '}
                 {entry.pressedAt ? formatDateTime(entry.pressedAt) : '—'}
-                {entry.state === 'excluded' && entry.returnReason ? (
+                {entry.state === 'excluded' ? (
                   <span className="rounded border border-border px-1.5 py-0.5 text-[11px]">
-                    {entry.returnReason}
+                    {ui.tasks.press.resultRetained}
                   </span>
                 ) : null}
               </p>
