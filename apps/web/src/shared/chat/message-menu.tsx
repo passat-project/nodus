@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ChatMessage } from '@nodus/contracts';
 import { stripMentionTokens, ui } from '@nodus/contracts';
 import {
@@ -18,6 +18,7 @@ import { startMessageEdit } from './message-edit.js';
 import { focusComposerWhenFree } from './composer-focus.js';
 import { useDeleteDialog, useForwardDialog, useUnpinDialog } from './dialog-stores.js';
 import { useAddFavorites, useFavoriteIds, useRemoveFavorite } from './favorites-api.js';
+import { closeMenuThenRun } from './menu-close.js';
 import { buildMessageItems, buildSelectionItems, type MenuItem } from './message-menu-items.js';
 import { MessageReplyProvider, type MessageReplyAction } from './message-reply.js';
 import { usePinToggle } from './pin-mutations.js';
@@ -102,6 +103,10 @@ export function MessageMenu({
   const selectionActive = useSelectionStore((s) => s.scope === scope && s.ids.length > 0);
   const selectedIds = useSelectionStore((s) => (s.scope === scope ? s.ids : EMPTY_IDS));
   const [fragment, setFragment] = useState<string | null>(null);
+  /** #273: меню управляемое — closeFirst-пункт закрывает его ЯВНО, а не
+   *  через неявный handleSelect Radix. */
+  const [menuOpen, setMenuOpen] = useState(false);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
   const triggerRef = useRef<HTMLSpanElement>(null);
 
   function captureSelection() {
@@ -271,11 +276,11 @@ export function MessageMenu({
             label: replyLabel,
             run: () => {
               const item = replyItemRef.current;
-              if (item) runMenuItem(item);
+              if (item) runMenuItem(item, closeMenu);
             },
           }
         : null,
-    [replyQuotes, replyLabel, replyDisabled],
+    [replyQuotes, replyLabel, replyDisabled, closeMenu],
   );
 
   /** #132 р.2: двойной клик по ПУЗРЬКУ = «Ответить» (горячая клавиша
@@ -291,7 +296,7 @@ export function MessageMenu({
   }
 
   return (
-    <ContextMenu>
+    <ContextMenu open={menuOpen} onOpenChange={setMenuOpen}>
       <ContextMenuTrigger asChild>
         {/* data-chat-* — координаты для баббла-цитаты выделения
             (selection-quote-bubble): scope/беседа/автор без проп-дрилла. */}
@@ -337,7 +342,7 @@ export function MessageMenu({
             <ContextMenuItem
               variant={item.danger ? 'destructive' : 'default'}
               disabled={item.disabled}
-              onClick={() => runMenuItem(item)}
+              onClick={() => runMenuItem(item, closeMenu)}
             >
               <item.icon className="size-4" strokeWidth={1.75} />
               {item.label}
@@ -352,16 +357,17 @@ export function MessageMenu({
 const EMPTY_IDS: string[] = [];
 
 /**
- * #132 р.2: единый исполнитель пункта реестра — для клика в меню и для
+ * #132 р.2 / #273: единый исполнитель пункта реестра — для клика в меню и для
  * плашки «Ответить» (#729). disabled гасится молча; closeFirst-пункты
- * (смена режима селекта) ждут закрытия меню (~100мс exit + запас), чтобы
- * контент не морфился в противоположный набор в анимации.
+ * (смена режима селекта) ЗАКРЫВАЮТ меню явно и ждут анимацию закрытия, чтобы
+ * контент не морфился в противоположный набор (закрытие не зависит от
+ * неявного handleSelect Radix — гонка могла оставить меню открытым).
  */
-function runMenuItem(item: MenuItem) {
+function runMenuItem(item: MenuItem, closeMenu: () => void) {
   if (item.disabled) return;
   if (!item.closeFirst) {
     item.run();
     return;
   }
-  window.setTimeout(item.run, 170);
+  closeMenuThenRun(closeMenu, item.run);
 }
