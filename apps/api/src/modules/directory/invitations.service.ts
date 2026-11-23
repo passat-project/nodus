@@ -81,6 +81,10 @@ export class InvitationsService {
             positionId: dto.positionId,
             legalDepartmentId: null,
             legalPositionId: null,
+            // HR-поля задаёт администратор при приглашении (#101): сотрудник их
+            // сам не правит, после активации в карточке их уже не заполнить.
+            workRate: dto.workRate,
+            hiredAt: dto.hiredAt,
           },
           tx,
         );
@@ -168,17 +172,26 @@ export class InvitationsService {
     });
   }
 
-  /** Сброс пароля (админ): только действующий/уволенный; ссылка на 24 часа. */
+  /**
+   * Сброс пароля (админ): только действующий сотрудник, себе — запрещено.
+   * Уволенного сначала возвращают в работу («Вернуть в работу»), затем
+   * выпускают ссылку; приглашённому — ссылка-приглашение, а не сброс.
+   */
   async issuePasswordReset(userId: string, actor: AuthUser): Promise<IssuePasswordResetResponse> {
+    // Себе — нельзя (I8): сброс по ссылке — действие над ДРУГИМ сотрудником,
+    // кнопка в UI скрыта, но сервер обязан отказать.
+    if (userId === actor.id) {
+      throw new DomainException(ErrorCode.DIRECTORY_SELF_RESET, 'Cannot reset your own password');
+    }
     return this.tx.run(async (tx) => {
       // Замок строки: два параллельных выпуска не оставят ДВЕ действующие
       // ссылки (revoke предыдущей и create новой — под одним замком).
       const locked = await this.invitations.lockUser(userId, tx);
       if (!locked) throw DomainException.notFound('User not found');
-      if (locked.status === 'invited') {
+      if (locked.status !== 'active') {
         throw new DomainException(
           ErrorCode.CONFLICT,
-          'Password reset is not available for an invited user',
+          'Password reset is available only for an active user',
         );
       }
       const user = await this.invitations.findUserById(userId, tx);

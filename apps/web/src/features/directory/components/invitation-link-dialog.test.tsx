@@ -29,7 +29,7 @@ describe('ссылка приглашения (#101)', () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(LINK));
   });
 
-  it('окно: primary «Скопировать», ghost «Закрыть»', async () => {
+  it('окно: копирует только иконка, отдельной primary-кнопки нет', async () => {
     const onOpenChange = vi.fn();
     render(
       <InvitationLinkDialog
@@ -42,7 +42,8 @@ describe('ссылка приглашения (#101)', () => {
       />,
     );
     const copyButtons = screen.getAllByRole('button', { name: ui.employees.inviteCopyLink });
-    fireEvent.click(copyButtons[copyButtons.length - 1]!);
+    expect(copyButtons).toHaveLength(1);
+    fireEvent.click(copyButtons[0]!);
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(LINK));
     fireEvent.click(screen.getByRole('button', { name: ui.common.close }));
     expect(onOpenChange).toHaveBeenCalledWith(false);

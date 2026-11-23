@@ -55,6 +55,9 @@ test.describe('приглашение по ссылке (#101, живой API)',
         middleName: null,
         positionId: position!.id,
         departmentId: departmentNode!.id,
+        // HR-поля необязательны, но если заданы — сохраняются (#101).
+        workRate: 0.5,
+        hiredAt: '2026-11-01',
       },
       headers: { ...auth, 'Idempotency-Key': crypto.randomUUID() },
     });
@@ -120,6 +123,13 @@ test.describe('приглашение по ссылке (#101, живой API)',
       { headers: auth },
     );
     expect((await activeAfter.json()).items).toHaveLength(1);
+
+    // HR-поля из приглашения дошли до карточки.
+    const card = await admin.get(`/api/v1/directory/users/${invitation.id}`, { headers: auth });
+    expect(card.ok()).toBe(true);
+    const cardBody = await card.json();
+    expect(cardBody.workRate).toBe(0.5);
+    expect(cardBody.hiredAt).toBe('2026-11-01');
 
     // Сброс пароля: админ выпускает ссылку на 24 часа, сотрудник задаёт новый.
     const reset = await admin.post(`/api/v1/directory/users/${invitation.id}/password-reset`, {

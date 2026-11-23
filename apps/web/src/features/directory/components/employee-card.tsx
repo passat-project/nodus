@@ -232,7 +232,12 @@ export function EmployeeCard({ userId, dormant = false }: { userId: string; dorm
 
           {/* Нижняя полоса левой зоны (#923): «Редактировать профиль» и
               «Действия» (только админ), вне скролла; нет кнопок — нет полосы. */}
-          <EmployeeProfileBar card={card} canManage={canManage} onEdit={() => setEditOpen(true)} />
+          <EmployeeProfileBar
+            card={card}
+            canManage={canManage}
+            onEdit={() => setEditOpen(true)}
+            onCloseCard={closeCard}
+          />
           {editOpen ? (
             <EmployeeProfileDialog
               open={editOpen}
@@ -270,7 +275,7 @@ export function EmployeeCard({ userId, dormant = false }: { userId: string; dorm
           style={{ width: columnW }}
         >
           {card.status === 'invited' ? (
-            <InvitedCardPanel card={card} canManage={canManage} onClose={() => closeCard()} />
+            <InvitedCardPanel />
           ) : (
             <EmployeeCardWorkTabs
               active={tab}

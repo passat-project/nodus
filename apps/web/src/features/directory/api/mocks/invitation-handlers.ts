@@ -12,6 +12,7 @@ import {
   rememberRuntimeUser,
   removeRuntimeUser,
 } from '../../../../shared/mocks/data/runtime-users.js';
+import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import { createInvitationTokenState } from './invitation-token-state.js';
 
 /** Состояние directory-мока для приглашений (#101): список, карточки и
@@ -93,10 +94,10 @@ export function invitationHandlers(state: InvitationMockState) {
         city: null,
         officeLocation: null,
         isRemote: false,
-        workRate: null,
+        workRate: parsed.data.workRate,
         gender: null,
         birthDate: null,
-        hiredAt: null,
+        hiredAt: parsed.data.hiredAt,
         workdayStart: null,
         roles: [],
         invitedAt: now,
@@ -156,8 +157,16 @@ export function invitationHandlers(state: InvitationMockState) {
     }),
 
     http.post('/api/v1/directory/users/:id/password-reset', ({ params }) => {
-      const card = state.cards.find((user) => user.id === String(params.id));
-      if (!card || card.status === 'invited') {
+      const id = String(params.id);
+      if (id === getMockActor().id) {
+        return HttpResponse.json(
+          { code: ErrorCode.DIRECTORY_SELF_RESET, message: 'Cannot reset your own password' },
+          { status: 409 },
+        );
+      }
+      const card = state.cards.find((user) => user.id === id);
+      // Сброс — только действующему: уволенного сначала возвращают в работу.
+      if (!card || card.status !== 'active') {
         return HttpResponse.json(
           { code: ErrorCode.CONFLICT, message: 'Password reset is not available' },
           { status: 409 },
@@ -229,7 +238,7 @@ export function invitationHandlers(state: InvitationMockState) {
       const entry = tokens.tokenOrError(String(params.token), 'reset');
       if (entry instanceof HttpResponse) return entry;
       const card = state.cards.find((user) => user.id === entry.userId);
-      if (!card) {
+      if (!card || card.status !== 'active') {
         return HttpResponse.json(
           { code: ErrorCode.PASSWORD_RESET_INVALID, message: 'Reset not found' },
           { status: 400 },
@@ -254,7 +263,7 @@ export function invitationHandlers(state: InvitationMockState) {
       const entry = tokens.tokenOrError(String(params.token), 'reset');
       if (entry instanceof HttpResponse) return entry;
       const card = state.cards.find((user) => user.id === entry.userId);
-      if (!card) {
+      if (!card || card.status !== 'active') {
         return HttpResponse.json(
           { code: ErrorCode.PASSWORD_RESET_INVALID, message: 'Reset not found' },
           { status: 400 },
@@ -268,15 +277,7 @@ export function invitationHandlers(state: InvitationMockState) {
       }
       const now = new Date().toISOString();
       entry.usedAt = now;
-      card.status = 'active';
-      card.activatedAt = card.activatedAt ?? now;
       card.updatedAt = now;
-      state.setUserState(
-        state
-          .getUserState()
-          .map((user) => (user.id === card.id ? { ...user, status: 'active' as const } : user)),
-      );
-      patchRuntimeUser(card.id, { status: 'active' });
       return HttpResponse.json({ id: card.id, email: card.email });
     }),
   ];

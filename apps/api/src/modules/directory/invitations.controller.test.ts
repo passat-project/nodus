@@ -28,6 +28,8 @@ describe('контроллеры приглашений (#101)', () => {
     middleName: null,
     positionId: 'p1',
     departmentId: 'd1',
+    workRate: null,
+    hiredAt: null,
   };
 
   it('админские маршруты вызывают сервис с актором', async () => {

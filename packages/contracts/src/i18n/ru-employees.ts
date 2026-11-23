@@ -113,7 +113,7 @@ export const employeesStrings = {
   employeeForms: ['сотрудник', 'сотрудника', 'сотрудников'],
   invite: 'Пригласить',
   inviteTitle: 'Приглашение сотрудника',
-  inviteLead: 'Заполните данные нового сотрудника. Обязательные поля отмечены *',
+  inviteLead: 'Заполните данные нового сотрудника.',
   inviteLastName: 'Фамилия',
   inviteFirstName: 'Имя',
   inviteMiddleName: 'Отчество',
@@ -122,11 +122,6 @@ export const employeesStrings = {
   invitePosition: 'Должность',
   inviteDepartment: 'Подразделение',
   inviteSubmit: 'Далее',
-  inviteLastNameRequired: 'Укажите фамилию',
-  inviteFirstNameRequired: 'Укажите имя',
-  inviteEmailRequired: 'Введите рабочую почту',
-  invitePositionRequired: 'Выберите должность',
-  inviteDepartmentRequired: 'Выберите подразделение',
   inviteLinkTitle: 'Ссылка-приглашение готова',
   inviteLinkLead:
     'Передайте ссылку сотруднику вручную — письмо пока не отправляется. Ссылка одноразовая и действует до указанной даты.',
@@ -141,8 +136,6 @@ export const employeesStrings = {
     'Ссылка перестанет действовать, приглашение исчезнет из списка. Сотрудник сможет получить новое приглашение позже.',
   inviteCancelConfirm: 'Отменить приглашение',
   inviteCancelled: 'Приглашение отменено',
-  inviteInvalidEmail: 'Введите рабочую почту в формате name@company.by',
-  inviteRequired: 'Заполните ФИО, должность, подразделение и рабочую почту',
   invitedCardTitle: 'Приглашение ожидает активации',
   invitedCardText:
     'Сотрудник ещё не открыл ссылку и не задал пароль. До активации доступа ему нельзя назначать задачи, добавлять в проекты и выбирать в маршрутах.',
@@ -152,11 +145,9 @@ export const employeesStrings = {
   resetLinkLead:
     'Передайте ссылку сотруднику: он задаст новый пароль и сразу войдёт. Прежние сессии будут завершены.',
   resetLinkExpires: 'Действует 24 часа, до',
-  restoreAccess: 'Восстановить доступ',
   resetConfirmTitle: 'Сбросить пароль?',
   resetConfirmText:
     'Текущие сессии сотрудника будут завершены. После подтверждения вы получите ссылку, которую нужно передать сотруднику.',
-  restoreConfirmTitle: 'Восстановить доступ?',
   invitePageTitle: 'Приглашение в Nodus',
   invitePageLead: 'Проверьте данные, подтвердите рабочую почту и задайте пароль',
   invitePageEmail: 'Рабочая почта',

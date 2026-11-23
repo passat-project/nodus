@@ -259,7 +259,10 @@ describe('приглашения по ссылке (#101)', () => {
     const users = (await (await fetch('/api/v1/directory/users?limit=100')).json()) as {
       items: { id: string; email: string; status: string }[];
     };
-    const target = users.items.find((user) => user.status === 'active')!;
+    // Себе сброс запрещён (23.11.2026) — берём другого действующего сотрудника.
+    const target = users.items.find(
+      (user) => user.status === 'active' && user.id !== userIds.klimovich,
+    )!;
     const issue = await fetch(`/api/v1/directory/users/${target.id}/password-reset`, {
       method: 'POST',
     });

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { DIRECTORY_EVENTS, type DomainEvent, type DomainEventHandler } from '@nodus/contracts';
 
 import { AuthRepository } from '../auth.repository.js';
+import { RevokedUsersStore } from '../revoked-users.store.js';
 
 interface PasswordEventPayload {
   userId: string;
@@ -9,13 +10,18 @@ interface PasswordEventPayload {
 
 /**
  * Подписчик `directory.user.password_reset_issued` и
- * `directory.user.password_changed` (#101): администратор выпустил ссылку
- * сброса или сотрудник задал новый пароль — все прежние сессии гасятся.
+ * `directory.user.password_changed` (#101).
  *
- * Стоп-лист `revokedUsers` здесь НЕ ставится осознанно (O5): маркер «+5 с»
- * отверг бы и access-токен, только что выданный авто-входом после установки
- * пароля. Остаточный риск ограничен TTL access-токена (15 мин); при появлении
- * MFA решение пересмотреть. Идемпотентен: повторный updateMany — no-op.
+ * Выпуск reset-ссылки: гасим refresh-сессии И ставим стоп-лист access-токенов
+ * (момент события + штатный запас, #333) — сотрудник теряет доступ сразу, а
+ * не через 15 минут. Авто-вход после принятия ссылки выпускается позже маркера
+ * и проходит; если вход случился в первые секунды запаса, SPA чинится
+ * штатным прозрачным refresh (новая сессия не отозвана).
+ *
+ * Смена пароля (принятие reset-ссылки): только сессии, созданные ДО события —
+ * стоп-лист здесь НЕ ставится, иначе отверг бы токен авто-входа. Остаточный
+ * риск ограничен TTL access-токена (15 мин); при появлении MFA пересмотреть.
+ * Идемпотентен: повторный updateMany — no-op, маркер пишется только вперёд.
  */
 @Injectable()
 export class PasswordCredentialEventsHandler implements DomainEventHandler<PasswordEventPayload> {
@@ -24,7 +30,10 @@ export class PasswordCredentialEventsHandler implements DomainEventHandler<Passw
     DIRECTORY_EVENTS.USER_PASSWORD_CHANGED,
   ] as const;
 
-  constructor(private readonly authRepository: AuthRepository) {}
+  constructor(
+    private readonly authRepository: AuthRepository,
+    private readonly revokedUsers: RevokedUsersStore,
+  ) {}
 
   async handle(event: DomainEvent<PasswordEventPayload>): Promise<void> {
     const { userId } = event.payload;
@@ -33,5 +42,8 @@ export class PasswordCredentialEventsHandler implements DomainEventHandler<Passw
     // установки пароля (#101) создаёт новую сессию ПОЗЖЕ и не должна быть
     // отозвана повторной доставкой password_changed.
     await this.authRepository.revokeSessionsBefore(userId, new Date(event.createdAt));
+    if (event.type === DIRECTORY_EVENTS.USER_PASSWORD_RESET_ISSUED) {
+      await this.revokedUsers.revoke(userId, new Date(event.createdAt));
+    }
   }
 }

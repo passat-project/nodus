@@ -1,17 +1,23 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { InvitationCreated } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@nodus/ui/components/dialog';
 
 import { InviteDialogForm } from './invite-dialog-form.js';
-import { copyTokenLink, TokenLinkField } from './invitation-link-dialog.js';
+import { TokenLinkField } from './invitation-link-dialog.js';
 
 /**
- * Приглашение сотрудника по ссылке (#101): форма (обязательные поля, отдел)
- * → шаг «ссылка готова». Создаётся пользователь со статусом «Приглашён»;
- * админ передаёт одноразовую ссылку вручную, письма пока нет (#991).
- * Руководитель производный (ADR-0053); разметка формы — `invite-dialog-form`.
+ * Приглашение сотрудника по ссылке (#101): форма (ФИО, почта, должность,
+ * подразделение, необязательные ставка и дата приёма) → шаг «ссылка готова».
+ * Создаётся пользователь со статусом «Приглашён»; админ передаёт одноразовую
+ * ссылку вручную, письма пока нет (#991). Руководитель производный (ADR-0053);
+ * разметка формы — `invite-dialog-form`.
+ *
+ * Шаг «ссылка» сбрасывается НЕ на закрытии, а при следующем открытии: сброс
+ * на закрытии перерисовывал контент в форму во время fade-out, `autoFocus`
+ * поля «Фамилия» выдёргивал браузерное автозаполнение — по центру на миг
+ * появлялось чужое окно (вердикт владельца 23.11.2026).
  */
 export function InviteDialog({
   open,
@@ -25,9 +31,12 @@ export function InviteDialog({
 }) {
   const [created, setCreated] = useState<InvitationCreated | null>(null);
   const link = created ? `${window.location.origin}${created.path}` : '';
+  // Новое открытие — всегда с формы: сборка сброса перенесена из закрытия.
+  useEffect(() => {
+    if (open) setCreated(null);
+  }, [open]);
 
   function close(): void {
-    setCreated(null);
     onOpenChange(false);
   }
 
@@ -59,9 +68,6 @@ export function InviteDialog({
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={close}>
                 {ui.common.close}
-              </Button>
-              <Button onClick={() => void copyTokenLink(link)}>
-                {ui.employees.inviteCopyLink}
               </Button>
             </div>
           </div>

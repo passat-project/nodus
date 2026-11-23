@@ -215,7 +215,9 @@ export type UpdateMyProfileDto = z.infer<typeof updateMyProfileSchema>;
 
 /** Приглашение сотрудника по ссылке (#101): обязательные системные поля —
  *  ФИО, управленческие должность и подразделение, рабочая почта. Руководитель
- *  НЕ принимается (производный, ADR-0053). */
+ *  НЕ принимается (производный, ADR-0053). Ставка и дата приёма — HR-поля,
+ *  которые сотрудник сам не правит (только администратор), поэтому задаются
+ *  уже при приглашении; необязательны. */
 export const createInvitationSchema = z.object({
   email: emailInputSchema,
   lastName: z.string().trim().min(1).max(128),
@@ -223,6 +225,8 @@ export const createInvitationSchema = z.object({
   middleName: z.string().trim().min(1).max(128).nullable().default(null),
   positionId: z.uuid(),
   departmentId: z.uuid(),
+  workRate: userProfileSchema.shape.workRate.default(null),
+  hiredAt: userProfileSchema.shape.hiredAt.default(null),
 });
 export type CreateInvitationDto = z.infer<typeof createInvitationSchema>;
 

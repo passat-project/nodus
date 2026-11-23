@@ -61,6 +61,8 @@ describe('админские хуки приглашений (#101)', () => {
         middleName: null,
         positionId: 'p1',
         departmentId: 'd1',
+        workRate: null,
+        hiredAt: null,
       });
     });
     expect(created?.token).toHaveLength(64);

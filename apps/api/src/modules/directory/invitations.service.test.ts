@@ -22,6 +22,8 @@ const DTO: CreateInvitationDto = {
   middleName: null,
   positionId: 'position-1',
   departmentId: 'department-1',
+  workRate: 0.5,
+  hiredAt: '2026-11-01',
 };
 
 const RAW_TOKEN = 'raw-token-'.padEnd(64, 'x');
@@ -127,6 +129,8 @@ describe('InvitationsService (админ, #101)', () => {
           invitedAt: expect.any(Date),
           activatedAt: null,
           displayName: 'Новиков Иван',
+          workRate: 0.5,
+          hiredAt: '2026-11-01',
         }),
         expect.anything(),
       );
@@ -250,7 +254,7 @@ describe('InvitationsService (админ, #101)', () => {
       });
     });
 
-    it('приглашённому сброс не выпускается → CONFLICT', async () => {
+    it('приглашённому и уволенному сброс не выпускается → CONFLICT', async () => {
       invitations.lockUser.mockResolvedValue({
         id: 'user-1',
         status: 'invited',
@@ -259,15 +263,23 @@ describe('InvitationsService (админ, #101)', () => {
       await expect(service.issuePasswordReset('user-1', ACTOR)).rejects.toMatchObject({
         code: ErrorCode.CONFLICT,
       });
+      invitations.lockUser.mockResolvedValue({ id: 'user-1', status: 'deactivated' });
+      await expect(service.issuePasswordReset('user-1', ACTOR)).rejects.toMatchObject({
+        code: ErrorCode.CONFLICT,
+      });
       expect(invitations.createToken).not.toHaveBeenCalled();
     });
 
-    it('уволенному выпускается reset-ссылка на 24 часа + событие отзыва сессий', async () => {
-      invitations.lockUser.mockResolvedValue({
-        id: 'user-1',
-        status: 'deactivated',
-        activatedAt: new Date('2026-01-01T00:00:00Z'),
+    it('себе сброс не выпускается → DIRECTORY_SELF_RESET, до чтения строки', async () => {
+      await expect(service.issuePasswordReset(ACTOR.id, ACTOR)).rejects.toMatchObject({
+        code: ErrorCode.DIRECTORY_SELF_RESET,
       });
+      expect(invitations.lockUser).not.toHaveBeenCalled();
+      expect(invitations.createToken).not.toHaveBeenCalled();
+    });
+
+    it('действующему выпускается reset-ссылка на 24 часа + событие отзыва', async () => {
+      invitations.lockUser.mockResolvedValue({ id: 'user-1', status: 'active' });
       invitations.findUserById.mockResolvedValue({ id: 'user-1' });
       invitations.createToken.mockImplementation(async () => ({
         id: 'token-2',

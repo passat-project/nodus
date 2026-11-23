@@ -143,7 +143,7 @@ export class InvitationAcceptService {
         'Password reset link already used',
       );
     }
-    if (entry.user.status === 'invited') return this.invalidReset(tokenHash);
+    if (entry.user.status !== 'active') return this.invalidReset(tokenHash);
     await this.throttle.reset(tokenHash);
     return {
       kind: 'reset',
@@ -153,8 +153,8 @@ export class InvitationAcceptService {
     };
   }
 
-  /** Новый пароль по ссылке: активирует уволенного, историю активации не
-   *  перезаписывает; сессии гасит подписчик auth по событию. */
+  /** Новый пароль по ссылке: только действующий сотрудник (уволенного сначала
+   *  возвращают в работу); сессии гасит подписчик auth по событию. */
   async acceptPasswordReset(token: string, dto: AcceptPasswordResetDto): Promise<AcceptResponse> {
     const tokenHash = InvitationThrottleService.hashToken(token);
     await this.assertNotThrottled(tokenHash);
@@ -176,7 +176,7 @@ export class InvitationAcceptService {
     if (
       entry.revokedAt !== null ||
       entry.expiresAt <= new Date() ||
-      entry.user.status === 'invited'
+      entry.user.status !== 'active'
     ) {
       await this.throttle.recordFailure(tokenHash);
       throw new DomainException(
@@ -195,7 +195,7 @@ export class InvitationAcceptService {
     const passwordHash = await this.passwords.hash(dto.password);
     const accepted = await this.tx.run(async (tx) => {
       const locked = await this.invitations.lockUser(entry.userId, tx);
-      if (!locked || locked.status === 'invited') {
+      if (!locked || locked.status !== 'active') {
         throw new DomainException(
           ErrorCode.PASSWORD_RESET_INVALID,
           'Password reset token is invalid',
@@ -207,27 +207,13 @@ export class InvitationAcceptService {
           'Password reset link already used',
         );
       }
-      const now = new Date();
-      await this.users.update(
-        locked.id,
-        { passwordHash, status: 'active', activatedAt: locked.activatedAt ?? now },
-        tx,
-      );
-      await this.invitations.grantEmployeeRoleIfNone(locked.id, tx);
+      await this.users.update(locked.id, { passwordHash }, tx);
       await this.eventBus.emit(
         tx,
         DIRECTORY_EVENTS.USER_PASSWORD_CHANGED,
         { userId: locked.id },
         { actorId: locked.id, aggregateType: 'user', aggregateId: locked.id },
       );
-      if (locked.status === 'deactivated') {
-        await this.eventBus.emit(
-          tx,
-          DIRECTORY_EVENTS.USER_ACTIVATED,
-          { userId: locked.id },
-          { actorId: locked.id, aggregateType: 'user', aggregateId: locked.id },
-        );
-      }
       return { id: locked.id, email: entry.user.email };
     });
     await this.throttle.reset(tokenHash);

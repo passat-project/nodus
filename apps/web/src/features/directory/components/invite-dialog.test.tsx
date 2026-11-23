@@ -114,6 +114,8 @@ describe('InviteDialog (#101)', () => {
       middleName: null,
       positionId: LAST_NAME,
       departmentId: DEPARTMENT_A,
+      workRate: null,
+      hiredAt: null,
     });
 
     expect(await screen.findByText(ui.employees.inviteLinkTitle)).toBeTruthy();
@@ -136,21 +138,45 @@ describe('InviteDialog (#101)', () => {
     expect(next.disabled).toBe(false);
   });
 
-  it('незаполненное поле показывает ошибку по полю, а не общий текст', () => {
+  it('без звёздочек и клиентских «Укажите фамилию»: сигнал — неактивная «Далее»', () => {
     render(<InviteDialog open onOpenChange={() => undefined} />);
-    const lastName = screen.getByLabelText(/Фамилия/);
-    fireEvent.blur(lastName);
-    expect(screen.getByText(ui.employees.inviteLastNameRequired)).toBeTruthy();
-    expect(lastName.getAttribute('aria-invalid')).toBe('true');
-    expect(screen.queryByText(ui.employees.inviteRequired)).toBeNull();
+    expect(screen.queryByText('*', { exact: false })).toBeNull();
+    fireEvent.blur(screen.getByLabelText(/Фамилия/));
+    expect(screen.queryByText(/Укажите фамилию/)).toBeNull();
+    expect(screen.getByLabelText(/Фамилия/).getAttribute('aria-invalid')).toBeNull();
   });
 
-  it('некорректная почта — ошибка под полем после отправки', () => {
+  it('необязательные ставка и дата приёма уходят в приглашение', async () => {
+    createInvitation.mutateAsync.mockResolvedValue({
+      id: 'user-1',
+      token: 't'.repeat(64),
+      path: `/invite/${'t'.repeat(64)}`,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    render(<InviteDialog open onOpenChange={() => undefined} initialDepartmentId={DEPARTMENT_A} />);
+    fillRequired();
+    fireEvent.change(screen.getByLabelText(ui.employees.fieldWorkRate), {
+      target: { value: '0.5' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: ui.employees.inviteSubmit }));
+
+    await waitFor(() => expect(createInvitation.mutateAsync).toHaveBeenCalledTimes(1));
+    expect(createInvitation.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ workRate: 0.5, hiredAt: null }),
+    );
+  });
+
+  it('некорректная почта — ошибка сервера под полем, без тоста', async () => {
+    createInvitation.mutateAsync.mockRejectedValue(
+      new ApiError(ErrorCode.VALIDATION_FAILED, 'Invalid payload', 400, {
+        issues: [{ path: 'email', code: 'invalid_format', message: 'Invalid email' }],
+      }),
+    );
     render(<InviteDialog open onOpenChange={() => undefined} initialDepartmentId={DEPARTMENT_A} />);
     fillRequired({ email: 'not-an-email' });
     fireEvent.click(screen.getByRole('button', { name: ui.employees.inviteSubmit }));
-    expect(createInvitation.mutateAsync).not.toHaveBeenCalled();
-    expect(screen.getByText(ui.employees.inviteEmailRequired)).toBeTruthy();
+    expect(await screen.findByText('Проверьте правильность заполнения полей')).toBeTruthy();
+    expect(screen.getByLabelText(/Рабочая почта/).getAttribute('aria-invalid')).toBe('true');
   });
 
   it('дубль почты с сервера — inline под «Рабочей почтой», без тоста', async () => {

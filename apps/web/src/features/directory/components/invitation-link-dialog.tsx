@@ -17,8 +17,10 @@ export async function copyTokenLink(link: string): Promise<void> {
 
 /**
  * Поле одноразовой ссылки (#101): строка с многоточием и полной ссылкой в
- * `title` (образец — `shared/custom-fields/path-value.tsx`), копирование рядом.
- * Readonly-Input обрезал URL без подсказки — админ не видел, что ссылка цела.
+ * `title` (образец — `shared/custom-fields/path-value.tsx`), копирование —
+ * фиолетовой иконкой рядом (вердикт владельца 23.11.2026: отдельная кнопка
+ * «Скопировать ссылку» дублировала иконку). Readonly-Input обрезал URL без
+ * подсказки — админ не видел, что ссылка цела.
  */
 export function TokenLinkField({ link }: { link: string }) {
   return (
@@ -39,7 +41,7 @@ export function TokenLinkField({ link }: { link: string }) {
           type="button"
           variant="ghost"
           size="icon-xs"
-          className="shrink-0 text-muted-foreground"
+          className="shrink-0 text-primary hover:bg-primary/10 hover:text-primary"
           aria-label={ui.employees.inviteCopyLink}
           title={ui.employees.inviteCopyLink}
           onClick={() => void copyTokenLink(link)}
@@ -87,7 +89,6 @@ export function InvitationLinkDialog({
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
               {ui.common.close}
             </Button>
-            <Button onClick={() => void copyTokenLink(link)}>{ui.employees.inviteCopyLink}</Button>
           </div>
         </div>
       </DialogContent>

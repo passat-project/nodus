@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { createInvitationSchema, ErrorCode, errorMessages, ui } from '@nodus/contracts';
+import { ErrorCode, errorMessages, ui } from '@nodus/contracts';
 import type { InvitationCreated } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Field, FieldGroup, FieldLabel } from '@nodus/ui/components/field';
@@ -8,16 +8,14 @@ import { Input } from '@nodus/ui/components/input';
 import { ApiError } from '../../../shared/api-client.js';
 import { toastApiError } from '../../../shared/api/error-toast.js';
 import { useDepartmentsList } from '../../../shared/api/departments-list.js';
+import { DateTimePicker } from '../../../shared/ui/date-time-picker.js';
+import { localDateStr, parseIsoDate } from '../../../shared/ui/date-time-grid.js';
 import { useCreateInvitation, usePositions } from '../api/directory-api.js';
 import { ReferenceCombobox } from './reference-combobox.js';
 
-type FieldKey = 'lastName' | 'firstName' | 'email' | 'positionId' | 'departmentId';
+type FieldKey =
+  'lastName' | 'firstName' | 'email' | 'positionId' | 'departmentId' | 'workRate' | 'hiredAt';
 type FieldErrors = Partial<Record<FieldKey, string>>;
-
-/** Звёздочка обязательного поля: скрыта от скринридеров и accessible name. */
-function RequiredMark() {
-  return <span aria-hidden> *</span>;
-}
 
 /** Ошибка сервера → поле формы (#101): дубль почты — под почтой, а не тостом. */
 function fieldErrorFromApi(error: ApiError): FieldErrors | null {
@@ -36,7 +34,9 @@ function fieldErrorFromApi(error: ApiError): FieldErrors | null {
         field === 'firstName' ||
         field === 'email' ||
         field === 'positionId' ||
-        field === 'departmentId'
+        field === 'departmentId' ||
+        field === 'workRate' ||
+        field === 'hiredAt'
       ) {
         errors[field] = errorMessages[ErrorCode.VALIDATION_FAILED];
       }
@@ -46,26 +46,22 @@ function fieldErrorFromApi(error: ApiError): FieldErrors | null {
   return null;
 }
 
-function requiredMessage(key: FieldKey): string {
-  switch (key) {
-    case 'lastName':
-      return ui.employees.inviteLastNameRequired;
-    case 'firstName':
-      return ui.employees.inviteFirstNameRequired;
-    case 'email':
-      return ui.employees.inviteEmailRequired;
-    case 'positionId':
-      return ui.employees.invitePositionRequired;
-    case 'departmentId':
-      return ui.employees.inviteDepartmentRequired;
-  }
+/** Пустая ставка → null («не задано» на сервере); иначе число. */
+function rateOf(value: string): number | null {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return null;
+  const parsed = Number(trimmed.replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 /**
- * Форма приглашения (#101): обязательные ФИО, рабочая почта, управленческие
- * должность и подразделение; руководитель производный (ADR-0053). Ошибки —
- * по полям (blur/отправка), дубль почты с сервера — inline. Вынесена из
- * диалога (I5): диалог держит только шаг «ссылка готова».
+ * Форма приглашения (#101): ФИО, рабочая почта, управленческие должность и
+ * подразделение — пока заполнены не все, «Далее» неактивна; звёздочек и
+ * клиентских «Укажите фамилию» нет (вердикт владельца 23.11.2026). Ставка и
+ * дата приёма — необязательные HR-поля: сотрудник их сам не правит, поэтому
+ * администратор задаёт их уже при приглашении. Руководитель производный
+ * (ADR-0053); ошибки сервера — по полям, без тоста. Вынесена из диалога (I5):
+ * диалог держит только шаг «ссылка готова».
  */
 export function InviteDialogForm({
   initialDepartmentId,
@@ -85,8 +81,9 @@ export function InviteDialogForm({
   const [email, setEmail] = useState('');
   const [positionId, setPositionId] = useState<string | null>(null);
   const [departmentId, setDepartmentId] = useState<string | null>(initialDepartmentId);
+  const [workRate, setWorkRate] = useState('');
+  const [hiredAt, setHiredAt] = useState('');
   const [errors, setErrors] = useState<FieldErrors>({});
-  const [touched, setTouched] = useState<Partial<Record<FieldKey, boolean>>>({});
 
   // Открытие из другого подразделения подставляет ЕГО отдел (#101): useState
   // помнил только первый монтированный — приглашение уходило не туда.
@@ -94,49 +91,18 @@ export function InviteDialogForm({
     setDepartmentId(initialDepartmentId);
   }, [initialDepartmentId]);
 
-  const filled = {
-    lastName: lastName.trim().length > 0,
-    firstName: firstName.trim().length > 0,
-    email: email.trim().length > 0,
-    positionId: positionId !== null,
-    departmentId: departmentId !== null,
-  };
-  const complete = Object.values(filled).every(Boolean);
+  const complete =
+    lastName.trim().length > 0 &&
+    firstName.trim().length > 0 &&
+    email.trim().length > 0 &&
+    positionId !== null &&
+    departmentId !== null;
 
-  function fieldError(key: FieldKey): string | undefined {
-    if (errors[key]) return errors[key];
-    if (!touched[key] || filled[key]) return undefined;
-    return requiredMessage(key);
-  }
-
-  function markTouched(key: FieldKey): void {
-    setTouched((prev) => ({ ...prev, [key]: true }));
-  }
-
-  function validate(): FieldErrors {
-    const next: FieldErrors = {};
-    for (const key of Object.keys(filled) as FieldKey[]) {
-      if (!filled[key]) next[key] = requiredMessage(key);
-    }
-    if (filled.email && !createInvitationSchema.shape.email.safeParse(email.trim()).success) {
-      next.email = ui.employees.inviteEmailRequired;
-    }
-    return next;
+  function clearError(key: FieldKey): void {
+    setErrors((prev) => (prev[key] ? { ...prev, [key]: undefined } : prev));
   }
 
   async function submit(): Promise<void> {
-    const validation = validate();
-    setTouched({
-      lastName: true,
-      firstName: true,
-      email: true,
-      positionId: true,
-      departmentId: true,
-    });
-    if (Object.keys(validation).length > 0) {
-      setErrors(validation);
-      return;
-    }
     setErrors({});
     try {
       const result = await create.mutateAsync({
@@ -146,6 +112,8 @@ export function InviteDialogForm({
         middleName: middleName.trim() || null,
         positionId: positionId!,
         departmentId: departmentId!,
+        workRate: rateOf(workRate),
+        hiredAt: hiredAt.trim() || null,
       });
       onCreated(result);
     } catch (err) {
@@ -169,43 +137,33 @@ export function InviteDialogForm({
     >
       <FieldGroup>
         <div className="grid grid-cols-2 gap-3">
-          <Field data-invalid={fieldError('lastName') ? true : undefined}>
-            <FieldLabel htmlFor="invite-last-name">
-              {ui.employees.inviteLastName}
-              <RequiredMark />
-            </FieldLabel>
+          <Field data-invalid={errors.lastName ? true : undefined}>
+            <FieldLabel htmlFor="invite-last-name">{ui.employees.inviteLastName}</FieldLabel>
             <Input
               id="invite-last-name"
               autoFocus
               value={lastName}
-              aria-invalid={fieldError('lastName') ? true : undefined}
+              aria-invalid={errors.lastName ? true : undefined}
               onChange={(e) => {
                 setLastName(e.target.value);
-                if (errors.lastName) setErrors((prev) => ({ ...prev, lastName: undefined }));
+                clearError('lastName');
               }}
-              onBlur={() => markTouched('lastName')}
             />
-            {fieldError('lastName') ? (
-              <p className="text-xs text-destructive">{fieldError('lastName')}</p>
-            ) : null}
+            {errors.lastName ? <p className="text-xs text-destructive">{errors.lastName}</p> : null}
           </Field>
-          <Field data-invalid={fieldError('firstName') ? true : undefined}>
-            <FieldLabel htmlFor="invite-first-name">
-              {ui.employees.inviteFirstName}
-              <RequiredMark />
-            </FieldLabel>
+          <Field data-invalid={errors.firstName ? true : undefined}>
+            <FieldLabel htmlFor="invite-first-name">{ui.employees.inviteFirstName}</FieldLabel>
             <Input
               id="invite-first-name"
               value={firstName}
-              aria-invalid={fieldError('firstName') ? true : undefined}
+              aria-invalid={errors.firstName ? true : undefined}
               onChange={(e) => {
                 setFirstName(e.target.value);
-                if (errors.firstName) setErrors((prev) => ({ ...prev, firstName: undefined }));
+                clearError('firstName');
               }}
-              onBlur={() => markTouched('firstName')}
             />
-            {fieldError('firstName') ? (
-              <p className="text-xs text-destructive">{fieldError('firstName')}</p>
+            {errors.firstName ? (
+              <p className="text-xs text-destructive">{errors.firstName}</p>
             ) : null}
           </Field>
         </div>
@@ -217,38 +175,28 @@ export function InviteDialogForm({
             onChange={(e) => setMiddleName(e.target.value)}
           />
         </Field>
-        <Field data-invalid={fieldError('email') ? true : undefined}>
-          <FieldLabel htmlFor="invite-email">
-            {ui.employees.inviteEmail}
-            <RequiredMark />
-          </FieldLabel>
+        <Field data-invalid={errors.email ? true : undefined}>
+          <FieldLabel htmlFor="invite-email">{ui.employees.inviteEmail}</FieldLabel>
           <Input
             id="invite-email"
             type="email"
             placeholder={ui.employees.inviteEmailPlaceholder}
             value={email}
-            aria-invalid={fieldError('email') ? true : undefined}
+            aria-invalid={errors.email ? true : undefined}
             onChange={(e) => {
               setEmail(e.target.value);
-              if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
+              clearError('email');
             }}
-            onBlur={() => markTouched('email')}
           />
-          {fieldError('email') ? (
-            <p className="text-xs text-destructive">{fieldError('email')}</p>
-          ) : null}
+          {errors.email ? <p className="text-xs text-destructive">{errors.email}</p> : null}
         </Field>
-        <Field data-invalid={fieldError('positionId') ? true : undefined}>
-          <FieldLabel>
-            {ui.employees.invitePosition}
-            <RequiredMark />
-          </FieldLabel>
+        <Field data-invalid={errors.positionId ? true : undefined}>
+          <FieldLabel>{ui.employees.invitePosition}</FieldLabel>
           <ReferenceCombobox
             value={positionId}
             onChange={(id) => {
               setPositionId(id);
-              if (errors.positionId) setErrors((prev) => ({ ...prev, positionId: undefined }));
-              markTouched('positionId');
+              clearError('positionId');
             }}
             options={(positions.data ?? []).map((position) => ({
               id: position.id,
@@ -257,35 +205,63 @@ export function InviteDialogForm({
             ariaLabel={ui.employees.invitePosition}
             allowClear={false}
           />
-          {fieldError('positionId') ? (
-            <p className="text-xs text-destructive">{fieldError('positionId')}</p>
+          {errors.positionId ? (
+            <p className="text-xs text-destructive">{errors.positionId}</p>
           ) : null}
         </Field>
-        <Field data-invalid={fieldError('departmentId') ? true : undefined}>
-          <FieldLabel>
-            {ui.employees.inviteDepartment}
-            <RequiredMark />
-          </FieldLabel>
+        <Field data-invalid={errors.departmentId ? true : undefined}>
+          <FieldLabel>{ui.employees.inviteDepartment}</FieldLabel>
           <ReferenceCombobox
             value={departmentId}
             onChange={(id) => {
               setDepartmentId(id);
-              if (errors.departmentId) {
-                setErrors((prev) => ({ ...prev, departmentId: undefined }));
-              }
-              markTouched('departmentId');
+              clearError('departmentId');
             }}
             options={departments
               .filter((department) => department.isActive)
               .map((department) => ({ id: department.id, label: department.name }))}
             ariaLabel={ui.employees.inviteDepartment}
             allowClear={false}
-            placement="bottom"
           />
-          {fieldError('departmentId') ? (
-            <p className="text-xs text-destructive">{fieldError('departmentId')}</p>
+          {errors.departmentId ? (
+            <p className="text-xs text-destructive">{errors.departmentId}</p>
           ) : null}
         </Field>
+        {/* HR-поля необязательны и правятся только администратором (#101). */}
+        <div className="grid grid-cols-2 gap-3">
+          <Field data-invalid={errors.workRate ? true : undefined}>
+            <FieldLabel htmlFor="invite-work-rate">{ui.employees.fieldWorkRate}</FieldLabel>
+            <Input
+              id="invite-work-rate"
+              type="number"
+              min={0}
+              max={2}
+              step={0.25}
+              value={workRate}
+              aria-invalid={errors.workRate ? true : undefined}
+              onChange={(e) => {
+                setWorkRate(e.target.value);
+                clearError('workRate');
+              }}
+            />
+            {errors.workRate ? <p className="text-xs text-destructive">{errors.workRate}</p> : null}
+          </Field>
+          <Field data-invalid={errors.hiredAt ? true : undefined}>
+            <FieldLabel>{ui.employees.fieldHiredAt}</FieldLabel>
+            <DateTimePicker
+              value={parseIsoDate(hiredAt)}
+              onChange={(date) => {
+                setHiredAt(date ? localDateStr(date) : '');
+                clearError('hiredAt');
+              }}
+              ariaLabel={ui.employees.fieldHiredAt}
+              placeholder={ui.common.notSet}
+              withTime={false}
+              format="full"
+            />
+            {errors.hiredAt ? <p className="text-xs text-destructive">{errors.hiredAt}</p> : null}
+          </Field>
+        </div>
       </FieldGroup>
 
       <div className="flex justify-end gap-2">

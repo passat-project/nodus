@@ -150,7 +150,7 @@ describe('InvitationAcceptService (#101)', () => {
     expect(users.update).not.toHaveBeenCalled();
   });
 
-  it('принятие reset у уволенного: активация, activatedAt не перезаписывается', async () => {
+  it('reset-ссылка уволенного не принимается: сначала «Вернуть в работу»', async () => {
     const activatedAt = new Date('2026-01-01T00:00:00Z');
     invitations.findByHash.mockResolvedValue(
       tokenEntry({
@@ -158,9 +158,28 @@ describe('InvitationAcceptService (#101)', () => {
         user: { ...tokenEntry().user, status: 'deactivated', activatedAt },
       }),
     );
+
+    await expect(
+      service.acceptPasswordReset('token', {
+        email: 'new.hire@nodus.by',
+        password: 'Strong!Pass123',
+      }),
+    ).rejects.toMatchObject({ code: ErrorCode.PASSWORD_RESET_INVALID });
+    expect(invitations.markUsed).not.toHaveBeenCalled();
+    expect(users.update).not.toHaveBeenCalled();
+  });
+
+  it('reset действующего: только пароль, статус и activatedAt не трогаются', async () => {
+    const activatedAt = new Date('2026-01-01T00:00:00Z');
+    invitations.findByHash.mockResolvedValue(
+      tokenEntry({
+        kind: 'reset',
+        user: { ...tokenEntry().user, status: 'active', activatedAt },
+      }),
+    );
     invitations.lockUser.mockResolvedValue({
       id: 'user-1',
-      status: 'deactivated',
+      status: 'active',
       activatedAt,
     });
     invitations.markUsed.mockResolvedValue(true);
@@ -172,11 +191,11 @@ describe('InvitationAcceptService (#101)', () => {
 
     expect(users.update).toHaveBeenCalledWith(
       'user-1',
-      { passwordHash: 'argon2-hash', status: 'active', activatedAt },
+      { passwordHash: 'argon2-hash' },
       expect.anything(),
     );
     const types = eventBus.emit.mock.calls.map((call) => call[1]);
     expect(types).toContain(DIRECTORY_EVENTS.USER_PASSWORD_CHANGED);
-    expect(types).toContain(DIRECTORY_EVENTS.USER_ACTIVATED);
+    expect(types).not.toContain(DIRECTORY_EVENTS.USER_ACTIVATED);
   });
 });

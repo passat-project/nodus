@@ -93,7 +93,7 @@ export class InvitationsController {
   @HttpCode(200)
   @RequirePermissions(Permission.DIRECTORY_MANAGE, Permission.USER_MANAGE)
   @Audit({ action: 'directory.user.password_reset', entity: 'user' })
-  @ApiOperation({ summary: 'Ссылка сброса пароля на 24 часа (действующий/уволенный)' })
+  @ApiOperation({ summary: 'Ссылка сброса пароля на 24 часа (только действующий)' })
   @ApiParam({
     name: 'id',
     description: 'UUID сотрудника',

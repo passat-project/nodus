@@ -24,6 +24,7 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.INVITATION_ALREADY_USED]: 'Эта ссылка уже использована',
   [ErrorCode.PASSWORD_RESET_INVALID]: 'Ссылка для сброса пароля недействительна',
   [ErrorCode.DIRECTORY_EMAIL_TAKEN]: 'Пользователь с таким email уже существует',
+  [ErrorCode.DIRECTORY_SELF_RESET]: 'Себе сбросить пароль нельзя',
   [ErrorCode.DIRECTORY_REFERENCE_INVALID]:
     'Выбранный объект не существует, неактивен или не подходит по виду структуры',
   [ErrorCode.DIRECTORY_POSITION_IN_USE]:

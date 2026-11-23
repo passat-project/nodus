@@ -160,11 +160,14 @@ export function DepartmentPanel({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuItem onClick={() => onInvite(node.id)}>
-                    {ui.employees.inviteToDepartment}
-                  </DropdownMenuItem>
+                  {/* Порядок пунктов (вердикт владельца 23.11.2026): сверху
+                      всегда «Редактировать подразделение», ниже — приглашение
+                      в Nodus, архивация последней. */}
                   <DropdownMenuItem onClick={() => onEdit(node)}>
                     {ui.employees.editDepartmentAction}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onInvite(node.id)}>
+                    {ui.employees.inviteToDepartment}
                   </DropdownMenuItem>
                   {/* Главную карточку компании не архивируем (вердикт 12.11);
                       непустой узел не архивируется (409 has_children). */}

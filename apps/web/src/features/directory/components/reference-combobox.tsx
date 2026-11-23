@@ -36,9 +36,9 @@ export function filterReferenceOptions(
  * Поведение — канон контрола «Руководитель/Заместитель» (#768, вердикт
  * 13.11.2026): открытие — клик/ввод/ArrowDown (НЕ фокус: окно ставит фокус
  * программно и список «мигал»), Esc закрывает список, а не диалог, указательный
- * гард Radix не даёт раннему dismiss съесть выбор. Переворот вверх — только
- * когда снизу физически не хватает места (страховка от обрезки у края экрана,
- * решение 19.11.2026); в штатном окне список всегда вниз.
+ * гард Radix не даёт раннему dismiss съесть выбор. Список всегда клампится в
+ * viewport: у нижнего края окна переворачивается вверх, высота — не больше
+ * доступного места (вердикт владельца 23.11.2026: списки «выезжали» за окно).
  */
 export function ReferenceCombobox({
   value,
@@ -47,10 +47,6 @@ export function ReferenceCombobox({
   ariaLabel,
   placeholder,
   allowClear = true,
-  /** Направление списка: `auto` — вниз, при нехватке места вверх (страховка
-   *  у края окна, #981); `bottom` — строго вниз, как у полей
-   *  «Руководитель/Заместитель» и «Вышестоящее подразделение» (#982). */
-  placement = 'auto',
   className,
 }: {
   value: string | null;
@@ -61,7 +57,6 @@ export function ReferenceCombobox({
   placeholder?: string;
   /** «Не выбрано» и крестик сброса; обязательный выбор — false. */
   allowClear?: boolean;
-  placement?: 'auto' | 'bottom';
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -148,16 +143,19 @@ export function ReferenceCombobox({
       <PopoverContent
         align="start"
         side="bottom"
-        // `auto` — переворот только при нехватке места снизу (страховка у края
-        // окна, #981); `bottom` — строго вниз, как у полей руководителя (#982).
-        avoidCollisions={placement === 'auto'}
+        collisionPadding={8}
         onOpenAutoFocus={(event) => event.preventDefault()}
         className="w-(--radix-popover-trigger-width) overflow-hidden p-1"
         onPointerDown={() => {
           fromPointer.current = true;
         }}
       >
-        <div role="listbox" id={listId} aria-label={ariaLabel} className="max-h-60 overflow-y-auto">
+        <div
+          role="listbox"
+          id={listId}
+          aria-label={ariaLabel}
+          className="max-h-[min(15rem,var(--radix-popover-content-available-height))] overflow-y-auto"
+        >
           {allowClear && (
             <button
               type="button"
