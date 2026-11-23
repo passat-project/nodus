@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Permission } from '@nodus/contracts';
 
+import { PERMISSIONS_KEY } from '../../core/decorators/require-permissions.decorator.js';
 import { InvitationsController } from './invitations.controller.js';
 import { PublicInvitationsController } from './public-invitations.controller.js';
 
@@ -59,5 +61,11 @@ describe('контроллеры приглашений (#101)', () => {
     });
     expect(accept.passwordResetInfo).toHaveBeenCalledWith('token-2');
     expect(accept.acceptPasswordReset).toHaveBeenCalledWith('token-2', expect.any(Object));
+  });
+
+  it('сброс пароля требует directory.manage И user.manage (каталог прав)', () => {
+    expect(
+      Reflect.getMetadata(PERMISSIONS_KEY, InvitationsController.prototype.issuePasswordReset),
+    ).toEqual([Permission.DIRECTORY_MANAGE, Permission.USER_MANAGE]);
   });
 });

@@ -160,6 +160,15 @@ describe('EmployeeActionsMenu (#923)', () => {
     expect(screen.queryByRole('menuitem', { name: ui.employees.revokeAdmin })).toBeNull();
   });
 
+  it('без права user.manage пункт сброса пароля скрыт (#101)', () => {
+    useAuthStore.setState({
+      user: { id: ME, email: 'me@nodus.by', displayName: 'Я', permissions: [] },
+    });
+    render(<EmployeeActionsMenu card={card()} />);
+    openMenu();
+    expect(screen.queryByRole('menuitem', { name: ui.employees.resetLink })).toBeNull();
+  });
+
   it('сброс пароля — только после подтверждения (#101): сессии не гасятся случайным кликом', async () => {
     hooks.reset.mutateAsync.mockResolvedValue({
       id: 'user-1',

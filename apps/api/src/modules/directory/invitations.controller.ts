@@ -43,7 +43,6 @@ export class InvitationsController {
   @ApiOperation({ summary: 'Пригласить сотрудника по одноразовой ссылке (7 дней)' })
   @ApiCreatedResponse({ standardSchema: invitationCreatedSchema })
   @ApiErrors(400, 401, 403, 409)
-  @ApiIdempotencyKey()
   create(
     @Body({
       schema: createInvitationSchema,
@@ -67,7 +66,6 @@ export class InvitationsController {
   })
   @ApiOkResponse({ standardSchema: invitationCreatedSchema })
   @ApiErrors(400, 401, 403, 404, 409)
-  @ApiIdempotencyKey()
   reissue(
     @Param('id', new ParseUUIDPipe()) id: string,
     @GetUser() actor: AuthUser,
@@ -103,7 +101,6 @@ export class InvitationsController {
   })
   @ApiOkResponse({ standardSchema: issuePasswordResetResponseSchema })
   @ApiErrors(400, 401, 403, 404, 409)
-  @ApiIdempotencyKey()
   issuePasswordReset(
     @Param('id', new ParseUUIDPipe()) id: string,
     @GetUser() actor: AuthUser,

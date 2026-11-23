@@ -168,13 +168,18 @@ const invitedList = await page.request.get(
 );
 const invitedId = (await invitedList.json()).items[0]?.id;
 if (invitedId) {
-  await page.request.post(`${base}/api/v1/directory/invitations/${invitedId}/reissue`, {
-    headers: { Authorization: `Bearer ${adminToken}`, 'Idempotency-Key': crypto.randomUUID() },
-  });
+  const reissued = await page.request.post(
+    `${base}/api/v1/directory/invitations/${invitedId}/reissue`,
+    { headers: { Authorization: `Bearer ${adminToken}`, 'Idempotency-Key': crypto.randomUUID() } },
+  );
+  if (!reissued.ok())
+    throw new Error(`Кадры: не удалось погасить invite-ссылку (${reissued.status()})`);
 }
-await page.request.post(`${base}/api/v1/directory/users/${target.id}/password-reset`, {
-  headers: { Authorization: `Bearer ${adminToken}`, 'Idempotency-Key': crypto.randomUUID() },
-});
+const revoked = await page.request.post(
+  `${base}/api/v1/directory/users/${target.id}/password-reset`,
+  { headers: { Authorization: `Bearer ${adminToken}`, 'Idempotency-Key': crypto.randomUUID() } },
+);
+if (!revoked.ok()) throw new Error(`Кадры: не удалось погасить reset-ссылку (${revoked.status()})`);
 
 const masked = (link) => link.replace(/[0-9a-f]{20,}/i, '[redacted]');
 console.log(
