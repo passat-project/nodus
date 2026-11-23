@@ -281,6 +281,8 @@ export const currentAuthUser: AuthUser = {
   // прав (#379) — права UI-фазы на моках. Строк вне каталога Permission нет (I15/Р13).
   permissions: [
     Permission.DIRECTORY_MANAGE,
+    // Управление учётками: сброс пароля (#101) — как у admin-роли.
+    Permission.USER_MANAGE,
     Permission.TASK_CREATE,
     Permission.TASK_MANAGE_ANY,
     Permission.CORRESPONDENCE_REGISTER,
