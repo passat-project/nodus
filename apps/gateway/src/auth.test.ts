@@ -19,10 +19,12 @@ async function signToken(
 }
 
 describe('createAccessTokenVerifier', () => {
-  it('принимает валидный токен и извлекает sub/sid', async () => {
+  it('принимает валидный токен и извлекает sub/sid/iat', async () => {
     const verify = createAccessTokenVerifier(SECRET);
     const token = await signToken(SECRET, { sub: 'user-1', sid: 'session-9' });
-    await expect(verify(token)).resolves.toEqual({ userId: 'user-1', sid: 'session-9' });
+    const identity = await verify(token);
+    expect(identity).toMatchObject({ userId: 'user-1', sid: 'session-9' });
+    expect(typeof identity?.issuedAtSeconds).toBe('number');
   });
 
   it('отклоняет истёкший токен', async () => {

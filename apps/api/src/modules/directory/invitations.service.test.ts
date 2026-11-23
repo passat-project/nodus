@@ -271,9 +271,12 @@ describe('InvitationsService (админ, #101)', () => {
     });
 
     it('себе сброс не выпускается → DIRECTORY_SELF_RESET, до чтения строки', async () => {
-      await expect(service.issuePasswordReset(ACTOR.id, ACTOR)).rejects.toMatchObject({
-        code: ErrorCode.DIRECTORY_SELF_RESET,
-      });
+      const selfReset = { code: ErrorCode.DIRECTORY_SELF_RESET };
+      await expect(service.issuePasswordReset(ACTOR.id, ACTOR)).rejects.toMatchObject(selfReset);
+      // UUID верхнего регистра не обходит запрет (канонизация id).
+      await expect(service.issuePasswordReset(ACTOR.id.toUpperCase(), ACTOR)).rejects.toMatchObject(
+        selfReset,
+      );
       expect(invitations.lockUser).not.toHaveBeenCalled();
       expect(invitations.createToken).not.toHaveBeenCalled();
     });

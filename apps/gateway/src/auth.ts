@@ -4,13 +4,15 @@ import { jwtVerify } from 'jose';
 export interface GatewayIdentity {
   userId: string;
   sid: string | null;
+  /** Момент выпуска (секунды epoch) — стоп-лист API (#333/#101). */
+  issuedAtSeconds: number | undefined;
 }
 
 /**
  * Верификатор access-JWT хендшейка: HS256, тот же JWT_SECRET, что у apps/api
  * (формат token.service). exp проверяется jwtVerify. Сессии (sid) не
- * проверяются — stateless, как в JwtAuthGuard api; отозванная сессия живёт
- * ≤ TTL access-токена (задокументировано в README gateway).
+ * проверяются — stateless, как в JwtAuthGuard api; стоп-лист токенов
+ * (`revoked-before`) читает хендшейк gateway (`revoked.ts`).
  */
 export type AccessTokenVerifier = (token: unknown) => Promise<GatewayIdentity | null>;
 
@@ -29,6 +31,7 @@ export function createAccessTokenVerifier(secret: string): AccessTokenVerifier {
       return {
         userId,
         sid: typeof payload.sid === 'string' ? payload.sid : null,
+        issuedAtSeconds: typeof payload.iat === 'number' ? payload.iat : undefined,
       };
     } catch {
       return null; // подпись, срок или формат — любой отказ означает анонима

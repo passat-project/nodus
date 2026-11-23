@@ -2,7 +2,8 @@
 
 WebSocket-gateway портала (I1: отдельный процесс): Socket.IO — auth-хендшейк,
 комнаты бесед, fanout доменных событий всех модулей (`chat.*` включая стикеры, `task.*`,
-`workflow.*`, `notification.*`, `directory.user.deactivated`) из Redis Stream,
+`workflow.*`, `notification.*`, `directory.user.deactivated`,
+`directory.user.password_reset_issued`) из Redis Stream,
 «печатает…», presence. Спека — issue #104 (трек M13).
 
 ## Запуск
@@ -47,9 +48,10 @@ WebSocket-gateway портала (I1: отдельный процесс): Socket
   текущий consumer и обрабатывает штатно (эмит + XACK); затем GC сирот —
   `XGROUP DELCONSUMER` чужих consumer'ов с pending = 0 и idle > 10 мин
   (живой BLOCK-reader обновляет idle каждые ≤ 5 с и под порог не попадает).
-- **Деактивация сотрудника**: `directory.user.deactivated` из стрима →
+- **Деактивация и сброс пароля**: `directory.user.deactivated` или
+  `directory.user.password_reset_issued` из стрима →
   `io.in(user:{id}).disconnectSockets(true)` — сокет, аутентифицированный
-  на хендшейке, не переживает деактивацию; клиент на `io server disconnect`
+  на хендшейке, не переживает событие; клиент на `io server disconnect`
   сам не переподключается, refresh-сессии отзывает auth тем же событием.
 - **READ-ONLY Postgres — осознанное исключение I3/I6** (зафиксировано спекой
   #104): gateway не тянет Nest/Prisma ради нескольких SELECT — `isMember` для
@@ -113,7 +115,12 @@ emit для ВСЕХ событий (#328); доменные составы со
   чат-дерево ключей и рефечит. Появится при масштабировании истории.
 - **Auth**: stateless HS256 (тот же формат, что apps/api); сессии (sid) не
   проверяются — отозванная сессия живёт ≤ TTL access-токена (15 мин).
-  Деактивация рвёт уже открытые сокеты (см. выше), а **статус учётки
+  Деактивация и выпуск reset-ссылки рвут уже открытые сокеты (см. выше), а
+  **хендшейк читает стоп-лист access-токенов** (`nodus:auth:revoked-before:<userId>`,
+  тот же ключ, что пишет apps/api, `revoked.ts`): старым токеном после
+  деактивации/сброса пароля переподключиться нельзя. Redis недоступен —
+  fail-open (портал не встаёт), статус учётки всё равно проверяется.
+  **Статус учётки
   перечитывается на каждом хендшейке** (#320, `isActiveUser` — один SELECT
   без кэша): новый хендшейк деактивированного с ещё живым access-токеном
   (перезагрузка вкладки) отклоняется `unauthorized` — refresh у него не

@@ -117,18 +117,22 @@ export class InvitationsService {
 
   /** Новая ссылка: прежняя гаснет, строка остаётся «Приглашён». */
   async reissueInvitation(userId: string, actor: AuthUser): Promise<InvitationCreated> {
+    // UUID канонически в нижнем регистре (ParseUUIDPipe пропускает верхний):
+    // иначе события/ключи стоп-листа получают id в другом регистре и не
+    // совпадают с `sub` токена (security-аудит #101).
+    const targetId = userId.toLowerCase();
     return this.tx.run(async (tx) => {
-      const user = await this.lockInvitedUser(userId, tx);
-      await this.invitations.revokeActive(userId, 'invite', tx);
-      const issued = await this.issueToken(tx, userId, 'invite', actor.id);
+      const user = await this.lockInvitedUser(targetId, tx);
+      await this.invitations.revokeActive(targetId, 'invite', tx);
+      const issued = await this.issueToken(tx, targetId, 'invite', actor.id);
       await this.eventBus.emit(
         tx,
         DIRECTORY_EVENTS.INVITATION_CREATED,
-        { userId, email: user.email, expiresAt: issued.expiresAt.toISOString() },
-        { actorId: actor.id, aggregateType: 'user', aggregateId: userId },
+        { userId: targetId, email: user.email, expiresAt: issued.expiresAt.toISOString() },
+        { actorId: actor.id, aggregateType: 'user', aggregateId: targetId },
       );
       return {
-        id: userId,
+        id: targetId,
         token: issued.token,
         path: `/invite/${issued.token}`,
         expiresAt: issued.expiresAt.toISOString(),
@@ -143,31 +147,32 @@ export class InvitationsService {
    * `user.deactivated`.
    */
   async cancelInvitation(userId: string, actor: AuthUser): Promise<void> {
+    const targetId = userId.toLowerCase();
     await this.tx.run(async (tx) => {
-      const user = await this.lockInvitedUser(userId, tx);
-      await this.invitations.revokeActive(userId, 'invite', tx);
+      const user = await this.lockInvitedUser(targetId, tx);
+      await this.invitations.revokeActive(targetId, 'invite', tx);
       await this.eventBus.emit(
         tx,
         DIRECTORY_EVENTS.INVITATION_REVOKED,
-        { userId, reason: 'cancelled' },
-        { actorId: actor.id, aggregateType: 'user', aggregateId: userId },
+        { userId: targetId, reason: 'cancelled' },
+        { actorId: actor.id, aggregateType: 'user', aggregateId: targetId },
       );
       if (user.activatedAt === null) {
-        await this.invitations.deleteUser(userId, tx);
+        await this.invitations.deleteUser(targetId, tx);
         await this.eventBus.emit(
           tx,
           DIRECTORY_EVENTS.USER_DELETED,
-          { userId },
-          { actorId: actor.id, aggregateType: 'user', aggregateId: userId },
+          { userId: targetId },
+          { actorId: actor.id, aggregateType: 'user', aggregateId: targetId },
         );
         return;
       }
-      await this.users.update(userId, { status: 'deactivated' }, tx);
+      await this.users.update(targetId, { status: 'deactivated' }, tx);
       await this.eventBus.emit(
         tx,
         DIRECTORY_EVENTS.USER_DEACTIVATED,
-        { userId },
-        { actorId: actor.id, aggregateType: 'user', aggregateId: userId },
+        { userId: targetId },
+        { actorId: actor.id, aggregateType: 'user', aggregateId: targetId },
       );
     });
   }
@@ -178,15 +183,17 @@ export class InvitationsService {
    * выпускают ссылку; приглашённому — ссылка-приглашение, а не сброс.
    */
   async issuePasswordReset(userId: string, actor: AuthUser): Promise<IssuePasswordResetResponse> {
+    const targetId = userId.toLowerCase();
     // Себе — нельзя (I8): сброс по ссылке — действие над ДРУГИМ сотрудником,
-    // кнопка в UI скрыта, но сервер обязан отказать.
-    if (userId === actor.id) {
+    // кнопка в UI скрыта, но сервер обязан отказать. Сравнение по каноническому
+    // UUID: ParseUUIDPipe пропускает верхний регистр (security-аудит #101).
+    if (targetId === actor.id.toLowerCase()) {
       throw new DomainException(ErrorCode.DIRECTORY_SELF_RESET, 'Cannot reset your own password');
     }
     return this.tx.run(async (tx) => {
       // Замок строки: два параллельных выпуска не оставят ДВЕ действующие
       // ссылки (revoke предыдущей и create новой — под одним замком).
-      const locked = await this.invitations.lockUser(userId, tx);
+      const locked = await this.invitations.lockUser(targetId, tx);
       if (!locked) throw DomainException.notFound('User not found');
       if (locked.status !== 'active') {
         throw new DomainException(
@@ -194,18 +201,18 @@ export class InvitationsService {
           'Password reset is available only for an active user',
         );
       }
-      const user = await this.invitations.findUserById(userId, tx);
+      const user = await this.invitations.findUserById(targetId, tx);
       if (!user) throw DomainException.notFound('User not found');
-      await this.invitations.revokeActive(userId, 'reset', tx);
-      const issued = await this.issueToken(tx, userId, 'reset', actor.id);
+      await this.invitations.revokeActive(targetId, 'reset', tx);
+      const issued = await this.issueToken(tx, targetId, 'reset', actor.id);
       await this.eventBus.emit(
         tx,
         DIRECTORY_EVENTS.USER_PASSWORD_RESET_ISSUED,
-        { userId, byAdminId: actor.id },
-        { actorId: actor.id, aggregateType: 'user', aggregateId: userId },
+        { userId: targetId, byAdminId: actor.id },
+        { actorId: actor.id, aggregateType: 'user', aggregateId: targetId },
       );
       return {
-        id: userId,
+        id: targetId,
         token: issued.token,
         path: `/reset/${issued.token}`,
         expiresAt: issued.expiresAt.toISOString(),

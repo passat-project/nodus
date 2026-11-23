@@ -17,6 +17,10 @@ import { convRoom, PRESENCE_ROOM, revokeConvRoom, userRoom } from './rooms.ts';
 /** Деактивация сотрудника (directory, payload `{ userId }`) — каталог contracts. */
 export const USER_DEACTIVATED_EVENT = DIRECTORY_EVENTS.USER_DEACTIVATED;
 
+/** Выпуск reset-ссылки: старые access-токены уже в стоп-листе API (#101) —
+ *  открытые сокеты пользователя тоже рвём (клиент войдёт заново). */
+export const USER_PASSWORD_RESET_ISSUED_EVENT = DIRECTORY_EVENTS.USER_PASSWORD_RESET_ISSUED;
+
 /** Установка/снятие пака «себе» (#318): меняется только набор владельца. */
 const STICKER_INSTALL_EVENTS = new Set<string>([
   CHAT_EVENTS.STICKER_PACK_INSTALLED,
@@ -73,7 +77,10 @@ const LIST_EVENTS = new Set([
  * - directory.user.deactivated → принудительное отключение всех сокетов
  *   пользователя (сокет аутентифицирован один раз на хендшейке и иначе
  *   пережил бы деактивацию; клиент на `io server disconnect` сам не
- *   переподключается, refresh-сессии уже отозвал auth).
+ *   переподключается, refresh-сессии уже отозвал auth);
+ * - directory.user.password_reset_issued (#101) → то же отключение: доступ
+ *   должен пропасть сразу, а не через TTL access-токена; переподключиться
+ *   старым токеном не даст стоп-лист хендшейка (`revoked.ts`).
  */
 export async function routeEnvelope(
   io: Server,
@@ -85,7 +92,10 @@ export async function routeEnvelope(
   const payload = (incoming.payload ?? {}) as Record<string, unknown>;
   const envelope = withoutAudience(incoming, payload);
 
-  if (envelope.type === USER_DEACTIVATED_EVENT) {
+  if (
+    envelope.type === USER_DEACTIVATED_EVENT ||
+    envelope.type === USER_PASSWORD_RESET_ISSUED_EVENT
+  ) {
     if (typeof payload.userId === 'string') {
       // close=true: DISCONNECT-пакет уходит до закрытия транспорта (engine.io
       // дожидается drain), клиент получает `io server disconnect` без автореконнекта.
