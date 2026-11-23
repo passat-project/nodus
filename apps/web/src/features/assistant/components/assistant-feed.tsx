@@ -22,6 +22,7 @@ import { AssistantActionBatchBar } from './assistant-action-batch.js';
 import { AssistantActionCard } from './assistant-action-card.js';
 import { AssistantMarkdown } from './assistant-markdown.js';
 import { AssistantMessageMenu } from './assistant-message-menu.js';
+import { DayBubble } from '../../../shared/chat/day-bubble.js';
 import { DayChip } from '../../../shared/chat/day-chip.js';
 import {
   buildMessageRuns,
@@ -327,6 +328,7 @@ export function AssistantFeed({
             ) : null}
           </MessageScrollerContent>
         </MessageScrollerViewport>
+        <DayBubble viewportRef={viewportRef} />
       </MessageScroller>
     </MessageScrollerProvider>
   );

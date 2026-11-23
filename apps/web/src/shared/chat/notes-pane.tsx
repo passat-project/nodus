@@ -18,6 +18,7 @@ import { ChatComposer } from './chat-composer.js';
 import { addFiles } from './composer-files.js';
 import { FeedDropzone } from './feed-dropzone.js';
 import type { ComposerSelection } from './selection-island.js';
+import { DayBubble } from './day-bubble.js';
 import { DayChip } from './day-chip.js';
 import { toFavoriteMessage } from './favorite-message.js';
 import { ensureOlderPage } from './messages-history.js';
@@ -300,6 +301,7 @@ export function NotesPane({ conversationId }: { conversationId: string }) {
                 )}
               </MessageScrollerContent>
             </MessageScrollerViewport>
+            <DayBubble viewportRef={viewportRef} />
           </MessageScroller>
         </MessageScrollerProvider>
       </FeedDropzone>
