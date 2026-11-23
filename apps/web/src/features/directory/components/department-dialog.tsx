@@ -10,20 +10,11 @@ import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@nodus/ui/components/dialog';
 import { Input } from '@nodus/ui/components/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@nodus/ui/components/select';
 
 import type { DepartmentOption } from '../../../shared/api/departments-list.js';
 import { useCreateDepartment, useUpdateDepartment } from '../api/directory-api.js';
 import { EmployeeCombobox } from './employee-combobox.js';
-
-/** Sentinel Radix Select для «без родителя» (пустая строка запрещена). */
-const NO_PARENT = '__none__';
+import { ReferenceCombobox } from './reference-combobox.js';
 
 /** Id узла и всего его поддерева — при переносе исключаем из кандидатов
  *  родителей (узел не может стать потомком сам себя; сервер тоже защищает). */
@@ -115,6 +106,18 @@ export function DepartmentDialog({
   // (сервер дополнительно защищает от циклов).
   const excluded = editing ? collectSubtreeIds(editing) : new Set<string>();
   const parentOptions = departmentOptions.filter((option) => !excluded.has(option.id));
+  // Главная карточка — корень структуры: вышестоящего подразделения у неё нет
+  // вовсе, поля в окне нет (#982). Обычное подразделение открепить в корень
+  // нельзя: выбор родителя обязателен, пункта «Нет вышестоящего…» нет.
+  const isRoot = editing !== null && editing.parentId === null;
+  // Кандидаты — со второй строкой «руководитель подразделения» (как у полей
+  // «Руководитель/Заместитель»): так перенос читается по людям, не только по
+  // названиям.
+  const parentCandidates = parentOptions.map((option) => ({
+    id: option.id,
+    label: option.name,
+    secondary: users.find((user) => user.id === option.headId)?.displayName ?? null,
+  }));
   // Создание из карточки: родитель задан контекстом — показываем его имя.
   const parentName = departmentOptions.find((option) => option.id === parentDraft)?.name ?? null;
 
@@ -197,41 +200,33 @@ export function DepartmentDialog({
               className="h-8 text-sm"
             />
           </Field>
-          <Field label={ui.employees.parentDepartment}>
-            {editing ? (
-              <Select
-                value={parentDraft ?? NO_PARENT}
-                onValueChange={(value) => setParentDraft(value === NO_PARENT ? null : value)}
-              >
-                <SelectTrigger size="sm" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent
-                  position="popper"
-                  side="bottom"
-                  // Только вниз и с прокруткой: иначе список родителей
-                  // раздувал окно и уезжал вверх за край (вердикт 17.11.2026).
-                  avoidCollisions={false}
-                  className="max-h-60"
-                >
-                  <SelectItem value={NO_PARENT}>{ui.employees.noParent}</SelectItem>
-                  {parentOptions.map((option) => (
-                    <SelectItem key={option.id} value={option.id}>
-                      {option.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              // Создание — родитель задан контекстом (карточка/пустое
-              // состояние): только имя, без выбора и тире уровней (#768).
+          {editing && !isRoot ? (
+            <Field label={ui.employees.parentDepartment}>
+              <ReferenceCombobox
+                value={parentDraft}
+                onChange={setParentDraft}
+                options={parentCandidates}
+                ariaLabel={ui.employees.parentDepartment}
+                placeholder={ui.employees.departmentSearchPlaceholder}
+                // Строго вниз, как у «Руководителя/Заместителя» (решение
+                // владельца 19.11.2026): переворот читался как «список уехал».
+                placement="bottom"
+                // Обязательный выбор: открепить подразделение в корень нельзя
+                // ни в интерфейсе, ни на сервере (#982).
+                allowClear={false}
+              />
+            </Field>
+          ) : !editing && parentName ? (
+            // Создание — родитель задан контекстом (карточка/пустое
+            // состояние): только имя, без выбора и тире уровней (#768).
+            <Field label={ui.employees.parentDepartment}>
               <span className="flex h-8 min-w-0 items-center text-sm text-foreground">
-                <span className="truncate" title={parentName ?? ui.employees.noParent}>
-                  {parentName ?? ui.employees.noParent}
+                <span className="truncate" title={parentName}>
+                  {parentName}
                 </span>
               </span>
-            )}
-          </Field>
+            </Field>
+          ) : null}
           <Field label={ui.employees.fieldHead}>
             <EmployeeCombobox
               value={headId}

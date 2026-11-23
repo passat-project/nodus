@@ -14,7 +14,7 @@ import {
   takeEmployeeCardTab,
 } from '../../../shared/chat/employee-card-nav.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
-import { chatCeiling, chatColumnWidth } from '../../../shared/ui/branch-panel.js';
+import { chatCeiling, chatColumnPx } from '../../../shared/ui/branch-panel.js';
 import {
   CHAT_PANEL_W,
   ChatSidePanel,
@@ -132,7 +132,10 @@ export function EmployeeCard({ userId, dormant = false }: { userId: string; dorm
   // а не догоняет растущую сетку во время анимации.
   const ceiling = chatCeiling(rowW, panelVisible ? CHAT_PANEL_W : 0);
   const { chatW, onDividerDown, dragging } = useChatWidth(chatRef, shrink, chatFloor, ceiling);
-  const columnW = chatColumnWidth(chatW, shrink, chatFloor, ceiling);
+  // Ширина правой зоны — целые px (#969): при дробном --ui-scale/DPR полупиксельная
+  // ширина давала слою дробное смещение и «мягкие» края текста; сумма колонок
+  // ряда от этого не зависит (профиль — `1fr`, чат — `auto`).
+  const columnW = chatColumnPx(chatW, shrink, chatFloor, ceiling);
 
   const items = useMemo(() => usersData?.items ?? [], [usersData]);
   const listItem = items.find((u) => u.id === userId);

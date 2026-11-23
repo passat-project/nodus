@@ -46,7 +46,7 @@ export function EmployeeTasksTab({
   const openCard = useOpenCard();
   const toolbar = useListToolbar('directory.tasks', taskBuiltinPresets);
   const search = useDebouncedValue(toolbar.query.trim(), 250);
-  const { data, isLoading } = useAssigneeTasks(userId, search);
+  const { data, isLoading, isError } = useAssigneeTasks(userId, search);
   const tasks = data?.items ?? [];
   // Реестр колонок — хук: атрибуты портала (#632) приходят с сервера.
   const fields = useTaskTableFields();
@@ -95,6 +95,7 @@ export function EmployeeTasksTab({
           rows={rows}
           rowKey={(task) => task.id}
           isLoading={isLoading}
+          isError={isError}
           emptyTitle={ui.employees.noTasks}
           onOpenRow={(task, rowEl) =>
             openCard({ kind: 'task', id: task.id }, rowEl.getBoundingClientRect())
@@ -109,7 +110,7 @@ export function EmployeeProjectsTab({ userId }: { userId: string }) {
   const openCard = useOpenCard();
   const toolbar = useListToolbar('directory.projects', projectBuiltinPresets);
   const search = useDebouncedValue(toolbar.query.trim(), 250);
-  const { data, isLoading } = useMemberProjects(userId, {
+  const { data, isLoading, isError } = useMemberProjects(userId, {
     enabled: projectsAvailable(),
     search,
   });
@@ -146,6 +147,7 @@ export function EmployeeProjectsTab({ userId }: { userId: string }) {
           rows={rows}
           rowKey={(project) => project.id}
           isLoading={isLoading}
+          isError={isError}
           emptyTitle={ui.employees.noProjects}
           onOpenRow={(project, rowEl) =>
             openCard({ kind: 'project', id: project.id }, rowEl.getBoundingClientRect())

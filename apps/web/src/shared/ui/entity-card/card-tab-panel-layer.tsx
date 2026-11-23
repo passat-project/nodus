@@ -27,7 +27,6 @@ export function CardTabPanelLayer({
   groups,
   tabs,
   widths,
-  width,
   baseId,
   renderPanel,
 }: {
@@ -35,20 +34,22 @@ export function CardTabPanelLayer({
   groups: CardTabGroup[];
   tabs: CardTabDef[];
   widths: number[];
-  width: number;
   /** Префикс id полос/панелей (один на карточку). */
   baseId: string;
   renderPanel: (tabId: string) => ReactNode;
 }) {
-  const positions = new Map(
-    groups.map((group, index) => [
-      group.active,
-      {
-        left: widths.slice(0, index).reduce((acc, value) => acc + value, 0),
-        width: widths[index] ?? 0,
-      },
-    ]),
-  );
+  // Координаты КАЖДОЙ области (колонки карточки) и вкладка → её область.
+  // Неактивная панель паркуется по координатам СВОЕЙ области, а не левой:
+  // при переключении React в одном коммите переставляет панели, и браузер
+  // успевал отрисовать перемещённый слой в чужой колонке на 130–170 мс
+  // (тулбар прошлой вкладки мелькал в «О проекте», #959).
+  const areaOf = new Map<string, { left: number; width: number; active: string }>();
+  let offset = 0;
+  groups.forEach((group, index) => {
+    const area = { left: offset, width: widths[index] ?? 0, active: group.active };
+    for (const tabId of group.tabs) areaOf.set(tabId, area);
+    offset += area.width;
+  });
   // Монтируем только ПОСЕЩЁННЫЕ вкладки: активные при создании состояния и
   // все, на которые пользователь переключался. Иначе открытие карточки
   // поднимало бы дерево/список/беседу/PDF всех вкладок сразу.
@@ -58,8 +59,12 @@ export function CardTabPanelLayer({
     <div className="relative min-h-0 flex-1 overflow-hidden">
       {tabs.map((tab) => {
         if (!visited.has(tab.id)) return null;
-        const position = positions.get(tab.id);
-        const active = Boolean(position);
+        const area = areaOf.get(tab.id);
+        // Вкладка вне отрисованных областей (скрыта из личного набора, ещё не
+        // разложена) остаётся СМОНТИРОВАННОЙ: панель паркуется в левой колонке
+        // и невидима — скролл/зум/черновик живут (критерий #959). Мелькание
+        // гасит `opacity: 0`, а не размонтирование.
+        const active = area ? area.active === tab.id : false;
         return (
           <div
             key={tab.id}
@@ -72,12 +77,13 @@ export function CardTabPanelLayer({
               // flex-колонка — иначе `flex-1`-контент вкладки не получает
               // высоту области и его скролл не включается (#798).
               'absolute inset-y-0 flex flex-col overflow-hidden',
-              !active && 'pointer-events-none invisible',
+              // `opacity: 0` — композиторное свойство: применяется сразу и
+              // страхует от кадра перемещённого слоя; `invisible` оставлен
+              // намеренно — он не отменяет IntersectionObserver (#770).
+              !active && 'pointer-events-none invisible opacity-0',
             )}
             style={
-              position
-                ? { left: position.left, width: position.width }
-                : { left: 0, width: widths[0] ?? width }
+              area ? { left: area.left, width: area.width } : { left: 0, width: widths[0] ?? 0 }
             }
           >
             {/* Неактивная вкладка остаётся СМОНТИРОВАННОЙ (скролл/зум живы),

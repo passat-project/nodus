@@ -24,6 +24,8 @@ export const errorMessages: Record<ErrorCode, string> = {
     'Должность используется: сначала переведите сотрудников на другую должность',
   [ErrorCode.DIRECTORY_POSITION_EXISTS]: 'Должность с таким названием уже есть',
   [ErrorCode.DIRECTORY_SELF_DEACTIVATE]: 'Себя уволить нельзя',
+  [ErrorCode.DIRECTORY_DEPARTMENT_ROOT_FORBIDDEN]:
+    'Подразделение нельзя открепить от структуры — выберите вышестоящее подразделение',
   [ErrorCode.TASK_LAST_STAGE]: 'Единственную стадию удалить нельзя',
   [ErrorCode.WORKFLOW_TRANSITION_NOT_ALLOWED]: 'Такой переход сейчас недоступен',
   [ErrorCode.WORKFLOW_TRANSITION_BLOCKED]: 'Переход заблокирован: не выполнены условия',

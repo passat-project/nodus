@@ -122,6 +122,23 @@ export class DepartmentsService {
 
   async update(id: string, dto: UpdateDepartmentDto, actor: AuthUser): Promise<DepartmentNode> {
     return this.tx.run(async (tx) => {
+      // #982: управленческое подразделение не открепляется в корень — корень
+      // один, главная карточка компании. Это ОТКАЗ, а не перенос: проверяем до
+      // лока дерева (очередь переносов зря не сериализуем), база не меняется.
+      // Юридическая структура — лес корней, там открепление законно.
+      if (dto.parentId === null) {
+        const node = await this.departments.findById(id, tx);
+        if (!node) {
+          throw DomainException.notFound('Department not found');
+        }
+        if (node.kind === 'management' && node.parentId !== null) {
+          throw new DomainException(
+            ErrorCode.DIRECTORY_DEPARTMENT_ROOT_FORBIDDEN,
+            'Management department cannot be detached to root',
+            { id },
+          );
+        }
+      }
       // #544: смена parentId сериализуется advisory-локом дерева — проверка
       // цикла и мутация видят зафиксированное состояние конкурента. Строчный
       // FOR UPDATE не спасает: параллельные переносы лочат РАЗНЫЕ строки.
@@ -134,6 +151,16 @@ export class DepartmentsService {
       const current = await this.departments.findById(id, tx);
       if (!current) {
         throw DomainException.notFound('Department not found');
+      }
+      // Повтор правила корня (#982) на состоянии ПОСЛЕ лока: ранняя проверка —
+      // быстрый путь без сериализации переносов, эта закрывает interleaving,
+      // когда узел успели переставить между чтением и локом.
+      if (dto.parentId === null && current.kind === 'management' && current.parentId !== null) {
+        throw new DomainException(
+          ErrorCode.DIRECTORY_DEPARTMENT_ROOT_FORBIDDEN,
+          'Management department cannot be detached to root',
+          { id },
+        );
       }
       // #441: ссылки оргструктуры — руководитель/зам только активные
       // сотрудники; родитель — подразделение того же вида структуры (иначе

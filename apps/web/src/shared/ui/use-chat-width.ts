@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState, type PointerEvent, type RefObject } from 'react';
 
-import { chatColumnWidth } from './branch-panel.js';
+import { chatColumnPx } from './branch-panel.js';
 import { uiPx } from './ui-scale.js';
 
 const STORE_KEY = 'nodus-card-chat-w-v2';
@@ -82,7 +82,7 @@ export function useChatWidth(
           raf = 0;
           const el = chatRef.current;
           if (el)
-            el.style.width = `${chatColumnWidth(
+            el.style.width = `${chatColumnPx(
               latest,
               shrinkRef.current,
               floorRef.current,
@@ -99,7 +99,9 @@ export function useChatWidth(
         // Коммит в React: стиль ре-рендера совпадает с последним императивным
         // значением — визуального скачка нет. Потолок (профиль слева) съедает
         // из памяти лишнее — перетаскивание на узком окне не копит «мертвый ход».
-        const capped = Math.min(latest, ceilingRef.current + shrinkRef.current);
+        // Целые px (#969): дробная ширина при DPR 1.25 давала слою дробное
+        // смещение — текст «мылился» до перерисовки.
+        const capped = Math.round(Math.min(latest, ceilingRef.current + shrinkRef.current));
         setChatW(capped);
         localStorage.setItem(STORE_KEY, String(capped));
       };

@@ -4,7 +4,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { useSurfaceVisible } from '../../lib/surface-visibility.js';
 import { CardTabPanelLayer } from './card-tab-panel-layer.js';
-import { activateTab, createCardTabsState, type CardTabsState } from './card-tabs-model.js';
+import {
+  activateTab,
+  createCardTabsState,
+  mergeGroups,
+  type CardTabsState,
+} from './card-tabs-model.js';
 import type { CardTabDef } from './card-tab-strip.js';
 
 /**
@@ -17,20 +22,20 @@ import type { CardTabDef } from './card-tab-strip.js';
 const TABS: CardTabDef[] = [
   { id: 'chat', label: 'Чат', icon: null },
   { id: 'files', label: 'Файлы', icon: null },
+  { id: 'history', label: 'История', icon: null },
 ];
 
 function Probe({ id }: { id: string }) {
   return <span data-testid={`probe-${id}`}>{useSurfaceVisible() ? 'visible' : 'hidden'}</span>;
 }
 
-function renderLayer(state: CardTabsState) {
+function renderLayer(state: CardTabsState, groups = state.groups, widths = [600]) {
   return render(
     <CardTabPanelLayer
       state={state}
-      groups={state.groups}
+      groups={groups}
       tabs={TABS}
-      widths={[600]}
-      width={600}
+      widths={widths}
       baseId="card"
       renderPanel={(id) => <Probe id={id} />}
     />,
@@ -49,7 +54,6 @@ describe('CardTabPanelLayer: панель вкладки — flex-колонка
         groups={state.groups}
         tabs={TABS}
         widths={[600]}
-        width={600}
         baseId="card"
         renderPanel={(id) => <div data-testid={`scroll-${id}`} className="min-h-0 flex-1" />}
       />,
@@ -82,5 +86,82 @@ describe('CardTabPanelLayer: видимость поверхности вкла�
     renderLayer(activateTab(base, 'area-1', 'files'));
     expect(screen.getByTestId('probe-chat').textContent).toBe('hidden');
     expect(screen.getByTestId('probe-files').textContent).toBe('visible');
+  });
+
+  it('посещённая вкладка вне отрисованных областей остаётся смонтированной (#959)', () => {
+    // Скрытие вкладки из личного набора сохраняет её в visited: панель обязана
+    // жить (скролл/зум/черновик), а не размонтироваться.
+    const hidden = createCardTabsState(
+      [{ id: 'area-1', tabs: ['chat', 'files'], active: 'chat' }],
+      { visited: ['chat', 'files', 'history'] },
+    );
+    renderLayer(hidden);
+
+    const panel = document.getElementById('card-tab-history-panel');
+    expect(panel).not.toBeNull();
+    expect(panel!.className).toContain('opacity-0');
+    expect(screen.getByTestId('probe-history').textContent).toBe('hidden');
+  });
+});
+
+describe('CardTabPanelLayer: панели не мелькают в чужой области (#959)', () => {
+  const twoAreas = createCardTabsState([
+    { id: 'area-1', tabs: ['chat'], active: 'chat' },
+    { id: 'area-2', tabs: ['files', 'history'], active: 'history' },
+  ]);
+  const panel = (id: string) => document.getElementById(`card-tab-${id}-panel`) as HTMLElement;
+
+  function renderTwoAreas(state: CardTabsState) {
+    return render(
+      <CardTabPanelLayer
+        state={state}
+        groups={state.groups}
+        tabs={TABS}
+        widths={[600, 400]}
+        baseId="card"
+        renderPanel={(id) => <Probe id={id} />}
+      />,
+    );
+  }
+
+  it('неактивная панель стоит по координатам СВОЕЙ области, а не левой', () => {
+    renderTwoAreas(twoAreas);
+
+    // Обе вкладки правой области — на её колонке; левая колонка только у чата.
+    expect(panel('files').style.left).toBe('600px');
+    expect(panel('history').style.left).toBe('600px');
+    expect(panel('chat').style.left).toBe('0px');
+    // Неактивные гасятся композиторным opacity (страховка от кадра переноса).
+    expect(panel('files').className).toContain('opacity-0');
+    expect(panel('history').className).not.toContain('opacity-0');
+  });
+
+  it('переключение внутри области не меняет left панелей', () => {
+    const { rerender } = renderTwoAreas(twoAreas);
+    rerender(
+      <CardTabPanelLayer
+        state={activateTab(twoAreas, 'area-2', 'files')}
+        groups={activateTab(twoAreas, 'area-2', 'files').groups}
+        tabs={TABS}
+        widths={[600, 400]}
+        baseId="card"
+        renderPanel={(id) => <Probe id={id} />}
+      />,
+    );
+
+    expect(panel('files').style.left).toBe('600px');
+    expect(panel('history').style.left).toBe('600px');
+    expect(panel('files').className).not.toContain('opacity-0');
+    expect(panel('history').className).toContain('opacity-0');
+  });
+
+  it('derived-свёрнутая область показывает ровно одну активную панель', () => {
+    const merged = mergeGroups(twoAreas.groups, 'area-1');
+    renderTwoAreas({ ...twoAreas, groups: merged });
+
+    const visible = ['chat', 'files', 'history'].filter(
+      (id) => !panel(id).className.includes('opacity-0'),
+    );
+    expect(visible).toEqual(['chat']);
   });
 });

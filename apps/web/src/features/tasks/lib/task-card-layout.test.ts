@@ -4,6 +4,7 @@ import {
   BRANCH_MIN_W,
   MIN_TASK_MAIN_W,
   branchMaxWidth,
+  chatColumnPx,
   chatColumnWidth,
   clampBranchWidth,
   rowMinWidths,
@@ -20,6 +21,13 @@ describe('chatColumnWidth — чат буфер сужений', () => {
   it('потолок отдаёт излишек левой зоне, но пол сильнее (карточка сотрудника #750)', () => {
     expect(chatColumnWidth(900, 0, 420, 700)).toBe(700);
     expect(chatColumnWidth(900, 0, 420, 300)).toBe(420);
+  });
+  it('целая ширина для рендера и drag-коммита — без полупиксельного смещения (#969)', () => {
+    // Дробный --ui-scale/DPR даёт полупиксельную ширину: слой смещается на
+    // долю пикселя и текст «мылится» до перерисовки.
+    expect(chatColumnPx(900.4, 300.2, 500)).toBe(600);
+    expect(chatColumnPx(899.6, 300.2, 500)).toBe(599);
+    expect(Number.isInteger(chatColumnPx(701.3, 360.9, 500))).toBe(true);
   });
 });
 

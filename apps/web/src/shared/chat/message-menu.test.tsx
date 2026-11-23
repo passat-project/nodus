@@ -9,7 +9,16 @@ vi.mock('../api-client.js', () => ({
   api: vi.fn(async () => ({ items: [], nextCursor: null, lastSeq: 0 })),
 }));
 
+// #273: spy на явный путь закрытия — проверяем, что closeFirst-пункт идёт
+// через closeMenuThenRun, а не полагается на неявный handleSelect Radix.
+vi.mock('./menu-close.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./menu-close.js')>();
+  return { ...actual, closeMenuThenRun: vi.fn(actual.closeMenuThenRun) };
+});
+
 import { MessageMenu } from './message-menu.js';
+import { closeMenuThenRun } from './menu-close.js';
+import { useSelectionStore } from './selection-store.js';
 import { useAuthStore } from '../auth-store.js';
 import { api } from '../api-client.js';
 
@@ -267,6 +276,31 @@ describe('MessageMenu: модераторское «Удалить» (#245)', ()
     setMe(['chat.moderate']);
     await openForeign();
     expect(screen.queryByRole('menuitem', { name: ui.chat.menu.delete })).toBeNull();
+  });
+});
+
+describe('MessageMenu: closeFirst-пункты закрывают меню явно (#273)', () => {
+  afterEach(() => {
+    useSelectionStore.getState().exit();
+    vi.mocked(closeMenuThenRun).mockClear();
+  });
+
+  it('«Выбрать»: явный closeMenuThenRun, меню закрыто, селект — после анимации', async () => {
+    renderMenu(msg(), false);
+    await openMenu();
+
+    fireEvent.click(screen.getByRole('menuitem', { name: ui.chat.menu.select }));
+
+    // Механизм: клик идёт через явное закрытие меню (до отложенного действия).
+    expect(vi.mocked(closeMenuThenRun)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(closeMenuThenRun).mock.calls[0]?.[0]).toBeTypeOf('function');
+    // Исход: меню закрыто, режим селекта включился после анимации закрытия.
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    await waitFor(() => {
+      const state = useSelectionStore.getState();
+      expect(state.scope).toBe('conversation:conv-1');
+      expect(state.ids).toEqual(['client-1']);
+    });
   });
 });
 

@@ -40,6 +40,9 @@ const CODE_TO_STATUS: Record<ErrorCode, number> = {
   [ErrorCode.DIRECTORY_POSITION_EXISTS]: HttpStatus.CONFLICT,
   // Себя уволить нельзя (#923) — правило состояния, не 400-валидация входа.
   [ErrorCode.DIRECTORY_SELF_DEACTIVATE]: HttpStatus.CONFLICT,
+  // Открепить управленческое подразделение в корень нельзя (#982): значение
+  // parentId технически корректно, но состояние структуры такое не допускает.
+  [ErrorCode.DIRECTORY_DEPARTMENT_ROOT_FORBIDDEN]: HttpStatus.CONFLICT,
   // Удаление единственной личной стадии «Моего плана» — конфликт состояния.
   [ErrorCode.TASK_LAST_STAGE]: HttpStatus.CONFLICT,
   // Маршрут задачи (ADR-0020): переход недоступен / гейт не пройден — конфликт

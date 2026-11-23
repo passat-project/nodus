@@ -275,13 +275,13 @@ describe('DepartmentsService', () => {
       expect(eventBus.emit).toHaveBeenCalled();
     });
 
-    it('перенос в корень снимает роли — правами не ограничен', async () => {
-      departments.findById.mockResolvedValue(row('dep', 'root'));
+    it('юридическая структура: перенос в корень снимает роли — правами не ограничен', async () => {
+      departments.findById.mockResolvedValue(row('dep', 'root', 'Юр-отдел', { kind: 'legal' }));
       departments.findParentChain.mockResolvedValue(['root']);
       departments.findSubtreeIds.mockResolvedValue(['dep']);
       users.findActiveIdsByDepartmentIds.mockResolvedValue(['u-1']);
       membership.effectiveRoleIds.mockResolvedValueOnce(['role-dept']).mockResolvedValueOnce([]);
-      departments.update.mockResolvedValue(row('dep', null));
+      departments.update.mockResolvedValue(row('dep', null, 'Юр-отдел', { kind: 'legal' }));
 
       await service.update('dep', { parentId: null }, actor());
 

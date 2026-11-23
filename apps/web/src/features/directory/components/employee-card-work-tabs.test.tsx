@@ -135,4 +135,27 @@ describe('EmployeeCardWorkTabs — рабочая зона карточки со
     expect(badge?.getAttribute('aria-hidden')).toBe('true');
     expect(badge?.className).toContain('invisible');
   });
+
+  it('бейдж показывает полное число задач (>100), а не размер первой страницы (#913)', () => {
+    function ManyHarness() {
+      const tasks = Array.from({ length: 137 }, (_, index) => ({ id: `t-${index}` }) as never);
+      return (
+        <EmployeeCardWorkTabs
+          active="chat"
+          visited={['chat']}
+          onActivate={vi.fn()}
+          isOwnCard={false}
+          userId="user-1"
+          chat={<div>лента</div>}
+          tasks={tasks}
+          onCreateTask={vi.fn()}
+          projects={[]}
+          panelOpen={false}
+          onPanelToggle={vi.fn()}
+        />
+      );
+    }
+    render(<ManyHarness />);
+    expect(screen.getByRole('tab', { name: /Задачи/ }).textContent).toContain('137');
+  });
 });
