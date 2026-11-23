@@ -36,6 +36,7 @@ import {
   TaskPressReturnedNotifyHandler,
   TaskPressBlockedNotifyHandler,
   TaskStageNotifyHandler,
+  TaskUpdatedNotifyHandler,
 } from './events/task-events.handler.js';
 import { NotificationsController } from './notifications.controller.js';
 import { NotificationsRepository } from './notifications.repository.js';
@@ -86,6 +87,7 @@ import { UrgentRepeatWorker } from './urgent-repeat.worker.js';
     // Задачи (#37): назначение/выполнение/возврат/просрочка — по событиям task.*.
     TaskNotificationWriter,
     TaskCreatedNotifyHandler,
+    TaskUpdatedNotifyHandler,
     TaskAssignedNotifyHandler,
     TaskParticipantsNotifyHandler,
     TaskStageNotifyHandler,

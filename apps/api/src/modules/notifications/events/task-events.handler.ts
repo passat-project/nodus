@@ -97,6 +97,8 @@ const handlerFor = (eventType: string) => {
 @Injectable()
 export class TaskCreatedNotifyHandler extends handlerFor(TASK_EVENTS.CREATED) {}
 @Injectable()
+export class TaskUpdatedNotifyHandler extends handlerFor(TASK_EVENTS.UPDATED) {}
+@Injectable()
 export class TaskAssignedNotifyHandler extends handlerFor(TASK_EVENTS.ASSIGNED) {}
 @Injectable()
 export class TaskParticipantsNotifyHandler extends handlerFor(TASK_EVENTS.PARTICIPANTS_CHANGED) {}
