@@ -79,6 +79,7 @@ describe('InvitationsService (админ, #101)', () => {
     lockPositions: vi.fn(),
   };
   const managers = { recomputeUsers: vi.fn() };
+  const guard = { assertEffectiveRolesHeld: vi.fn() };
   const tx = { run: vi.fn(async (fn: (client: unknown) => unknown) => fn({})) };
 
   let service: InvitationsService;
@@ -94,6 +95,7 @@ describe('InvitationsService (админ, #101)', () => {
       eventBus as never,
       references as never,
       managers as never,
+      guard as never,
     );
   });
 
@@ -135,6 +137,12 @@ describe('InvitationsService (админ, #101)', () => {
         expect.anything(),
       );
       expect(managers.recomputeUsers).toHaveBeenCalledWith(['user-1'], expect.anything());
+      expect(guard.assertEffectiveRolesHeld).toHaveBeenCalledWith(
+        ACTOR,
+        'user-1',
+        [],
+        expect.anything(),
+      );
       expect(invitations.createToken).toHaveBeenCalledWith(
         expect.objectContaining({ userId: 'user-1', kind: 'invite', createdBy: 'admin-1' }),
         expect.anything(),

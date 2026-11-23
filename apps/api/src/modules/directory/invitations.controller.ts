@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, HttpCode, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, HttpCode, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
@@ -68,7 +68,10 @@ export class InvitationsController {
   @ApiOkResponse({ standardSchema: invitationCreatedSchema })
   @ApiErrors(400, 401, 403, 404, 409)
   @ApiIdempotencyKey()
-  reissue(@Param('id') id: string, @GetUser() actor: AuthUser): Promise<InvitationCreated> {
+  reissue(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @GetUser() actor: AuthUser,
+  ): Promise<InvitationCreated> {
     return this.invitations.reissueInvitation(id, actor);
   }
 
@@ -84,13 +87,13 @@ export class InvitationsController {
   })
   @ApiErrors(401, 403, 404, 409)
   @ApiIdempotencyKey()
-  cancel(@Param('id') id: string, @GetUser() actor: AuthUser): Promise<void> {
+  cancel(@Param('id', new ParseUUIDPipe()) id: string, @GetUser() actor: AuthUser): Promise<void> {
     return this.invitations.cancelInvitation(id, actor);
   }
 
   @Post('users/:id/password-reset')
   @HttpCode(200)
-  @RequirePermissions(Permission.DIRECTORY_MANAGE)
+  @RequirePermissions(Permission.DIRECTORY_MANAGE, Permission.USER_MANAGE)
   @Audit({ action: 'directory.user.password_reset', entity: 'user' })
   @ApiOperation({ summary: 'Ссылка сброса пароля на 24 часа (действующий/уволенный)' })
   @ApiParam({
@@ -102,7 +105,7 @@ export class InvitationsController {
   @ApiErrors(400, 401, 403, 404, 409)
   @ApiIdempotencyKey()
   issuePasswordReset(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @GetUser() actor: AuthUser,
   ): Promise<IssuePasswordResetResponse> {
     return this.invitations.issuePasswordReset(id, actor);

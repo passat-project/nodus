@@ -29,6 +29,9 @@ export class PasswordCredentialEventsHandler implements DomainEventHandler<Passw
   async handle(event: DomainEvent<PasswordEventPayload>): Promise<void> {
     const { userId } = event.payload;
     if (!userId) return;
-    await this.authRepository.revokeAllSessions(userId);
+    // Гасим только сессии, существовавшие до события: авто-вход после
+    // установки пароля (#101) создаёт новую сессию ПОЗЖЕ и не должна быть
+    // отозвана повторной доставкой password_changed.
+    await this.authRepository.revokeSessionsBefore(userId, new Date(event.createdAt));
   }
 }

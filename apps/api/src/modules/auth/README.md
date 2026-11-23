@@ -50,7 +50,7 @@
 ## Приглашённые и сброс пароля (#101, ADR-0054)
 
 - **Вход до активации:** `POST /login` по email приглашённого отвечает `403 AUTH_ACCOUNT_NOT_ACTIVATED` до проверки пароля (анти-enumeration осознанно ослаблен — O1); неудача считается в троттлинге входа, аудит `auth.login_failed` с `reason: 'not_activated'`. `passwordHash = NULL` проверяется dummy-хэшем (тайминг).
-- **Сброс пароля:** модуль directory выпускает одноразовую ссылку и шлёт `directory.user.password_reset_issued`; подписчик `PasswordCredentialEventsHandler` гасит все сессии (`password_reset_issued` и `password_changed`). Стоп-лист `revokedUsers` при этом НЕ ставится (O5): маркер «+5 с» отверг бы access-токен авто-входа; остаточный риск ограничен TTL access (15 мин).
+- **Сброс пароля:** модуль directory выпускает одноразовую ссылку и шлёт `directory.user.password_reset_issued`; подписчик `PasswordCredentialEventsHandler` гасит сессии, созданные ДО события (`revokeSessionsBefore`, `password_reset_issued` и `password_changed`). Это не задевает авто-вход после установки нового пароля (новая сессия создаётся позже события). Стоп-лист `revokedUsers` при этом НЕ ставится (O5): маркер «+5 с» отверг бы access-токен авто-входа.
 - **Пароль знает только сотрудник:** админ не придумывает и не видит пароль; после установки нового — авто-вход обычным `/auth/login`.
 
 ## Лимиты

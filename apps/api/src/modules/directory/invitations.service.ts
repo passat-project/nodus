@@ -17,6 +17,7 @@ import { EventBus } from '../../core/events/event-bus.js';
 import { InvitationsRepository, type UserTokenKind } from './invitations.repository.js';
 import { ManagerDerivationService } from './manager-derivation.service.js';
 import { ReferenceGuard } from './reference-guard.service.js';
+import { RoleAssignmentGuard } from './role-assignment-guard.service.js';
 import { UsersRepository } from './users.repository.js';
 import { buildDisplayName } from './user-dto.js';
 
@@ -51,6 +52,7 @@ export class InvitationsService {
     private readonly eventBus: EventBus,
     private readonly references: ReferenceGuard,
     private readonly managers: ManagerDerivationService,
+    private readonly guard: RoleAssignmentGuard,
   ) {}
 
   /** Новый сотрудник сразу строкой «Приглашён» + одноразовая ссылка. */
@@ -84,6 +86,9 @@ export class InvitationsService {
         );
         // Руководитель производный (ADR-0053): ближайший глава подразделения.
         await this.managers.recomputeUsers([created.id], tx);
+        // bind (#490, ADR-0034): роли, эффективно полученные от подразделения,
+        // должны быть у актора — иначе приглашающий выдал бы права шире своих.
+        await this.guard.assertEffectiveRolesHeld(actor, created.id, [], tx);
         const issued = await this.issueToken(tx, created.id, 'invite', actor.id);
         await this.eventBus.emit(
           tx,

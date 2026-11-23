@@ -160,5 +160,24 @@ await shot('13-invited-card-740');
 await page.setViewportSize({ width: 1600, height: 1000 });
 await shot('14-invited-card-1600');
 
-console.log(JSON.stringify({ inviteLink, resetLink, out }, null, 2));
+// Гигиена кадров: в публичном репо не должно остаться действующих ссылок.
+// Перевыпуск/повторный reset гасят показанные в кадрах токены (новые не снимаем).
+const invitedList = await page.request.get(
+  `${base}/api/v1/directory/users?search=${encodeURIComponent(email)}`,
+  { headers: { Authorization: `Bearer ${adminToken}` } },
+);
+const invitedId = (await invitedList.json()).items[0]?.id;
+if (invitedId) {
+  await page.request.post(`${base}/api/v1/directory/invitations/${invitedId}/reissue`, {
+    headers: { Authorization: `Bearer ${adminToken}`, 'Idempotency-Key': crypto.randomUUID() },
+  });
+}
+await page.request.post(`${base}/api/v1/directory/users/${target.id}/password-reset`, {
+  headers: { Authorization: `Bearer ${adminToken}`, 'Idempotency-Key': crypto.randomUUID() },
+});
+
+const masked = (link) => link.replace(/[0-9a-f]{20,}/i, '[redacted]');
+console.log(
+  JSON.stringify({ inviteLink: masked(inviteLink), resetLink: masked(resetLink), out }, null, 2),
+);
 await browser.close();

@@ -167,6 +167,17 @@ export class AuthRepository {
     });
   }
 
+  /** Отзыв сессий, созданных ДО момента `before` (смена пароля, #101):
+   *  авто-вход после установки нового пароля создаёт сессию позже события и
+   *  не должна гаситься повторной доставкой `password_changed`. */
+  async revokeSessionsBefore(userId: string, before: Date, tx?: TransactionClient): Promise<void> {
+    const client = tx ?? this.prisma;
+    await client.session.updateMany({
+      where: { userId, revokedAt: null, createdAt: { lte: before } },
+      data: { revokedAt: new Date() },
+    });
+  }
+
   /** Активные сессии пользователя для списка «Мои сессии». */
   async listActiveSessions(userId: string): Promise<SessionRow[]> {
     return this.prisma.session.findMany({
