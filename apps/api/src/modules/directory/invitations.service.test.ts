@@ -157,9 +157,41 @@ describe('InvitationsService (админ, #101)', () => {
       const expires = new Date(result.expiresAt).getTime();
       expect(expires - Date.now()).toBeGreaterThan(INVITE_TTL_MS - 5_000);
     });
+    it('гонка уникального email (P2002) → DIRECTORY_EMAIL_TAKEN', async () => {
+      users.emailExists.mockResolvedValue(false);
+      users.create.mockRejectedValue(Object.assign(new Error('unique'), { code: 'P2002' }));
+      await expect(service.createInvitation(DTO, ACTOR)).rejects.toMatchObject({
+        code: ErrorCode.DIRECTORY_EMAIL_TAKEN,
+      });
+    });
   });
 
   describe('перевыпуск и отмена', () => {
+    it('перевыпуск приглашённого: прежние гаснут, новая ссылка и событие', async () => {
+      invitations.lockUser.mockResolvedValue({
+        id: 'user-1',
+        status: 'invited',
+        activatedAt: null,
+      });
+      invitations.findUserById.mockResolvedValue(tokenEntry().user);
+      invitations.createToken.mockResolvedValue({
+        id: 'token-2',
+        userId: 'user-1',
+        expiresAt: new Date(Date.now() + INVITE_TTL_MS),
+      });
+
+      const result = await service.reissueInvitation('user-1', ACTOR);
+
+      expect(invitations.revokeActive).toHaveBeenCalledWith('user-1', 'invite', expect.anything());
+      expect(result.path).toBe(`/invite/${RAW_TOKEN}`);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        expect.anything(),
+        DIRECTORY_EVENTS.INVITATION_CREATED,
+        expect.objectContaining({ userId: 'user-1', email: 'new.hire@nodus.by' }),
+        expect.anything(),
+      );
+    });
+
     it('перевыпуск не-приглашённого → CONFLICT', async () => {
       invitations.lockUser.mockResolvedValue({
         id: 'user-1',
@@ -211,6 +243,13 @@ describe('InvitationsService (админ, #101)', () => {
   });
 
   describe('сброс пароля', () => {
+    it('неизвестный сотрудник → NOT_FOUND', async () => {
+      invitations.lockUser.mockResolvedValue(null);
+      await expect(service.issuePasswordReset('nope', ACTOR)).rejects.toMatchObject({
+        code: ErrorCode.NOT_FOUND,
+      });
+    });
+
     it('приглашённому сброс не выпускается → CONFLICT', async () => {
       invitations.lockUser.mockResolvedValue({
         id: 'user-1',
