@@ -210,17 +210,22 @@ export function PopupView() {
     return <div className="h-screen w-screen bg-transparent" />;
   }
 
+  // Длительность таяния — из payload (единый источник с Rust-таймером
+  // закрытия, #998); старый payload без поля — прежние 3 с.
+  const fadeMs = data.fadeMs !== undefined && data.fadeMs > 0 ? data.fadeMs : 3000;
   const fadeClass =
     fade === 'fading'
-      ? 'opacity-0 transition-opacity duration-[3000ms] ease-linear'
+      ? 'opacity-0 transition-opacity ease-linear'
       : fade === 'reset'
         ? 'opacity-100 transition-opacity duration-300'
         : 'opacity-100';
+  const fadeStyle = fade === 'fading' ? { transitionDuration: `${fadeMs}ms` } : undefined;
 
   return (
     <div
       ref={cardRef}
       className={`group bg-card text-card-foreground relative flex h-screen w-screen flex-col overflow-clip rounded-xl border p-2 font-sans ${fadeClass}`}
+      style={fadeStyle}
       onMouseEnter={() => {
         setHovered(true);
         void invoke('popup_set_hover', { hover: true });
