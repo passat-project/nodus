@@ -108,7 +108,7 @@ export function InviteDialog({
         {created ? (
           <div className="flex flex-col gap-4 pt-2">
             <Field>
-              <FieldLabel htmlFor="invite-link">{ui.employees.inviteCopyLink}</FieldLabel>
+              <FieldLabel htmlFor="invite-link">{ui.employees.inviteLinkLabel}</FieldLabel>
               <Input id="invite-link" readOnly value={link} onFocus={(e) => e.target.select()} />
             </Field>
             <p className="text-sm text-muted-foreground">

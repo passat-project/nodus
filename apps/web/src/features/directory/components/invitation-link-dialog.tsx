@@ -40,7 +40,7 @@ export function InvitationLinkDialog({
         <DialogDescription>{lead}</DialogDescription>
         <div className="flex flex-col gap-4 pt-2">
           <Field>
-            <FieldLabel htmlFor="token-link">{ui.employees.inviteCopyLink}</FieldLabel>
+            <FieldLabel htmlFor="token-link">{ui.employees.inviteLinkLabel}</FieldLabel>
             <Input
               id="token-link"
               readOnly

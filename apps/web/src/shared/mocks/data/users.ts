@@ -280,6 +280,7 @@ export const currentAuthUser: AuthUser = {
   // стикеры (#143), редактор маршрутов (#378), реестр полей (#431) и матрица
   // прав (#379) — права UI-фазы на моках. Строк вне каталога Permission нет (I15/Р13).
   permissions: [
+    Permission.DIRECTORY_MANAGE,
     Permission.TASK_CREATE,
     Permission.TASK_MANAGE_ANY,
     Permission.CORRESPONDENCE_REGISTER,

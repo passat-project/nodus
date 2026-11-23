@@ -110,7 +110,7 @@ describe('InviteDialog (#101)', () => {
     });
 
     expect(await screen.findByText(ui.employees.inviteLinkTitle)).toBeTruthy();
-    const link = screen.getByLabelText(ui.employees.inviteCopyLink) as HTMLInputElement;
+    const link = screen.getByLabelText(ui.employees.inviteLinkLabel) as HTMLInputElement;
     expect(link.value).toContain('/invite/');
   });
 

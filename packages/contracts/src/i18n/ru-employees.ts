@@ -127,6 +127,7 @@ export const employeesStrings = {
     'Передайте ссылку сотруднику вручную — письмо пока не отправляется. Ссылка одноразовая и действует до указанной даты.',
   inviteLinkExpires: 'Действует до',
   inviteCopyLink: 'Скопировать ссылку',
+  inviteLinkLabel: 'Ссылка',
   inviteReissue: 'Выпустить новую ссылку',
   inviteReissueDone: 'Новая ссылка выпущена, прежняя больше не действует',
   inviteCancel: 'Отменить приглашение',
