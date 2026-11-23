@@ -10,7 +10,7 @@ import {
   UserMinus,
 } from 'lucide-react';
 import type { IssuePasswordResetResponse, UserCard } from '@nodus/contracts';
-import { SystemRole, ui } from '@nodus/contracts';
+import { Permission, SystemRole, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@nodus/ui/components/dialog';
 import {
@@ -90,6 +90,11 @@ export function EmployeeActionsMenu({ card }: { card: UserCard }) {
   const deactivate = useDeactivateUser(card.id);
   const activate = useActivateUser(card.id);
   const reset = useIssuePasswordReset(card.id);
+  // Сброс пароля — отдельное право `user.manage` (каталог прав): у HR с
+  // directory.manage без него пункта не будет (#816).
+  const canReset = useAuthStore(
+    (state) => state.user?.permissions.includes(Permission.USER_MANAGE) ?? false,
+  );
   const [link, setLink] = useState<IssuePasswordResetResponse | null>(null);
   const grant = useUpdateUser(card.id, { successMessage: ui.employees.grantAdminDone });
   const revoke = useUpdateUser(card.id, { successMessage: ui.employees.revokeAdminDone });
@@ -192,11 +197,17 @@ export function EmployeeActionsMenu({ card }: { card: UserCard }) {
               )}
             </>
           ) : null}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => setConfirm('reset')}>
-            {card.status === 'deactivated' ? <RotateCcw /> : <KeyRound />}
-            {card.status === 'deactivated' ? ui.employees.restoreAccess : ui.employees.resetLink}
-          </DropdownMenuItem>
+          {canReset ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => setConfirm('reset')}>
+                {card.status === 'deactivated' ? <RotateCcw /> : <KeyRound />}
+                {card.status === 'deactivated'
+                  ? ui.employees.restoreAccess
+                  : ui.employees.resetLink}
+              </DropdownMenuItem>
+            </>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
 

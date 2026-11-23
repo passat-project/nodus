@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { UserCard } from '@nodus/contracts';
-import { ui } from '@nodus/contracts';
+import { Permission, type UserCard, ui } from '@nodus/contracts';
 
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { EmployeeActionsMenu, EmployeeProfileBar } from './employee-actions-menu.js';
@@ -74,7 +73,12 @@ function openMenu() {
 beforeEach(() => {
   vi.clearAllMocks();
   useAuthStore.setState({
-    user: { id: ME, email: 'me@nodus.by', displayName: 'Я', permissions: [] },
+    user: {
+      id: ME,
+      email: 'me@nodus.by',
+      displayName: 'Я',
+      permissions: [Permission.USER_MANAGE],
+    },
   });
 });
 
