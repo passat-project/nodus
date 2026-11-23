@@ -1,9 +1,10 @@
-//! Единый раскладчик стека попапов (#254): один проход решает всё —
-//! порядок по счёту показа (новейший у ПОЛА), позиции КУМУЛЯТИВНО по
+//! Единый раскладчик стека попапов (#254): один проход решает всё — две
+//! полосы (сообщения/письма — от пола вверх, подтверждение скачивания — от
+//! потолка вниз, #992), порядок по счёту показа, позиции КУМУЛЯТИВНО по
 //! ФАКТИЧЕСКИМ высотам окон (`popup_set_height` от мини-UI, #406): разросшееся
 //! поле ответа приподнимает верхние — дыр и наездов не бывает. Окно «Скрыть
-//! все» стоит строго над ПОЛНЫМ столбиком с тем же зазором, что между
-//! карточками (фидбек владельца 08.10).
+//! все» стоит строго над ПОЛНЫМ столбиком сообщений/писем с тем же зазором,
+//! что между карточками (фидбек владельца 08.10).
 //!
 //! Позиция и размер применяются ОДНИМ `SetWindowPos` (атомарно): пара
 //! set_size+set_position давала промежуточный кадр, в котором контент уже
@@ -18,8 +19,8 @@ use tauri::{AppHandle, Manager};
 
 use crate::anchor::{resolve_anchor, Anchor};
 use crate::popups::{
-    build_popup_window, show_without_activation, spawn_ready_fallback, stack, ActivePopup, GAP,
-    HIDE_ALL_H, HIDE_ALL_LABEL, MAX_STACK, POPUP_MAX_H, POPUP_MIN_H, POPUP_W,
+    build_popup_window, show_without_activation, spawn_ready_fallback, stack, ActivePopup,
+    PopupLane, GAP, HIDE_ALL_H, HIDE_ALL_LABEL, MAX_STACK, POPUP_MAX_H, POPUP_MIN_H, POPUP_W,
 };
 use crate::reanchor::note_layout;
 
@@ -45,8 +46,8 @@ impl Placement {
     }
 }
 
-/// Вертикальная раскладка столбика: `heights` — в порядке «новейший первым»
-/// (он у пола). Возвращает (y, физическая высота) для каждого окна.
+/// Вертикальная раскладка нижней полосы: `heights` — в порядке «новейший
+/// первым» (он у пола). Возвращает (y, физическая высота) для каждого окна.
 /// Чистая функция — юнит-тесты на кумулятивный подъём и клампы.
 fn column(bottom: i32, heights: &[f64], scale: f64, gap: f64) -> Vec<(i32, i32)> {
     let px = |v: f64| (v * scale).round() as i32;
@@ -62,9 +63,26 @@ fn column(bottom: i32, heights: &[f64], scale: f64, gap: f64) -> Vec<(i32, i32)>
         .collect()
 }
 
-/// ЕДИНЫЙ раскладчик стека (фидбек 08.10): один проход решает всё —
-/// порядок по счёту показа (новейший у ПОЛА), позиции кумулятивно по
-/// фактическим высотам, «Скрыть все» только над ПОЛНЫМ столбиком
+/// Вертикальная раскладка верхней полосы (#992): `heights` — в порядке
+/// «новейшее первым» (оно прижато к верху), следующие идут вниз с тем же
+/// зазором, что и в нижней полосе. Чистая функция — юнит-тесты.
+fn column_down(top: i32, heights: &[f64], scale: f64, gap: f64) -> Vec<(i32, i32)> {
+    let px = |v: f64| (v * scale).round() as i32;
+    let mut cursor = top;
+    heights
+        .iter()
+        .map(|h| {
+            let height = px(h.clamp(POPUP_MIN_H, POPUP_MAX_H));
+            let y = cursor;
+            cursor = y + height + px(gap);
+            (y, height)
+        })
+        .collect()
+}
+
+/// ЕДИНЫЙ раскладчик стека (фидбек 08.10, две полосы — #992): один проход
+/// решает всё — порядок по счёту показа, позиции кумулятивно по фактическим
+/// высотам, «Скрыть все» только над ПОЛНЫМ столбиком сообщений/писем
 /// (смысл — быстро убрать 3 попапа; фидбек 08.10 п.4).
 pub(crate) fn reposition_all(app: &AppHandle) {
     let Some(anchor) = resolve_anchor(app) else {
@@ -73,21 +91,41 @@ pub(crate) fn reposition_all(app: &AppHandle) {
     note_layout(app, &anchor);
     let plan: Vec<Placement> = {
         let x = anchor.right();
-        // Низ стека — над панелью задач; идём снизу вверх: новейший первым.
-        let bottom = anchor.bottom();
+        let width = anchor.px(POPUP_W);
         let mut s = stack(app);
         let mut order: Vec<&mut ActivePopup> = s.active.iter_mut().collect();
         order.sort_by_key(|p| std::cmp::Reverse(p.counter));
-        let heights: Vec<f64> = order.iter().map(|p| p.height).collect();
-        let placed = column(bottom, &heights, anchor.scale, GAP);
-        let mut plan = Vec::with_capacity(order.len());
-        for (index, (p, (y, height))) in order.iter_mut().zip(placed).enumerate() {
+        // Слоты уникальны на всю раскладку: по ним `free_slot` ищет свободное
+        // место (полос две, индексы внутри полосы пересекались бы).
+        for (index, p) in order.iter_mut().enumerate() {
             p.slot = index as u32;
+        }
+        let (chats, downloads): (Vec<&mut ActivePopup>, Vec<&mut ActivePopup>) =
+            order.into_iter().partition(|p| p.lane == PopupLane::Chat);
+        let mut plan = Vec::with_capacity(chats.len() + downloads.len());
+        // Нижняя полоса — сообщения и письма: новейший у пола, стек вверх.
+        let chat_heights: Vec<f64> = chats.iter().map(|p| p.height).collect();
+        let chat_placed = column(anchor.bottom(), &chat_heights, anchor.scale, GAP);
+        for (p, (y, height)) in chats.into_iter().zip(chat_placed) {
             plan.push(Placement {
                 label: p.label.clone(),
                 x,
                 y,
-                width: anchor.px(POPUP_W),
+                width,
+                height,
+                scale: anchor.scale,
+            });
+        }
+        // Верхняя полоса — подтверждение скачивания: новейшее у потолка,
+        // следующие ниже с тем же зазором (#992).
+        let download_heights: Vec<f64> = downloads.iter().map(|p| p.height).collect();
+        let download_placed = column_down(anchor.top(), &download_heights, anchor.scale, GAP);
+        for (p, (y, height)) in downloads.into_iter().zip(download_placed) {
+            plan.push(Placement {
+                label: p.label.clone(),
+                x,
+                y,
+                width,
                 height,
                 scale: anchor.scale,
             });
@@ -138,7 +176,8 @@ fn begin_hide_all_create(creating: &mut bool, full: bool, window_absent: bool) -
 }
 
 /// Окно «Скрыть все»: РОВНО межпопапный зазор (та же арифметика кумутива),
-/// живёт ТОЛЬКО при полном столбике. Создание/закрытие — под мьютексом
+/// живёт ТОЛЬКО при полном столбике сообщений/писем (карточки скачивания в
+/// верхней полосе в него не входят — #992). Создание/закрытие — под мьютексом
 /// (hide_all_live): два reposition_all подряд успевали создать ОКНО-ДУБЛЬ,
 /// которое вечно висело над стеком и ломало зазор.
 ///
@@ -151,13 +190,17 @@ fn place_hide_all(app: &AppHandle, anchor: &Anchor) {
         let width = anchor.px(POPUP_W);
         let height = anchor.px(HIDE_ALL_H);
         let mut s = stack(app);
-        let mut order: Vec<&mut ActivePopup> = s.active.iter_mut().collect();
-        order.sort_by_key(|p| std::cmp::Reverse(p.counter));
-        let heights: Vec<f64> = order.iter().map(|p| p.height).collect();
+        let mut chats: Vec<&mut ActivePopup> = s
+            .active
+            .iter_mut()
+            .filter(|p| p.lane == PopupLane::Chat)
+            .collect();
+        chats.sort_by_key(|p| std::cmp::Reverse(p.counter));
+        let heights: Vec<f64> = chats.iter().map(|p| p.height).collect();
         let top = column(anchor.bottom(), &heights, anchor.scale, GAP)
             .last()
             .map(|(y, _)| *y);
-        let full = s.active.len() >= MAX_STACK as usize;
+        let full = chats.len() >= MAX_STACK as usize;
         s.hide_all_live = full;
         if !full {
             None
@@ -266,6 +309,27 @@ mod tests {
         let column = column(1000, &[10.0, 1000.0], 1.25, GAP);
         assert_eq!(column[0].1, (POPUP_MIN_H * 1.25).round() as i32);
         assert_eq!(column[1].1, (POPUP_MAX_H * 1.25).round() as i32);
+    }
+
+    #[test]
+    fn верхняя_полоса_растёт_вниз_новейшее_сверху() {
+        // Новейшее (первое в списке) прижато к верху, следующие — ниже.
+        let column = column_down(100, &[139.0, 91.0, 91.0], 1.0, GAP);
+        assert_eq!(column[0], (100, 139), "новейшее прижато к потолку");
+        assert_eq!(column[1], (244, 91), "следующее ниже с зазором");
+        assert_eq!(column[2], (340, 91), "третье — кумулятивно ниже");
+        // Зазор ровно GAP между окнами (без дыр и наездов).
+        assert_eq!(column[0].0 + column[0].1 + GAP as i32, column[1].0);
+        assert_eq!(column[1].0 + column[1].1 + GAP as i32, column[2].0);
+    }
+
+    #[test]
+    fn верхняя_полоса_клампят_высоты_и_масштабирует() {
+        let column = column_down(0, &[10.0, 1000.0], 1.25, GAP);
+        assert_eq!(column[0].1, (POPUP_MIN_H * 1.25).round() as i32);
+        assert_eq!(column[1].1, (POPUP_MAX_H * 1.25).round() as i32);
+        // Второе окно начинается после первого и зазора (5×1.25 ≈ 6).
+        assert_eq!(column[1].0, column[0].1 + 6);
     }
 
     #[test]

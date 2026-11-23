@@ -12,7 +12,7 @@
 
 use tauri::{AppHandle, Manager, Monitor};
 
-use crate::popups::{MARGIN, POPUP_H, POPUP_W};
+use crate::popups::{PopupLane, MARGIN, POPUP_H, POPUP_W};
 
 /// Опорная площадка раскладки: рабочая область монитора (физические px).
 pub(crate) struct Anchor {
@@ -47,9 +47,15 @@ impl Anchor {
         self.x + self.width - self.px(POPUP_W) - self.px(MARGIN)
     }
 
-    /// Низ столбика — над панелью задач.
+    /// Низ нижней полосы — над панелью задач.
     pub(crate) fn bottom(&self) -> i32 {
         self.y + self.height - self.px(MARGIN)
+    }
+
+    /// Верх верхней полосы — под верхней границей рабочей области (тот же
+    /// отступ `MARGIN`, что и снизу): карточка скачивания живёт сверху (#992).
+    pub(crate) fn top(&self) -> i32 {
+        self.y + self.px(MARGIN)
     }
 }
 
@@ -74,16 +80,19 @@ pub(crate) fn resolve_anchor(app: &AppHandle) -> Option<Anchor> {
         .map(|monitor| Anchor::from_monitor(&monitor, false))
 }
 
-/// Позиция НОВОГО попапа (логические px) для билдера окна: он всегда самый
-/// нижний в столбике (новейший у пола), высота — стартовая POPUP_H. Окно
-/// рождается сразу в правом нижнем углу — системный каскад `CW_USEDEFAULT`
-/// (лесенка от левого верхнего угла) не показывается даже при неудачной
-/// раскладке (#588). Фактический якорь фиксирует раскладчик
-/// (`reanchor::note_layout`).
-pub(crate) fn initial_position(app: &AppHandle) -> Option<(f64, f64)> {
+/// Позиция НОВОГО попапа (логические px) для билдера окна: он рождается уже
+/// на своём краю рабочей области — сообщения у пола (стек растёт вверх),
+/// подтверждение скачивания у потолка (стек растёт вниз, #992). Системный
+/// каскад `CW_USEDEFAULT` (лесенка от левого верхнего угла) не показывается
+/// даже при неудачной раскладке (#588). Фактический якорь фиксирует
+/// раскладчик (`reanchor::note_layout`).
+pub(crate) fn initial_position(app: &AppHandle, lane: PopupLane) -> Option<(f64, f64)> {
     let anchor = resolve_anchor(app)?;
     let x = anchor.right();
-    let y = anchor.bottom() - anchor.px(POPUP_H);
+    let y = match lane {
+        PopupLane::Chat => anchor.bottom() - anchor.px(POPUP_H),
+        PopupLane::Download => anchor.top(),
+    };
     Some((f64::from(x) / anchor.scale, f64::from(y) / anchor.scale))
 }
 
@@ -110,6 +119,16 @@ mod tests {
         // Низ столбика: 1080 − 18 = 1062; попап 88×1.25 = 110 → y = 952.
         assert_eq!(anchor.bottom(), 1062);
         assert_eq!(anchor.bottom() - anchor.px(POPUP_H), 952);
+    }
+
+    #[test]
+    fn верхняя_полоса_прижимается_к_верху_рабочей_области() {
+        let anchor = anchor(0, 0, 1920, 1080, 1.25);
+        // Верх полосы: 0 + отступ 14×1.25 ≈ 18.
+        assert_eq!(anchor.top(), 18);
+        // Второй монитор с отрицательным смещением — та же арифметика.
+        let left = anchor(-1920, -200, 1920, 1080, 1.0);
+        assert_eq!(left.top(), -186);
     }
 
     #[test]

@@ -6,7 +6,7 @@
 
 [[permission]]
 identifier = "allow-notify-popup"
-description = "Показать попап уведомления (стек право-низ, важные — до реакции)."
+description = "Показать попап уведомления (сообщения/письма — право-низ, скачивание — право-верх, важные — до реакции)."
 commands.allow = ["notify_popup"]
 
 [[permission]]

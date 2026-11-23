@@ -18,6 +18,26 @@ use crate::bridge::{self, PopupPayload, PopupReply};
 // показа, угасание, поле ответа, IPC мини-UI), ~95 строк — inline-тесты;
 // разрез на файлы размазал бы мьютекс стека и инварианты once-показа.
 
+/// Полоса попапов: сообщения и письма живут у правого низа и растут вверх
+/// (модель Telegram, фидбек 08.10), подтверждение скачивания — у правого
+/// верха и растёт вниз (#992). Вид определяется payload'ом: цель `download` —
+/// служебная карточка о файле, остальное — переписка.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PopupLane {
+    Chat,
+    Download,
+}
+
+/// Полоса попапа по его payload (#992). Верхняя — только подтверждение
+/// скачивания; сообщения чата и письма остаются в нижней.
+pub(crate) fn lane_of(payload: &PopupPayload) -> PopupLane {
+    if payload.download.is_some() {
+        PopupLane::Download
+    } else {
+        PopupLane::Chat
+    }
+}
+
 /// Геометрия попапа (логические px). Ширина фиксирована дизайном; ВЫСОТА —
 /// по факту контента: мини-UI измеряет карточку и сообщает её командой
 /// `popup_set_height` (#406). Константы: стартовая высота скрытого окна до
@@ -32,8 +52,8 @@ pub(crate) const POPUP_MAX_H: f64 = 400.0;
 pub(crate) const HIDE_ALL_H: f64 = 28.0;
 pub(crate) const MARGIN: f64 = 14.0;
 pub(crate) const GAP: f64 = 5.0;
-/// Максимум в столбик (фидбек 08.10, модель Telegram: «не более трёх, каждое
-/// следующее заменяет старейшее как очередь»).
+/// Максимум карточек на экране (обе полосы вместе; фидбек 08.10, модель
+/// Telegram: «не более трёх, каждое следующее заменяет старейшее как очередь»).
 pub(crate) const MAX_STACK: u32 = 3;
 /// Метка окна «Скрыть все» над стеком (Telegram HideAllButton).
 pub(crate) const HIDE_ALL_LABEL: &str = "popup-hide-all";
@@ -48,8 +68,12 @@ pub(crate) const READY_FALLBACK_MS: u64 = 1200;
 pub(crate) struct ActivePopup {
     pub(crate) label: String,
     pub(crate) slot: u32,
-    /// Монотонный номер показа — жёсткий порядок «новейший внизу»
-    /// (Instant имеет грубое разрешение на Windows, counter — нет).
+    /// Полоса раскладки (#992): сообщения/письма — право-низ, скачивание —
+    /// право-верх.
+    pub(crate) lane: PopupLane,
+    /// Монотонный номер показа — жёсткий порядок в полосе (Instant имеет
+    /// грубое разрешение на Windows, counter — нет); в нижней полосе новейший
+    /// внизу, в верхней — сверху.
     pub(crate) counter: u64,
     /// Ключ гашения источника: conversationId беседы ИЛИ letterId письма
     /// (#618) — портал гасит попапы по открытии источника (Telegram).
@@ -89,7 +113,9 @@ pub(crate) struct ActivePopup {
     payload: serde_json::Value,
 }
 
-/// Стек попапов: слоты 0..3 от право-низа вверх + очередь переполнения.
+/// Стек попапов: две полосы — сообщения/письма от право-низа вверх,
+/// подтверждение скачивания от право-верха вниз (#992) — и общая очередь
+/// переполнения.
 /// Поведение (фидбек владельца 08.10, модель Telegram Desktop):
 /// - на экране ≤3; новое при полном стеке ЗАКРЫВАЕТ старейший спокойный
 ///   (hover/поле ответа не трогаем) и занимает его место;
@@ -192,6 +218,7 @@ pub(crate) fn show(app: &AppHandle, payload: crate::bridge::PopupPayload) {
     let download_path = payload.download.as_ref().and_then(|d| d.path.clone());
     let urgent = payload.urgent;
     let popup_id = payload.id.clone();
+    let lane = lane_of(&payload);
     log::info!(
         "popups::show: id={} dismissKey={} urgent={}",
         payload.id,
@@ -235,6 +262,7 @@ pub(crate) fn show(app: &AppHandle, payload: crate::bridge::PopupPayload) {
         s.active.push(ActivePopup {
             label: label.clone(),
             slot,
+            lane,
             counter,
             dismiss_key,
             urgent,
@@ -252,14 +280,15 @@ pub(crate) fn show(app: &AppHandle, payload: crate::bridge::PopupPayload) {
         });
         (label, slot)
     };
-    // Окно рождается сразу в правом нижнем углу (позиция билдера) — системный
-    // каскад в левом верхнем углу не показывается даже при неудачной
-    // раскладке; дальше позицию уточнит reposition_all (кумулятив по стеку).
+    // Окно рождается сразу на своём краю рабочей области (позиция билдера) —
+    // нижняя полоса у пола, верхняя у потолка (#992); системный каскад в
+    // левом верхнем углу не показывается даже при неудачной раскладке; дальше
+    // позицию уточнит reposition_all (кумулятив по полосе).
     // Показ — ТОЛЬКО по готовности (#305): мини-UI применит тему из payload
     // и отрисует карточку, позовёт popup_ready; не успел за таймаут —
     // fallback показывает как есть. Клавиатуру у портала отбирает webview-
     // ребёнок попапа — возвращает гвард `focus.rs` (#709, второй слой).
-    let position = crate::anchor::initial_position(app);
+    let position = crate::anchor::initial_position(app, lane);
     let win = build_popup_window(app, &label, POPUP_H, position);
     crate::layout::reposition_all(app);
     match &win {
@@ -853,6 +882,7 @@ mod tests {
             s.active.push(ActivePopup {
                 label: format!("popup-{k}"),
                 slot,
+                lane: PopupLane::Chat,
                 counter: k as u64,
                 dismiss_key: format!("conv-{k}"),
                 urgent: false,
@@ -877,7 +907,7 @@ mod tests {
         occupy(&mut s, 2);
         assert!(s.free_slot().is_some());
         occupy(&mut s, 1);
-        assert!(s.free_slot().is_none(), "максимум 3 в столбик");
+        assert!(s.free_slot().is_none(), "максимум 3 карточки на экране");
     }
 
     #[test]
@@ -905,6 +935,14 @@ mod tests {
         s.active[1].urgent = true;
         s.active[2].urgent = true;
         assert!(s.eviction_victim().is_none());
+    }
+
+    /** Полоса попапа (#992): скачивание — верхняя, сообщения/письма — нижняя. */
+    #[test]
+    fn полоса_по_виду_попапа() {
+        assert_eq!(lane_of(&payload("m1", "conv-1")), PopupLane::Chat);
+        assert_eq!(lane_of(&letter_payload("l1", "letter-9")), PopupLane::Chat);
+        assert_eq!(lane_of(&download_payload()), PopupLane::Download);
     }
 
     /** Дедуп повторов (#880): тот же id в стеке или очереди — без дубля. */

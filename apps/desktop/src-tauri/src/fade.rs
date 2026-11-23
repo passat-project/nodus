@@ -14,7 +14,7 @@ use tauri::{AppHandle, Manager};
 use crate::activity;
 use crate::bridge::PopupPayload;
 use crate::layout::reposition_all;
-use crate::popups::{show, stack, MAX_STACK};
+use crate::popups::{show, stack, PopupLane, MAX_STACK};
 
 /// Полное угасание с момента активности пользователя (~3 c, медленно).
 const FADE_MS: u64 = 3000;
@@ -50,6 +50,12 @@ fn tick_fade(app: &AppHandle) {
         let mut s = stack(app);
         let last_input = activity::last_input_ms();
         for p in s.active.iter_mut() {
+            // Подтверждение скачивания (#992) живёт по своему таймеру мини-UI
+            // (8 с, hover — пауза) и от кликов/клавиш не гаснет: это служебная
+            // карточка о файле, а не переписка.
+            if p.lane == PopupLane::Download {
+                continue;
+            }
             // Срочный не угасает по таймеру (#867, ADR-0019 «urgent — до
             // реакции»): висит статично, пока не откроют/не ответят/не закроют.
             // Повторы (#880) не дублируют окно (дедуп в popups::show), а лишь
