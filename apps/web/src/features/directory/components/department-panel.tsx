@@ -159,7 +159,7 @@ export function DepartmentPanel({
                     <MoreHorizontal className="size-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
+                <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuItem onClick={() => onInvite(node.id)}>
                     {ui.employees.inviteToDepartment}
                   </DropdownMenuItem>

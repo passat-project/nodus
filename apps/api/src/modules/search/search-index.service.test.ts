@@ -85,4 +85,12 @@ describe('индексатор поисковой проекции (#952)', () =
     const { service } = serviceWith(null);
     expect(await service.scan('task')).toBe(0);
   });
+
+  it('removeIds удаляет строки проекции без обращения к провайдеру (#101)', async () => {
+    const { repository, service } = serviceWith(null);
+    await service.removeIds('employee', ['u1', 'u1', 'u2']);
+    expect(repository.remove).toHaveBeenCalledTimes(2);
+    expect(repository.remove).toHaveBeenCalledWith('employee', 'u1', expect.any(Date));
+    expect(repository.remove).toHaveBeenCalledWith('employee', 'u2', expect.any(Date));
+  });
 });

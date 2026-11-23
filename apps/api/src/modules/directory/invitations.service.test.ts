@@ -204,7 +204,11 @@ describe('InvitationsService (админ, #101)', () => {
 
   describe('сброс пароля', () => {
     it('приглашённому сброс не выпускается → CONFLICT', async () => {
-      users.findCardById.mockResolvedValue({ id: 'user-1', status: 'invited' });
+      invitations.lockUser.mockResolvedValue({
+        id: 'user-1',
+        status: 'invited',
+        activatedAt: null,
+      });
       await expect(service.issuePasswordReset('user-1', ACTOR)).rejects.toMatchObject({
         code: ErrorCode.CONFLICT,
       });
@@ -212,7 +216,12 @@ describe('InvitationsService (админ, #101)', () => {
     });
 
     it('уволенному выпускается reset-ссылка на 24 часа + событие отзыва сессий', async () => {
-      users.findCardById.mockResolvedValue({ id: 'user-1', status: 'deactivated' });
+      invitations.lockUser.mockResolvedValue({
+        id: 'user-1',
+        status: 'deactivated',
+        activatedAt: new Date('2026-01-01T00:00:00Z'),
+      });
+      invitations.findUserById.mockResolvedValue({ id: 'user-1' });
       invitations.createToken.mockImplementation(async () => ({
         id: 'token-2',
         userId: 'user-1',

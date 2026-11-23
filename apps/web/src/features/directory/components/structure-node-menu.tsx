@@ -39,7 +39,7 @@ export function StructureNodeMenu({
           <MoreHorizontal className="size-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="right" align="start" sideOffset={6} className="w-auto">
+      <DropdownMenuContent side="right" align="start" sideOffset={6} className="w-56">
         <DropdownMenuItem onClick={() => onInvite(node)}>
           {ui.employees.inviteToDepartment}
         </DropdownMenuItem>

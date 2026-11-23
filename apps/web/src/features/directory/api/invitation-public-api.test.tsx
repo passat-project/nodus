@@ -61,7 +61,8 @@ describe('публичные хуки приглашений (#101)', () => {
     await waitFor(() => expect(reset.result.current.isSuccess).toBe(true));
     expect(reset.result.current.data?.kind).toBe('reset');
     // Bearer не отправляется: страницу открывает аноним.
-    const headers = fetchMock.mock.calls.map((call) => (call[1] as RequestInit).headers);
+    const calls = fetchMock.mock.calls as unknown as [RequestInfo | URL, RequestInit | undefined][];
+    const headers = calls.map((call) => call[1]?.headers);
     expect(JSON.stringify(headers)).not.toContain('authorization');
   });
 
@@ -83,7 +84,8 @@ describe('публичные хуки приглашений (#101)', () => {
       password: 'Strong!Pass124',
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[0]?.[0]).toContain('/invitations/token-1/accept');
-    expect(fetchMock.mock.calls[1]?.[0]).toContain('/password-resets/token-2/accept');
+    const calls = fetchMock.mock.calls as unknown as [RequestInfo | URL][];
+    expect(String(calls[0]?.[0])).toContain('/invitations/token-1/accept');
+    expect(String(calls[1]?.[0])).toContain('/password-resets/token-2/accept');
   });
 });

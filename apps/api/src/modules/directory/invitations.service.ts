@@ -166,14 +166,18 @@ export class InvitationsService {
   /** Сброс пароля (админ): только действующий/уволенный; ссылка на 24 часа. */
   async issuePasswordReset(userId: string, actor: AuthUser): Promise<IssuePasswordResetResponse> {
     return this.tx.run(async (tx) => {
-      const user = await this.users.findCardById(userId, tx);
-      if (!user) throw DomainException.notFound('User not found');
-      if (user.status === 'invited') {
+      // Замок строки: два параллельных выпуска не оставят ДВЕ действующие
+      // ссылки (revoke предыдущей и create новой — под одним замком).
+      const locked = await this.invitations.lockUser(userId, tx);
+      if (!locked) throw DomainException.notFound('User not found');
+      if (locked.status === 'invited') {
         throw new DomainException(
           ErrorCode.CONFLICT,
           'Password reset is not available for an invited user',
         );
       }
+      const user = await this.invitations.findUserById(userId, tx);
+      if (!user) throw DomainException.notFound('User not found');
       await this.invitations.revokeActive(userId, 'reset', tx);
       const issued = await this.issueToken(tx, userId, 'reset', actor.id);
       await this.eventBus.emit(

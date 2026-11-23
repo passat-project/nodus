@@ -14,6 +14,7 @@ import {
 } from '@nodus/contracts';
 
 import { Public } from '../../core/decorators/public.decorator.js';
+import { Audit } from '../../core/decorators/audit.decorator.js';
 import { ApiErrors } from '../../core/openapi/api-errors.decorator.js';
 import { ZodValidationPipe } from '../../core/pipes/zod-validation.pipe.js';
 import { InvitationAcceptService } from './invitation-accept.service.js';
@@ -42,6 +43,7 @@ export class PublicInvitationsController {
 
   @Post('invitations/:token/accept')
   @HttpCode(200)
+  @Audit({ action: 'directory.invitation.accept', entity: 'user' })
   @ApiOperation({ summary: 'Принятие приглашения: сверка почты, пароль, активация' })
   @ApiParam({ name: 'token', description: 'Одноразовый токен из ссылки' })
   @ApiOkResponse({ standardSchema: acceptResponseSchema })
@@ -68,6 +70,7 @@ export class PublicInvitationsController {
 
   @Post('password-resets/:token/accept')
   @HttpCode(200)
+  @Audit({ action: 'directory.user.password_reset_accept', entity: 'user' })
   @ApiOperation({ summary: 'Новый пароль по ссылке сброса (авто-вход на фронте)' })
   @ApiParam({ name: 'token', description: 'Одноразовый токен из ссылки' })
   @ApiOkResponse({ standardSchema: acceptResponseSchema })
