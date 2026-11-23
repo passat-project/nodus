@@ -70,6 +70,7 @@ export function useDayLabelAboveTop(viewportRef: RefObject<HTMLElement | null>):
       if (frame !== 0) return;
       frame = requestAnimationFrame(measure);
     };
+    schedule();
     const initial = window.setTimeout(schedule, 350);
     viewport.addEventListener('scroll', schedule, { passive: true });
 
@@ -103,7 +104,7 @@ export function DayBubble({ viewportRef }: { viewportRef: RefObject<HTMLElement 
       aria-hidden="true"
       className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center px-3"
     >
-      <span className="rounded-full bg-card/90 px-2.5 py-1 font-mono text-label-sm tracking-wide text-muted-foreground uppercase shadow-none backdrop-blur-md">
+      <span className="rounded-full border border-border bg-card/90 px-2.5 py-1 font-mono text-label-sm tracking-wide text-muted-foreground uppercase shadow-none backdrop-blur-sm">
         {label}
       </span>
     </div>
