@@ -5,12 +5,16 @@ import { createTokenRevokedChecker } from './revoked.js';
 
 /** Стоп-лист access-токенов gateway (#101): тот же ключ, что пишет API. */
 describe('createTokenRevokedChecker', () => {
-  const checker = (raw: string | null, reject?: Error) => {
+  const checker = (raw: string | null, options: { reject?: Error; hang?: boolean } = {}) => {
     const get = vi.fn(async () => {
-      if (reject) throw reject;
+      if (options.reject) throw options.reject;
+      if (options.hang) return new Promise<string | null>(() => undefined);
       return raw;
     });
-    return { get, check: createTokenRevokedChecker({ get } as unknown as Redis) };
+    return {
+      get,
+      check: createTokenRevokedChecker({ status: 'ready', get } as unknown as Redis),
+    };
   };
 
   it('ключа нет — токен жив', async () => {
@@ -30,8 +34,19 @@ describe('createTokenRevokedChecker', () => {
     await expect(check('user-1', undefined)).resolves.toBe(true);
   });
 
-  it('Redis недоступен — fail-open, хендшейк не валится', async () => {
-    const { check } = checker(null, new Error('ECONNREFUSED'));
+  it('Redis не ready — fail-open без команды', async () => {
+    const get = vi.fn();
+    const check = createTokenRevokedChecker({ status: 'reconnecting', get } as unknown as Redis);
     await expect(check('user-1', 1000)).resolves.toBe(false);
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it('Redis ошибся или завис — fail-open за ≤300 мс, хендшейк не валится', async () => {
+    await expect(checker(null, { reject: new Error('ECONNREFUSED') }).check('u1', 1)).resolves.toBe(
+      false,
+    );
+    const started = Date.now();
+    await expect(checker(null, { hang: true }).check('u1', 1)).resolves.toBe(false);
+    expect(Date.now() - started).toBeLessThan(1_000);
   });
 });

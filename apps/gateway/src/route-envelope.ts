@@ -21,6 +21,10 @@ export const USER_DEACTIVATED_EVENT = DIRECTORY_EVENTS.USER_DEACTIVATED;
  *  открытые сокеты пользователя тоже рвём (клиент войдёт заново). */
 export const USER_PASSWORD_RESET_ISSUED_EVENT = DIRECTORY_EVENTS.USER_PASSWORD_RESET_ISSUED;
 
+/** Фактическая смена пароля: сокеты, открытые по старому паролю, не должны
+ *  жить после ротации (легитимный клиент переподключится после входа). */
+export const USER_PASSWORD_CHANGED_EVENT = DIRECTORY_EVENTS.USER_PASSWORD_CHANGED;
+
 /** Установка/снятие пака «себе» (#318): меняется только набор владельца. */
 const STICKER_INSTALL_EVENTS = new Set<string>([
   CHAT_EVENTS.STICKER_PACK_INSTALLED,
@@ -78,9 +82,9 @@ const LIST_EVENTS = new Set([
  *   пользователя (сокет аутентифицирован один раз на хендшейке и иначе
  *   пережил бы деактивацию; клиент на `io server disconnect` сам не
  *   переподключается, refresh-сессии уже отозвал auth);
- * - directory.user.password_reset_issued (#101) → то же отключение: доступ
- *   должен пропасть сразу, а не через TTL access-токена; переподключиться
- *   старым токеном не даст стоп-лист хендшейка (`revoked.ts`).
+ * - directory.user.password_reset_issued / password_changed (#101) → то же
+ *   отключение: доступ должен пропасть сразу, а не через TTL access-токена;
+ *   переподключиться старым токеном не даст стоп-лист хендшейка (`revoked.ts`).
  */
 export async function routeEnvelope(
   io: Server,
@@ -94,7 +98,8 @@ export async function routeEnvelope(
 
   if (
     envelope.type === USER_DEACTIVATED_EVENT ||
-    envelope.type === USER_PASSWORD_RESET_ISSUED_EVENT
+    envelope.type === USER_PASSWORD_RESET_ISSUED_EVENT ||
+    envelope.type === USER_PASSWORD_CHANGED_EVENT
   ) {
     if (typeof payload.userId === 'string') {
       // close=true: DISCONNECT-пакет уходит до закрытия транспорта (engine.io

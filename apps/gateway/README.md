@@ -48,11 +48,12 @@ WebSocket-gateway портала (I1: отдельный процесс): Socket
   текущий consumer и обрабатывает штатно (эмит + XACK); затем GC сирот —
   `XGROUP DELCONSUMER` чужих consumer'ов с pending = 0 и idle > 10 мин
   (живой BLOCK-reader обновляет idle каждые ≤ 5 с и под порог не попадает).
-- **Деактивация и сброс пароля**: `directory.user.deactivated` или
-  `directory.user.password_reset_issued` из стрима →
-  `io.in(user:{id}).disconnectSockets(true)` — сокет, аутентифицированный
-  на хендшейке, не переживает событие; клиент на `io server disconnect`
-  сам не переподключается, refresh-сессии отзывает auth тем же событием.
+- **Деактивация и сброс пароля**: `directory.user.deactivated`,
+  `directory.user.password_reset_issued` или `directory.user.password_changed`
+  из стрима → `io.in(user:{id}).disconnectSockets(true)` — сокет,
+  аутентифицированный на хендшейке, не переживает событие; клиент на
+  `io server disconnect` сам не переподключается, refresh-сессии отзывает
+  auth тем же событием.
 - **READ-ONLY Postgres — осознанное исключение I3/I6** (зафиксировано спекой
   #104): gateway не тянет Nest/Prisma ради нескольких SELECT — `isMember` для
   подписки на комнату, `status` учётки на хендшейке и `display_name/avatar_url` для presence-entries (кэш
@@ -117,9 +118,11 @@ emit для ВСЕХ событий (#328); доменные составы со
   проверяются — отозванная сессия живёт ≤ TTL access-токена (15 мин).
   Деактивация и выпуск reset-ссылки рвут уже открытые сокеты (см. выше), а
   **хендшейк читает стоп-лист access-токенов** (`nodus:auth:revoked-before:<userId>`,
-  тот же ключ, что пишет apps/api, `revoked.ts`): старым токеном после
-  деактивации/сброса пароля переподключиться нельзя. Redis недоступен —
-  fail-open (портал не встаёт), статус учётки всё равно проверяется.
+  тот же ключ, что пишет apps/api, `revoked.ts`) на ОТДЕЛЬНОМ неблокирующем
+  Redis-соединении (`gateway:auth`; fanout занят `XREADGROUP BLOCK`): старым
+  токеном после деактивации/сброса пароля переподключиться нельзя. Redis не
+  ready или не ответил за 300 мс — fail-open (портал не встаёт), статус учётки
+  всё равно проверяется.
   **Статус учётки
   перечитывается на каждом хендшейке** (#320, `isActiveUser` — один SELECT
   без кэша): новый хендшейк деактивированного с ещё живым access-токеном

@@ -5,6 +5,7 @@ import type { RealtimeEnvelope } from '@nodus/contracts';
 import {
   routeEnvelope,
   USER_DEACTIVATED_EVENT,
+  USER_PASSWORD_CHANGED_EVENT,
   USER_PASSWORD_RESET_ISSUED_EVENT,
 } from './route-envelope.js';
 import type { MembershipStore } from './membership.js';
@@ -318,6 +319,12 @@ describe('routeEnvelope', () => {
     await routeEnvelope(io, store, envelope(USER_PASSWORD_RESET_ISSUED_EVENT, { userId: USER_A }));
     expect(inRoom).toHaveBeenCalledWith(`user:${USER_A}`);
     expect(disconnectSockets).toHaveBeenCalledTimes(2);
+
+    // Фактическая смена пароля: сокет, открытый по старому паролю, не живёт.
+    inRoom.mockClear();
+    await routeEnvelope(io, store, envelope(USER_PASSWORD_CHANGED_EVENT, { userId: USER_A }));
+    expect(inRoom).toHaveBeenCalledWith(`user:${USER_A}`);
+    expect(disconnectSockets).toHaveBeenCalledTimes(3);
     expect(calls).toHaveLength(0);
   });
 
