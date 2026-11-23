@@ -270,7 +270,7 @@ export function EmployeeCard({ userId, dormant = false }: { userId: string; dorm
           style={{ width: columnW }}
         >
           {card.status === 'invited' ? (
-            <InvitedCardPanel card={card} onClose={() => closeCard()} />
+            <InvitedCardPanel card={card} canManage={canManage} onClose={() => closeCard()} />
           ) : (
             <EmployeeCardWorkTabs
               active={tab}

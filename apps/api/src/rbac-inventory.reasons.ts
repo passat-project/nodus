@@ -270,6 +270,12 @@ export const INTENTIONALLY_PUBLIC: Record<string, string> = {
   'POST /auth/login': 'вход — до аутентификации по определению',
   'POST /auth/refresh': 'ротация по httpOnly refresh-cookie (access истёк)',
   'POST /auth/logout': 'отзыв сессии по refresh-cookie (access мог истечь)',
+  // Одноразовые ссылки приглашения/сброса (#101): гость ещё без учётки;
+  // токен одноразовый, троттлинг и сверка почты — в сервисе.
+  'GET /invitations/:token': 'публичная ссылка приглашения: инфо для префилла формы',
+  'POST /invitations/:token/accept': 'принятие приглашения: сверка почты и установка пароля',
+  'GET /password-resets/:token': 'публичная ссылка сброса пароля: инфо для формы',
+  'POST /password-resets/:token/accept': 'установка нового пароля по одноразовой ссылке',
   'GET /desktop/config': 'оболочка читает имя сервера и минимальную версию до входа',
   'GET /files/:id/content': 'подписанная ссылка (HMAC + срок) — доступ проверен при выдаче',
   'GET /files/:id/derivative/:kind':

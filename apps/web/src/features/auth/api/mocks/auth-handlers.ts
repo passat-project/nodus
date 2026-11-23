@@ -44,7 +44,6 @@ export const authHandlers = [
         { code: 'VALIDATION_FAILED', message: 'Invalid credentials shape' },
         { status: 400 },
       );
-    rememberMockLogin(parsed.data.email);
     const runtime = runtimeUserByEmail(parsed.data.email);
     if (runtime?.status === 'invited') {
       return HttpResponse.json(
@@ -55,6 +54,7 @@ export const authHandlers = [
         { status: 403 },
       );
     }
+    rememberMockLogin(parsed.data.email);
     return HttpResponse.json(
       { ...tokens, userId: demoActorFor(parsed.data.email).id },
       { headers: { 'Set-Cookie': `${COOKIE}=alive; Path=/` } },

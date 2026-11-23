@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ui } from '@nodus/contracts';
+import { ErrorCode, ui } from '@nodus/contracts';
 
+import { ApiError } from '../../../shared/api-client.js';
 import { InviteDialog } from './invite-dialog.js';
 
 const createInvitation = vi.hoisted(() => ({
@@ -28,6 +29,14 @@ vi.mock('../../../shared/api/departments-list.js', () => ({
     {
       id: '00000000-0000-4000-9000-000000000002',
       name: 'Проектный отдел',
+      depth: 0,
+      isActive: true,
+      headId: null,
+      deputyId: null,
+    },
+    {
+      id: '00000000-0000-4000-9000-000000000003',
+      name: 'Строительный отдел',
       depth: 0,
       isActive: true,
       headId: null,
@@ -63,7 +72,23 @@ vi.mock('./reference-combobox.js', () => ({
   ),
 }));
 
+const LAST_NAME = '00000000-0000-4000-9000-000000000001';
+const DEPARTMENT_A = '00000000-0000-4000-9000-000000000002';
+const DEPARTMENT_B = '00000000-0000-4000-9000-000000000003';
+
+function fillRequired(overrides: { email?: string } = {}): void {
+  fireEvent.change(screen.getByLabelText(/Фамилия/), { target: { value: 'Новиков' } });
+  fireEvent.change(screen.getByLabelText(/^Имя/), { target: { value: 'Иван' } });
+  fireEvent.change(screen.getByLabelText(/Рабочая почта/), {
+    target: { value: overrides.email ?? 'New.Hire@Nodus.by' },
+  });
+  fireEvent.change(screen.getByLabelText(ui.employees.invitePosition), {
+    target: { value: LAST_NAME },
+  });
+}
+
 afterEach(() => {
+  cleanup();
   vi.clearAllMocks();
 });
 
@@ -76,27 +101,9 @@ describe('InviteDialog (#101)', () => {
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
     });
 
-    render(
-      <InviteDialog
-        open
-        onOpenChange={() => undefined}
-        initialDepartmentId="00000000-0000-4000-9000-000000000002"
-      />,
-    );
+    render(<InviteDialog open onOpenChange={() => undefined} initialDepartmentId={DEPARTMENT_A} />);
 
-    fireEvent.change(screen.getByLabelText(ui.employees.inviteLastName), {
-      target: { value: 'Новиков' },
-    });
-    fireEvent.change(screen.getByLabelText(ui.employees.inviteFirstName), {
-      target: { value: 'Иван' },
-    });
-    fireEvent.change(screen.getByLabelText(ui.employees.inviteEmail), {
-      target: { value: 'New.Hire@Nodus.by' },
-    });
-    fireEvent.change(screen.getByLabelText(ui.employees.invitePosition), {
-      target: { value: '00000000-0000-4000-9000-000000000001' },
-    });
-
+    fillRequired();
     fireEvent.click(screen.getByRole('button', { name: ui.employees.inviteSubmit }));
 
     await waitFor(() => expect(createInvitation.mutateAsync).toHaveBeenCalledTimes(1));
@@ -105,19 +112,79 @@ describe('InviteDialog (#101)', () => {
       lastName: 'Новиков',
       firstName: 'Иван',
       middleName: null,
-      positionId: '00000000-0000-4000-9000-000000000001',
-      departmentId: '00000000-0000-4000-9000-000000000002',
+      positionId: LAST_NAME,
+      departmentId: DEPARTMENT_A,
     });
 
     expect(await screen.findByText(ui.employees.inviteLinkTitle)).toBeTruthy();
-    const link = screen.getByLabelText(ui.employees.inviteLinkLabel) as HTMLInputElement;
-    expect(link.value).toContain('/invite/');
+    const link = screen.getByRole('textbox', { name: ui.employees.inviteLinkLabel });
+    expect(link.textContent).toContain('/invite/');
+    // Ссылка не обрезается молча: полная — в title строки (после многоточия).
+    expect(link.getAttribute('title')).toBe(link.textContent);
   });
 
-  it('без обязательных полей приглашение не уходит', () => {
+  it('«Далее» недоступна, пока не заполнены обязательные поля', () => {
     render(<InviteDialog open onOpenChange={() => undefined} />);
+    const next = screen.getByRole('button', {
+      name: ui.employees.inviteSubmit,
+    }) as HTMLButtonElement;
+    expect(next.disabled).toBe(true);
+    fillRequired();
+    fireEvent.change(screen.getByLabelText(ui.employees.inviteDepartment), {
+      target: { value: DEPARTMENT_A },
+    });
+    expect(next.disabled).toBe(false);
+  });
+
+  it('незаполненное поле показывает ошибку по полю, а не общий текст', () => {
+    render(<InviteDialog open onOpenChange={() => undefined} />);
+    const lastName = screen.getByLabelText(/Фамилия/);
+    fireEvent.blur(lastName);
+    expect(screen.getByText(ui.employees.inviteLastNameRequired)).toBeTruthy();
+    expect(lastName.getAttribute('aria-invalid')).toBe('true');
+    expect(screen.queryByText(ui.employees.inviteRequired)).toBeNull();
+  });
+
+  it('некорректная почта — ошибка под полем после отправки', () => {
+    render(<InviteDialog open onOpenChange={() => undefined} initialDepartmentId={DEPARTMENT_A} />);
+    fillRequired({ email: 'not-an-email' });
     fireEvent.click(screen.getByRole('button', { name: ui.employees.inviteSubmit }));
     expect(createInvitation.mutateAsync).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert').textContent).toBe(ui.employees.inviteRequired);
+    expect(screen.getByText(ui.employees.inviteEmailRequired)).toBeTruthy();
+  });
+
+  it('дубль почты с сервера — inline под «Рабочей почтой», без тоста', async () => {
+    createInvitation.mutateAsync.mockRejectedValue(
+      new ApiError(ErrorCode.DIRECTORY_EMAIL_TAKEN, 'Email already exists', 409),
+    );
+    render(<InviteDialog open onOpenChange={() => undefined} initialDepartmentId={DEPARTMENT_A} />);
+    fillRequired();
+    fireEvent.click(screen.getByRole('button', { name: ui.employees.inviteSubmit }));
+    await waitFor(() =>
+      expect(screen.getByText('Пользователь с таким email уже существует')).toBeTruthy(),
+    );
+    const email = screen.getByLabelText(/Рабочая почта/);
+    expect(email.getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('повторное открытие из другого подразделения подставляет его отдел', () => {
+    const { rerender } = render(
+      <InviteDialog open onOpenChange={() => undefined} initialDepartmentId={DEPARTMENT_A} />,
+    );
+    const department = () =>
+      screen.getByLabelText(ui.employees.inviteDepartment) as HTMLSelectElement;
+    expect(department().value).toBe(DEPARTMENT_A);
+
+    rerender(
+      <InviteDialog
+        open={false}
+        onOpenChange={() => undefined}
+        initialDepartmentId={DEPARTMENT_A}
+      />,
+    );
+    rerender(
+      <InviteDialog open onOpenChange={() => undefined} initialDepartmentId={DEPARTMENT_B} />,
+    );
+    expect(department().value).toBe(DEPARTMENT_B);
   });
 });

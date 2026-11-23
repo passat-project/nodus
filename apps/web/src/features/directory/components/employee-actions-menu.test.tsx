@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UserCard } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -21,13 +21,14 @@ const hooks = vi.hoisted(() => ({
   deactivate: { mutate: vi.fn(), isPending: false },
   activate: { mutate: vi.fn(), isPending: false },
   update: { mutate: vi.fn(), isPending: false },
+  reset: { mutateAsync: vi.fn(), isPending: false },
 }));
 
 vi.mock('../api/directory-api.js', () => ({
   useDeactivateUser: () => hooks.deactivate,
   useActivateUser: () => hooks.activate,
   useUpdateUser: () => hooks.update,
-  useIssuePasswordReset: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useIssuePasswordReset: () => hooks.reset,
 }));
 
 vi.mock('../../../shared/api/roles.js', () => ({
@@ -153,5 +154,36 @@ describe('EmployeeActionsMenu (#923)', () => {
     openMenu();
     expect(screen.queryByRole('menuitem', { name: ui.employees.grantAdmin })).toBeNull();
     expect(screen.queryByRole('menuitem', { name: ui.employees.revokeAdmin })).toBeNull();
+  });
+
+  it('сброс пароля — только после подтверждения (#101): сессии не гасятся случайным кликом', async () => {
+    hooks.reset.mutateAsync.mockResolvedValue({
+      id: 'user-1',
+      token: 'r'.repeat(64),
+      path: `/reset/${'r'.repeat(64)}`,
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    });
+    render(<EmployeeActionsMenu card={card()} />);
+    openMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: ui.employees.resetLink }));
+    expect(hooks.reset.mutateAsync).not.toHaveBeenCalled();
+    expect(screen.getByText(ui.employees.resetConfirmText)).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: ui.employees.resetLink }));
+    await waitFor(() => expect(hooks.reset.mutateAsync).toHaveBeenCalledTimes(1));
+  });
+
+  it('восстановление доступа уволенного — своё подтверждение и reset-ссылка', async () => {
+    hooks.reset.mutateAsync.mockResolvedValue({
+      id: 'user-1',
+      token: 'r'.repeat(64),
+      path: `/reset/${'r'.repeat(64)}`,
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    });
+    render(<EmployeeActionsMenu card={card({ status: 'deactivated' })} />);
+    openMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: ui.employees.restoreAccess }));
+    expect(screen.getByText(ui.employees.restoreConfirmTitle)).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: ui.employees.restoreAccess }));
+    await waitFor(() => expect(hooks.reset.mutateAsync).toHaveBeenCalledTimes(1));
   });
 });

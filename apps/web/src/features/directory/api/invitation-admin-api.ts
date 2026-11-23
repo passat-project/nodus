@@ -21,7 +21,8 @@ export function useCreateInvitation() {
   return useMutation({
     mutationFn: (body: CreateInvitationDto) =>
       api<InvitationCreated>('/directory/invitations', { method: 'POST', body }),
-    onError: (error) => toastApiError(error),
+    // Ошибки разбирает диалог приглашения (#101): дубль почты — под полем,
+    // тост остаётся только для неожиданных сбоев (вызывающий).
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: directoryKeys.all });
     },

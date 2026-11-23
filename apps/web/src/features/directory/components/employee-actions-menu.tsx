@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import {
+  KeyRound,
   MoreHorizontal,
   Pencil,
+  RotateCcw,
   ShieldMinus,
   ShieldPlus,
   UserCheck,
@@ -29,7 +31,7 @@ import {
 } from '../api/directory-api.js';
 import { InvitationLinkDialog } from './invitation-link-dialog.js';
 
-type ConfirmAction = 'deactivate' | 'grant' | 'revoke';
+type ConfirmAction = 'deactivate' | 'grant' | 'revoke' | 'reset';
 
 /**
  * Нижняя полоса профиля (#923) — только левая зона карточки, вне скролла:
@@ -92,7 +94,7 @@ export function EmployeeActionsMenu({ card }: { card: UserCard }) {
   const grant = useUpdateUser(card.id, { successMessage: ui.employees.grantAdminDone });
   const revoke = useUpdateUser(card.id, { successMessage: ui.employees.revokeAdminDone });
   const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
-  const pending = deactivate.isPending || grant.isPending || revoke.isPending;
+  const pending = deactivate.isPending || grant.isPending || revoke.isPending || reset.isPending;
 
   function roleIds(add: boolean, roleId: string): string[] {
     const ids = card.roles.map((role) => role.id).filter((id) => id !== roleId);
@@ -103,6 +105,14 @@ export function EmployeeActionsMenu({ card }: { card: UserCard }) {
     if (action === 'deactivate') deactivate.mutate();
     if (action === 'grant' && adminRole) grant.mutate({ roleIds: roleIds(true, adminRole.id) });
     if (action === 'revoke' && adminRole) revoke.mutate({ roleIds: roleIds(false, adminRole.id) });
+    if (action === 'reset') {
+      // Ссылка выпускается ТОЛЬКО после подтверждения (#101): до него сессии
+      // сотрудника не гасятся — случайный клик не выкидывает его из портала.
+      void reset
+        .mutateAsync()
+        .then((result) => setLink(result))
+        .catch(() => undefined);
+    }
     setConfirm(null);
   }
 
@@ -121,6 +131,14 @@ export function EmployeeActionsMenu({ card }: { card: UserCard }) {
       title: ui.employees.revokeAdminTitle,
       text: ui.employees.revokeAdminText,
       confirm: ui.employees.revokeAdmin,
+    },
+    reset: {
+      title:
+        card.status === 'deactivated'
+          ? ui.employees.restoreConfirmTitle
+          : ui.employees.resetConfirmTitle,
+      text: ui.employees.resetConfirmText,
+      confirm: card.status === 'deactivated' ? ui.employees.restoreAccess : ui.employees.resetLink,
     },
   };
   const current = confirm ? texts[confirm] : null;
@@ -175,14 +193,8 @@ export function EmployeeActionsMenu({ card }: { card: UserCard }) {
             </>
           ) : null}
           <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onSelect={() => {
-              void reset
-                .mutateAsync()
-                .then((result) => setLink(result))
-                .catch(() => undefined);
-            }}
-          >
+          <DropdownMenuItem onSelect={() => setConfirm('reset')}>
+            {card.status === 'deactivated' ? <RotateCcw /> : <KeyRound />}
             {card.status === 'deactivated' ? ui.employees.restoreAccess : ui.employees.resetLink}
           </DropdownMenuItem>
         </DropdownMenuContent>

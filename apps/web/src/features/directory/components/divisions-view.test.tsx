@@ -63,6 +63,7 @@ function mount(overrides: Partial<Parameters<typeof DivisionsView>[0]> = {}) {
     statsById: new Map<string, DepartmentCardStats>(),
     onSelect: vi.fn(),
     onCreateChild: vi.fn(),
+    onInvite: vi.fn(),
     onEdit: vi.fn(),
     ...overrides,
   };

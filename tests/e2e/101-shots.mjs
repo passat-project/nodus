@@ -45,12 +45,16 @@ async function openInvite(target, email, lastName) {
   return dialog;
 }
 
+async function tokenLinkOf(target) {
+  return (await target.locator('[data-token-link]').first().textContent()) ?? '';
+}
+
 async function createInvite(target, email, lastName) {
   const dialog = await openInvite(target, email, lastName);
   await shot(target, '02-invite-filled-light');
-  await dialog.getByRole('button', { name: 'Пригласить' }).click();
+  await dialog.getByRole('button', { name: 'Далее' }).click();
   await dialog.getByText('Ссылка-приглашение готова').waitFor({ timeout: 20_000 });
-  const link = await dialog.getByRole('textbox').inputValue();
+  const link = await tokenLinkOf(dialog);
   await shot(target, '03-link-ready-light');
   return { dialog, link };
 }
@@ -79,9 +83,12 @@ await page.keyboard.press('Escape');
 await page.getByText('Екатерина Поломар').first().click();
 await page.getByRole('button', { name: 'Действия', exact: true }).click();
 await page.getByRole('menuitem', { name: 'Сбросить пароль' }).click();
+await page.getByText('Текущие сессии сотрудника будут завершены').waitFor({ timeout: 20_000 });
+await shot(page, '15-reset-confirm-light');
+await page.getByRole('dialog').getByRole('button', { name: 'Сбросить пароль' }).click();
 await page.getByText('Ссылка для сброса пароля готова').waitFor({ timeout: 20_000 });
 const resetDialog = page.getByRole('dialog');
-const resetLink = await resetDialog.getByRole('textbox').inputValue();
+const resetLink = await tokenLinkOf(resetDialog);
 await shot(page, '05-reset-link-light');
 await resetDialog.getByRole('button', { name: 'Закрыть' }).click();
 await page.keyboard.press('Escape');
@@ -141,7 +148,7 @@ await page.setViewportSize({ width: 740, height: 900 });
 await page.goto(`${base}/employees`);
 const narrowDialog = await openInvite(page, 'width.employee.101@nodus.local', 'Широков');
 await shot(page, '12-invite-dialog-740');
-await narrowDialog.getByRole('button', { name: 'Пригласить' }).click();
+await narrowDialog.getByRole('button', { name: 'Далее' }).click();
 await narrowDialog.getByText('Ссылка-приглашение готова').waitFor({ timeout: 20_000 });
 await narrowDialog.getByRole('button', { name: 'Закрыть' }).click();
 await page.getByText('width.employee.101@nodus.local').first().click();

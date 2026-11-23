@@ -48,7 +48,13 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
  * истёкший токен (найдено k6-прогоном #58). Повтор логина безопасен и без
  * идемпотентности (api-client генерирует уникальный ключ на вызов).
  */
-const IDEMPOTENCY_EXCLUDED_PREFIXES = ['/api/v1/auth/'];
+const IDEMPOTENCY_EXCLUDED_PREFIXES = [
+  '/api/v1/auth/',
+  // Одноразовые ссылки (#101): сырой токен не должен лежать в Redis-кэше
+  // идемпотентности 24 часа; accept одноразовый по CAS самого токена.
+  '/api/v1/invitations/',
+  '/api/v1/password-resets/',
+];
 
 interface CachedResponse {
   body: unknown;

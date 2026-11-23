@@ -32,6 +32,14 @@ const CODE_TO_STATUS: Record<ErrorCode, number> = {
   // Доменные коды с нестандартным статусом (остальные доменные → 400 ниже).
   [ErrorCode.AUTH_INVALID_CREDENTIALS]: HttpStatus.UNAUTHORIZED,
   [ErrorCode.AUTH_SESSION_INVALID]: HttpStatus.UNAUTHORIZED,
+  // Вход приглашённого до активации (#101, O1): учётка есть, пароля нет.
+  [ErrorCode.AUTH_ACCOUNT_NOT_ACTIVATED]: HttpStatus.FORBIDDEN,
+  // Одноразовые ссылки приглашения/сброса (#101): негодная/просроченная/
+  // отозванная — 400, израсходованная — 409 (UI показывает разный текст).
+  [ErrorCode.INVITATION_INVALID]: HttpStatus.BAD_REQUEST,
+  [ErrorCode.INVITATION_EMAIL_MISMATCH]: HttpStatus.BAD_REQUEST,
+  [ErrorCode.INVITATION_ALREADY_USED]: HttpStatus.CONFLICT,
+  [ErrorCode.PASSWORD_RESET_INVALID]: HttpStatus.BAD_REQUEST,
   [ErrorCode.DIRECTORY_EMAIL_TAKEN]: HttpStatus.CONFLICT,
   // Ссылка оргструктуры (руководитель/подразделение/должность) негодна — 400
   // с details { field, reason } (#441).

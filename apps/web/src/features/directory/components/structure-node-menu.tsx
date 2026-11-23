@@ -12,14 +12,17 @@ import {
 /**
  * «⋯» карточки отдела (#768, вердикт 16.11.2026): sibling кнопки-тела, поэтому
  * клик по меню НЕ выбирает отдел; видна администратору всегда, имя обрезается
- * до неё. Пункт пока один — правка отдела в существующем диалоге; полное меню
- * действий (перевод сотрудников, удаление с переносом) — #881.
+ * до неё. Пункты: приглашение в Nodus с предвыбранным подразделением (#101) и
+ * правка отдела; полное меню действий (перевод сотрудников, удаление с
+ * переносом) — #881.
  */
 export function StructureNodeMenu({
   node,
+  onInvite,
   onEdit,
 }: {
   node: DepartmentNode;
+  onInvite: (node: DepartmentNode) => void;
   onEdit: (node: DepartmentNode) => void;
 }) {
   return (
@@ -37,6 +40,9 @@ export function StructureNodeMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="right" align="start" sideOffset={6} className="w-auto">
+        <DropdownMenuItem onClick={() => onInvite(node)}>
+          {ui.employees.inviteToDepartment}
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => onEdit(node)}>
           {ui.employees.editDepartmentAction}
         </DropdownMenuItem>

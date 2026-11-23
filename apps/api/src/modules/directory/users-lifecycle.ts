@@ -54,6 +54,11 @@ export async function deactivateUserOf(
   if (!before) {
     throw DomainException.notFound('User not found');
   }
+  if (before.status === 'invited') {
+    // Приглашённый не активирован: «Уволить» нечего, приглашение отменяет
+    // отдельное действие (#101); старый deactivate не должен его трогать.
+    throw new DomainException(ErrorCode.CONFLICT, 'Invited user cannot be deactivated');
+  }
   if (before.status === 'deactivated') {
     return toUserCard(before, deps.avatarUrlOf); // идемпотентно
   }
@@ -107,6 +112,11 @@ export async function activateUserOf(
 ): Promise<UserCard> {
   const before = await deps.users.findCardById(id);
   if (!before) throw DomainException.notFound('User not found');
+  if (before.status === 'invited') {
+    // Активирует только принятие приглашения (пароль задаёт сам сотрудник);
+    // «Вернуть в работу» до активации включил бы вход без пароля/ссылки.
+    throw new DomainException(ErrorCode.CONFLICT, 'Invited user cannot be activated directly');
+  }
   if (before.status === 'active') return toUserCard(before, deps.avatarUrlOf); // идемпотентно
 
   return deps.tx.run(async (tx) => {

@@ -45,11 +45,21 @@ export class SearchIndexService {
     await this.apply(await provider.loadByDepartment(departmentId));
   }
 
-  /** Переименование/переназначение должности: держатели меняют текст. */
+  /** Переименование/назначение должности: держатели меняют текст. */
   async indexByPosition(positionId: string): Promise<void> {
     const provider = this.registry.get('employee');
     if (!provider?.loadByPosition) return;
     await this.apply(await provider.loadByPosition(positionId));
+  }
+
+  /** Жёсткое удаление источника (#101): строку проекции надо убрать, а не
+   *  переиндексировать — `indexIds` для удалённой строки вернёт пусто и
+   *  оставит tombstone-документ. */
+  async removeIds(type: SearchSourceType, ids: readonly string[]): Promise<void> {
+    const unique = [...new Set(ids)];
+    for (const id of unique) {
+      await this.repository.remove(type, id, new Date());
+    }
   }
 
   /** Полный скан источника для бэкфилла; возвращает число обработанных строк

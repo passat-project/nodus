@@ -4,13 +4,14 @@ import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../core/database/prisma.service.js';
 import type { TransactionClient } from '../../core/database/transaction-runner.js';
 
-/** Учётные данные для проверки пароля (passwordHash не выходит из репозитория). */
+/** Учётные данные для проверки пароля (passwordHash не выходит из репозитория).
+ *  `passwordHash: null` — приглашённый ещё не задал пароль (#101). */
 export interface UserCredentials {
   id: string;
   email: string;
-  passwordHash: string;
+  passwordHash: string | null;
   displayName: string;
-  status: 'active' | 'deactivated';
+  status: 'active' | 'deactivated' | 'invited';
 }
 
 /** Профиль пользователя для AuthUser/JWT — БЕЗ прав (#379, ADR-0034 п. 4):
@@ -19,7 +20,7 @@ export interface AuthProfile {
   id: string;
   email: string;
   displayName: string;
-  status: 'active' | 'deactivated';
+  status: 'active' | 'deactivated' | 'invited';
 }
 
 /** Идентичность для AuthUser/JWT: профиль + развёрнутые права ролей. */
@@ -64,6 +65,17 @@ export class AuthRepository {
     return user;
   }
 
+  /** Статус до проверки пароля (#101): приглашённый получает отдельное
+   *  сообщение «учётка не активирована», не раскрывая при этом хеш. */
+  async findStatusByEmail(
+    email: string,
+  ): Promise<{ id: string; status: 'active' | 'deactivated' | 'invited' } | null> {
+    return this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true, status: true },
+    });
+  }
+
   /** Профиль без прав: их даёт порт ролей (прямые роли ∪ подразделение и предки). */
   async findProfileById(id: string, tx?: TransactionClient): Promise<AuthProfile | null> {
     const client = tx ?? this.prisma;
@@ -81,7 +93,6 @@ export class AuthRepository {
     const client = tx ?? this.prisma;
     await client.user.update({ where: { id: userId }, data: { passwordHash } });
   }
-
   async createSession(
     data: {
       userId: string;

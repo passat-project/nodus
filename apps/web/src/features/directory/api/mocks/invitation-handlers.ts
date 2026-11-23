@@ -32,7 +32,17 @@ export function invitationHandlers(state: InvitationMockState) {
       const parsed = createInvitationSchema.safeParse(await request.json());
       if (!parsed.success) {
         return HttpResponse.json(
-          { code: 'VALIDATION_FAILED', message: 'Invalid invitation payload' },
+          {
+            code: 'VALIDATION_FAILED',
+            message: 'Invalid invitation payload',
+            details: {
+              issues: parsed.error.issues.map((issue) => ({
+                path: issue.path.join('.'),
+                code: issue.code,
+                message: issue.message,
+              })),
+            },
+          },
           { status: 400 },
         );
       }
@@ -60,7 +70,7 @@ export function invitationHandlers(state: InvitationMockState) {
       }
       const now = new Date().toISOString();
       const id = crypto.randomUUID();
-      const displayName = [parsed.data.lastName, parsed.data.firstName, parsed.data.middleName]
+      const displayName = [parsed.data.lastName, parsed.data.firstName]
         .filter((part): part is string => Boolean(part))
         .join(' ');
       const template = state.cards[0]!;

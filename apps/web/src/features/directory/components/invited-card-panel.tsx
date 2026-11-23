@@ -17,7 +17,15 @@ import { InvitationLinkDialog } from './invitation-link-dialog.js';
 /** Правая зона карточки приглашённого (#101): вкладок «Чат/Задачи/Проекты»
  *  нет — сотрудник ещё не активировал учётку; вместо них объяснение и
  *  действия администратора. */
-export function InvitedCardPanel({ card, onClose }: { card: UserCard; onClose: () => void }) {
+export function InvitedCardPanel({
+  card,
+  canManage,
+  onClose,
+}: {
+  card: UserCard;
+  canManage: boolean;
+  onClose: () => void;
+}) {
   const reissue = useReissueInvitation(card.id);
   const cancel = useCancelInvitation(card.id);
   const [link, setLink] = useState<InvitationCreated | null>(null);
@@ -30,24 +38,27 @@ export function InvitedCardPanel({ card, onClose }: { card: UserCard; onClose: (
           <EmptyTitle>{ui.employees.invitedCardTitle}</EmptyTitle>
           <EmptyDescription>{ui.employees.invitedCardText}</EmptyDescription>
         </EmptyHeader>
-        <EmptyContent>
-          <div className="flex flex-wrap justify-center gap-2">
-            <Button
-              onClick={() => {
-                void reissue
-                  .mutateAsync()
-                  .then((result) => setLink(result))
-                  .catch(() => undefined);
-              }}
-              disabled={reissue.isPending}
-            >
-              {ui.employees.inviteReissue}
-            </Button>
-            <Button variant="outline" onClick={() => setCancelOpen(true)}>
-              {ui.employees.inviteCancel}
-            </Button>
-          </div>
-        </EmptyContent>
+        {canManage ? (
+          <EmptyContent>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  void reissue
+                    .mutateAsync()
+                    .then((result) => setLink(result))
+                    .catch(() => undefined);
+                }}
+                disabled={reissue.isPending}
+              >
+                {ui.employees.inviteReissue}
+              </Button>
+              <Button variant="ghost" onClick={() => setCancelOpen(true)}>
+                {ui.employees.inviteCancel}
+              </Button>
+            </div>
+          </EmptyContent>
+        ) : null}
       </Empty>
 
       {link ? (

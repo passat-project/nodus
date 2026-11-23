@@ -66,6 +66,16 @@
 - Дерево подразделений — целиком (десятки узлов; ленивые уровни — при росте > 1000).
 - Замещение (временный зам с периодом) и календарь отсутствий — отдельный issue эпика M2; таблица замещений появится там.
 
+## Приглашение по ссылке и сброс пароля (#101, ADR-0054)
+
+- **Модель:** приглашённый — строка `users` со статусом `invited` без `password_hash`; в списке виден с чипом, в структуре/пикерах/поиске/ролях — нет. Активация — только принятие одноразовой ссылки (сверка рабочей почты + пароль по общей политике + авто-привязка базовой роли `employee`, если прямых ролей нет).
+- **Токены:** `user_tokens` (`invite` 7 дней, `reset` 24 часа), в БД только SHA-256; одноразовость — CAS, перевыпуск/отмена — `revoked_at`; сырой токен отдаётся один раз и не попадает в логи/аудит/Redis (маскирование пути, публичные префиксы исключены из идемпотентности).
+- **API админа (`directory.manage`, `@Audit`, `@ApiIdempotencyKey`):** `POST /directory/invitations`, `POST /directory/invitations/:id/reissue`, `DELETE /directory/invitations/:id`, `POST /directory/users/:id/password-reset`.
+- **Публичные (`@Public`, троттлинг по хешу токена):** `GET/POST /invitations/:token[/accept]`, `GET/POST /password-resets/:token[/accept]`.
+- **События:** `directory.invitation.created|accepted|revoked|expired`, `directory.user.deleted`, `directory.user.password_reset_issued|password_changed`; auth гасит сессии по reset-событиям, search по `user.deleted` удаляет документ.
+- **Автоистечение:** BullMQ раз в час; никогда не активированную строку удаляет, бывшего сотрудника возвращает в «Уволен»; аудит `directory.invitation.expire` (`actorId = null`).
+- **Запреты сервера:** `roleIds` приглашённому → 409, `activate`/`deactivate` → 409, глава/зам и назначения требуют `status = active`.
+
 ## Документация (OpenAPI, I2)
 
 Контроллеры аннотированы для генерации спеки из кода (ADR-0006): схемы — те же контракты

@@ -77,6 +77,22 @@ export class AuthService {
       throw new DomainException(ErrorCode.AUTH_INVALID_CREDENTIALS, 'Invalid email or password');
     }
 
+    // Приглашённый до активации (#101): отдельное понятное сообщение вместо
+    // «неверный пароль». Анти-enumeration ослаблен осознанно (O1, README auth):
+    // это корпоративный портал, адрес и так известен коллегам.
+    const status = await this.authRepository.findStatusByEmail(email);
+    if (status?.status === 'invited') {
+      await this.loginThrottle.recordFailure(email);
+      await this.audit.append({
+        actorId: null,
+        action: 'auth.login_failed',
+        details: { email, reason: 'not_activated' },
+        ip,
+        userAgent: userAgent ?? undefined,
+      });
+      throw new DomainException(ErrorCode.AUTH_ACCOUNT_NOT_ACTIVATED, 'Account is not activated');
+    }
+
     const identity = await this.authProvider.verifyCredentials(email, password);
     if (!identity) {
       await this.loginThrottle.recordFailure(email);
@@ -271,6 +287,10 @@ export class AuthService {
       ? await this.authRepository.findCredentialsByEmail(profile.email)
       : null;
     if (!credentials) {
+      throw new DomainException(ErrorCode.AUTH_INVALID_CREDENTIALS, 'Invalid password');
+    }
+    if (credentials.passwordHash === null) {
+      // Приглашённый без пароля: менять нечего, вход — через ссылку.
       throw new DomainException(ErrorCode.AUTH_INVALID_CREDENTIALS, 'Invalid password');
     }
     const valid = await this.passwordService.verify(credentials.passwordHash, oldPassword);
