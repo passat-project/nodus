@@ -108,4 +108,14 @@ describe('transitionFormInputSchema (#380)', () => {
     ).toEqual({ fields: { deadline: '2026-10-25T12:00:00.000Z' } });
     expect(() => transitionFormInputSchema.parse({ fields: {} })).toThrow();
   });
+
+  it('очистка срока и планового времени выражается null (#994)', () => {
+    expect(
+      transitionFormInputSchema.parse({ fields: { deadline: null, plannedMinutes: null } }),
+    ).toEqual({ fields: { deadline: null, plannedMinutes: null } });
+    // null — значение, а не пустой набор: одно поле-очистка валидно.
+    expect(transitionFormInputSchema.parse({ fields: { plannedMinutes: null } })).toEqual({
+      fields: { plannedMinutes: null },
+    });
+  });
 });

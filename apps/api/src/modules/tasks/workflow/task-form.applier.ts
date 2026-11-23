@@ -75,12 +75,15 @@ export class TaskFormApplier {
         fields.description = { from: task.description, to: input.fields.description };
       }
       if (input.fields.deadline !== undefined) {
-        const to = new Date(input.fields.deadline);
+        // null — человек очистил срок в окне; пустая строка контрактом не
+        // допускается, поэтому `undefined` остаётся «не трогали».
+        const to =
+          input.fields.deadline === null ? null : new Date(input.fields.deadline).toISOString();
         const current = task.deadline?.toISOString() ?? null;
-        if (to.toISOString() !== current) {
-          patch.deadline = to.toISOString();
+        if (to !== current) {
+          patch.deadline = to;
           keys.push('deadline');
-          fields.deadline = { from: current, to: to.toISOString() };
+          fields.deadline = { from: current, to };
         }
       }
       if (
