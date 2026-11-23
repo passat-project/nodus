@@ -27,6 +27,7 @@ vi.mock('../api/directory-api.js', () => ({
   useDeactivateUser: () => hooks.deactivate,
   useActivateUser: () => hooks.activate,
   useUpdateUser: () => hooks.update,
+  useIssuePasswordReset: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock('../../../shared/api/roles.js', () => ({

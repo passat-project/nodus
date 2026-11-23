@@ -27,6 +27,7 @@ import { directoryKeys } from './directory-keys.js';
 // Канонический хук справочника людей — shared (единый ключ/кэш); реэкспорт
 // для обратной совместимости импортов фичи.
 export { useUsersList } from '../../../shared/api/users-list.js';
+export * from './invitation-admin-api.js';
 export { directoryKeys } from './directory-keys.js';
 export { useEmployeePresence, usePresence } from './presence.js';
 

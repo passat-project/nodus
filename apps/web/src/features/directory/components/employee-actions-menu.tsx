@@ -7,7 +7,7 @@ import {
   UserCheck,
   UserMinus,
 } from 'lucide-react';
-import type { UserCard } from '@nodus/contracts';
+import type { IssuePasswordResetResponse, UserCard } from '@nodus/contracts';
 import { SystemRole, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@nodus/ui/components/dialog';
@@ -21,7 +21,13 @@ import {
 
 import { useRoles } from '../../../shared/api/roles.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
-import { useActivateUser, useDeactivateUser, useUpdateUser } from '../api/directory-api.js';
+import {
+  useActivateUser,
+  useDeactivateUser,
+  useIssuePasswordReset,
+  useUpdateUser,
+} from '../api/directory-api.js';
+import { InvitationLinkDialog } from './invitation-link-dialog.js';
 
 type ConfirmAction = 'deactivate' | 'grant' | 'revoke';
 
@@ -60,7 +66,7 @@ export function EmployeeProfileBar({
         <Pencil className="shrink-0" aria-hidden />
         <span className="hidden truncate @min-[18rem]/zone:inline">{ui.employees.editProfile}</span>
       </Button>
-      {canManage ? <EmployeeActionsMenu card={card} /> : null}
+      {canManage && card.status !== 'invited' ? <EmployeeActionsMenu card={card} /> : null}
     </div>
   );
 }
@@ -81,6 +87,8 @@ export function EmployeeActionsMenu({ card }: { card: UserCard }) {
   const isAdmin = card.roles.some((role) => role.code === SystemRole.ADMIN);
   const deactivate = useDeactivateUser(card.id);
   const activate = useActivateUser(card.id);
+  const reset = useIssuePasswordReset(card.id);
+  const [link, setLink] = useState<IssuePasswordResetResponse | null>(null);
   const grant = useUpdateUser(card.id, { successMessage: ui.employees.grantAdminDone });
   const revoke = useUpdateUser(card.id, { successMessage: ui.employees.revokeAdminDone });
   const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
@@ -166,6 +174,17 @@ export function EmployeeActionsMenu({ card }: { card: UserCard }) {
               )}
             </>
           ) : null}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onSelect={() => {
+              void reset
+                .mutateAsync()
+                .then((result) => setLink(result))
+                .catch(() => undefined);
+            }}
+          >
+            {card.status === 'deactivated' ? ui.employees.restoreAccess : ui.employees.resetLink}
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -199,6 +218,18 @@ export function EmployeeActionsMenu({ card }: { card: UserCard }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {link ? (
+        <InvitationLinkDialog
+          open
+          onOpenChange={(open) => (open ? undefined : setLink(null))}
+          title={ui.employees.resetLinkDone}
+          lead={ui.employees.resetLinkLead}
+          link={`${window.location.origin}${link.path}`}
+          expiresAt={link.expiresAt}
+          expiresLabel={ui.employees.resetLinkExpires}
+        />
+      ) : null}
     </>
   );
 }

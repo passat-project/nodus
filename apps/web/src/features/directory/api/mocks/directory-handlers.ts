@@ -1,6 +1,5 @@
 import { http, HttpResponse } from 'msw';
 import {
-  createInvitationSchema,
   createPositionSchema,
   ErrorCode,
   listUsersQuerySchema,
@@ -20,6 +19,7 @@ import { demoPositions } from '../../../../shared/mocks/data/positions.js';
 import { demoRoles } from '../../../../shared/mocks/data/roles.js';
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import { departmentHandlers } from './department-handlers.js';
+import { invitationHandlers } from './invitation-handlers.js';
 
 /**
  * MSW-слой справочника (ADR-0001): контракты — источник формы ответов.
@@ -275,15 +275,13 @@ export const directoryHandlers = [
     }
     return HttpResponse.json(card);
   }),
-  /** Приглашение сотрудника (кнопка «Пригласить») — заготовка: принимает
-   *  email, полный поток (роль, отдел, письмо-инвайт) — с бэкендом. */
-  http.post('/api/v1/directory/invitations', async ({ request }) => {
-    const parsed = createInvitationSchema.safeParse(await request.json());
-    if (!parsed.success)
-      return HttpResponse.json(
-        { code: 'VALIDATION_FAILED', message: 'Invalid email' },
-        { status: 400 },
-      );
-    return HttpResponse.json({ id: crypto.randomUUID() }, { status: 201 });
+  ...invitationHandlers({
+    getUserState: () => userState,
+    setUserState: (items) => {
+      userState = items;
+    },
+    cards: demoUserCards,
+    getDepartments: () => departmentState,
+    getPositions: () => positionState,
   }),
 ];

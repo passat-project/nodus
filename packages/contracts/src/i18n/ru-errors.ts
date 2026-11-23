@@ -17,6 +17,12 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.UNSUPPORTED_MEDIA_TYPE]: 'Формат данных запроса не поддерживается',
   [ErrorCode.AUTH_INVALID_CREDENTIALS]: 'Неверный email или пароль',
   [ErrorCode.AUTH_SESSION_INVALID]: 'Сессия завершена, войдите снова',
+  [ErrorCode.AUTH_ACCOUNT_NOT_ACTIVATED]:
+    'Учётная запись ещё не активирована — откройте ссылку-приглашение',
+  [ErrorCode.INVITATION_INVALID]: 'Ссылка недействительна или устарела — запросите новую',
+  [ErrorCode.INVITATION_EMAIL_MISMATCH]: 'Почта не совпадает с приглашением',
+  [ErrorCode.INVITATION_ALREADY_USED]: 'Эта ссылка уже использована',
+  [ErrorCode.PASSWORD_RESET_INVALID]: 'Ссылка для сброса пароля недействительна',
   [ErrorCode.DIRECTORY_EMAIL_TAKEN]: 'Пользователь с таким email уже существует',
   [ErrorCode.DIRECTORY_REFERENCE_INVALID]:
     'Выбранный объект не существует, неактивен или не подходит по виду структуры',

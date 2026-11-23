@@ -212,6 +212,7 @@ vi.mock('../../../../shared/api/projects-list.js', () => ({
 
 vi.mock('../../../../shared/api/users-list.js', () => ({
   useUsersList: () => ({ data: { items: [] } }),
+  useActiveUsersList: () => ({ data: { items: [] } }),
   useUsersSearch: () => ({ data: { items: [] }, isFetching: false }),
 }));
 

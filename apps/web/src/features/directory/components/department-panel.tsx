@@ -56,7 +56,7 @@ export function DepartmentPanel({
   topShift: number;
   /** Отдел архивирован: панель переключается на родителя. */
   onArchived: (node: DepartmentNode) => void;
-  onInvite: () => void;
+  onInvite: (departmentId: string) => void;
   onEdit: (node: DepartmentNode) => void;
   /** Право `directory.manage`: админ-действия панели (без права — просмотр). */
   canManage: boolean;
@@ -160,7 +160,7 @@ export function DepartmentPanel({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={onInvite}>
+                  <DropdownMenuItem onClick={() => onInvite(node.id)}>
                     {ui.employees.inviteToDepartment}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => onEdit(node)}>

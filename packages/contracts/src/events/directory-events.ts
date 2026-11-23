@@ -8,18 +8,32 @@ import { permissionSchema } from '../auth/permission.js';
  * должности, роли и сотрудники (раньше отделы/должности/роли шли строковыми
  * литералами, а каталог отставал от кода — #379, Н2).
  *
- * Подписчики: auth (отзыв сессий деактивированного), gateway (разрыв
- * WS-сокетов деактивированного, #317). `role.permissions_changed` gateway
- * пока не маршрутизирует: подписчиков у клиентов нет — их добавит #382.
- * `user.activated` парен деактивации (AUD-016): подписчиков у него пока нет —
- * сессии не восстанавливаются (сотрудник входит заново), а беседы и проекты
- * при деактивации уже потеряны.
+ * Подписчики: auth (отзыв сессий деактивированного, сброс пароля — #101),
+ * search (индекс сотрудника по created/updated/deactivated/activated/deleted),
+ * gateway (разрыв WS-сокетов деактивированного, #317). `role.permissions_changed`
+ * gateway пока не маршрутизирует: подписчиков у клиентов нет — их добавит #382.
+ * `user.activated` парен деактивации (AUD-016): сессии не восстанавливаются
+ * (сотрудник входит заново), search переиндексирует запись.
  */
 export const DIRECTORY_EVENTS = {
   USER_CREATED: 'directory.user.created',
   USER_UPDATED: 'directory.user.updated',
   USER_DEACTIVATED: 'directory.user.deactivated',
   USER_ACTIVATED: 'directory.user.activated',
+  /** Пользователь удалён жёстко (истечение неактивированного приглашения, #101). */
+  USER_DELETED: 'directory.user.deleted',
+  /** Приглашение по ссылке (#101): создано/перевыпущено. */
+  INVITATION_CREATED: 'directory.invitation.created',
+  /** Приглашение принято: пароль задан, статус active. */
+  INVITATION_ACCEPTED: 'directory.invitation.accepted',
+  /** Приглашение отменено админом (`reason: 'cancelled'`). */
+  INVITATION_REVOKED: 'directory.invitation.revoked',
+  /** Приглашение истекло: строка удалена или возвращена в «Уволен». */
+  INVITATION_EXPIRED: 'directory.invitation.expired',
+  /** Админ выпустил ссылку сброса пароля (#101) — auth гасит сессии. */
+  USER_PASSWORD_RESET_ISSUED: 'directory.user.password_reset_issued',
+  /** Пароль изменён по reset-ссылке — auth повторно гасит сессии. */
+  USER_PASSWORD_CHANGED: 'directory.user.password_changed',
   DEPARTMENT_CREATED: 'directory.department.created',
   DEPARTMENT_UPDATED: 'directory.department.updated',
   DEPARTMENT_ARCHIVED: 'directory.department.archived',
@@ -54,6 +68,46 @@ export const userActivatedPayloadSchema = z.object({
   userId: z.uuid(),
 });
 export type UserActivatedPayload = z.infer<typeof userActivatedPayloadSchema>;
+
+export const userDeletedPayloadSchema = z.object({
+  userId: z.uuid(),
+});
+export type UserDeletedPayload = z.infer<typeof userDeletedPayloadSchema>;
+
+export const invitationCreatedPayloadSchema = z.object({
+  userId: z.uuid(),
+  email: z.email(),
+  expiresAt: z.iso.datetime(),
+});
+export type InvitationCreatedPayload = z.infer<typeof invitationCreatedPayloadSchema>;
+
+export const invitationAcceptedPayloadSchema = z.object({
+  userId: z.uuid(),
+  email: z.email(),
+});
+export type InvitationAcceptedPayload = z.infer<typeof invitationAcceptedPayloadSchema>;
+
+export const invitationRevokedPayloadSchema = z.object({
+  userId: z.uuid(),
+  reason: z.enum(['cancelled', 'expired']),
+});
+export type InvitationRevokedPayload = z.infer<typeof invitationRevokedPayloadSchema>;
+
+export const invitationExpiredPayloadSchema = z.object({
+  userId: z.uuid(),
+});
+export type InvitationExpiredPayload = z.infer<typeof invitationExpiredPayloadSchema>;
+
+export const userPasswordResetIssuedPayloadSchema = z.object({
+  userId: z.uuid(),
+  byAdminId: z.uuid(),
+});
+export type UserPasswordResetIssuedPayload = z.infer<typeof userPasswordResetIssuedPayloadSchema>;
+
+export const userPasswordChangedPayloadSchema = z.object({
+  userId: z.uuid(),
+});
+export type UserPasswordChangedPayload = z.infer<typeof userPasswordChangedPayloadSchema>;
 
 /** Payload `directory.role.permissions_changed`: выдали (`granted: true`) или отозвали. */
 export const rolePermissionsChangedPayloadSchema = z.object({

@@ -77,6 +77,7 @@ export function EmployeesPage() {
   const [focus, setFocus] = useState<StructureFocus | null>(null);
   const [highlightUserId, setHighlightUserId] = useState<string | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteDepartmentId, setInviteDepartmentId] = useState<string | null>(null);
   const canManage = useCanManageDirectory();
   const focusToken = useRef(0);
   const enteredStructure = useRef(false);
@@ -219,7 +220,10 @@ export function EmployeesPage() {
           positionsOpen={positionsOpen}
           roots={roots}
           users={items}
-          onInvite={() => setInviteOpen(true)}
+          onInvite={() => {
+            setInviteDepartmentId(null);
+            setInviteOpen(true);
+          }}
           onTogglePositions={() =>
             setRightPanel((prev) => (prev === 'positions' ? 'dept' : 'positions'))
           }
@@ -240,7 +244,12 @@ export function EmployeesPage() {
             defs={filterDefs}
             left={
               canManage ? (
-                <Button onClick={() => setInviteOpen(true)}>
+                <Button
+                  onClick={() => {
+                    setInviteDepartmentId(null);
+                    setInviteOpen(true);
+                  }}
+                >
                   <UserPlus data-icon="inline-start" />
                   {ui.employees.invite}
                 </Button>
@@ -346,7 +355,10 @@ export function EmployeesPage() {
             setSelectedDeptId(node.parentId ?? mainId ?? null);
             setHighlightUserId(null);
           }}
-          onInvite={() => setInviteOpen(true)}
+          onInvite={(departmentId) => {
+            setInviteDepartmentId(departmentId);
+            setInviteOpen(true);
+          }}
           onEdit={(node) => setDeptDialog({ open: true, parentId: null, editing: node })}
           canManage={canManage}
         />
@@ -359,7 +371,11 @@ export function EmployeesPage() {
           onClose={() => setRightPanel('dept')}
         />
       ) : null}
-      <InviteDialog open={inviteOpen} onOpenChange={setInviteOpen} />
+      <InviteDialog
+        open={inviteOpen}
+        onOpenChange={setInviteOpen}
+        initialDepartmentId={inviteDepartmentId}
+      />
       <DepartmentDialog
         open={deptDialog.open}
         onOpenChange={(open) => setDeptDialog((prev) => ({ ...prev, open }))}

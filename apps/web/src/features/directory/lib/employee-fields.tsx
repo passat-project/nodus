@@ -8,9 +8,16 @@ import type { DataTableField } from '../../../shared/views/data-table.js';
 
 /** HR-статус сотрудника (справочник, I15): работает / уволен. */
 export function UserStatusChip({ status }: { status: UserListItem['status'] }) {
+  const tone = status === 'active' ? 'success' : status === 'invited' ? 'warning' : 'muted';
+  const label =
+    status === 'active'
+      ? ui.employees.statusActive
+      : status === 'invited'
+        ? ui.employees.statusInvited
+        : ui.employees.statusDeactivated;
   return (
-    <NodeChip tone={status === 'active' ? 'success' : 'muted'} className="shrink-0">
-      {status === 'active' ? ui.employees.statusActive : ui.employees.statusDeactivated}
+    <NodeChip tone={tone} className="shrink-0">
+      {label}
     </NodeChip>
   );
 }

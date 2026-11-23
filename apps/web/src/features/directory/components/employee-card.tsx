@@ -22,6 +22,7 @@ import {
   useChatSidePanel,
 } from '../../../shared/chat/chat-side-panel.js';
 import { ConversationPane } from '../../../shared/chat/conversation-pane.js';
+import { useCloseCard } from '../../../app/shell/use-card-stack.js';
 import { openTaskCreate } from '../../../shared/tasks/task-create-store.js';
 import { MIN_CHAT_W, useChatWidth } from '../../../shared/ui/use-chat-width.js';
 import { useEmployeePresence, useUserCard, useUsersList } from '../api/directory-api.js';
@@ -31,6 +32,7 @@ import { EmployeeProfileBar } from './employee-actions-menu.js';
 import { EmployeeCardSkeleton } from './employee-card-skeleton.js';
 import { EmployeeCardWorkTabs, type EmployeeWorkTab } from './employee-card-work-tabs.js';
 import { EmployeeProfileDialog } from './employee-profile-dialog.js';
+import { InvitedCardPanel } from './invited-card-panel.js';
 import { EmployeeProfileTab } from './employee-profile-tab.js';
 
 /**
@@ -55,6 +57,7 @@ export function EmployeeCard({ userId, dormant = false }: { userId: string; dorm
   const tasksQuery = useAssigneeTasks(userId);
   const projectsQuery = useMemberProjects(userId, { enabled: projectsAvailable() });
   const meId = useAuthStore((s) => s.user?.id);
+  const closeCard = useCloseCard();
   // Активная вкладка правой зоны (память не вводим — личные настройки/engine,
   // #744/#746). Дефолт — чат, но внешнее открытие из мессенджера (#972)
   // пристаивает «Задачи»: профиль должен открываться как профиль, а не
@@ -93,7 +96,9 @@ export function EmployeeCard({ userId, dormant = false }: { userId: string; dorm
   // Личный диалог — find-or-create (POST, #343): открытие ПРОФИЛЯ не должно
   // молча создавать диалог. Запрос уходит только после первого открытия
   // вкладки «Чат» (до этого данные не нужны ни ленте, ни панели беседы).
-  const directQuery = useDirectConversation(userId, { enabled: visited.includes('chat') });
+  const directQuery = useDirectConversation(userId, {
+    enabled: card?.status !== 'invited' && visited.includes('chat'),
+  });
   const panel = useChatSidePanel();
   // Панель беседы видна ТОЛЬКО на вкладке чата: уход на журнал её прячет,
   // panel.open не сбрасывается — возврат восстанавливает открытое состояние.
@@ -264,19 +269,23 @@ export function EmployeeCard({ userId, dormant = false }: { userId: string; dorm
           )}
           style={{ width: columnW }}
         >
-          <EmployeeCardWorkTabs
-            active={tab}
-            visited={visited}
-            onActivate={activateTab}
-            isOwnCard={card.id === meId}
-            userId={userId}
-            chat={chat}
-            tasks={tasks}
-            onCreateTask={() => openTaskCreate({ assigneeId: userId })}
-            projects={projects}
-            panelOpen={panelVisible}
-            onPanelToggle={panel.toggle}
-          />
+          {card.status === 'invited' ? (
+            <InvitedCardPanel card={card} onClose={() => closeCard()} />
+          ) : (
+            <EmployeeCardWorkTabs
+              active={tab}
+              visited={visited}
+              onActivate={activateTab}
+              isOwnCard={card.id === meId}
+              userId={userId}
+              chat={chat}
+              tasks={tasks}
+              onCreateTask={() => openTaskCreate({ assigneeId: userId })}
+              projects={projects}
+              panelOpen={panelVisible}
+              onPanelToggle={panel.toggle}
+            />
+          )}
         </div>
       </div>
       {directQuery.data ? (

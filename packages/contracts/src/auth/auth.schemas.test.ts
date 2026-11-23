@@ -25,6 +25,14 @@ describe('emailInputSchema (#321): адрес один независимо от
       firstName: 'Иван',
     });
     expect(created.email).toBe('new.hire@nodus.by');
-    expect(createInvitationSchema.parse({ email: 'Guest@Nodus.BY' }).email).toBe('guest@nodus.by');
+    expect(
+      createInvitationSchema.parse({
+        email: 'Guest@Nodus.BY',
+        lastName: 'Гость',
+        firstName: 'Новый',
+        positionId: '00000000-0000-4000-8000-000000000001',
+        departmentId: '00000000-0000-4000-8000-000000000002',
+      }).email,
+    ).toBe('guest@nodus.by');
   });
 });
