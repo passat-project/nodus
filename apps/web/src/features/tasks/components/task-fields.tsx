@@ -28,7 +28,7 @@ import type { TaskCardLayoutView } from '../lib/task-card-type-layout.js';
 import { TaskDeadlineField, TaskPlannedField, TaskPriorityField } from './task-field-editors.js';
 import { TaskChangeTypeDialog } from './task-change-type-dialog.js';
 import { TaskAssigneeField, TaskPeopleField } from './task-people-field.js';
-import { TaskStageField } from './task-stage-controls.js';
+import { TaskStageField } from './task-stage-field.js';
 import { TaskSpentField } from './task-time.js';
 
 const VISIBILITY_KEY = 'nodus-task-fields-v1';

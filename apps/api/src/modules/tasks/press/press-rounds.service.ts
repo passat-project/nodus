@@ -20,6 +20,7 @@ import { TasksRepository } from '../tasks/tasks.repository.js';
 import { PROJECT_READER, type ProjectReader } from '../../projects/ports/project-reader.port.js';
 import { PressEvents } from './press-events.service.js';
 import { PressRepository } from './press.repository.js';
+import { seedReturnEntries } from './press-return-seed.js';
 import { PressSourcesService } from './press-sources.service.js';
 import { pressRoundViewOf } from './press-view.js';
 
@@ -120,52 +121,7 @@ export class PressRoundsService {
       previous.stageId === stageId &&
       previous.transitionId === transition.id &&
       previous.entries.length > 0
-        ? previous.entries.map((entry) => {
-            const selected = options.returnUserIds!.includes(entry.userId);
-            if (entry.state === 'excluded') {
-              return {
-                userId: entry.userId,
-                order: entry.order,
-                state: 'excluded',
-                returnReason: entry.returnReason ?? ui.tasks.press.excludedReason,
-              };
-            }
-            // Выбранный начинает заново; невыбранный сохраняет отметку только
-            // если реально сдавал. Остальные снова ждут — иначе «сдал» без
-            // нажатия закрыл бы кворум нового цикла (security-аудит #707).
-            if (selected) {
-              return {
-                userId: entry.userId,
-                order: entry.order,
-                state: 'returned',
-                input: null,
-                result: null,
-                timeEntryId: null,
-                returnReason: ui.tasks.press.returnedReason,
-              };
-            }
-            if (entry.state === 'pressed') {
-              return {
-                userId: entry.userId,
-                order: entry.order,
-                state: 'pressed',
-                pressedAt: entry.pressedAt,
-                input: entry.input,
-                result: entry.result,
-                timeEntryId: entry.timeEntryId,
-              };
-            }
-            // Невыбранный и не сдававший в прошлом цикле не должен снова
-            // видеть кнопку: он вне нового состава (В2, «только выбранные»).
-            return {
-              userId: entry.userId,
-              order: entry.order,
-              state: 'excluded',
-              returnReason: ui.tasks.press.excludedReason,
-              input: null,
-              result: null,
-            };
-          })
+        ? seedReturnEntries(previous.entries, options.returnUserIds ?? [])
         : null;
     const entries =
       seeded ??
