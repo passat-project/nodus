@@ -168,7 +168,7 @@ export class FilesController {
         .header('Content-Length', body.length)
         .header(
           'Content-Disposition',
-          `attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+          `attachment; filename*=UTF-8''${encodeURIComponent(safeFileName(file.name))}`,
         )
         .header('X-Content-Type-Options', 'nosniff')
         .header('ETag', etag)
