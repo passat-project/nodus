@@ -83,6 +83,27 @@ describe('TaskFormApplier — окно перехода задачи (#380)', ()
     });
   });
 
+  it('очистка срока и планового времени — null в писатель (#994)', async () => {
+    const { applier, writer } = setup({ plannedMinutes: 120 });
+
+    const applied = await applier.apply(TX, 't1', actor('bob'), {
+      fields: { deadline: null, plannedMinutes: null },
+    });
+
+    expect(writer.apply).toHaveBeenCalledWith(
+      TX,
+      expect.objectContaining({ id: 'bob' }),
+      expect.objectContaining({ id: 't1' }),
+      { deadline: null, plannedMinutes: null },
+      ['deadline', 'plannedMinutes'],
+      {},
+    );
+    expect(applied.fields).toEqual({
+      deadline: { from: TASK.deadline.toISOString(), to: null },
+      plannedMinutes: { from: 120, to: null },
+    });
+  });
+
   it('время: запись через учёт времени, id — в журнал', async () => {
     const { applier, time } = setup();
     const applied = await applier.apply(TX, 't1', actor('bob'), {

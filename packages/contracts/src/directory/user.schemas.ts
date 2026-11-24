@@ -10,7 +10,7 @@ import { cursorQuerySchema } from '../pagination/paginated.schema.js';
  * контактный блок карточки сотрудника.
  */
 
-export const userStatusSchema = z.enum(['active', 'deactivated']);
+export const userStatusSchema = z.enum(['active', 'deactivated', 'invited']);
 export type UserStatus = z.infer<typeof userStatusSchema>;
 
 export const genderSchema = z.enum(['male', 'female']);
@@ -70,6 +70,10 @@ export const userCardSchema = z.object({
   ...userProfileSchema.shape,
   /** Роли сотрудника (RBAC-данные, не права — права разворачиваются в JWT). */
   roles: z.array(z.object({ id: z.uuid(), code: z.string(), name: z.string() })),
+  /** Когда приглашён (null/нет — создан иначе/до #101). */
+  invitedAt: z.iso.datetime().nullable().optional(),
+  /** Когда впервые активировал учётку; null/нет — ещё не активировал. */
+  activatedAt: z.iso.datetime().nullable().optional(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });
@@ -209,9 +213,75 @@ export const updateMyProfileSchema = z
 
 export type UpdateMyProfileDto = z.infer<typeof updateMyProfileSchema>;
 
-/** Приглашение сотрудника (кнопка «Пригласить»): минимум — рабочая почта;
- *  роль/подразделение/письмо-инвайт — полный поток с бэкендом. */
+/** Приглашение сотрудника по ссылке (#101): обязательные системные поля —
+ *  ФИО, управленческие должность и подразделение, рабочая почта. Руководитель
+ *  НЕ принимается (производный, ADR-0053). Ставка и дата приёма — HR-поля,
+ *  которые сотрудник сам не правит (только администратор), поэтому задаются
+ *  уже при приглашении; необязательны. */
 export const createInvitationSchema = z.object({
   email: emailInputSchema,
+  lastName: z.string().trim().min(1).max(128),
+  firstName: z.string().trim().min(1).max(128),
+  middleName: z.string().trim().min(1).max(128).nullable().default(null),
+  positionId: z.uuid(),
+  departmentId: z.uuid(),
+  workRate: userProfileSchema.shape.workRate.default(null),
+  hiredAt: userProfileSchema.shape.hiredAt.default(null),
 });
 export type CreateInvitationDto = z.infer<typeof createInvitationSchema>;
+
+/** Ответ на создание/перевыпуск приглашения и на выпуск reset-ссылки.
+ *  `token` и `path` отдаются один раз: в БД живёт только хеш. */
+export const invitationCreatedSchema = z.object({
+  id: z.uuid(),
+  token: z.string().min(32),
+  path: z.string().startsWith('/invite/'),
+  expiresAt: z.iso.datetime(),
+});
+export type InvitationCreated = z.infer<typeof invitationCreatedSchema>;
+
+export const issuePasswordResetResponseSchema = z.object({
+  id: z.uuid(),
+  token: z.string().min(32),
+  path: z.string().startsWith('/reset/'),
+  expiresAt: z.iso.datetime(),
+});
+export type IssuePasswordResetResponse = z.infer<typeof issuePasswordResetResponseSchema>;
+
+/** Публичная информация по токену приглашения (префилл формы принятия). */
+export const invitationInfoSchema = z.object({
+  kind: z.literal('invite'),
+  displayName: z.string().min(1),
+  email: z.email(),
+  departmentName: z.string().nullable(),
+  positionName: z.string().nullable(),
+  expiresAt: z.iso.datetime(),
+});
+export type InvitationInfo = z.infer<typeof invitationInfoSchema>;
+
+export const passwordResetInfoSchema = z.object({
+  kind: z.literal('reset'),
+  displayName: z.string().min(1),
+  email: z.email(),
+  expiresAt: z.iso.datetime(),
+});
+export type PasswordResetInfo = z.infer<typeof passwordResetInfoSchema>;
+
+/** Принятие приглашения: сверка рабочей почты + пароль по общей политике. */
+export const acceptInvitationSchema = z.object({
+  email: emailInputSchema,
+  password: passwordSchema,
+});
+export type AcceptInvitationDto = z.infer<typeof acceptInvitationSchema>;
+
+export const acceptPasswordResetSchema = z.object({
+  email: emailInputSchema,
+  password: passwordSchema,
+});
+export type AcceptPasswordResetDto = z.infer<typeof acceptPasswordResetSchema>;
+
+export const acceptResponseSchema = z.object({
+  id: z.uuid(),
+  email: z.email(),
+});
+export type AcceptResponse = z.infer<typeof acceptResponseSchema>;

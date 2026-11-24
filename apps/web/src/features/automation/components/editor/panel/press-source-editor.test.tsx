@@ -6,6 +6,7 @@ import { ui, type PressSource } from '@nodus/contracts';
 
 vi.mock('../../../../../shared/api/users-list.js', () => ({
   useUsersList: () => ({ data: { items: [{ id: 'u1', displayName: 'Иванов' }] } }),
+  useActiveUsersList: () => ({ data: { items: [{ id: 'u1', displayName: 'Иванов' }] } }),
 }));
 vi.mock('../../../../../shared/custom-fields/queries.js', () => ({
   useCustomFieldDefinitions: () => ({

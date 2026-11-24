@@ -45,6 +45,16 @@ function pageLoader(loader: () => Promise<{ default: ComponentType }>) {
 const LoginPage = pageLoader(() =>
   import('../features/auth/pages/login-page.js').then((m) => ({ default: m.LoginPage })),
 );
+const InviteAcceptPage = pageLoader(() =>
+  import('../features/directory/pages/invite-accept-page.js').then((m) => ({
+    default: m.InviteAcceptPage,
+  })),
+);
+const PasswordResetPage = pageLoader(() =>
+  import('../features/directory/pages/password-reset-page.js').then((m) => ({
+    default: m.PasswordResetPage,
+  })),
+);
 const HomePage = pageLoader(() =>
   import('./home-route.js').then((m) => ({ default: m.HomeRoute })),
 );
@@ -128,6 +138,20 @@ const loginRoute = createRoute({
   path: '/login',
   component: LoginPage,
   beforeLoad: requireAnonymous,
+});
+
+/** Публичные страницы одноразовых ссылок (#101): доступны и анониму, и
+ *  вошедшему — смена учётки подтверждается на самой странице. */
+const inviteAcceptRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/invite/$token',
+  component: InviteAcceptPage,
+});
+
+const passwordResetRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/reset/$token',
+  component: PasswordResetPage,
 });
 
 const shellRoute = createRoute({
@@ -258,6 +282,8 @@ const devUiRoute = devUiEnabled ? createDevUiRoute() : null;
 
 const routeTree = rootRoute.addChildren([
   loginRoute,
+  inviteAcceptRoute,
+  passwordResetRoute,
   shellRoute.addChildren([
     indexRoute,
     homeRoute,

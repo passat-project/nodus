@@ -10,6 +10,7 @@ import { AuthController } from './auth.controller.js';
 import { AuthRepository } from './auth.repository.js';
 import { AuthService } from './auth.service.js';
 import { RoleAccessChangedHandler } from './events/role-access-changed.handler.js';
+import { PasswordCredentialEventsHandler } from './events/password-credential-events.handler.js';
 import { UserDeactivatedHandler } from './events/user-deactivated.handler.js';
 import { UserRolesChangedHandler } from './events/user-roles-changed.handler.js';
 import { IdentityLoader } from './identity.loader.js';
@@ -46,6 +47,7 @@ import { TokenService } from './token.service.js';
     UserDeactivatedHandler,
     UserRolesChangedHandler,
     RoleAccessChangedHandler,
+    PasswordCredentialEventsHandler,
     LoginThrottleService,
     RevokedUsersStore,
     { provide: AUTH_PROVIDER, useClass: LocalAuthProvider },

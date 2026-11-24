@@ -12,7 +12,7 @@ import { cn } from '@nodus/ui/lib/utils';
 import { Plus, X } from 'lucide-react';
 
 import { projectsAvailable } from '../api/projects-available.js';
-import { useUsersList } from '../api/users-list.js';
+import { useActiveUsersList } from '../api/users-list.js';
 import { CustomFieldEditor } from '../custom-fields/value-editor.js';
 import { PersonAvatar } from '../ui/person-avatar.js';
 import { DateTimePicker } from '../ui/date-time-picker.js';
@@ -132,7 +132,7 @@ function AssigneeField({
   label: string;
   onChange: (value: unknown) => void;
 }) {
-  const { data: users } = useUsersList();
+  const { data: users } = useActiveUsersList();
   const options = (users?.items ?? []).map((user) => ({
     value: user.id,
     label: user.displayName,
@@ -163,7 +163,7 @@ function PeopleField({
   label: string;
   onChange: (value: unknown) => void;
 }) {
-  const { data: users } = useUsersList();
+  const { data: users } = useActiveUsersList();
   const selected = Array.isArray(value) ? (value as string[]) : [];
   const byId = new Map((users?.items ?? []).map((user) => [user.id, user]));
   const toggle = (id: string) =>

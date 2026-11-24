@@ -79,6 +79,7 @@ export const directoryFindUsersTool = defineTool({
         str(user.departmentName) ? `подразделение: ${str(user.departmentName)}` : null,
         str(user.email) ? `почта: ${str(user.email)}` : null,
         user.status === 'deactivated' ? 'уволен' : null,
+        user.status === 'invited' ? 'учётка не активирована' : null,
         `id ${id}`,
       ]
         .filter(Boolean)
@@ -132,7 +133,7 @@ export const directoryGetUserTool = defineTool({
       `Почта: ${str(user.email) ?? '—'}`,
       `Телефон: ${str(user.mobilePhone) ?? '—'}`,
       `Город / кабинет: ${str(user.city) ?? '—'}${str(user.officeLocation) ? `, ${str(user.officeLocation)}` : ''}`,
-      `Статус: ${user.status === 'deactivated' ? 'уволен' : 'работает'}`,
+      `Статус: ${user.status === 'deactivated' ? 'уволен' : user.status === 'invited' ? 'приглашён, учётка не активирована' : 'работает'}`,
       `Оргструктура (id): ${org}. Названия — в списке сотрудников (поиск по ФИО).`,
     ];
     return {

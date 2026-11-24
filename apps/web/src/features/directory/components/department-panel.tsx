@@ -56,7 +56,7 @@ export function DepartmentPanel({
   topShift: number;
   /** Отдел архивирован: панель переключается на родителя. */
   onArchived: (node: DepartmentNode) => void;
-  onInvite: () => void;
+  onInvite: (departmentId: string) => void;
   onEdit: (node: DepartmentNode) => void;
   /** Право `directory.manage`: админ-действия панели (без права — просмотр). */
   canManage: boolean;
@@ -128,10 +128,10 @@ export function DepartmentPanel({
     );
   }
 
-  /** Подпись роли в «Руководителях»: руководитель и заместитель (нет — пусто). */
+  /** Подпись роли в «Руководителях»: руководитель и заместители (#817). */
   function headRole(person: UserListItem): string | undefined {
     if (node.headId === person.id) return ui.employees.fieldHead;
-    if (node.deputyId === person.id) return ui.employees.fieldDeputy;
+    if (node.deputyIds.includes(person.id)) return ui.employees.fieldDeputy;
     return undefined;
   }
 
@@ -159,12 +159,15 @@ export function DepartmentPanel({
                     <MoreHorizontal className="size-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={onInvite}>
-                    {ui.employees.inviteToDepartment}
-                  </DropdownMenuItem>
+                <DropdownMenuContent align="end" className="w-56">
+                  {/* Порядок пунктов (вердикт владельца 23.11.2026): сверху
+                      всегда «Редактировать подразделение», ниже — приглашение
+                      в Nodus, архивация последней. */}
                   <DropdownMenuItem onClick={() => onEdit(node)}>
                     {ui.employees.editDepartmentAction}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onInvite(node.id)}>
+                    {ui.employees.inviteToDepartment}
                   </DropdownMenuItem>
                   {/* Главную карточку компании не архивируем (вердикт 12.11);
                       непустой узел не архивируется (409 has_children). */}

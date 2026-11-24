@@ -13,9 +13,10 @@ import { buildDepartmentTree } from '../../../../shared/mocks/data/departments.j
 import { demoUserCards } from '../../../../shared/mocks/data/users.js';
 
 /**
- * Моки подразделений (#84, #946): дерево и CRUD поверх concept-state списка
- * сотрудников. Назначение главы/зама переводит сотрудника в узел — паритет
- * с серверным правилом «одно место»; глава и зам одного узла — разные люди.
+ * Моки подразделений (#84, #946, #817): дерево и CRUD поверх concept-state
+ * списка сотрудников. Назначение главы/замов переводит сотрудников в узел —
+ * паритет с серверным правилом «одно место»; глава не входит в список замов,
+ * один сотрудник — зам ровно одного отдела.
  */
 
 export interface DepartmentMockState {
@@ -25,8 +26,8 @@ export interface DepartmentMockState {
   setUsers: (next: UserListItem[]) => void;
 }
 
-function sameLeaders(headId: string | null | undefined, deputyId: string | null | undefined) {
-  return !!headId && !!deputyId && headId.toLowerCase() === deputyId.toLowerCase();
+function sameLeaders(headId: string | null | undefined, deputyIds: readonly string[]) {
+  return !!headId && deputyIds.some((deputyId) => deputyId.toLowerCase() === headId.toLowerCase());
 }
 
 function sameLeaderError() {
@@ -34,41 +35,64 @@ function sameLeaderError() {
     {
       code: 'VALIDATION_FAILED',
       message: 'Head and deputy must differ',
-      details: { field: 'deputyId', reason: 'same_as_head' },
+      details: { field: 'deputyIds', reason: 'same_as_head' },
     },
     { status: 400 },
   );
 }
 
 export function departmentHandlers(state: DepartmentMockState) {
-  /** #946: переводит назначенного главу/зама в узел; прежний узел теряет роль. */
-  function transferLeader(userId: string | null | undefined, departmentId: string): void {
-    if (!userId) return;
-    state.setDepartments(
-      state.getDepartments().map((department) => ({
-        ...department,
-        headId:
-          department.id !== departmentId && department.headId === userId ? null : department.headId,
-        deputyId:
-          department.id !== departmentId && department.deputyId === userId
-            ? null
-            : department.deputyId,
-      })),
-    );
-    state.setUsers(
-      state.getUsers().map((user) => (user.id === userId ? { ...user, departmentId } : user)),
-    );
-    const card = demoUserCards.find((candidate) => candidate.id === userId);
-    if (card) card.departmentId = departmentId;
-  }
+  const leaderSet = (headId: string | null | undefined, deputyIds: readonly string[]) =>
+    new Set([headId ?? '', ...deputyIds].filter(Boolean));
 
-  function transferLeaders(
+  /** #817: место главы/зама одно на человека — прежние узлы его теряют. */
+  function clearSeatsElsewhere(
     headId: string | null | undefined,
-    deputyId: string | null | undefined,
+    deputyIds: readonly string[],
     departmentId: string,
   ): void {
-    transferLeader(headId, departmentId);
-    transferLeader(deputyId, departmentId);
+    const leaders = leaderSet(headId, deputyIds);
+    if (leaders.size === 0) return;
+    state.setDepartments(
+      state.getDepartments().map((department) => {
+        if (department.id === departmentId) return department;
+        const headRemoved = department.headId !== null && leaders.has(department.headId);
+        const remaining = department.deputyIds.filter((deputyId) => !leaders.has(deputyId));
+        if (!headRemoved && remaining.length === department.deputyIds.length) return department;
+        return {
+          ...department,
+          headId: headRemoved ? null : department.headId,
+          deputyIds: remaining,
+        };
+      }),
+    );
+  }
+
+  /** #946: назначение в управленческий узел переводит сотрудника (членство). */
+  function moveMembers(
+    headId: string | null | undefined,
+    deputyIds: readonly string[],
+    departmentId: string,
+  ): void {
+    const leaders = leaderSet(headId, deputyIds);
+    if (leaders.size === 0) return;
+    state.setUsers(
+      state.getUsers().map((user) => (leaders.has(user.id) ? { ...user, departmentId } : user)),
+    );
+    for (const card of demoUserCards) {
+      if (leaders.has(card.id)) card.departmentId = departmentId;
+    }
+  }
+
+  /** Паритет с сервером: место снимается всегда, перевод — только management
+   *  (юридическая структура формальная). */
+  function applyLeaders(
+    headId: string | null | undefined,
+    deputyIds: readonly string[],
+    department: Department,
+  ): void {
+    clearSeatsElsewhere(headId, deputyIds, department.id);
+    if (department.kind === 'management') moveMembers(headId, deputyIds, department.id);
   }
 
   return [
@@ -92,11 +116,9 @@ export function departmentHandlers(state: DepartmentMockState) {
         isActive: true,
         ...parsed.data,
       };
-      if (sameLeaders(department.headId, department.deputyId)) return sameLeaderError();
+      if (sameLeaders(department.headId, department.deputyIds)) return sameLeaderError();
       state.setDepartments([...state.getDepartments(), department]);
-      if (department.kind === 'management') {
-        transferLeaders(department.headId, department.deputyId, department.id);
-      }
+      applyLeaders(department.headId, department.deputyIds, department);
       return HttpResponse.json(department, { status: 201 });
     }),
     http.patch('/api/v1/directory/departments/:id', async ({ params, request }) => {
@@ -126,13 +148,11 @@ export function departmentHandlers(state: DepartmentMockState) {
           { status: 409 },
         );
       const next: Department = { ...current, ...parsed.data };
-      if (sameLeaders(next.headId, next.deputyId)) return sameLeaderError();
+      if (sameLeaders(next.headId, next.deputyIds)) return sameLeaderError();
       state.setDepartments(
         state.getDepartments().map((department) => (department.id === next.id ? next : department)),
       );
-      if (next.kind === 'management') {
-        transferLeaders(next.headId, next.deputyId, next.id);
-      }
+      applyLeaders(next.headId, next.deputyIds, next);
       return HttpResponse.json(next);
     }),
   ];

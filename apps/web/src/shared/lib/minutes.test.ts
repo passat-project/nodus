@@ -24,6 +24,17 @@ describe('parseDuration (#311)', () => {
   });
 });
 
+describe('parseDuration: предел планового времени (#1009)', () => {
+  it('100 000 минут включительно — валидно', () => {
+    expect(parseDuration('100000')).toBe(100_000);
+    expect(parseDuration('1666ч 40м')).toBe(100_000);
+  });
+
+  it.each(['100001', '2000ч', '1667ч', '100001м'])('%s → null (больше предела)', (input) => {
+    expect(parseDuration(input)).toBeNull();
+  });
+});
+
 describe('formatDuration', () => {
   it('часы и минуты', () => {
     expect(formatDuration(90, 'ч', 'м')).toBe('1 ч 30 м');

@@ -54,6 +54,7 @@ vi.mock('../api/projects-list.js', () => ({
 }));
 vi.mock('../api/users-list.js', () => ({
   useUsersList: () => ({ data: { items: [{ id: 'u-1', displayName: 'Иванов И.' }] } }),
+  useActiveUsersList: () => ({ data: { items: [{ id: 'u-1', displayName: 'Иванов И.' }] } }),
 }));
 vi.mock('../api/project-members.js', () => ({
   useAddProjectMembers: () => ({ mutate: h.addMembers.mutate, isPending: false }),

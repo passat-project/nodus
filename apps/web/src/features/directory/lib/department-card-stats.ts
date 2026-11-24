@@ -57,13 +57,17 @@ export function buildDepartmentCardStats(
   /** Люди всей ветки (члены, руководители и замы всех уровней) — для чипа. */
   const visit = (node: DepartmentNode, isMain: boolean): Map<string, UserListItem> => {
     const head = node.headId ? byId.get(node.headId) : undefined;
-    const deputy =
-      node.deputyId && node.deputyId !== node.headId ? byId.get(node.deputyId) : undefined;
+    // Заместители (#817): все активные из списка связи, кроме главы.
+    const deputies = node.deputyIds
+      .filter((deputyId) => deputyId !== node.headId)
+      .map((deputyId) => byId.get(deputyId))
+      .filter((user): user is UserListItem => user !== undefined);
+    const deputyIds = new Set(deputies.map((user) => user.id));
     const members = byDepartment.get(node.id) ?? [];
 
     const seen = new Set<string>();
     const subordinates = [...members, ...(isMain ? orphans : [])].filter((user) => {
-      if (user.id === node.headId || user.id === node.deputyId) return false;
+      if (user.id === node.headId || deputyIds.has(user.id)) return false;
       if (seen.has(user.id)) return false;
       seen.add(user.id);
       return true;
@@ -72,7 +76,7 @@ export function buildDepartmentCardStats(
     const people = new Map<string, UserListItem>();
     for (const user of members) people.set(user.id, user);
     if (head) people.set(head.id, head);
-    if (deputy) people.set(deputy.id, deputy);
+    for (const deputy of deputies) people.set(deputy.id, deputy);
     if (isMain) for (const user of orphans) people.set(user.id, user);
     for (const child of node.children) {
       for (const [id, user] of visit(child, false)) people.set(id, user);
@@ -91,7 +95,7 @@ export function buildDepartmentCardStats(
 
     stats.set(node.id, {
       head: cardHead,
-      deputies: deputy ? [deputy] : [],
+      deputies,
       subordinates,
       // Уволенный/не загруженный руководитель в people не попадает — и не вычитается.
       teamCount: people.size - (head ? 1 : 0),

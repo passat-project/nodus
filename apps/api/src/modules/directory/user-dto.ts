@@ -51,6 +51,8 @@ export function toUserCard(
     workdayStart: row.workdayStart,
     avatarUrl: avatarUrlOf(row.avatarFileId),
     roles: row.roles.map((ur) => ({ id: ur.role.id, code: ur.role.code, name: ur.role.name })),
+    invitedAt: row.invitedAt?.toISOString() ?? null,
+    activatedAt: row.activatedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

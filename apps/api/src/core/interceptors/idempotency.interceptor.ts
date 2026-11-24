@@ -48,7 +48,33 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
  * истёкший токен (найдено k6-прогоном #58). Повтор логина безопасен и без
  * идемпотентности (api-client генерирует уникальный ключ на вызов).
  */
-const IDEMPOTENCY_EXCLUDED_PREFIXES = ['/api/v1/auth/'];
+const IDEMPOTENCY_EXCLUDED_PREFIXES = [
+  '/api/v1/auth/',
+  // Одноразовые ссылки (#101): сырой токен не должен лежать в Redis-кэше
+  // идемпотентности 24 часа; accept одноразовый по CAS самого токена.
+  '/api/v1/invitations/',
+  '/api/v1/password-resets/',
+];
+
+/**
+ * Админские маршруты, возвращающие СЫРОЙ одноразовый токен (#101): тело
+ * ответа кэшировать нельзя — иначе действующий токен 7 дней/24 часа лежит
+ * в Redis открытым текстом (ADR-0054 §8). Idempotency-Key у web-клиента есть
+ * на каждой мутации, поэтому без исключения сюда попадали бы все выпуски.
+ */
+const IDEMPOTENCY_EXCLUDED_PATTERNS: readonly RegExp[] = [
+  /^\/api\/v1\/directory\/invitations$/,
+  /^\/api\/v1\/directory\/invitations\/[^/]+\/reissue$/,
+  /^\/api\/v1\/directory\/users\/[^/]+\/password-reset$/,
+];
+
+/** Маршрут не кэшируется механизмом идемпотентности (экспорт — для тестов). */
+export function isIdempotencyExcluded(path: string): boolean {
+  return (
+    IDEMPOTENCY_EXCLUDED_PREFIXES.some((prefix) => path.startsWith(prefix)) ||
+    IDEMPOTENCY_EXCLUDED_PATTERNS.some((pattern) => pattern.test(path))
+  );
+}
 
 interface CachedResponse {
   body: unknown;
@@ -85,7 +111,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
       return next.handle();
     }
     const path = request.url.split('?')[0] ?? request.url;
-    if (IDEMPOTENCY_EXCLUDED_PREFIXES.some((prefix) => path.startsWith(prefix))) {
+    if (isIdempotencyExcluded(path)) {
       return next.handle();
     }
     const keyHeader = request.headers['idempotency-key'];

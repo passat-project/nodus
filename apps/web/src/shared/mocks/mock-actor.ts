@@ -3,7 +3,8 @@ import type { AuthUser, UserRef } from '@nodus/contracts';
 import { isDomainMocked } from '../api/api-mock-config.js';
 import { useAuthStore } from '../auth-store.js';
 import { demoUserListItems, currentAuthUser } from './data/users.js';
-import { mockEffectiveRoleIds, mockPermissionsOfRoleIds } from './data/roles.js';
+import { demoRoles, mockEffectiveRoleIds, mockPermissionsOfRoleIds } from './data/roles.js';
+import { runtimeUserByEmail } from './data/runtime-users.js';
 
 /**
  * Актёр мок-доменов (#48, фаза 2). В покомпонентном режиме (живой логин +
@@ -51,16 +52,24 @@ export function mockSessionEmail(): string | null {
 
 /** Демо-сотрудник по e-mail (неизвестный — текущий демо-админ). */
 export function demoActorFor(email: string | null): AuthUser {
+  const runtime = email ? runtimeUserByEmail(email) : undefined;
   const item = email
     ? demoUserListItems.find((entry) => entry.email.toLowerCase() === email)
     : undefined;
-  if (!item) return currentAuthUser;
-  const roleIds = mockEffectiveRoleIds(item.id);
+  const base = item ?? runtime;
+  if (!base) return currentAuthUser;
+  const roleIds = mockEffectiveRoleIds(base.id);
+  // Приглашённый/активированный на лету сотрудник не входит в демо-роли:
+  // даём базовую роль «Сотрудник», иначе после авто-входа пустой портал.
+  const effective =
+    roleIds.length > 0
+      ? roleIds
+      : demoRoles.filter((role) => role.code === 'employee').map((role) => role.id);
   return {
-    id: item.id,
-    email: item.email,
-    displayName: item.displayName,
-    permissions: mockPermissionsOfRoleIds(roleIds),
+    id: base.id,
+    email: base.email,
+    displayName: base.displayName,
+    permissions: mockPermissionsOfRoleIds(effective),
   };
 }
 

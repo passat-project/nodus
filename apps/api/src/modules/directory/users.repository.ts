@@ -32,7 +32,7 @@ export type UserListRow = Prisma.UserGetPayload<{ select: typeof userListSelect 
 export interface UserPageFilter {
   search?: string;
   departmentId?: string;
-  status?: 'active' | 'deactivated';
+  status?: 'active' | 'deactivated' | 'invited';
 }
 
 const DEFAULT_LIMIT = 50;
@@ -192,7 +192,7 @@ export class UsersRepository {
   async findRef(
     id: string,
     tx?: TransactionClient,
-  ): Promise<{ id: string; status: 'active' | 'deactivated' } | null> {
+  ): Promise<{ id: string; status: 'active' | 'deactivated' | 'invited' } | null> {
     return (tx ?? this.prisma).user.findUnique({
       where: { id },
       select: { id: true, status: true },

@@ -53,7 +53,9 @@ export class RevokedUsersStore {
   }
 
   private key(userId: string): string {
-    return `nodus:auth:revoked-before:${userId}`;
+    // Канонический UUID в нижнем регистре: ParseUUIDPipe пропускает верхний,
+    // иначе маркер роли/подразделения не совпал бы с `sub` токена (#101).
+    return `nodus:auth:revoked-before:${userId.toLowerCase()}`;
   }
 
   /** Отзыв всех токенов, выданных не позже `at` (+ запас). */
