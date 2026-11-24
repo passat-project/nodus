@@ -1,5 +1,7 @@
 import { isFinalState, isOpenState, isReviewState, type NotificationKind } from '@nodus/contracts';
 
+import { companyDateTimeRu } from '../../core/time/company-time.js';
+
 /**
  * Адресаты уведомлений о задачах (#37) — чистая функция над событием task.*
  * (I3: notifications знает только payload события, не таблицы задач).
@@ -21,9 +23,9 @@ const ids = (v: unknown): string[] =>
 export function taskNotices(type: string, p: Payload, actorId: string | null): TaskNotice[] {
   const label = `ПП-${String(p.number)} · ${str(p.title) ?? str(p.toStageName) ?? ''}`.trim();
   const out = new Map<string, TaskNotice>();
-  const add = (userId: string | null, kind: NotificationKind) => {
+  const add = (userId: string | null, kind: NotificationKind, preview: string = label) => {
     if (userId && userId !== actorId && !out.has(userId))
-      out.set(userId, { userId, kind, preview: label });
+      out.set(userId, { userId, kind, preview });
   };
   switch (type) {
     case 'task.created':
@@ -70,6 +72,21 @@ export function taskNotices(type: string, p: Payload, actorId: string | null): T
         add(str(p.creatorId), 'task.awaiting_approval');
       }
       if (!isOpenState(from) && isOpenState(to)) add(str(p.assigneeId), 'task.returned');
+      break;
+    }
+    case 'task.updated': {
+      // Смена срока (#996): только фактическая правка — пустое сохранение
+      // карточки приходит как `fields: ['deadline']` без маркера.
+      if (p.deadlineChanged !== true) break;
+      const deadline = str(p.deadline);
+      const preview = `${label} · ${
+        deadline ? `до ${companyDateTimeRu(new Date(deadline))}` : 'срок снят'
+      }`;
+      add(str(p.assigneeId), 'task.deadline_changed', preview);
+      add(str(p.creatorId), 'task.deadline_changed', preview);
+      // Наблюдатели — без уведомлений (их канал — чат задачи), поэтому
+      // адресуем по ролям из снимка события, а не по `audience`.
+      for (const id of ids(p.coexecutorIds)) add(id, 'task.deadline_changed', preview);
       break;
     }
     case 'task.overdue':
