@@ -80,7 +80,14 @@ export class FileStorageProvider implements FileStorage {
     if (!row) return null;
     try {
       const stream = await this.driver.get(row.key);
-      return { stream, mime: row.mime, name: row.name, size: row.size };
+      // Legacy-строки (до санитизации на входе, #1005) отдаём потребителям
+      // чистыми: имя/mime — единая точка, а не каждый потребитель.
+      return {
+        stream,
+        mime: safeContentType(row.mime),
+        name: safeFileName(row.name),
+        size: row.size,
+      };
     } catch {
       // объект исчез (уборка/сбой) — для потребителя это «файла нет»
       return null;
