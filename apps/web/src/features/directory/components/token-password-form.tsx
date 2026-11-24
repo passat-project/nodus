@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import type { AcceptInvitationDto, InvitationInfo, PasswordResetInfo } from '@nodus/contracts';
-import { ErrorCode, errorMessages, ui } from '@nodus/contracts';
+import {
+  ErrorCode,
+  errorMessages,
+  passwordRuleViolations,
+  ui,
+  type PasswordRule,
+} from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Field, FieldGroup, FieldLabel } from '@nodus/ui/components/field';
 import { Input } from '@nodus/ui/components/input';
@@ -11,11 +17,41 @@ import { useAuthStore } from '../../../shared/auth-store.js';
 
 type PublicTokenInfo = InvitationInfo | PasswordResetInfo;
 
+/** Тексты нарушений политики — общий порядок из contracts (#101). */
+const PASSWORD_RULE_MESSAGES: Record<PasswordRule, string> = {
+  'too-short': ui.employees.passwordTooShort,
+  'too-long': ui.employees.passwordTooLong,
+  lower: ui.employees.passwordNeedsLower,
+  upper: ui.employees.passwordNeedsUpper,
+  digit: ui.employees.passwordNeedsDigit,
+  special: ui.employees.passwordNeedsSpecial,
+};
+
+function passwordMessage(password: string): string | null {
+  const violations = passwordRuleViolations(password);
+  if (violations.length === 0) return null;
+  return violations.map((rule) => PASSWORD_RULE_MESSAGES[rule]).join(' · ');
+}
+
+/** Сервер отклонил именно пароль в общем VALIDATION_FAILED (#101). */
+function isPasswordValidationError(error: ApiError): boolean {
+  if (error.code !== ErrorCode.VALIDATION_FAILED) return false;
+  const issues = Array.isArray(error.details?.issues) ? error.details.issues : [];
+  return issues.some(
+    (issue) =>
+      issue !== null &&
+      typeof issue === 'object' &&
+      (issue as { path?: unknown }).path === 'password',
+  );
+}
+
 /**
  * Форма установки пароля по одноразовой ссылке (#101): общая для приглашения
- * и сброса. Сверяет почту (сервер — авторитет), после успеха выходит из
- * текущей сессии (если была) и входит обычным `login` — «авто-вход» без
- * создания сессий в модуле directory (I3/I6).
+ * и сброса. Требования политики видны под полем, проверка — до запроса;
+ * серверная VALIDATION_FAILED по паролю тоже показывается адресно, а не общим
+ * «Проверьте правильность заполнения полей». После успеха выходит из текущей
+ * сессии (если была) и входит обычным `login` — «авто-вход» без создания
+ * сессий в модуле directory (I3/I6).
  */
 export function TokenPasswordForm({
   info,
@@ -33,7 +69,9 @@ export function TokenPasswordForm({
   const [email, setEmail] = useState(info.email);
   const [password, setPassword] = useState('');
   const [repeat, setRepeat] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [repeatError, setRepeatError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [switchConfirmed, setSwitchConfirmed] = useState(false);
 
@@ -41,11 +79,18 @@ export function TokenPasswordForm({
     current !== null && current.email.trim().toLowerCase() !== info.email.trim().toLowerCase();
 
   async function submit(): Promise<void> {
+    setPasswordError(null);
+    setRepeatError(null);
+    setFormError(null);
     if (password !== repeat) {
-      setError(ui.employees.passwordMismatch);
+      setRepeatError(ui.employees.passwordMismatch);
       return;
     }
-    setError(null);
+    const policyError = passwordMessage(password);
+    if (policyError) {
+      setPasswordError(policyError);
+      return;
+    }
     setPending(true);
     try {
       if (current) await logout();
@@ -53,8 +98,12 @@ export function TokenPasswordForm({
       await login(info.email, password);
       await navigate({ to: '/' });
     } catch (err) {
+      if (err instanceof ApiError && isPasswordValidationError(err)) {
+        setPasswordError(ui.employees.passwordInvalid);
+        return;
+      }
       const code = err instanceof ApiError ? err.code : ErrorCode.INTERNAL_ERROR;
-      setError(errorMessages[code as ErrorCode] ?? ui.auth.fallbackError);
+      setFormError(errorMessages[code as ErrorCode] ?? ui.auth.fallbackError);
     } finally {
       setPending(false);
     }
@@ -115,17 +164,32 @@ export function TokenPasswordForm({
             autoComplete="email"
           />
         </Field>
-        <Field>
+        <Field data-invalid={passwordError ? true : undefined}>
           <FieldLabel htmlFor="token-password">{ui.employees.invitePagePassword}</FieldLabel>
           <Input
             id="token-password"
             type="password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            aria-invalid={passwordError ? true : undefined}
+            aria-describedby={
+              passwordError ? 'token-password-hint token-password-error' : 'token-password-hint'
+            }
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setPasswordError(null);
+            }}
             autoComplete="new-password"
           />
+          <p id="token-password-hint" className="text-xs text-muted-foreground">
+            {ui.employees.invitePagePasswordHint}
+          </p>
+          {passwordError ? (
+            <p id="token-password-error" role="alert" className="text-xs text-destructive">
+              {passwordError}
+            </p>
+          ) : null}
         </Field>
-        <Field>
+        <Field data-invalid={repeatError ? true : undefined}>
           <FieldLabel htmlFor="token-password-repeat">
             {ui.employees.invitePagePasswordRepeat}
           </FieldLabel>
@@ -133,15 +197,25 @@ export function TokenPasswordForm({
             id="token-password-repeat"
             type="password"
             value={repeat}
-            onChange={(e) => setRepeat(e.target.value)}
+            aria-invalid={repeatError ? true : undefined}
+            aria-describedby={repeatError ? 'token-password-repeat-error' : undefined}
+            onChange={(e) => {
+              setRepeat(e.target.value);
+              setRepeatError(null);
+            }}
             autoComplete="new-password"
           />
+          {repeatError ? (
+            <p id="token-password-repeat-error" role="alert" className="text-xs text-destructive">
+              {repeatError}
+            </p>
+          ) : null}
         </Field>
       </FieldGroup>
 
-      {error ? (
+      {formError ? (
         <p role="alert" className="text-sm text-destructive">
-          {error}
+          {formError}
         </p>
       ) : null}
 

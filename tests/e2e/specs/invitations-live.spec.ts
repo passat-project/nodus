@@ -12,7 +12,7 @@ import { ADMIN } from '../e2e-users.js';
 
 const LIVE = Boolean(process.env.E2E_LIVE_API);
 const { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } = ADMIN;
-const PASSWORD = 'Night-Probe-100!';
+const PASSWORD = 'Night-Probe-100#';
 
 async function login(
   request: import('@playwright/test').APIRequestContext,
@@ -94,6 +94,14 @@ test.describe('приглашение по ссылке (#101, живой API)',
     expect(mismatch.status()).toBe(400);
     expect((await mismatch.json()).code).toBe('INVITATION_EMAIL_MISMATCH');
 
+    // Слабый пароль — понятная VALIDATION_FAILED, ссылка не расходуется.
+    const weak = await anonRequest.post(`${apiInvite}/accept`, {
+      data: { email, password: 'short' },
+    });
+    expect(weak.status()).toBe(400);
+    expect((await weak.json()).code).toBe('VALIDATION_FAILED');
+    expect((await anonRequest.get(apiInvite)).ok()).toBe(true);
+
     const accepted = await anonRequest.post(`${apiInvite}/accept`, {
       data: { email, password: PASSWORD },
     });
@@ -140,7 +148,7 @@ test.describe('приглашение по ссылке (#101, живой API)',
     const resetInfo = await anonRequest.get(`/api/v1/password-resets/${resetLink.token}`);
     expect(resetInfo.ok()).toBe(true);
 
-    const newPassword = 'Night-Probe-101!';
+    const newPassword = 'Night-Probe-101#';
     const resetAccepted = await anonRequest.post(
       `/api/v1/password-resets/${resetLink.token}/accept`,
       { data: { email, password: newPassword } },
