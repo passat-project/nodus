@@ -703,12 +703,18 @@
   }
   /* Открытая карточка накрывает раздел (ADR-0009): полосы прокрутки таблиц ЗА
      карточкой не выглядывают в 8-пиксельную щель рамки — прокрутка страницы всё
-     равно недоступна (#948). Детект — по корню карточки (`section.slider-shadow`
-     из SliderPanel), таблицы ВНУТРИ карточки лежат вне #content. */
-  html:has(section.slider-shadow) #content [role='table'] {
+     равно недоступна (#948). Признак — атрибут корня `data-slider-open`, его
+     выставляет сам SliderPanel (slider-panel.tsx).
+     ПОЧЕМУ НЕ `html:has(section.slider-shadow)`: `:has()` на корне при живых
+     кандидатах ставит движок в режим полной инвалидации стилей — после визита
+     страницы с карточкой-слайдером (`/projects`) КАЖДОЕ изменение DOM (ввод
+     символа в мессенджере) пересчитывало стили всего документа: 4300 элементов,
+     30–80 мс на букву, ~700 мс на 24 буквы. Замер и механизм — gotchas
+     frontend.md, «:has() на корне». */
+  html[data-slider-open] #content [role='table'] {
     scrollbar-width: none;
   }
-  html:has(section.slider-shadow) #content [role='table']::-webkit-scrollbar {
+  html[data-slider-open] #content [role='table']::-webkit-scrollbar {
     display: none;
   }
   /* Вкладки модуля в топбаре прокручиваются колесом/треком без видимой
