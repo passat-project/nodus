@@ -51,4 +51,9 @@ describe('safeFileName — имя для хранения и Content-Disposition
     expect(safeFileName(' \u0001\n ')).toBe(FALLBACK_FILE_NAME);
     expect(() => encodeURIComponent(safeFileName('\ud83d'))).not.toThrow();
   });
+
+  it('bidi-переопределения не подменяют расширение (CWE-451)', () => {
+    expect(safeFileName('счёт\u202efdp.exe')).toBe('счётfdp.exe');
+    expect(safeFileName('a\u200fb\u2066c\u2069.txt')).toBe('abc.txt');
+  });
 });
