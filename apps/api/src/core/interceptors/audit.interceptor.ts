@@ -13,6 +13,7 @@ import type { AuthUser } from '@nodus/contracts';
 import { AUDIT_KEY, type AuditMetadata } from '../decorators/audit.decorator.js';
 import { REQUEST_USER_KEY } from '../decorators/get-user.decorator.js';
 import { AuditRepository } from '../audit/audit.repository.js';
+import { maskTokenPath } from '../logging/mask-token-path.js';
 
 /**
  * Аудит действий (I7): после успешного ответа маршрута с `@Audit(...)`
@@ -66,7 +67,8 @@ export class AuditInterceptor implements NestInterceptor {
               entityId,
               details: {
                 method: request.method,
-                path: request.url.split('?')[0],
+                // Токен приглашения/сброса — не в аудите (#101, O6).
+                path: maskTokenPath(request.url.split('?')[0] ?? ''),
                 statusCode: reply.statusCode,
                 traceId: String(request.id),
               },

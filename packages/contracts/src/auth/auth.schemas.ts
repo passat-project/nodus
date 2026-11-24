@@ -21,12 +21,37 @@ export const emailInputSchema = z.string().trim().toLowerCase().max(254).check(z
 export const PASSWORD_MIN_LENGTH = 12;
 export const PASSWORD_MAX_LENGTH = 128;
 
+/** Нарушения политики пароля в порядке показа пользователю. Один источник для
+ *  формы установки пароля: сервер отдаёт только общий `VALIDATION_FAILED`. */
+type PasswordClassRule = 'lower' | 'upper' | 'digit' | 'special';
+export type PasswordRule = 'too-short' | 'too-long' | PasswordClassRule;
+
+const PASSWORD_CLASS_RULES: readonly { rule: PasswordClassRule; pattern: RegExp }[] = [
+  { rule: 'lower', pattern: /[a-z]/ },
+  { rule: 'upper', pattern: /[A-Z]/ },
+  { rule: 'digit', pattern: /\d/ },
+  // Спецсимвол — знак пунктуации/символ: не буква, не цифра и не пробел
+  // (#101). Кириллица и эмодзи тоже не считаются «спецсимволом» по классу
+  // \p{L}/\p{N}; пробел разрешён в пароле, но требованием не закрывается.
+  { rule: 'special', pattern: /[^\p{L}\p{N}\s]/u },
+];
+
+export function passwordRuleViolations(password: string): PasswordRule[] {
+  const violations: PasswordRule[] = [];
+  if (password.length < PASSWORD_MIN_LENGTH) violations.push('too-short');
+  if (password.length > PASSWORD_MAX_LENGTH) violations.push('too-long');
+  for (const { rule, pattern } of PASSWORD_CLASS_RULES) {
+    if (!pattern.test(password)) violations.push(rule);
+  }
+  return violations;
+}
+
 /** Политика паролей: 12+ символов, верхний/нижний регистр, цифра, спецсимвол. */
 export const passwordSchema = z
   .string()
   .min(PASSWORD_MIN_LENGTH, { message: 'Password must be at least 12 characters' })
   .max(PASSWORD_MAX_LENGTH)
-  .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/, {
+  .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\p{L}\p{N}\s])/u, {
     message: 'Password must contain uppercase, lowercase, number, and special character',
   });
 

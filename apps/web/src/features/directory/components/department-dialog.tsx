@@ -245,9 +245,6 @@ export function DepartmentDialog({
                 options={parentCandidates}
                 ariaLabel={ui.employees.parentDepartment}
                 placeholder={ui.employees.departmentSearchPlaceholder}
-                // Строго вниз, как у «Руководителя/Заместителя» (решение
-                // владельца 19.11.2026): переворот читался как «список уехал».
-                placement="bottom"
                 // Обязательный выбор: открепить подразделение в корень нельзя
                 // ни в интерфейсе, ни на сервере (#982).
                 allowClear={false}

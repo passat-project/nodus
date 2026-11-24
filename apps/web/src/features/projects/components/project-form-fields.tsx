@@ -14,7 +14,7 @@ import {
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useProjectGroups } from '../../../shared/api/projects-list.js';
-import { useUsersList } from '../../../shared/api/users-list.js';
+import { useActiveUsersList } from '../../../shared/api/users-list.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
 import { PeoplePicker } from '../../../shared/ui/people-picker.js';
 import { SEGMENTED_ACTIVE_TONAL, SegmentedControl } from '../../../shared/ui/segmented-control.js';
@@ -37,7 +37,7 @@ export function ManagerField({
   label: string;
   disabled?: boolean;
 }) {
-  const { data: users } = useUsersList();
+  const { data: users } = useActiveUsersList();
   const user = users?.items.find((entry) => entry.id === value);
   return (
     <PeoplePicker selectedIds={value ? [value] : []} ariaLabel={label} onToggle={onChange}>
@@ -76,7 +76,7 @@ export function PeopleMultiField({
   label: string;
   disabled?: boolean;
 }) {
-  const { data: users } = useUsersList();
+  const { data: users } = useActiveUsersList();
   const byId = new Map((users?.items ?? []).map((user) => [user.id, user]));
   const toggle = (id: string) =>
     onChange(value.includes(id) ? value.filter((entry) => entry !== id) : [...value, id]);

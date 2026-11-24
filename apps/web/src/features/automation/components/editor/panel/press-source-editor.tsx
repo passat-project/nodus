@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from '@nodus/ui/components/select';
 
-import { useUsersList } from '../../../../../shared/api/users-list.js';
+import { useActiveUsersList } from '../../../../../shared/api/users-list.js';
 import { useCustomFieldDefinitions } from '../../../../../shared/custom-fields/queries.js';
 import { PeoplePicker } from '../../../../../shared/ui/people-picker.js';
 import { PersonAvatar } from '../../../../../shared/ui/person-avatar.js';
@@ -45,7 +45,7 @@ export function PressSourcesEditor({
   readOnly: boolean;
   category: ProcessCategory;
 }) {
-  const users = useUsersList().data?.items ?? [];
+  const users = useActiveUsersList().data?.items ?? [];
   const definitions = useCustomFieldDefinitions('task').data ?? [];
   const userFields = definitions.filter((d) => d.type === 'user' || d.type === 'users');
   const kinds = TASK_KINDS;

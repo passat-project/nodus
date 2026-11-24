@@ -24,7 +24,7 @@ import { Textarea } from '@nodus/ui/components/textarea';
 import { cn } from '@nodus/ui/lib/utils';
 import { toast } from 'sonner';
 
-import { useUsersList } from '../../../shared/api/users-list.js';
+import { useActiveUsersList } from '../../../shared/api/users-list.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { withoutPatronymic } from '../../../shared/lib/format.js';
 import { avatarIssueMessage, validateAvatarFile } from '../../../shared/chat/avatar-upload.js';
@@ -167,7 +167,7 @@ export function ChatCreateDialog({
   onClose: () => void;
 }) {
   const me = useAuthStore((s) => s.user);
-  const { data: users } = useUsersList();
+  const { data: users } = useActiveUsersList();
   const create = useCreateConversation();
   const setAvatar = useSetConversationAvatar();
 

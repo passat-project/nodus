@@ -1,7 +1,7 @@
 import { ui } from '@nodus/contracts';
 
 import { useProjectsList } from '../api/projects-list.js';
-import { useUsersList } from '../api/users-list.js';
+import { useActiveUsersList } from '../api/users-list.js';
 import type { CreateFailure, SecretProjectMembers } from './task-create-errors.js';
 
 /**
@@ -13,7 +13,7 @@ import type { CreateFailure, SecretProjectMembers } from './task-create-errors.j
 export function useSecretMembersNotice(members: SecretProjectMembers | undefined) {
   const enabled = Boolean(members);
   const { data: projects } = useProjectsList({ enabled });
-  const { data: users } = useUsersList({ enabled });
+  const { data: users } = useActiveUsersList({ enabled });
   const project = members
     ? projects?.items.find((entry) => entry.id === members.projectId)
     : undefined;

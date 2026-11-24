@@ -60,6 +60,7 @@ export function DivisionsView({
   statsById,
   onSelect,
   onCreateChild,
+  onInvite,
   onEdit,
   onLocateMe,
 }: {
@@ -75,6 +76,8 @@ export function DivisionsView({
   statsById: ReadonlyMap<string, DepartmentCardStats>;
   onSelect: (id: string) => void;
   onCreateChild: (parentId: string) => void;
+  /** «⋯» карточки: приглашение в Nodus с предвыбранным подразделением (#101). */
+  onInvite: (node: DepartmentNode) => void;
   /** «⋯» карточки: правка отдела (полное меню действий — #881). */
   onEdit: (node: DepartmentNode) => void;
   /** «Найти меня»: выбор себя через поиск (нет обработчика — нет кнопки). */
@@ -235,6 +238,7 @@ export function DivisionsView({
                 onSelect={selectNode}
                 onToggle={toggleNode}
                 onCreateChild={onCreateChild}
+                onInvite={onInvite}
                 onEdit={onEdit}
               />
             ))}

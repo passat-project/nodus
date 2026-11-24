@@ -4,7 +4,7 @@ import { isOpenState, ui } from '@nodus/contracts';
 
 import { useProjectsList } from '../api/projects-list.js';
 import { useTaskStages } from '../api/task-stages.js';
-import { useUsersList } from '../api/users-list.js';
+import { useActiveUsersList } from '../api/users-list.js';
 import { useAuthStore } from '../auth-store.js';
 import { useCustomFieldFilterDefs } from '../custom-fields/filter-defs.js';
 import { customFieldValuesOf } from '../custom-fields/queries.js';
@@ -85,7 +85,7 @@ export function useTaskFilterDefs({
   deciderVisible?: boolean;
 } = {}): FilterFieldDef<TaskListItem>[] {
   const { data: stages } = useTaskStages();
-  const { data: users } = useUsersList();
+  const { data: users } = useActiveUsersList();
   const { data: projects } = useProjectsList({ enabled: projectVisible });
   const meId = useAuthStore((s) => s.user?.id);
   // Кастомные поля области «Задачи» — группой «Атрибуты» в конце панели (#431, Р8).

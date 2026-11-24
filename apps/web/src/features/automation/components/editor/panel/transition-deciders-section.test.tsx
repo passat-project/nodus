@@ -15,6 +15,9 @@ vi.mock('../../../../../shared/api/users-list.js', () => ({
   useUsersList: () => ({
     data: { items: [{ id: '00000000-0000-4000-8000-0000000000b1', displayName: 'Пётр' }] },
   }),
+  useActiveUsersList: () => ({
+    data: { items: [{ id: '00000000-0000-4000-8000-0000000000b1', displayName: 'Пётр' }] },
+  }),
   useUsersSearch: () => ({ data: { items: [] }, isFetching: false }),
 }));
 

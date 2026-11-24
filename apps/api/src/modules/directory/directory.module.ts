@@ -7,11 +7,18 @@ import { RoleMembershipProvider } from '../../core/ports/role-membership.provide
 import { DepartmentsController } from './departments.controller.js';
 import { DepartmentsRepository } from './departments.repository.js';
 import { DepartmentsService } from './departments.service.js';
+import { InvitationExpiryJob } from './invitation-expiry.job.js';
+import { InvitationAcceptService } from './invitation-accept.service.js';
+import { InvitationThrottleService } from './invitation-throttle.service.js';
+import { InvitationsController } from './invitations.controller.js';
+import { InvitationsRepository } from './invitations.repository.js';
+import { InvitationsService } from './invitations.service.js';
 import { ManagerDerivationRepository } from './manager-derivation.repository.js';
 import { ManagerDerivationService } from './manager-derivation.service.js';
 import { PositionsController } from './positions.controller.js';
 import { PositionsRepository } from './positions.repository.js';
 import { PositionsService } from './positions.service.js';
+import { PublicInvitationsController } from './public-invitations.controller.js';
 import { ReferenceGuard } from './reference-guard.service.js';
 import { RoleAssignmentGuard } from './role-assignment-guard.service.js';
 import { RoleAudienceRepository } from './role-audience.repository.js';
@@ -30,10 +37,22 @@ import { UsersService } from './users.service.js';
  * интегрируются событиями `directory.user.*` и `@nodus/contracts` (I3/I6).
  */
 @Module({
-  controllers: [UsersController, DepartmentsController, PositionsController, RolesController],
+  controllers: [
+    UsersController,
+    DepartmentsController,
+    PositionsController,
+    RolesController,
+    InvitationsController,
+    PublicInvitationsController,
+  ],
   providers: [
     UsersService,
     UsersRepository,
+    InvitationsService,
+    InvitationsRepository,
+    InvitationAcceptService,
+    InvitationThrottleService,
+    InvitationExpiryJob,
     // Источник поисковой проекции «сотрудник» (#952): маркер
     // searchSourceType, сбор — DiscoveryService ядра search.
     EmployeeSearchSourceProvider,

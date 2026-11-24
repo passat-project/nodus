@@ -8,6 +8,7 @@ import { ChatEventsConsumer } from './fanout.ts';
 import { buildHealthPayload } from './health-payload.ts';
 import type { MembershipStore, UserStatusReader } from './membership.ts';
 import { PresenceTracker } from './presence.ts';
+import type { TokenRevokedChecker } from './revoked.ts';
 import { registerRoomHandlers, userRoom } from './rooms.ts';
 import { TypingThrottler } from './typing.ts';
 
@@ -17,6 +18,10 @@ export interface GatewayDeps {
   redis: Redis;
   /** Имя consumer group стрима (тесты подставляют изолированное). */
   consumerGroup?: string;
+  /** Проверка стоп-листа access-токенов на хендшейке (#101); обязательна:
+   *  отдельный НЕблокирующий Redis-клиент из main.ts. `null` — выключить
+   *  (health-тесты и изолированные сборки). */
+  isTokenRevoked: TokenRevokedChecker | null;
 }
 
 export interface GatewayServer {
@@ -52,6 +57,7 @@ export function createGatewayServer(deps: GatewayDeps): GatewayServer {
 
   const io = new Server(httpServer);
   const verify: AccessTokenVerifier = createAccessTokenVerifier(deps.jwtSecret);
+  const isTokenRevoked = deps.isTokenRevoked;
   const typing = new TypingThrottler(io, deps.store);
   const presence = new PresenceTracker(deps.store, io);
 
@@ -65,6 +71,12 @@ export function createGatewayServer(deps: GatewayDeps): GatewayServer {
     void (async () => {
       const identity = await verify(socket.handshake.auth?.token);
       if (!identity) return next(new Error('unauthorized'));
+      // Стоп-лист access-токенов (#333/#101): деактивация, смена ролей, выпуск
+      // reset-ссылки. Старый токен не должен пустить обратно в WS после того,
+      // как HTTP уже отвечает 401. Redis недоступен — fail-open внутри чека.
+      if (isTokenRevoked && (await isTokenRevoked(identity.userId, identity.issuedAtSeconds))) {
+        return next(new Error('unauthorized'));
+      }
       let active: boolean;
       try {
         active = await deps.store.isActiveUser(identity.userId);

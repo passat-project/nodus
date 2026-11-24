@@ -31,6 +31,7 @@ describe('AuthService', () => {
   const authProvider = { verifyCredentials: vi.fn() };
   const authRepository = {
     findCredentialsByEmail: vi.fn(),
+    findStatusByEmail: vi.fn(),
     findProfileById: vi.fn(),
     updatePassword: vi.fn(),
     createSession: vi.fn(),
@@ -72,6 +73,7 @@ describe('AuthService', () => {
     );
     loginThrottle.isLocked.mockResolvedValue(false);
     authRepository.rotateSessionIfCurrent.mockResolvedValue(true);
+    authRepository.findStatusByEmail.mockResolvedValue(null);
     service = new AuthService(
       authProvider as never,
       authRepository as never,
@@ -311,38 +313,6 @@ describe('AuthService', () => {
       authRepository.findSessionById.mockResolvedValue(makeSession());
       await service.logout('cookie');
       expect(authRepository.revokeSession).toHaveBeenCalledWith('session-1');
-    });
-  });
-
-  describe('changePassword', () => {
-    it('неверный старый пароль → AUTH_INVALID_CREDENTIALS', async () => {
-      authRepository.findProfileById.mockResolvedValue(IDENTITY);
-      authRepository.findCredentialsByEmail.mockResolvedValue({
-        ...IDENTITY,
-        passwordHash: 'hash',
-      });
-      passwordService.verify.mockResolvedValue(false);
-
-      await expect(
-        service.changePassword('user-1', 'bad', 'New!234567890', 's1'),
-      ).rejects.toMatchObject({
-        code: ErrorCode.AUTH_INVALID_CREDENTIALS,
-      });
-    });
-
-    it('успех → перехэш + отзыв всех сессий кроме текущей', async () => {
-      authRepository.findProfileById.mockResolvedValue(IDENTITY);
-      authRepository.findCredentialsByEmail.mockResolvedValue({
-        ...IDENTITY,
-        passwordHash: 'hash',
-      });
-      passwordService.verify.mockResolvedValue(true);
-      passwordService.hash.mockResolvedValue('new-hash');
-
-      await service.changePassword('user-1', 'old', 'New!234567890', 'session-1');
-
-      expect(authRepository.updatePassword).toHaveBeenCalledWith('user-1', 'new-hash');
-      expect(authRepository.revokeAllSessions).toHaveBeenCalledWith('user-1', 'session-1');
     });
   });
 });

@@ -3,7 +3,7 @@ import { customFieldIdOfKey, formFieldWidth, isFormDecor, ui } from '@nodus/cont
 import { Button } from '@nodus/ui/components/button';
 import { Textarea } from '@nodus/ui/components/textarea';
 
-import { useUsersList } from '../../../api/users-list.js';
+import { useActiveUsersList } from '../../../api/users-list.js';
 import { CustomFieldEditor } from '../../../custom-fields/value-editor.js';
 import { DateTimePicker } from '../../../ui/date-time-picker.js';
 import { PeoplePicker } from '../../../ui/people-picker.js';
@@ -208,7 +208,7 @@ function AssigneeField({
   editable: boolean;
   onChange: (next: Partial<WindowFieldValues>) => void;
 }) {
-  const { data } = useUsersList();
+  const { data } = useActiveUsersList();
   const current = value ? data?.items.find((u) => u.id === value) : undefined;
   return (
     <PeoplePicker
