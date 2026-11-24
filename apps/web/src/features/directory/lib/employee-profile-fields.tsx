@@ -19,7 +19,7 @@ import type { UserCard, UserListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 
 import type { CardRef } from '../../../app/shell/card-stack.js';
-import { formatDate } from '../../../shared/lib/format.js';
+import { formatDate, formatDateWithYear } from '../../../shared/lib/format.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
 import type { EntityFieldDef } from '../../../shared/ui/entity-fields.js';
 import { UserStatusChip } from './employee-fields.js';
@@ -109,7 +109,13 @@ export function employeeProfileDefs(args: {
       key: 'email',
       icon: <Mail className="size-3.5" />,
       label: ui.employees.email,
-      render: () => <span className="text-sm">{card.email}</span>,
+      // Длинная почта ужимается многоточием внутри колонки (как имя
+      // руководителя), полное значение — в подсказке (#999).
+      render: () => (
+        <span className="min-w-0 truncate text-sm" title={card.email}>
+          {card.email}
+        </span>
+      ),
     },
     {
       key: 'phone',
@@ -176,9 +182,11 @@ export function employeeProfileDefs(args: {
       key: 'hiredAt',
       icon: <CalendarCheck2 className="size-3.5" />,
       label: ui.employees.fieldHiredAt,
+      // Дата приёма — с годом (читается стаж); день рождения — без года
+      // (решение владельца, #999).
       render: () =>
         card.hiredAt ? (
-          <span className={monoValue}>{formatDate(card.hiredAt)}</span>
+          <span className={monoValue}>{formatDateWithYear(card.hiredAt)}</span>
         ) : (
           ui.common.notSet
         ),
