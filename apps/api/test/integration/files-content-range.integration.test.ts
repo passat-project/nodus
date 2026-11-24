@@ -68,6 +68,8 @@ describe.skipIf(!process.env.DATABASE_URL || !process.env.STORAGE_ACCESS_KEY)(
       expect(res.headers.get('accept-ranges')).toBe('bytes');
       expect(res.headers.get('content-type')).toBe('video/mp4');
       expect(res.headers.get('content-disposition')).toContain('inline');
+      // Security-ревью #1005: пользовательский контент — с CSP-песочницей.
+      expect(res.headers.get('content-security-policy')).toBe("default-src 'none'; sandbox");
       expect(res.headers.get('content-length')).toBe(String(SIZE));
       expect(new Uint8Array(await res.arrayBuffer())).toEqual(BYTES);
       etag = res.headers.get('etag') ?? '';

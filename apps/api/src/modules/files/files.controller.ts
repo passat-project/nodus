@@ -185,12 +185,16 @@ export class FilesController {
       );
     }
     const range = rangeDecision.kind === 'partial' ? rangeDecision.range : undefined;
+    // Поток читаем ДО выставления заголовков файла: сбой хранилища должен
+    // уйти в единый конверт ошибки без медиа-заголовков (`inline`, кеш, ETag)
+    // на ответе-ошибке (security-ревью #1005).
+    const stream = await this.driver.get(key, range);
     // Inline — ТОЛЬКО whitelist неисполняемых форматов: mime приходит от
     // клиента и не валидируется, а SVG (и пр. активный контент) в «новой
     // вкладке» исполняет скрипты на origin портала → refresh-cookie жертвы
     // (валидация #57: stored XSS). Изображения и видео-контейнеры (стикеры
     // #143, кинозал #787, перемотка #1005) — inline; остальное — attachment;
-    // на всё — nosniff.
+    // на всё — nosniff + CSP-песочница пользовательского контента.
     const INLINE_MIME = new Set([
       'image/png',
       'image/jpeg',
@@ -215,6 +219,10 @@ export class FilesController {
       'Content-Disposition': `${disposition}; filename*=UTF-8''${encodeURIComponent(file.name)}`,
       'Accept-Ranges': 'bytes',
       'X-Content-Type-Options': 'nosniff',
+      // Defense-in-depth для пользовательского контента (security-ревью #1005):
+      // прямая навигация по ссылке не исполнит активный контент на origin
+      // портала (где refresh-cookie), даже если sniffing когда-нибудь обойдут.
+      'Content-Security-Policy': "default-src 'none'; sandbox",
       'Cache-Control': 'private, max-age=3600',
       ETag: etag,
     };
@@ -222,7 +230,7 @@ export class FilesController {
     void reply
       .status(range ? 206 : 200)
       .headers(headers)
-      .send(await this.driver.get(key, range));
+      .send(stream);
   }
 
   /**
