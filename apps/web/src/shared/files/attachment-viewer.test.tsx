@@ -70,3 +70,38 @@ describe('AttachmentViewer — выбор оболочки по типу фай�
     expect(dialog.querySelector('img')).not.toBeNull();
   });
 });
+
+/** Один Esc = один слой (#1021): вьюер гасит клавишу — карточка сущности под
+ *  плеером тем же нажатием не закрывается (второй Esc — её). */
+describe('AttachmentViewer: Esc закрывает только вьюер (#1021)', () => {
+  function pressEscape(): KeyboardEvent {
+    const event = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true });
+    document.dispatchEvent(event);
+    return event;
+  }
+
+  it('Esc закрывает вьюер и preventDefault+stopPropagation — карточка под ним цела', () => {
+    useViewerStore.setState({ target: target({ name: 'ролик.mp4' }) });
+    renderViewer();
+    expect(screen.getByRole('dialog')).toBeTruthy();
+
+    const event = pressEscape();
+    expect(event.defaultPrevented).toBe(true);
+    expect(useViewerStore.getState().target).toBeNull();
+  });
+
+  it('второй Esc после закрытия вьюера доходит до карточки: событие уже не гасится', () => {
+    useViewerStore.setState({ target: null });
+    renderViewer(); // вьюер не открыт — слушателя нет
+    const event = pressEscape();
+    expect(event.defaultPrevented).toBe(false);
+    expect(useViewerStore.getState().target).toBeNull();
+  });
+
+  it('другая клавиша вьюер не закрывает', () => {
+    useViewerStore.setState({ target: target({ name: 'ролик.mp4' }) });
+    renderViewer();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', cancelable: true }));
+    expect(useViewerStore.getState().target).not.toBeNull();
+  });
+});

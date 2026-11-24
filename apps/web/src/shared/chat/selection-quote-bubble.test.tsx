@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
-import { QueryClient } from '@tanstack/react-query';
-import { beforeEach, describe, expect, it } from 'vitest';
-import type { FavoriteCard, Paginated } from '@nodus/contracts';
+import { act, cleanup, render } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { beforeEach, afterEach, describe, expect, it } from 'vitest';
+import type { ChatMessage, FavoriteCard, Paginated } from '@nodus/contracts';
 
 import { useChatDrafts } from './chat-drafts.js';
 import { useConversationOpenStore } from './conversation-open-store.js';
 import { favoriteKeys } from './favorites-api.js';
 import { useJumpStore } from './jump-store.js';
-import { applyFavoriteCardQuote } from './selection-quote-bubble.js';
+import { applyFavoriteCardQuote, SelectionQuoteBubble } from './selection-quote-bubble.js';
+import { chatKeys } from './chat-keys.js';
 
 /**
  * Путь карточки избранного в баббле цитаты (#306): клик по кавычкам на
@@ -124,5 +126,135 @@ describe('applyFavoriteCardQuote — цитата с карточки избра
     applyFavoriteCardQuote(client, MSG, 'фрагмент');
 
     expect(useChatDrafts.getState().drafts[`conversation:${CONV}`]?.reply?.messageId).toBe(MSG);
+  });
+});
+
+/**
+ * Баббл-цитата над выделением — ТОЛЬКО по тексту сообщения (#1021):
+ * выделение, содержащее текст (даже с заездом на мету/чип), показывает баббл
+ * и цитирует срез до текста; выделение ТОЛЬКО по чипу файла/мете баббл не
+ * порождает. jsdom без раскладки — getClientRects подменяется прямоугольником.
+ */
+describe('SelectionQuoteBubble — баббл только на тексте сообщения (#1021)', () => {
+  const SCOPE = `conversation:${CONV}`;
+
+  const message = (): ChatMessage => ({
+    id: MSG,
+    conversationId: CONV,
+    seq: 1,
+    clientMessageId: MSG,
+    author,
+    text: 'текст сообщения целиком',
+    replyToId: null,
+    reply: null,
+    deletedAt: null,
+    pinned: false,
+    forwardedFrom: null,
+    threadRootId: null,
+    threadRepliesCount: 0,
+    reactions: [],
+    attachments: [],
+    editedAt: null,
+    readAt: null,
+    readBy: [],
+    urgent: false,
+    mentionedUserIds: [],
+    linkPreview: null,
+    createdAt: '2026-11-24T10:00:00Z',
+  });
+
+  function seedMessage(client: QueryClient): void {
+    // Apply ищет оригинал в кэше ЛЕНТЫ БЕСЕДЫ (ключ по conversationId) —
+    // тот же ключ, что у ленты чата, не по id сообщения.
+    client.setQueryData(chatKeys.messages(CONV), { items: [message()], nextCursor: null });
+  }
+
+  function messageContainer(): HTMLElement {
+    const host = document.createElement('div');
+    host.setAttribute('data-chat-message', MSG);
+    host.setAttribute('data-chat-scope', SCOPE);
+    host.setAttribute('data-chat-conversation', CONV);
+    host.innerHTML =
+      '<span data-slot="message-text">текст сообщения целиком</span>' +
+      '<span data-slot="message-meta">12:34</span>';
+    document.body.append(host);
+    return host;
+  }
+
+  function selectRangeOf(start: Node, startOffset: number, end: Node, endOffset: number): void {
+    const range = document.createRange();
+    range.setStart(start, startOffset);
+    range.setEnd(end, endOffset);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  }
+
+  function renderBubble(client: QueryClient): void {
+    render(
+      <QueryClientProvider client={client}>
+        <SelectionQuoteBubble />
+      </QueryClientProvider>,
+    );
+  }
+
+  // jsdom Range вовсе не имеет getClientRects — добавляем заглушку и снимаем
+  // её после (spyOn требует существующего свойства).
+  const proto = Range.prototype as unknown as Record<string, unknown>;
+  let originalRects: unknown;
+
+  beforeEach(() => {
+    originalRects = proto.getClientRects;
+    proto.getClientRects = () =>
+      [
+        { width: 40, height: 12, top: 10, right: 60, left: 20, bottom: 22 },
+      ] as unknown as DOMRectList;
+  });
+
+  afterEach(() => {
+    cleanup();
+    window.getSelection()?.removeAllRanges();
+    if (originalRects === undefined) delete proto.getClientRects;
+    else proto.getClientRects = originalRects;
+  });
+
+  it('выделение с текстом (и заездом на мету): баббл есть, клик кладёт срез до текста', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    seedMessage(client);
+    const host = messageContainer();
+    const text = host.querySelector('[data-slot="message-text"]')!;
+    const meta = host.querySelector('[data-slot="message-meta"]')!;
+    selectRangeOf(text.firstChild!, 6, meta.firstChild!, 2);
+    renderBubble(client);
+
+    act(() => {
+      document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    });
+    const bubble = document.querySelector('[data-quote-bubble]') as HTMLElement;
+    expect(bubble).not.toBeNull();
+
+    act(() => {
+      bubble.click();
+    });
+    expect(document.querySelector('[data-quote-bubble]')).toBeNull();
+    // Срез до текста: мета «12:…» в цитату не попала (#1021).
+    expect(useChatDrafts.getState().drafts[SCOPE]?.reply?.quoteText).toBe('сообщения целиком');
+    expect(useChatDrafts.getState().drafts[SCOPE]?.reply?.messageId).toBe(MSG);
+    host.remove();
+  });
+
+  it('выделение ТОЛЬКО по мете (текста нет): баббл не показывается', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    seedMessage(client);
+    const host = messageContainer();
+    const meta = host.querySelector('[data-slot="message-meta"]')!;
+    selectRangeOf(meta.firstChild!, 0, meta.firstChild!, 4);
+    renderBubble(client);
+
+    act(() => {
+      document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    });
+    expect(document.querySelector('[data-quote-bubble]')).toBeNull();
+    host.remove();
   });
 });

@@ -132,3 +132,56 @@ describe('SliderPanel: закрытие схлопыванием в источн
     expect(section.style.willChange).toBe('');
   });
 });
+
+/** Гейт Esc-слоёв (#1021): открытый поповер (реальное содержимое обёртки с
+ *  data-state=open, не тултип) съедает Esc; обёртка в exit-анимации
+ *  (data-state=closed) и тултип — не мешают панели закрыться. */
+describe('SliderPanel: Esc и popper-слои (#1021)', () => {
+  afterEach(() => {
+    cleanup();
+    document.querySelectorAll('[data-radix-popper-content-wrapper]').forEach((el) => el.remove());
+  });
+
+  function appendWrapper(content: string): void {
+    const wrapper = document.createElement('div');
+    wrapper.setAttribute('data-radix-popper-content-wrapper', '');
+    wrapper.innerHTML = content;
+    document.body.append(wrapper);
+  }
+
+  it('Esc закрывает панель без источника (прямое onClose)', () => {
+    const onClose = vi.fn();
+    render(
+      <SliderPanel title="Карточка" onClose={onClose}>
+        <div />
+      </SliderPanel>,
+    );
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('открытый поповер (data-state=open) съедает Esc — панель остаётся', () => {
+    const onClose = vi.fn();
+    render(
+      <SliderPanel title="Карточка" onClose={onClose}>
+        <div />
+      </SliderPanel>,
+    );
+    appendWrapper('<div data-state="open" role="menu">меню</div>');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('обёртка в exit-анимации (data-state=closed) и открытый тултип Esc не глотают', () => {
+    const onClose = vi.fn();
+    render(
+      <SliderPanel title="Карточка" onClose={onClose}>
+        <div />
+      </SliderPanel>,
+    );
+    appendWrapper('<div data-state="closed" role="menu">закрывается</div>');
+    appendWrapper('<div data-state="open" role="tooltip">подсказка</div>');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
