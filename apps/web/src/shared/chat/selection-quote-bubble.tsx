@@ -13,6 +13,7 @@ import { toFavoriteMessage } from './favorite-message.js';
 import { favoriteKeys } from './favorites-api.js';
 import { focusComposer } from './composer-focus.js';
 import { useJumpStore } from './jump-store.js';
+import { selectionFragmentIn } from './selection-fragment.js';
 
 /**
  * Баббл-цитата над выделением (вердикт 24.09: модель Bitrix24 — выделил текст
@@ -41,6 +42,8 @@ interface BubbleState {
   messageId: string;
   /** Выделение на карточке избранного — путь карточки (#306). */
   favoriteCard: boolean;
+  /** Контейнер сообщения — источник среза цитаты на клике (#1021). */
+  container: Element;
 }
 
 function containerOf(node: Node | null): Element | null {
@@ -69,6 +72,13 @@ export function SelectionQuoteBubble() {
         setBubble(null);
         return;
       }
+      // Баббл — ТОЛЬКО над выделением, в котором есть ТЕКСТ сообщения (#1021):
+      // выделение имени/меты/чипа файла цитату не порождает.
+      const fragment = selectionFragmentIn(container);
+      if (!fragment) {
+        setBubble(null);
+        return;
+      }
       // Позиция — СПРАВА от конца выделения, по вертикали последней строки
       // (модель Bitrix24, вердикт 24.09: bubble компактный и не нависает).
       const rects = selection.getRangeAt(0).getClientRects();
@@ -84,6 +94,7 @@ export function SelectionQuoteBubble() {
         conversationId: container.getAttribute('data-chat-conversation') ?? '',
         messageId: container.getAttribute('data-chat-message') ?? '',
         favoriteCard: container.hasAttribute('data-favorite-card'),
+        container,
       });
     }
 
@@ -120,10 +131,12 @@ export function SelectionQuoteBubble() {
 
   function apply() {
     if (!bubble) return;
-    const fragment = window.getSelection()?.toString().trim() ?? '';
+    // Фрагмент пересчитывается НА КЛИКЕ из того же контейнера (#1021):
+    // срез на текст сообщения, как при показе баббла.
+    const fragment = selectionFragmentIn(bubble.container);
     window.getSelection()?.removeAllRanges();
     setBubble(null);
-    if (fragment.length === 0) return;
+    if (!fragment) return;
     if (bubble.favoriteCard) {
       applyFavoriteCardQuote(queryClient, bubble.messageId, fragment);
       return;

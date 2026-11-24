@@ -55,7 +55,8 @@ export function PostCard({
   lastReplyAt,
   threadUnread,
   reactionsHidden,
-  onOpenThread,
+  threadOpen,
+  onToggleThread,
 }: {
   message: ChatMessage;
   mine: boolean;
@@ -70,7 +71,13 @@ export function PostCard({
   threadUnread: boolean;
   /** Режим выделения: реакции недоступны (#132 р.4). */
   reactionsHidden: boolean;
-  onOpenThread: () => void;
+  /** Окно треда ЭТОГО поста сейчас открыто (полоса = тумблер, #1021). */
+  threadOpen: boolean;
+  /** Открыть/закрыть тред. КЛИКОВЫЙ вход — только полоса «Обсудить» (решение
+   *  владельца 24.11.2026, #1021): клик по телу поста тред не открывает,
+   *  повторный клик по полосе — закрывает (крестика в шапке окна нет);
+   *  существующий вход ПКМ «Ответить» сохранён — тоже открывает тред. */
+  onToggleThread: () => void;
 }) {
   const surface = messageSurface(mine);
   const sticker = stickerAttachmentOf(message);
@@ -127,7 +134,8 @@ export function PostCard({
         {repliesCount > 0 ? (
           <button
             type="button"
-            onClick={onOpenThread}
+            onClick={onToggleThread}
+            aria-expanded={threadOpen}
             className="flex h-8 w-full cursor-pointer items-center gap-2 border-t border-border/60 bg-current/10 px-2.5 text-left transition-colors hover:bg-current/20"
           >
             <ThreadStrip
@@ -146,32 +154,14 @@ export function PostCard({
 
   return (
     <>
+      {/* Карточка НЕ открывает тред кликом по себе (решение владельца
+          24.11.2026, #1021): единственная точка — полоса «Обсудить» ниже.
+          Поэтому без role="button"/onClick: выделение текста, ссылки и
+          реакции живут как обычный контент. */}
       <div
-        role="button"
-        tabIndex={0}
-        onClick={(e) => {
-          // Клик из React-портала (лайтбокс, меню) всплывает по ДЕРЕВУ
-          // React, хотя target лежит вне DOM карточки: такой клик НЕ
-          // открывает тред (#409 — клик мимо картинки открывал обсуждение).
-          if (!e.currentTarget.contains(e.target as Node)) return;
-          // Р.7: завершение выделения текста — НЕ клик по карточке; интерактивы
-          // (галерея, реакции, ссылки) отсекаются гвардом.
-          if (!window.getSelection()?.isCollapsed) return;
-          const interactive = (e.target as HTMLElement).closest(
-            'button, a, input, [role="button"]',
-          );
-          if (interactive && interactive !== e.currentTarget) return;
-          onOpenThread();
-        }}
-        onKeyDown={(e) => {
-          if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-            e.preventDefault();
-            onOpenThread();
-          }
-        }}
         className={cn(
           surface.fill,
-          'relative w-fit max-w-[min(100%,42rem)] cursor-pointer rounded-xl text-left transition-colors group/msg group/bubble',
+          'relative w-fit max-w-[min(100%,42rem)] rounded-xl text-left transition-colors group/msg group/bubble',
           // Медиа-пост — БЕЗ рамки вообще (раунд 4: даже прозрачный бордер
           // давал 1px-полосу фона вдоль картинки — background-clip:border-box
           // красит фон ПОД прозрачным бордером, инсет = «линии вокруг
@@ -303,8 +293,15 @@ export function PostCard({
           {/* Полоса обсуждения — ПОСТОЯННАЯ высота h-8 (вердикт 28.09): аватарки
             size-5 центрируются, прыжков высоты нет; нижний full-bleed блок.
             ВПЛОТНУЮ к контенту (раунд 7 п.3): зазор метки до границы — как у
-            пузырей чата (разделение несёт border-t полосы, не воздух). */}
-          <span className="flex h-8 items-center gap-2 border-t border-border/60 bg-current/10 px-2.5">
+            пузырей чата (разделение несёт border-t полосы, не воздух).
+            ТУМБЛЕР треда (#1021): клик открывает окно обсуждения, повторный —
+            закрывает; aria-expanded для AT. */}
+          <button
+            type="button"
+            onClick={onToggleThread}
+            aria-expanded={threadOpen}
+            className="flex h-8 w-full cursor-pointer items-center gap-2 border-t border-border/60 bg-current/10 px-2.5 text-left transition-colors hover:bg-current/20"
+          >
             <ThreadStrip
               surface={surface}
               participants={participants}
@@ -313,7 +310,7 @@ export function PostCard({
               threadUnread={threadUnread}
             />
             <ThreadStripEnter surface={surface} />
-          </span>
+          </button>
         </div>
         {/* Рамка выделения — overlay НАД контентом (раунд 4: у медиа-постов
           бордера нет вовсе, у текстовых он 1px — единая толстая рамка селекта

@@ -3,6 +3,9 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ChatMessage } from '@nodus/contracts';
+
+import { chatKeys } from './chat-keys.js';
 
 import { useSendChatMessage } from './send-message.js';
 
@@ -86,5 +89,89 @@ describe('useSendChatMessage — идемпотентность отправки
     expect(keys[0]).toBeTruthy();
     expect(keys[1]).toBeTruthy();
     expect(keys[0]).not.toBe(keys[1]);
+  });
+});
+
+/** Темп несёт аватар ТЕКУЩЕГО пользователя из кэша справочника (#1021):
+ *  раньше avatarUrl в темпе был всегда null — аватар «мигал» до ответа
+ *  сервера (инициалы → фото). Кэш справочника не загружен (холодный вход) —
+ *  как раньше, null. */
+describe('useSendChatMessage — аватар темпа из справочника (#1021)', () => {
+  const ME = '11111111-1111-4111-8111-111111111111';
+
+  /** POST-заглушка с задержкой: темп живёт в кэше до ответа — успеваем
+   *  прочитать его из кэша waitFor'ом, не гоняясь за settlement. */
+  function stubDelayedPost(): void {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 80));
+        return new Response(JSON.stringify({ items: [], nextCursor: null }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }),
+    );
+  }
+
+  async function tempInCache(
+    client: QueryClient,
+    match: (m: ChatMessage) => boolean,
+  ): Promise<ChatMessage | undefined> {
+    let found: ChatMessage | undefined;
+    await waitFor(() => {
+      const cached = client.getQueryData<{ items: ChatMessage[] }>(chatKeys.messages(CONV));
+      found = cached?.items.find((m) => m.seq === 0);
+      expect(found && match(found)).toBe(true);
+    });
+    return found;
+  }
+
+  it('аватар текущего пользователя попадает в автор темпа', async () => {
+    stubDelayedPost();
+    const { useAuthStore } = await import('../auth-store.js');
+    const { usersListKey } = await import('../api/users-list.js');
+    useAuthStore.setState({
+      status: 'authenticated',
+      accessToken: 'test',
+      user: { id: ME, email: 'me@nodus.by', displayName: 'Я Сам', permissions: [] },
+    });
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(usersListKey, {
+      items: [{ id: ME, avatarUrl: '/avatars/me.png' }],
+      nextCursor: null,
+    });
+
+    const { result } = renderHook(() => useSendChatMessage(CONV), {
+      wrapper: makeWrapper(client),
+    });
+    act(() => {
+      result.current.mutate({ text: 'привет' });
+    });
+
+    const temp = await tempInCache(client, (m) => m.author.avatarUrl === '/avatars/me.png');
+    expect(temp?.author.id).toBe(ME);
+  });
+
+  it('кэш справочника пуст (холодный вход) — avatarUrl null, как раньше', async () => {
+    stubDelayedPost();
+    const { useAuthStore } = await import('../auth-store.js');
+    useAuthStore.setState({
+      status: 'authenticated',
+      accessToken: 'test',
+      user: { id: ME, email: 'me@nodus.by', displayName: 'Я Сам', permissions: [] },
+    });
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useSendChatMessage(CONV), {
+      wrapper: makeWrapper(client),
+    });
+    act(() => {
+      result.current.mutate({ text: 'привет' });
+    });
+
+    const temp = await tempInCache(client, (m) => m.author.avatarUrl === null);
+    expect(temp?.author.id).toBe(ME);
   });
 });

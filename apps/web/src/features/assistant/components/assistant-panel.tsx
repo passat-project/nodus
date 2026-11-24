@@ -6,6 +6,7 @@ import { useCircuitAxisY } from '../../../app/shell/use-circuit-axis.js';
 import { useElementWidth } from '../../../shared/ui/use-element-width.js';
 import { uiPx } from '../../../shared/ui/ui-scale.js';
 import { inputModality } from '../../../shared/lib/input-modality.js';
+import { hasOpenPopperLayer } from '../../../shared/lib/overlay-layers.js';
 import {
   ASSISTANT_W_KEY,
   assistantLiveBounds,
@@ -86,7 +87,7 @@ export function AssistantPanel() {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      if (document.querySelector('[data-radix-popper-content-wrapper]')) return;
+      if (hasOpenPopperLayer()) return;
       event.preventDefault();
       useAssistantStore.getState().setOpen(false);
     };

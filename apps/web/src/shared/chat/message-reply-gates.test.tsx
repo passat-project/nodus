@@ -224,7 +224,8 @@ describe('Язычок «Ответить» (#729): только там, где 
             lastReplyAt={null}
             threadUnread={false}
             reactionsHidden={false}
-            onOpenThread={() => onOpenThread('m1')}
+            threadOpen={false}
+            onToggleThread={() => onOpenThread('m1')}
           />
         </MessageMenu>
       </QueryClientProvider>,
