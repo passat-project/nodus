@@ -27,6 +27,9 @@ describe('VideoPlayerView — кинозал видео (#787)', () => {
     const video = document.querySelector('video');
     expect(video).not.toBeNull();
     expect(video?.hasAttribute('controls')).toBe(true);
+    // #1005: фокус на плеере при открытии — иначе ←/→ уходят в интерфейс.
+    expect(video?.tabIndex).toBe(0);
+    expect(document.activeElement).toBe(video);
     expect(video?.className).toContain('max-h-full');
     expect(video?.className).toContain('max-w-full');
     expect(video?.className).toContain('object-contain');

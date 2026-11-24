@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { ui } from '@nodus/contracts';
 
 import { ImageViewer } from './image-viewer.js';
+import { handleVideoSeekKey } from './video-seek-keys.js';
 import { ViewerFullscreenButton } from './viewer-fullscreen-button.js';
 
 /**
@@ -24,6 +25,11 @@ function MediaStage({ children }: { children: ReactNode }) {
  * панорамирование, панель масштаба одной грамматики с PDF) — полноэкранный
  * контент БЕЗ скруглений (#151, вердикт владельца 29.09: в углах картинки
  * может быть важная информация); скругления остаются у миниатюр в ленте.
+ *
+ * Фокус плеера (#1005): у `<video>`/`<audio>` `autoFocus`-атрибут React
+ * игнорирует (`commitMount` знает только input-подобные теги) — ставим
+ * фокус ref'ом, иначе ←/→ не перематывают (работают лишь при фокусе на
+ * медиаэлементе).
  */
 export function MediaViewer({
   url,
@@ -38,22 +44,34 @@ export function MediaViewer({
   name: string;
   /** Изображение по ширине панели со скроллом (скан письма, #55). */
   fit?: 'width';
-  /** Фокус плеера: модалка — да, вкладка карточки — нет (не крадёт ввод). */
+  /** Фокус на плеере при открытии: видео — да (стрелки/пробел — управление
+   *  воспроизведением); поля ввода карточки при этом не затронуты. */
   autoFocus?: boolean;
   /** «На весь экран»: у картинки — в панели масштаба, у плеера — поверх. */
   onFullscreen?: () => void;
 }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    if (!autoFocus) return;
+    const player = mime.startsWith('video/') ? videoRef.current : audioRef.current;
+    player?.focus({ preventScroll: true });
+  }, [autoFocus, mime, url]);
+
   if (mime.startsWith('video/')) {
     return (
       <MediaStage>
         <video
+          ref={videoRef}
           key={url}
           src={url}
           controls
-          autoFocus={autoFocus}
+          tabIndex={0}
           playsInline
           className="max-h-full max-w-full object-contain"
           aria-label={name}
+          onKeyDown={handleVideoSeekKey}
         />
         {onFullscreen ? (
           <ViewerFullscreenButton onClick={onFullscreen} className="absolute top-3 right-3 z-10" />
@@ -66,7 +84,7 @@ export function MediaViewer({
       <div className="relative grid size-full place-items-center p-6">
         <div className="flex w-full max-w-md flex-col items-center gap-4">
           <span className="text-sm text-muted-foreground">{ui.files.mediaTitle}</span>
-          <audio key={url} src={url} controls autoFocus={autoFocus} className="w-full" />
+          <audio ref={audioRef} key={url} src={url} controls tabIndex={0} className="w-full" />
         </div>
         {onFullscreen ? (
           <ViewerFullscreenButton onClick={onFullscreen} className="absolute top-3 right-3 z-10" />

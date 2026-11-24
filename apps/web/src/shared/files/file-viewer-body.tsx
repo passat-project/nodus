@@ -132,7 +132,10 @@ export function FileViewerBody({
         mime={target.mime}
         name={target.name}
         fit={fit}
-        autoFocus={!fit}
+        // Видео во вкладке тоже получает клавиатуру (#1005): ←/→ и пробел —
+        // управление роликом, полей ввода в видео-вкладке нет. Документы и
+        // картинки по-прежнему не крадут ввод (autoFocus им не нужен).
+        autoFocus={!fit || target.mime.startsWith('video/')}
         onFullscreen={onFullscreen}
       />
     ) : (

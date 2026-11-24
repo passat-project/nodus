@@ -58,4 +58,22 @@ describe('MediaViewer: медиа ужимается по обеим осям (#
     expect(audio.className).toContain('w-full');
     expect(audio.parentElement!.className).toContain('max-w-md');
   });
+
+  /** #1005: autoFocus у медиаэлемента — реальный фокус (React атрибут игнорит). */
+  it('autoFocus: фокус на видео и tabIndex=0', () => {
+    const { container } = render(
+      <MediaViewer url="/files/clip.mp4" mime="video/mp4" name="clip.mp4" autoFocus />,
+    );
+    const video = container.querySelector('video')!;
+    expect(video.tabIndex).toBe(0);
+    expect(document.activeElement).toBe(video);
+  });
+
+  it('autoFocus=false: фокус не забирается у вкладки-хоста', () => {
+    const { container } = render(
+      <MediaViewer url="/files/clip.mp4" mime="video/mp4" name="clip.mp4" autoFocus={false} />,
+    );
+    const video = container.querySelector('video')!;
+    expect(document.activeElement).not.toBe(video);
+  });
 });
