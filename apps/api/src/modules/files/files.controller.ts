@@ -26,6 +26,7 @@ import { MinioStorageDriver } from './storage/minio-storage.driver.js';
 import { decideContentRange } from './content-range.js';
 import { needsTextNormalization, normalizeTextForOffice } from './office/text-normalizer.js';
 import { safeContentType } from './safe-content-type.js';
+import { safeFileName } from './safe-file-name.js';
 import { FileTextService } from './text/file-text.service.js';
 
 const contentQuerySchema = z.object({
@@ -225,7 +226,7 @@ export class FilesController {
       'Content-Type': safeContentType(file.mime),
       // Длина — тела ответа: у 206 это срез, у 200 — весь файл.
       'Content-Length': range ? range.end - range.start + 1 : size,
-      'Content-Disposition': `${disposition}; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+      'Content-Disposition': `${disposition}; filename*=UTF-8''${encodeURIComponent(safeFileName(file.name))}`,
       'Accept-Ranges': 'bytes',
       'X-Content-Type-Options': 'nosniff',
       'Content-Security-Policy': USER_CONTENT_CSP,
@@ -312,7 +313,7 @@ export class FilesController {
       // (security-ревью #1005).
       'Content-Type': 'application/pdf',
       'Content-Length': derivative.size,
-      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(`${file.name}.pdf`)}`,
+      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(safeFileName(`${file.name}.pdf`))}`,
       'X-Content-Type-Options': 'nosniff',
       'Cache-Control': 'private, max-age=3600',
       ETag: etag,

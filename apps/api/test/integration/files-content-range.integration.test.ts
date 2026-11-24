@@ -145,6 +145,40 @@ describe.skipIf(!process.env.DATABASE_URL || !process.env.STORAGE_ACCESS_KEY)(
       });
     });
 
+    it('длинное имя файла обрезается, ответ отдаётся', async () => {
+      // Security-ревью #1005: multipart-имя без лимита + encodeURIComponent
+      // раздували Content-Disposition — клиенты отбрасывали ответ.
+      const longName = `${'a'.repeat(480)}.webm`;
+      const form = new FormData();
+      const body = Uint8Array.from([1, 2, 3, 4]);
+      form.append('size', String(body.length));
+      form.append('file', new Blob([body], { type: 'video/webm' }), longName);
+      const uploaded = await fetch(`${fx.baseUrl}/chat/attachments`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${alice.token}` },
+        body: form,
+      });
+      expect(uploaded.status).toBe(201);
+      const att = (await uploaded.json()) as { id: string; url: string };
+
+      const res = await fetch(`${origin}${att.url}`);
+      expect(res.status).toBe(200);
+      // Заголовок строится из сохранённого имени (санитизировано при
+      // сохранении) и дополнительно клампится в контроллере: имя в
+      // Content-Disposition ≤ 200 символов, весь заголовок — читаемый.
+      const disposition = res.headers.get('content-disposition') ?? '';
+      const encoded = disposition.split("filename*=UTF-8''")[1] ?? '';
+      expect(encoded.length).toBeGreaterThan(0);
+      expect(encoded.length).toBeLessThan(700);
+      expect(decodeURIComponent(encoded).length).toBeLessThanOrEqual(200);
+      expect((await res.arrayBuffer()).byteLength).toBe(body.length);
+
+      await fetch(`${fx.baseUrl}/chat/attachments/${att.id}`, {
+        method: 'DELETE',
+        headers: { authorization: `Bearer ${alice.token}` },
+      });
+    });
+
     it('If-Range: чужая версия — весь файл; своя — 206', async () => {
       const stale = await fetch(`${origin}${url}`, {
         headers: { range: 'bytes=0-9', 'if-range': '"other-version"' },
