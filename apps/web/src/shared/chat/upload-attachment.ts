@@ -44,6 +44,50 @@ async function imageDimensions(file: File): Promise<{ width: number; height: num
   }
 }
 
+interface VideoMetadata {
+  width: number;
+  height: number;
+  durationMs: number;
+}
+
+/** Метаданные видео ДО загрузки (#250): габариты/длительность из
+ *  `<video loadedmetadata>` — бокс плитки и бейдж стабильны до ответа сервера;
+ *  сервер перепроверит ffprobe (авторитетно). */
+async function videoMetadata(file: File): Promise<VideoMetadata | null> {
+  return new Promise((resolve) => {
+    const objectUrl = URL.createObjectURL(file);
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    let settled = false;
+    const finish = (value: VideoMetadata | null): void => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      video.removeAttribute('src');
+      video.load();
+      URL.revokeObjectURL(objectUrl);
+      resolve(value);
+    };
+    const timer = window.setTimeout(() => finish(null), 10_000);
+    video.onloadedmetadata = () => {
+      const width = video.videoWidth;
+      const height = video.videoHeight;
+      const duration = video.duration;
+      finish(
+        width > 0 && height > 0
+          ? {
+              width,
+              height,
+              durationMs: Number.isFinite(duration) ? Math.max(0, Math.round(duration * 1000)) : 0,
+            }
+          : null,
+      );
+    };
+    video.onerror = () => finish(null);
+    video.src = objectUrl;
+  });
+}
+
 export interface UploadHandle {
   promise: Promise<MessageAttachment>;
   cancel: () => void;
@@ -65,18 +109,26 @@ export function uploadAttachment(file: File, onProgress: (fraction: number) => v
     // странице и передаётся серверу как previewUrl — blob из SW не резолвится.
     // В живом контуре previewUrl игнорируется: url выдаёт хранилище (#57).
     const objectUrl = URL.createObjectURL(file);
-    const dims = file.type.startsWith('image/') ? await imageDimensions(file) : null;
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+    const imageMeta = isImage ? await imageDimensions(file) : null;
+    const videoMeta = isVideo ? await videoMetadata(file) : null;
     const form = new FormData();
     // ТЕКСТОВЫЕ ПОЛЯ ДО ФАЙЛА (контракт @fastify/multipart: request.file()
     // видит только части раньше файловой — на больших файлах поля после
     // файла теряются, size=NaN → 400; репро #57).
-    form.append('previewUrl', objectUrl);
+    if (isImage) form.append('previewUrl', objectUrl);
     // size — заявленный размер (File.size): живой контур стримит в хранилище,
     // а putObject из стрима требует размер заранее; сервер сверит с байтами.
     form.append('size', String(file.size));
-    if (dims) {
-      form.append('width', String(dims.width));
-      form.append('height', String(dims.height));
+    if (imageMeta) {
+      form.append('width', String(imageMeta.width));
+      form.append('height', String(imageMeta.height));
+    }
+    if (videoMeta) {
+      form.append('width', String(videoMeta.width));
+      form.append('height', String(videoMeta.height));
+      form.append('durationMs', String(videoMeta.durationMs));
     }
     form.append('file', file);
     try {

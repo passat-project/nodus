@@ -71,19 +71,26 @@ export const chatMutationHandlers = [
     const width = Number(form.get('width'));
     const height = Number(form.get('height'));
     const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+    const durationRaw = Number(form.get('durationMs'));
     const attachment: MessageAttachment = {
       id: crypto.randomUUID(),
       fileId: crypto.randomUUID(),
       name: file.name,
       size: file.size,
       mime: file.type || 'application/octet-stream',
-      kind: isImage ? 'image' : 'file',
+      kind: isImage ? 'image' : isVideo ? 'video' : 'file',
       url: typeof previewUrl === 'string' && previewUrl ? previewUrl : null,
       thumbnailUrl: isImage && typeof previewUrl === 'string' ? previewUrl : null,
-      previewKind: isImage ? 'image' : 'file',
+      previewKind: isImage ? 'image' : isVideo ? 'video' : 'file',
       pdfUrl: null,
-      width: isImage && Number.isFinite(width) && width > 0 ? Math.round(width) : null,
-      height: isImage && Number.isFinite(height) && height > 0 ? Math.round(height) : null,
+      width: (isImage || isVideo) && Number.isFinite(width) && width > 0 ? Math.round(width) : null,
+      height:
+        (isImage || isVideo) && Number.isFinite(height) && height > 0 ? Math.round(height) : null,
+      durationMs:
+        isVideo && Number.isFinite(durationRaw) && durationRaw >= 0
+          ? Math.round(durationRaw)
+          : null,
     };
     uploadedAttachments.set(attachment.id, attachment);
     return HttpResponse.json(attachment, { status: 201 });

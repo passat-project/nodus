@@ -1,21 +1,25 @@
 import { useState } from 'react';
+import { Play } from 'lucide-react';
 import type { MessageAttachment } from '@nodus/contracts';
+import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
+import { useViewerHost } from '../files/viewer-host.js';
+import { handleVideoSeekKey } from '../files/video-seek-keys.js';
 import { ImageLightbox } from './image-lightbox.js';
 import { uiPx } from '../ui/ui-scale.js';
 
 /**
- * Раскладка галереи изображений (plan chat-attachments-plan.md; research:
+ * Раскладка медиа-галереи (plan chat-attachments-plan.md; research:
  * rowboat/Slack — равновысотные плитки в ряд, CometChat — коллаж, Битрикс —
- * ряд превью): 1 изображение — одна крупная плитка; 2+ — ряды по 3.
- * Чистая функция — unit-тест.
+ * ряд превью): 1 медиа — одна крупная плитка; 2+ — ряды по 3. С #250 медиа —
+ * это и изображения, и видео (одна грамматика). Чистая функция — unit-тест.
  */
-export function galleryRows(images: MessageAttachment[]): MessageAttachment[][] {
-  if (images.length === 0) return [];
-  if (images.length === 1) return [images];
+export function galleryRows(media: MessageAttachment[]): MessageAttachment[][] {
+  if (media.length === 0) return [];
+  if (media.length === 1) return [media];
   const rows: MessageAttachment[][] = [];
-  for (let i = 0; i < images.length; i += 3) rows.push(images.slice(i, i + 3));
+  for (let i = 0; i < media.length; i += 3) rows.push(media.slice(i, i + 3));
   return rows;
 }
 
@@ -35,12 +39,10 @@ const FALLBACK_W = uiPx(320);
  * Одиночная плитка из сохранённых габаритов. Модель FB Messenger (ishadeed,
  * разбор компонента: «if the image is smaller than the maximum values, we
  * display it as it is»): НЕ апскейлим — бокс не шире/выше природных px
- * картинки (низкое разрешение остаётся маленьким и резким, а не большим и
- * мыльным, как при фиксированном боксе Telegram); капы MAX_W×MAX_H режут
- * только крупное. Микро (<100px) поднимается до пола читаемости. Без
- * габаритов (клиент не прочитал / старые строки) — фолбэк 4:3: бокс
- * фиксируется и НЕ меняется после загрузки. Целые px — дробные при
- * --ui-scale округляются врозь (урок Switch, #96). Чистая — unit-тест.
+ * картинки; капы MAX_W×MAX_H режут только крупное. Микро (<100px) поднимается
+ * до пола читаемости. Без габаритов — фолбэк 4:3: бокс фиксируется и НЕ
+ * меняется после загрузки. Целые px — дробные при --ui-scale округляются
+ * врозь (урок Switch, #96). Чистая — unit-тест.
  */
 export function fitSingleBox(
   width?: number | null,
@@ -67,6 +69,19 @@ export function fitSingleBox(
   }
   return { width: Math.round(w), height: Math.round(h) };
 }
+
+/** Длительность бейджа: M:SS (≥ часа — H:MM:SS). Чистая — unit-тест. */
+export function formatVideoDuration(durationMs: number): string {
+  const total = Math.max(0, Math.round(durationMs / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  const mm = hours > 0 ? String(minutes).padStart(2, '0') : String(minutes);
+  const ss = String(seconds).padStart(2, '0');
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+const TILE_CLASS = 'relative min-w-0 overflow-hidden bg-muted';
 
 function GalleryTile({
   image,
@@ -95,7 +110,8 @@ function GalleryTile({
         // безопасны: пузырь/карточка несут ЯВНЫЙ px из mediaBubbleWidth —
         // gotcha «fit-content + проценты» не применяется), высота — из
         // aspect-ratio по габаритам: пропорции держатся при сужении панели.
-        'relative min-w-0 cursor-zoom-in overflow-hidden bg-muted',
+        TILE_CLASS,
+        'cursor-zoom-in',
         single ? 'w-full shrink-0 rounded-none' : 'flex-1 rounded-none',
         !loaded && 'animate-pulse',
       )}
@@ -118,46 +134,155 @@ function GalleryTile({
 }
 
 /**
- * Галерея изображений сообщения (грамматика Битрикс24 + медиа-стиль #187):
- * плитки равной высоты в рядах по 3, одиночное — full-bleed превью на всю
- * ширину пузыря. Геометрия — ЯВНЫЕ px из сохранённых width/height (#150):
- * габариты задают ЯВНУЮ ширину пузыря/карточки (mediaBubbleWidth), поэтому
- * проценты внутри безопасны (gotcha «fit-content + проценты» о схлопе до
- * загрузки не применяется) — бокс обязанателен до первого байта картинки.
- * Клик по плитке — лайтбокс (`image-lightbox.tsx`: Esc/стрелки, счётчик,
- * возврат фокуса на плитку; добро владельца 14.09.2026).
+ * Видео-плитка (#250, решение владельца 07.10: модель Битрикс24): постер —
+ * серверный кадр (WebP), play в левом верхнем углу играет ролик НА МЕСТЕ
+ * (нативные контролы), клик по остальной плитке открывает большой плеер,
+ * справа внизу — длительность. Кодек не поддержан — вежливая карточка
+ * «Не удалось воспроизвести — Скачать» на месте ролика (без сломанного плеера).
  */
-export function AttachmentGallery({ images }: { images: MessageAttachment[] }) {
-  const [openAt, setOpenAt] = useState<number | null>(null);
-  const rows = galleryRows(images);
-  let offset = 0;
+function VideoGalleryTile({
+  video,
+  single,
+  onOpen,
+}: {
+  video: MessageAttachment;
+  single: boolean;
+  onOpen: () => void;
+}) {
+  const [mode, setMode] = useState<'poster' | 'playing' | 'error'>('poster');
+  const box = fitSingleBox(video.width, video.height);
+  const duration = video.durationMs ?? null;
+  return (
+    <div
+      className={cn(TILE_CLASS, single ? 'w-full shrink-0 rounded-none' : 'flex-1 rounded-none')}
+      style={single ? { aspectRatio: `${box.width} / ${box.height}` } : { height: ROW_HEIGHT }}
+    >
+      {mode === 'playing' ? (
+        <video
+          src={video.url ?? undefined}
+          controls
+          autoPlay
+          playsInline
+          className="size-full bg-black object-contain"
+          aria-label={video.name}
+          onKeyDown={handleVideoSeekKey}
+          onError={() => setMode('error')}
+        />
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={onOpen}
+            aria-label={video.name}
+            className="absolute inset-0 z-0 cursor-zoom-in"
+          >
+            {video.thumbnailUrl ? (
+              <img
+                src={video.thumbnailUrl}
+                alt=""
+                loading="lazy"
+                className="size-full object-cover"
+              />
+            ) : (
+              <span className="block size-full bg-black/70" />
+            )}
+          </button>
+          {mode === 'error' ? (
+            <span className="absolute inset-x-2 bottom-2 z-10 rounded-md bg-black/75 px-2 py-1 text-center text-badge text-white">
+              {ui.chat.videoUnsupported}{' '}
+              <a
+                href={video.url ?? '#'}
+                download={video.name}
+                className="underline underline-offset-2"
+                onClick={(event) => event.stopPropagation()}
+              >
+                {ui.files.download}
+              </a>
+            </span>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setMode('playing')}
+                aria-label={ui.chat.videoPlay}
+                title={ui.chat.videoPlay}
+                className="absolute top-2 left-2 z-10 grid size-9 place-items-center rounded-full bg-black/55 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+              >
+                <Play className="size-4 translate-x-[1px]" fill="currentColor" strokeWidth={0} />
+              </button>
+              {duration !== null ? (
+                <span className="pointer-events-none absolute right-2 bottom-2 z-10 rounded bg-black/60 px-1.5 py-0.5 font-mono text-badge text-white tabular-nums">
+                  {formatVideoDuration(duration)}
+                </span>
+              ) : null}
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Медиа-галерея сообщения (грамматика Битрикс24 + медиа-стиль #187):
+ * плитки равной высоты в рядах по 3, одиночное — full-bleed превью на всю
+ * ширину пузыря. Изображения открываются лайтбоксом (`image-lightbox.tsx`:
+ * Esc/стрелки, счётчик, возврат фокуса на плитку), видео — большим плеером
+ * (глобальный `AttachmentViewer` → «кинозал»), play на постере — встроенным
+ * плеером на месте (#250). Геометрия — явные px из width/height: бокс
+ * обязателен до первого байта медиа.
+ */
+export function AttachmentGallery({ media }: { media: MessageAttachment[] }) {
+  const viewer = useViewerHost();
+  const [openImageId, setOpenImageId] = useState<string | null>(null);
+  const images = media.filter((item) => item.kind === 'image');
+  const rows = galleryRows(media);
+  const openIndex = openImageId ? images.findIndex((image) => image.id === openImageId) : -1;
   return (
     <span
       className="flex min-w-0 max-w-full flex-col gap-0.5"
       style={rows.length > 1 || (rows[0]?.length ?? 0) > 1 ? { width: MEDIA_MAX_W } : undefined}
     >
       {rows.map((row, rowIndex) => {
-        const start = offset;
-        offset += row.length;
         return (
           <span key={rowIndex} className="flex min-w-0 gap-0.5">
-            {row.map((image, i) => (
-              <GalleryTile
-                key={image.id}
-                image={image}
-                single={rows.length === 1 && row.length === 1}
-                onOpen={() => setOpenAt(start + i)}
-              />
-            ))}
+            {row.map((item) => {
+              const single = rows.length === 1 && row.length === 1;
+              return item.kind === 'video' ? (
+                <VideoGalleryTile
+                  key={item.id}
+                  video={item}
+                  single={single}
+                  onOpen={() =>
+                    viewer.open({
+                      fileId: item.fileId,
+                      name: item.name,
+                      mime: item.mime,
+                      size: item.size,
+                      url: item.url,
+                      previewKind: item.previewKind,
+                      pdfUrl: item.pdfUrl,
+                    })
+                  }
+                />
+              ) : (
+                <GalleryTile
+                  key={item.id}
+                  image={item}
+                  single={single}
+                  onOpen={() => setOpenImageId(item.id)}
+                />
+              );
+            })}
           </span>
         );
       })}
-      {openAt !== null ? (
+      {openIndex >= 0 ? (
         <ImageLightbox
           images={images}
-          index={openAt}
-          onIndex={setOpenAt}
-          onClose={() => setOpenAt(null)}
+          index={openIndex}
+          onIndex={(index) => setOpenImageId(images[index]?.id ?? null)}
+          onClose={() => setOpenImageId(null)}
         />
       ) : null}
     </span>

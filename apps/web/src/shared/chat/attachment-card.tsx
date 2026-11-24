@@ -1,4 +1,4 @@
-import { Download } from 'lucide-react';
+import { Download, Play } from 'lucide-react';
 import type { MessageAttachment } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import {
@@ -45,6 +45,7 @@ export function AttachmentCard({
   const surface = messageSurface(mine);
   const viewer = useViewerHost();
   const isImage = attachment.kind === 'image';
+  const isVideo = attachment.kind === 'video';
   const open = () => {
     if (isImage) {
       onOpenImage?.();
@@ -91,6 +92,24 @@ export function AttachmentCard({
           ) : (
             <span className="aspect-square w-6 rounded-sm bg-muted" />
           )
+        ) : isVideo ? (
+          // Видео в смешанном наборе (рядом файл): квадратная миниатюра-постер
+          // с play-значком (#250); без постера — иконка типа.
+          <span className="relative block aspect-square w-6 overflow-hidden rounded-sm bg-muted">
+            {attachment.thumbnailUrl ? (
+              <img
+                src={attachment.thumbnailUrl}
+                alt=""
+                loading="lazy"
+                className="size-full object-cover"
+              />
+            ) : (
+              <FileTypeIcon mime={attachment.mime} className="size-6" />
+            )}
+            <span className="absolute inset-0 grid place-items-center bg-black/25">
+              <Play className="size-3 text-white" fill="currentColor" strokeWidth={0} />
+            </span>
+          </span>
         ) : (
           <FileTypeIcon mime={attachment.mime} className="size-6" />
         )}

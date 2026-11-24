@@ -16,7 +16,7 @@ export interface ReplyDraft {
   snippet: string;
   /** Частичная цитата: выделенный автором фрагмент (Replies 2.0). */
   quoteText: string | null;
-  attachmentKind: 'image' | 'file' | 'sticker' | null;
+  attachmentKind: 'image' | 'video' | 'file' | 'sticker' | null;
   /** #288: мини-глиф оригинального СТИКЕРА в цитате (url + первый эмодзи
    *  пака + mime); null у остальных видов и старых черновиков. */
   stickerUrl: string | null;

@@ -15,13 +15,14 @@ import { useJumpStore } from './jump-store.js';
  *  превью сообщения; удалённый закреп — placeholder). */
 function pinSnippet(
   text: string,
-  kind: 'image' | 'file' | 'sticker' | null,
+  kind: 'image' | 'video' | 'file' | 'sticker' | null,
   deleted: boolean,
 ): string {
   if (deleted) return ui.chat.deletedPlaceholder;
   // Однострочный truncate: упоминание — отображаемым текстом (канон Telegram).
   if (text) return stripMentionTokens(text);
   if (kind === 'image') return ui.chat.quotePhoto;
+  if (kind === 'video') return ui.chat.quoteVideo;
   if (kind === 'file') return ui.chat.quoteFile;
   if (kind === 'sticker') return ui.chat.stickerPreview;
   return '';

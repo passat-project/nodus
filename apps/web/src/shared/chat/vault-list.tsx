@@ -1,4 +1,4 @@
-import { Download, Link2, MessagesSquare } from 'lucide-react';
+import { Download, Link2, MessagesSquare, Play } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type {
   FavoriteCard,
@@ -11,6 +11,7 @@ import { ui } from '@nodus/contracts';
 
 import { FileTypeIcon } from '../files/file-type-icon.js';
 import { formatBytes, formatDateTimeShort } from '../lib/format.js';
+import { formatVideoDuration } from './attachment-gallery.js';
 import { useJumpStore } from './jump-store.js';
 
 /**
@@ -31,12 +32,17 @@ export function MediaTile({
   name,
   meta,
   src,
+  isVideo = false,
+  durationMs = null,
   onOpen,
   onJump,
 }: {
   name: string;
   meta: string;
   src: string | undefined;
+  /** Видео-плитка (#250): play-значок и бейдж длительности на постере. */
+  isVideo?: boolean;
+  durationMs?: number | null;
   onOpen: () => void;
   onJump: () => void;
 }) {
@@ -57,6 +63,20 @@ export function MediaTile({
             decoding="async"
             className="absolute inset-0 size-full object-cover transition-opacity duration-200 group-hover:opacity-90"
           />
+        ) : isVideo ? (
+          <span className="absolute inset-0 bg-black/60" />
+        ) : null}
+        {isVideo ? (
+          <>
+            <span className="pointer-events-none absolute top-1.5 left-1.5 grid size-7 place-items-center rounded-full bg-black/55 text-white">
+              <Play className="size-3.5 translate-x-[1px]" fill="currentColor" strokeWidth={0} />
+            </span>
+            {durationMs !== null ? (
+              <span className="pointer-events-none absolute right-1.5 bottom-1.5 rounded bg-black/60 px-1 py-0.5 font-mono text-[10px] text-white tabular-nums">
+                {formatVideoDuration(durationMs)}
+              </span>
+            ) : null}
+          </>
         ) : null}
         <span
           role="button"
