@@ -40,6 +40,9 @@ describe.skipIf(!process.env.DATABASE_URL || !process.env.REDIS_URL || !process.
         store,
         redis,
         consumerGroup,
+        // Стоп-лист токенов здесь выключен: общий redis занят XREADGROUP BLOCK,
+        // а отдельный клиент в интеграционном наборе не нужен (#101).
+        isTokenRevoked: null,
       });
       await new Promise<void>((resolve) => {
         gateway.httpServer.listen(0, '127.0.0.1', () => {

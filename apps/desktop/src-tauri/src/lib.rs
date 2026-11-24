@@ -5,6 +5,7 @@ mod bridge;
 mod deep_link;
 mod downloads;
 mod fade;
+mod fade_policy;
 mod focus;
 mod layout;
 mod popups;

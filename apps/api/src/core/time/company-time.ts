@@ -48,3 +48,21 @@ export function companyDate(at: Date, timeZone: string = companyTimeZone()): str
   const { year, month, day } = companyParts(at, timeZone);
   return `${String(year).padStart(4, '0')}-${month}-${day}`;
 }
+
+/** Дата и время по поясу компании человеком: «5 декабря, 17:00» — строки
+ *  уведомлений о сроке (тот же вид, что чип срока в карточке): вечерние сроки
+ *  не съезжают на день, а смена времени в пределах дня видна. */
+export function companyDateTimeRu(at: Date, timeZone: string = companyTimeZone()): string {
+  const date = new Intl.DateTimeFormat('ru-RU', {
+    timeZone,
+    day: 'numeric',
+    month: 'long',
+  }).format(at);
+  const time = new Intl.DateTimeFormat('ru-RU', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(at);
+  return `${date}, ${time}`;
+}

@@ -122,7 +122,7 @@ describe('UsersService: деактивация сотрудника', () => {
     expect(eventBus.emit).toHaveBeenCalledWith(
       'tx-handle',
       'directory.department.updated',
-      { departmentId: 'dep-2', changedFields: ['deputyId'] },
+      { departmentId: 'dep-2', changedFields: ['deputyIds'] },
       expect.objectContaining({ actorId: 'admin-1' }),
     );
   });
@@ -169,6 +169,16 @@ describe('UsersService: деактивация сотрудника', () => {
     await expect(service.deactivateUser('nope', actor())).rejects.toMatchObject({
       code: ErrorCode.NOT_FOUND,
     });
+  });
+
+  it('приглашённого нельзя уволить старым действием (#101) → CONFLICT', async () => {
+    users.findCardById.mockResolvedValue(cardRow({ status: 'invited' }));
+
+    await expect(service.deactivateUser('user-1', actor())).rejects.toMatchObject({
+      code: ErrorCode.CONFLICT,
+    });
+    expect(users.update).not.toHaveBeenCalled();
+    expect(eventBus.emit).not.toHaveBeenCalled();
   });
 
   it('последний администратор: деактивация → 409 ROLE_LAST_ADMIN, замок строки admin', async () => {

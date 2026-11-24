@@ -5,6 +5,7 @@ import { loadGatewayConfig } from './config.ts';
 import { createGatewayServer } from './gateway-server.ts';
 import { PgMembershipStore } from './membership.ts';
 import { createGatewayRedis } from './redis-connection.ts';
+import { createTokenRevokedChecker } from './revoked.ts';
 import { registerUnhandledRejectionHandler } from './unhandled-rejection.ts';
 
 // Фоновая ошибка не должна завершать процесс gateway (AUD-018): пишем error
@@ -16,7 +17,18 @@ registerUnhandledRejectionHandler((message, error) => {
 const config = loadGatewayConfig();
 const store = new PgMembershipStore(config.DATABASE_URL);
 const redis = createGatewayRedis(config.REDIS_URL);
-const gateway = createGatewayServer({ jwtSecret: config.JWT_SECRET, store, redis });
+// Стоп-лист хендшейка — на ОТДЕЛЬНОМ неблокирующем соединении: fanout-client
+// занят XREADGROUP BLOCK, проверка на нём ждала бы остаток блокировки.
+const authRedis = createGatewayRedis(config.REDIS_URL, 'gateway:auth', {
+  enableOfflineQueue: false,
+  commandTimeout: 300,
+});
+const gateway = createGatewayServer({
+  jwtSecret: config.JWT_SECRET,
+  store,
+  redis,
+  isTokenRevoked: createTokenRevokedChecker(authRedis),
+});
 
 gateway.httpServer.listen(config.GATEWAY_PORT, '0.0.0.0', () => {
   void gateway
@@ -39,6 +51,7 @@ async function shutdown(signal: string): Promise<void> {
   console.log(`gateway: ${signal}, останавливаюсь`);
   await gateway.close();
   redis.disconnect();
+  authRedis.disconnect();
   await store.close();
 }
 process.on('SIGTERM', () => {

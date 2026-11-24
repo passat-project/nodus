@@ -122,6 +122,7 @@ vi.mock('../../../shared/api/projects-list.js', () => ({
 
 vi.mock('../../../shared/api/users-list.js', () => ({
   useUsersList: () => ({ data: { items: [{ ...MANAGER, email: 'a@nodus.by' }] } }),
+  useActiveUsersList: () => ({ data: { items: [{ ...MANAGER, email: 'a@nodus.by' }] } }),
   useUsersSearch: () => ({ data: { items: [] }, isFetching: false }),
 }));
 

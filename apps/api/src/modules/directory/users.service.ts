@@ -186,6 +186,11 @@ export class UsersService {
     if (!before) {
       throw DomainException.notFound('User not found');
     }
+    if (before.status === 'invited' && dto.roleIds !== undefined) {
+      // Роль до активации не выдаётся (#101): базовую «Сотрудник» привязывает
+      // принятие приглашения, остальные права — после входа.
+      throw new DomainException(ErrorCode.CONFLICT, 'Invited user cannot receive roles');
+    }
     if (dto.roleIds) {
       await assertRolesExist(this.roles, dto.roleIds);
     }

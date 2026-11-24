@@ -1,11 +1,9 @@
 import type { EffectiveSection, TransitionWindowFieldKey } from '@nodus/contracts';
 import { customFieldIdOfKey, formFieldWidth, isFormDecor, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
-import { Input } from '@nodus/ui/components/input';
 import { Textarea } from '@nodus/ui/components/textarea';
 
-import { formatDuration, parseDuration } from '../../../lib/minutes.js';
-import { useUsersList } from '../../../api/users-list.js';
+import { useActiveUsersList } from '../../../api/users-list.js';
 import { CustomFieldEditor } from '../../../custom-fields/value-editor.js';
 import { DateTimePicker } from '../../../ui/date-time-picker.js';
 import { PeoplePicker } from '../../../ui/people-picker.js';
@@ -18,6 +16,7 @@ import {
   type FormGridItem,
 } from '../../../forms/form-grid.js';
 import { WillLockNotice } from '../../../forms/lock-notice.js';
+import { MinutesField } from './minutes-field.js';
 
 /**
  * «Поля задачи»: текущие значения, меняются только выбранные в окне.
@@ -209,7 +208,7 @@ function AssigneeField({
   editable: boolean;
   onChange: (next: Partial<WindowFieldValues>) => void;
 }) {
-  const { data } = useUsersList();
+  const { data } = useActiveUsersList();
   const current = value ? data?.items.find((u) => u.id === value) : undefined;
   return (
     <PeoplePicker
@@ -221,28 +220,5 @@ function AssigneeField({
         {current ? current.displayName : ui.common.notSet}
       </Button>
     </PeoplePicker>
-  );
-}
-
-function MinutesField({
-  value,
-  editable,
-  onChange,
-}: {
-  value: number | null;
-  editable: boolean;
-  onChange: (minutes: number | null) => void;
-}) {
-  return (
-    <Input
-      defaultValue={
-        value === null ? '' : formatDuration(value, ui.tasks.hoursShort, ui.tasks.minutesShort)
-      }
-      readOnly={!editable}
-      placeholder={ui.tasks.plannedPlaceholder}
-      aria-label={ui.tasks.plannedTime}
-      className="h-8 w-40 text-sm"
-      onBlur={(e) => onChange(parseDuration(e.target.value))}
-    />
   );
 }

@@ -1,4 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { PAGINATION_MAX_LIMIT } from '@nodus/contracts';
 import type { Paginated, UserListItem } from '@nodus/contracts';
 
@@ -68,4 +69,19 @@ export function useUsersList(options: { enabled?: boolean } = {}) {
     queryFn: fetchAllUsers,
     enabled: options.enabled ?? true,
   });
+}
+
+/** Только активные сотрудники — для пикеров назначения, фильтров и участников
+ *  (#101): приглашённые и уволенные не должны предлагаться к выбору.
+ *  Список сотрудников и заголовки карточек остаются на полном `useUsersList`. */
+export function useActiveUsersList(options: { enabled?: boolean } = {}) {
+  const query = useUsersList(options);
+  const data = useMemo(
+    () =>
+      query.data
+        ? { ...query.data, items: query.data.items.filter((user) => user.status === 'active') }
+        : query.data,
+    [query.data],
+  );
+  return { ...query, data };
 }

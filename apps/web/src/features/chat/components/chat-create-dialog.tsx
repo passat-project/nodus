@@ -24,13 +24,14 @@ import { Textarea } from '@nodus/ui/components/textarea';
 import { cn } from '@nodus/ui/lib/utils';
 import { toast } from 'sonner';
 
-import { useUsersList } from '../../../shared/api/users-list.js';
+import { useActiveUsersList } from '../../../shared/api/users-list.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { withoutPatronymic } from '../../../shared/lib/format.js';
 import { avatarIssueMessage, validateAvatarFile } from '../../../shared/chat/avatar-upload.js';
 import { useSetConversationAvatar } from '../../../shared/chat/manage-api.js';
 import { PersonAvatar, PersonAvatarById } from '../../../shared/ui/person-avatar.js';
 import { useCreateConversation } from '../api/chat-api.js';
+import { chatParticipantCandidates } from '../lib/participant-candidates.js';
 
 /**
  * Создание группового чата/канала (#91, референс окна «Создание чата»
@@ -166,7 +167,7 @@ export function ChatCreateDialog({
   onClose: () => void;
 }) {
   const me = useAuthStore((s) => s.user);
-  const { data: users } = useUsersList();
+  const { data: users } = useActiveUsersList();
   const create = useCreateConversation();
   const setAvatar = useSetConversationAvatar();
 
@@ -201,15 +202,15 @@ export function ChatCreateDialog({
   const [permissions, setPermissions] = useState(DEFAULT_PERMISSIONS);
   const [pickQuery, setPickQuery] = useState('');
 
-  const candidates = useMemo(() => {
-    const q = pickQuery.trim().toLowerCase();
-    return (users?.items ?? []).filter(
-      (u: UserListItem) =>
-        u.id !== me?.id &&
-        !memberIds.includes(u.id) &&
-        (!q || u.displayName.toLowerCase().includes(q)),
-    );
-  }, [users, memberIds, pickQuery, me?.id]);
+  const candidates = useMemo(
+    () =>
+      chatParticipantCandidates(users?.items ?? [], {
+        meId: me?.id,
+        selectedIds: memberIds,
+        query: pickQuery,
+      }),
+    [users, memberIds, pickQuery, me?.id],
+  );
 
   function onAvatarPicked(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];

@@ -93,6 +93,9 @@ model FeatureFlag {
 enum UserStatus {
   active
   deactivated
+  /// Приглашён по ссылке (#101): строка существует, пароля нет, до активации
+  /// не участвует в структуре, пикерах, поиске и назначениях.
+  invited
 }
 
 enum Gender {
@@ -112,7 +115,7 @@ enum OrgUnitKind {
 model User {
   id           String     @id @default(uuid()) @db.Uuid
   email        String     @unique
-  passwordHash String     @map("password_hash")
+  passwordHash String?    @map("password_hash")
   lastName     String     @map("last_name")
   firstName    String     @map("first_name")
   middleName   String?    @map("middle_name")
@@ -148,6 +151,12 @@ model User {
   /// Начало рабочего дня, «HH:mm».
   workdayStart   String?   @map("workday_start")
 
+  /// Приглашение по ссылке (#101): когда создано; история не перезаписывается.
+  invitedAt   DateTime? @map("invited_at") @db.Timestamptz()
+  /// Первая активация (пароль задан). NULL — строку никогда не активировали:
+  /// истечение приглашения удаляет её; у бывшего сотрудника остаётся история.
+  activatedAt DateTime? @map("activated_at") @db.Timestamptz()
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
@@ -160,9 +169,11 @@ model User {
 
   roles               UserRole[]
   sessions            Session[]
+  tokens              UserToken[]
   letterViews         LetterView[]
   headedDepartments   Department[] @relation("DepartmentHead")
-  deputiedDepartments Department[] @relation("DepartmentDeputy")
+  /// Заместительства (#817): сотрудник — зам ровно одного отдела (UNIQUE).
+  deputyships DepartmentDeputy[]
   /// ИИ-агент (#889): сессии и прогоны принадлежат сотруднику.
   assistantSessions AssistantSession[]
   assistantRuns     AssistantRun[]   @relation("AssistantRuns")
@@ -181,14 +192,13 @@ model User {
 }
 
 /// Подразделение (data-model.md: Department). Дерево по parent_id;
-/// руководитель (head) и постоянный заместитель (deputy) — эпик M2.
+/// руководитель (head) и заместители (deputy, #817) — роли сотрудников.
 model Department {
   id        String      @id @default(uuid()) @db.Uuid
   name      String
   kind      OrgUnitKind @default(management)
   parentId  String?     @map("parent_id") @db.Uuid
   headId    String?     @map("head_id") @db.Uuid
-  deputyId  String?     @map("deputy_id") @db.Uuid
   sortOrder Int         @default(0) @map("sort_order")
   /// Архивация вместо удаления (связи сотрудников и история сохраняются).
   isActive  Boolean     @default(true) @map("is_active")
@@ -199,7 +209,9 @@ model Department {
   parent   Department?  @relation("DepartmentTree", fields: [parentId], references: [id], onDelete: SetNull)
   children Department[] @relation("DepartmentTree")
   head     User?        @relation("DepartmentHead", fields: [headId], references: [id], onDelete: SetNull)
-  deputy   User?        @relation("DepartmentDeputy", fields: [deputyId], references: [id], onDelete: SetNull)
+
+  /// Заместители отдела (#817): их несколько, порядок — sortOrder.
+  deputies DepartmentDeputy[]
 
   members      User[] @relation("DepartmentMembers")
   legalMembers User[] @relation("LegalDepartmentMembers")
@@ -210,9 +222,27 @@ model Department {
   @@index([kind, parentId, sortOrder])
   /// FK SetNull-проверки (удаление подразделения/сотрудника) и подъём по дереву.
   @@index([parentId])
-  @@index([headId])
-  @@index([deputyId])
+  /// Один человек — глава одного подразделения (#817): NULL-ов сколько угодно.
+  @@unique([headId])
   @@map("departments")
+}
+
+/// Заместитель подразделения (#817). Их несколько у отдела; sortOrder — порядок
+/// показа (первый — «старший»). Сотрудник — зам ровно одного отдела (UNIQUE
+/// user_id): «одно место» — роль в своём отделе, а не второе место.
+model DepartmentDeputy {
+  departmentId String   @map("department_id") @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  sortOrder    Int      @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([departmentId, userId])
+  /// «Один сотрудник — одно место»: зам ровно одного отдела.
+  @@unique([userId])
+  @@map("department_deputies")
 }
 
 /// Должность — плоский справочник; kind: management | legal (эпик M2).
@@ -313,6 +343,29 @@ model Session {
 
   @@index([userId, revokedAt])
   @@map("sessions")
+}
+
+/// Одноразовые ссылки приглашения и сброса пароля (#101): в БД только
+/// SHA-256 от сырого токена. `used_at` — израсходован, `revoked_at` —
+/// перевыпущен/отменён; действует тот, у кого оба NULL и `expires_at > now()`.
+/// `created_by` — голый UUID администратора без FK (как audit, I3).
+model UserToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  /// 'invite' | 'reset' (CHECK в миграции: Prisma не выражает CHECK).
+  kind      String
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz()
+  usedAt    DateTime? @map("used_at") @db.Timestamptz()
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz()
+  createdBy String?   @map("created_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind])
+  @@index([kind, expiresAt])
+  @@map("user_tokens")
 }
 
 // ===== Модуль chat (issue #58, эпик M6) =====

@@ -11,7 +11,7 @@ import {
 import { useDepartmentsList } from '../api/departments-list.js';
 import { projectsAvailable } from '../api/projects-available.js';
 import { useProjectsList } from '../api/projects-list.js';
-import { useUsersList } from '../api/users-list.js';
+import { useActiveUsersList } from '../api/users-list.js';
 import { dictionariesKeys, fetchDictionaryItems } from '../dictionaries/queries.js';
 import type { FilterFieldDef, FilterOption } from '../views/list-filters.js';
 import { useCustomFieldDefinitions } from './queries.js';
@@ -31,7 +31,7 @@ export function useCustomFieldFilterDefs<T>(
 ): FilterFieldDef<T>[] {
   const { data } = useCustomFieldDefinitions(module);
   const definitions = useMemo(() => data ?? [], [data]);
-  const { data: users } = useUsersList();
+  const { data: users } = useActiveUsersList();
   const departments = useDepartmentsList();
   const projectsAvailableNow = projectsAvailable();
   const { data: projects } = useProjectsList({ enabled: projectsAvailableNow });

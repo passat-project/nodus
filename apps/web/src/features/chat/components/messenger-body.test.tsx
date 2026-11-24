@@ -28,6 +28,7 @@ vi.mock('../../../shared/chat/chat-queries.js', () => ({
 }));
 vi.mock('../../../shared/api/users-list.js', () => ({
   useUsersList: () => ({ data: { items: [] } }),
+  useActiveUsersList: () => ({ data: { items: [] } }),
 }));
 vi.mock('../../../shared/chat/conversation-open-responder.js', () => ({
   ConversationOpenResponder: () => null,

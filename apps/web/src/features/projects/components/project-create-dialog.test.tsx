@@ -97,6 +97,7 @@ vi.mock('../../../shared/api/users-list.js', () => {
   ];
   return {
     useUsersList: () => ({ data: { items } }),
+    useActiveUsersList: () => ({ data: { items } }),
     // PeoplePicker ищет сотрудников серверным поиском при открытии.
     useUsersSearch: () => ({ data: { items }, isFetching: false }),
   };

@@ -30,6 +30,8 @@ const ACCESS_REVOCATION_EVENTS: ReadonlySet<string> = new Set([
   DIRECTORY_EVENTS.USER_DEACTIVATED,
   DIRECTORY_EVENTS.ROLE_ACCESS_CHANGED,
   DIRECTORY_EVENTS.USER_UPDATED,
+  DIRECTORY_EVENTS.USER_PASSWORD_RESET_ISSUED,
+  DIRECTORY_EVENTS.USER_PASSWORD_CHANGED,
 ]);
 
 type HandlerInstance = DomainEventHandler & {
@@ -61,7 +63,8 @@ interface RetryState {
  * повторяется бэкоффом один; после `POISON_ATTEMPTS` он снимается с
  * повторов (error-запись с id события и именем обработчика), и событие
  * завершается. Исключение — события отзыва доступа (`USER_DEACTIVATED`,
- * `USER_UPDATED`, `ROLE_ACCESS_CHANGED`): их упавший обработчик не снимается
+ * `USER_PASSWORD_RESET_ISSUED`, `USER_PASSWORD_CHANGED`, `USER_UPDATED`,
+ * `ROLE_ACCESS_CHANGED`): их упавший обработчик не снимается
  * с повторов никогда — отзыв прав не теряется молча, повтор идёт до
  * восстановления Redis. Обработчик исполняется ВНЕ транзакции диспетчера:
  * у него свои транзакции (TransactionRunner), а обёртка лишь держала бы

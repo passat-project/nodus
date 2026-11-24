@@ -120,4 +120,14 @@ describe('UsersService: активация сотрудника', () => {
     });
     expect(users.update).not.toHaveBeenCalled();
   });
+
+  it('приглашённого нельзя активировать напрямую (#101) → CONFLICT', async () => {
+    users.findCardById.mockResolvedValue(cardRow({ status: 'invited' }));
+
+    await expect(service.activateUser('user-1', actor())).rejects.toMatchObject({
+      code: ErrorCode.CONFLICT,
+    });
+    expect(users.update).not.toHaveBeenCalled();
+    expect(eventBus.emit).not.toHaveBeenCalled();
+  });
 });

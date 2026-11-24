@@ -40,7 +40,7 @@ vi.mock('../../../shared/api/departments-list.js', () => ({
       depth: 0,
       isActive: true,
       headId: null,
-      deputyId: null,
+      deputyIds: [],
     },
   ],
 }));

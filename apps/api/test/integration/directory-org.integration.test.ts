@@ -86,7 +86,7 @@ describe('оргструктура: частичная правка (#492)', () 
       parentId: parent.id,
       kind: 'legal',
       headId: f.users.employee.id,
-      deputyId: f.users.limited.id,
+      deputyIds: [f.users.limited.id],
       sortOrder: 3,
     });
 
@@ -100,12 +100,21 @@ describe('оргструктура: частичная правка (#492)', () 
       parentId: parent.id,
       kind: 'legal',
       headId: f.users.employee.id,
-      deputyId: f.users.limited.id,
+      deputyIds: [f.users.limited.id],
       sortOrder: 3,
     };
     expect(updated).toMatchObject(expected);
-    const stored = await f.prisma.department.findUniqueOrThrow({ where: { id: child.id } });
-    expect(stored).toMatchObject(expected);
+    const stored = await f.prisma.department.findUniqueOrThrow({
+      where: { id: child.id },
+      include: { deputies: { select: { userId: true } } },
+    });
+    expect(stored).toMatchObject({
+      parentId: parent.id,
+      kind: 'legal',
+      headId: f.users.employee.id,
+      sortOrder: 3,
+    });
+    expect(stored.deputies.map((deputy) => deputy.userId)).toEqual([f.users.limited.id]);
 
     expect(await lastEventPayload('department', child.id, 'directory.department.updated')).toEqual(
       expect.objectContaining({ changedFields: ['name'] }),

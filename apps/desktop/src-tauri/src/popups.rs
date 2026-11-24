@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use tauri::webview::WebviewWindowBuilder;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow};
@@ -12,6 +12,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 use crate::activity;
 use crate::bridge::{self, PopupPayload, PopupReply};
+use crate::fade_policy::FadePolicy;
 
 // >500 строк — обоснование (I5): «стек попапов» — одна когерентная
 // ответственность (жизненный цикл окна: очередь/вытеснение/ready-gate
@@ -60,13 +61,13 @@ pub(crate) struct ActivePopup {
     /// id попапа (messageId беседы / notificationId письма): дедуп повторов
     /// (#880) — повтор срочного с тем же id не создаёт второе окно.
     pub(crate) popup_id: String,
-    pub(crate) created_ms: u64,
     /// Фактическая высота окна (логические px): мини-UI измерил контент и
     /// прислал `popup_set_height`. Стек раскладывается по ЭТИМ высотам —
     /// никаких захардкоженных «88/124», которые разъезжаются с ui-scale.
     pub(crate) height: f64,
-    /// Начало текущего угасания (None — полная яркость).
-    pub(crate) fading: Option<Instant>,
+    /// Политика угасания (#998): пауза от первого ввода после появления,
+    /// затем таяние; hover/поле ответа сбрасывают отсчёт.
+    pub(crate) fade: FadePolicy,
     /// Курсор на попапе: угасание на паузе, яркость восстановлена.
     pub(crate) hover: bool,
     /// Открыто поле ответа: не гасим (пользователь печатает).
@@ -94,8 +95,9 @@ pub(crate) struct ActivePopup {
 /// - на экране ≤3; новое при полном стеке ЗАКРЫВАЕТ старейший спокойный
 ///   (hover/поле ответа не трогаем) и занимает его место;
 /// - пользователь неактивен (нет кликов/клавиш) — попапы не угасают никогда;
-/// - активность (клик/клавиша, НЕ движение мыши) — медленное угасание ~3 c
-///   (CSS transition в окне), hover возвращает яркость и держит паузу;
+/// - первое нажатие после появления — пауза (~1 c, полностью яркий), затем
+///   медленное угасание (~3 c; конфиг и точный смысл — `fade.rs`, #998),
+///   CSS transition в окне; hover возвращает яркость и держит паузу;
 /// - над стеком плашка «Скрыть все».
 #[derive(Default)]
 pub(crate) struct PopupStack {
@@ -168,6 +170,9 @@ fn payload_to_json(payload: &PopupPayload, theme: &str) -> serde_json::Value {
         "previewAttachment": payload.preview_attachment.unwrap_or(false),
         "urgent": payload.urgent,
         "canReply": payload.can_reply,
+        // Длительность таяния — из того же конфига, что и таймер закрытия
+        // Rust (#998): CSS мини-UI не держит вторую константу.
+        "fadeMs": crate::fade::fade_ms(),
         // Путь файла НЕ отдаём: мини-UI знает только имя и факт успеха (#647).
         "download": payload.download.as_ref().map(|d| serde_json::json!({
             "fileName": d.file_name,
@@ -239,9 +244,8 @@ pub(crate) fn show(app: &AppHandle, payload: crate::bridge::PopupPayload) {
             dismiss_key,
             urgent,
             popup_id,
-            created_ms: activity::monotonic_ms(),
+            fade: FadePolicy::new(activity::monotonic_ms()),
             height: POPUP_H,
-            fading: None,
             hover: false,
             replying: false,
             shown: false,
@@ -628,17 +632,20 @@ pub fn popup_close_all(app: AppHandle) {
 }
 
 /// Курсор на попапе (mouseenter/leave из UI): пауза угасания + возврат
-/// яркости; уход курсора возобновляет угасание с нуля (~3 c заново).
+/// яркости; уход курсора запускает свежую паузу (#998).
 #[tauri::command]
 pub fn popup_set_hover(app: AppHandle, window: WebviewWindow, hover: bool) {
     let label = window.label().to_string();
-    let mut s = stack(&app);
-    if let Some(p) = s.active.iter_mut().find(|p| p.label == label) {
-        p.hover = hover;
-        if !hover {
-            p.fading = None; // ушли курсором — таймер заново с полной яркости
+    {
+        let mut s = stack(&app);
+        if let Some(p) = s.active.iter_mut().find(|p| p.label == label) {
+            p.hover = hover;
+            p.fade.reset(); // пауза/уход — отсчёт с полной яркости
         }
     }
+    // Яркость возвращаем сразу, не дожидаясь тика: короткий hover мог
+    // проскочить между тиками и оставить карточку наполовину погасшей.
+    let _ = window.eval("window.__popupFade&&window.__popupFade('reset')");
 }
 
 /// Payload попапа — pull-моделью после загрузки окна (без гонки со маунтом).
@@ -712,6 +719,7 @@ pub fn popup_set_expanded(app: AppHandle, window: WebviewWindow, expanded: bool)
         match s.active.iter_mut().find(|p| p.label == label) {
             Some(p) => {
                 p.replying = expanded;
+                p.fade.reset(); // печать — пауза; после закрытия поля свежий отсчёт
                 if expanded {
                     // Запоминаем, у кого забираем фокус (клик по неактивируемому
                     // попапу foreground не меняет — это чужая программа/портал).
@@ -728,6 +736,8 @@ pub fn popup_set_expanded(app: AppHandle, window: WebviewWindow, expanded: bool)
             None => None,
         }
     };
+    // Поле ответа — пауза: возвращаем полную яркость сразу (как hover).
+    let _ = window.eval("window.__popupFade&&window.__popupFade('reset')");
     // `focusable` — единственный механизм, который tao удерживает сам:
     // ручной WS_EX_NOACTIVATE стирается apply_diff при show()/смене флагов.
     let _ = window.set_focusable(expanded);
@@ -857,9 +867,8 @@ mod tests {
                 dismiss_key: format!("conv-{k}"),
                 urgent: false,
                 popup_id: format!("m-{k}"),
-                created_ms: 0,
+                fade: FadePolicy::new(0),
                 height: POPUP_H,
-                fading: None,
                 hover: false,
                 replying: false,
                 shown: false,

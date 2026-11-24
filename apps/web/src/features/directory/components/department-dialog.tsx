@@ -13,6 +13,8 @@ import { Input } from '@nodus/ui/components/input';
 
 import type { DepartmentOption } from '../../../shared/api/departments-list.js';
 import { useCreateDepartment, useUpdateDepartment } from '../api/directory-api.js';
+import { groupTransferHints } from '../lib/transfer-hints.js';
+import { DepartmentDeputiesField } from './department-deputies-field.js';
 import { EmployeeCombobox } from './employee-combobox.js';
 import { ReferenceCombobox } from './reference-combobox.js';
 
@@ -26,12 +28,30 @@ function collectSubtreeIds(node: DepartmentNode): Set<string> {
   return ids;
 }
 
+/** Одинаковые наборы id независимо от порядка (PATCH только при изменении). */
+function sameIds(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) return false;
+  const set = new Set(right);
+  return left.every((id) => set.has(id));
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex min-w-0 flex-col gap-1.5">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
       {children}
     </label>
+  );
+}
+
+/** Группа без `<label>` (#817): клик по пустому месту поля не должен
+ *  «нажимать» первый labelable-потомок — иначе он снимал чип заместителя. */
+function FieldGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      {children}
+    </div>
   );
 }
 
@@ -65,7 +85,8 @@ export function DepartmentDialog({
   const update = useUpdateDepartment(kind);
   const [name, setName] = useState('');
   const [headId, setHeadId] = useState<string | null>(null);
-  const [deputyId, setDeputyId] = useState<string | null>(null);
+  // Заместителей несколько (#817): чипы в порядке назначения.
+  const [deputyIds, setDeputyIds] = useState<string[]>([]);
   const [parentDraft, setParentDraft] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   // Окно открылось — до первого действия пользователя гасим авто-выделение
@@ -79,29 +100,45 @@ export function DepartmentDialog({
     if (open) {
       setName(editing?.name ?? '');
       setHeadId(editing?.headId ?? null);
-      setDeputyId(editing?.deputyId ?? null);
+      setDeputyIds(editing?.deputyIds ?? []);
       setParentDraft(editing ? editing.parentId : parentId);
     }
   }
 
   const valid = name.trim().length > 0;
-  const samePerson = headId !== null && deputyId !== null && headId === deputyId;
-  // #946: назначение переводит сотрудника в подразделение — предупреждаем до
-  // сохранения. Для юрструктуры правило не действует (формальная структура).
-  const willTransfer =
-    kind === 'management' &&
-    [headId, deputyId].some((userId) => {
-      if (!userId) return false;
-      const user = users.find((candidate) => candidate.id === userId);
-      return user?.departmentId !== editing?.id;
-    });
+  // Глава не может быть среди заместителей (сервер вернёт 400 same_as_head).
+  const samePerson = headId !== null && deputyIds.includes(headId);
+  // #946/#817: назначение переводит сотрудника в подразделение — предупреждаем
+  // до сохранения, ПО КАЖДОМУ выбранному (глава и все замы). Для юрструктуры
+  // правило не действует (формальная структура).
+  const transfers =
+    kind === 'management'
+      ? [headId, ...deputyIds]
+          .filter((userId): userId is string => Boolean(userId))
+          .map((userId) => {
+            const user = users.find((candidate) => candidate.id === userId);
+            const fromId = user?.departmentId ?? null;
+            if (fromId === editing?.id) return null;
+            const fromName = fromId
+              ? (departmentOptions.find((option) => option.id === fromId)?.name ?? null)
+              : null;
+            return { id: userId, name: user?.displayName ?? '', fromName };
+          })
+          .filter(
+            (entry): entry is { id: string; name: string; fromName: string | null } =>
+              entry !== null,
+          )
+      : [];
+  const willTransfer = transfers.length > 0;
   const pending = create.isPending || update.isPending;
   // Кандидаты — только активные: уволенного сервер не примет (валидация
   // ссылок #441). Текущие значения правки не сбрасываются — их видно в полях.
   // Текущий руководитель/зам может быть уволен — показываем его в кандидатах,
   // чтобы имя не «пропадало» из поля (отправка идёт только при изменении).
   const headCandidates = users.filter((user) => user.status === 'active' || user.id === headId);
-  const deputyCandidates = users.filter((user) => user.status === 'active' || user.id === deputyId);
+  const deputyCandidates = users.filter(
+    (user) => user.status === 'active' || deputyIds.includes(user.id),
+  );
   // Перенос: узел не может стать потомком сам себя — исключаем своё поддерево
   // (сервер дополнительно защищает от циклов).
   const excluded = editing ? collectSubtreeIds(editing) : new Set<string>();
@@ -129,7 +166,7 @@ export function DepartmentDialog({
       const patch: UpdateDepartmentDto = {};
       if (name.trim() !== editing.name) patch.name = name.trim();
       if (headId !== editing.headId) patch.headId = headId;
-      if (deputyId !== editing.deputyId) patch.deputyId = deputyId;
+      if (!sameIds(deputyIds, editing.deputyIds)) patch.deputyIds = deputyIds;
       if (parentDraft !== editing.parentId) patch.parentId = parentDraft;
       if (Object.keys(patch).length === 0) {
         onOpenChange(false);
@@ -139,7 +176,7 @@ export function DepartmentDialog({
       return;
     }
     create.mutate(
-      { name: name.trim(), kind, parentId: parentDraft, headId, deputyId, sortOrder: 0 },
+      { name: name.trim(), kind, parentId: parentDraft, headId, deputyIds, sortOrder: 0 },
       { onSuccess: () => onOpenChange(false) },
     );
   }
@@ -208,9 +245,6 @@ export function DepartmentDialog({
                 options={parentCandidates}
                 ariaLabel={ui.employees.parentDepartment}
                 placeholder={ui.employees.departmentSearchPlaceholder}
-                // Строго вниз, как у «Руководителя/Заместителя» (решение
-                // владельца 19.11.2026): переворот читался как «список уехал».
-                placement="bottom"
                 // Обязательный выбор: открепить подразделение в корень нельзя
                 // ни в интерфейсе, ни на сервере (#982).
                 allowClear={false}
@@ -236,15 +270,24 @@ export function DepartmentDialog({
               users={headCandidates}
             />
           </Field>
-          <Field label={ui.employees.fieldDeputy}>
-            <EmployeeCombobox
-              value={deputyId}
-              onChange={setDeputyId}
-              ariaLabel={ui.employees.fieldDeputy}
-              placeholder={ui.employees.managerPlaceholder}
+          <FieldGroup label={ui.employees.fieldDeputies}>
+            <DepartmentDeputiesField
+              selectedIds={deputyIds}
               users={deputyCandidates}
+              assigned={editing?.deputies ?? []}
+              // Глава не может быть замом (сервер вернёт 400): не предлагаем
+              // его в списке и не даём выбрать, даже если имя уже набрано.
+              excludeIds={headId ? [headId] : []}
+              onToggle={(userId) =>
+                setDeputyIds((previous) =>
+                  previous.includes(userId)
+                    ? previous.filter((id) => id !== userId)
+                    : [...previous, userId],
+                )
+              }
+              ariaLabel={ui.employees.fieldDeputies}
             />
-          </Field>
+          </FieldGroup>
           {willTransfer || samePerson ? (
             // Заметки о ролях — ОДНА группа, прижатая к полю «Заместитель» на шаг
             // метка→поле (близость = принадлежность): на сеточном gap-3 строки
@@ -254,17 +297,36 @@ export function DepartmentDialog({
             // к ней ближе всех.
             <div className="-mt-1.5 flex flex-col gap-1.5">
               {willTransfer ? (
-                // Иконка перевода — из грамматики того же модуля (перенос в
-                // структуре): метки формы иконок не носят, поэтому строка не
-                // читается ещё одной подписью поля.
-                <p role="status" className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                  <ArrowRightLeft
-                    className="mt-0.5 size-3.5 shrink-0"
-                    strokeWidth={1.75}
-                    aria-hidden
-                  />
-                  <span className="min-w-0">{ui.employees.leaderTransferHint}</span>
-                </p>
+                // Одна строка на прежнее подразделение (#817): сотрудники из
+                // одного места перечисляются через запятую, а не дублируют
+                // подсказку. Иконка — из грамматики модуля (перевод в структуре).
+                <div className="flex flex-col gap-1">
+                  {groupTransferHints(transfers).map((group) => (
+                    <p
+                      key={group.fromName ?? ''}
+                      role="status"
+                      className="flex items-start gap-1.5 text-xs text-muted-foreground"
+                    >
+                      <ArrowRightLeft
+                        className="mt-px size-3.5 shrink-0"
+                        strokeWidth={1.75}
+                        aria-hidden
+                      />
+                      <span className="min-w-0">
+                        {group.names.join(', ')} —{' '}
+                        {group.fromName
+                          ? `${
+                              group.names.length > 1
+                                ? ui.employees.leaderTransferFromMany
+                                : ui.employees.leaderTransferFromOne
+                            } «${group.fromName}»`
+                          : group.names.length > 1
+                            ? ui.employees.leaderTransferIntoMany
+                            : ui.employees.leaderTransferIntoOne}
+                      </span>
+                    </p>
+                  ))}
+                </div>
               ) : null}
               {samePerson ? (
                 // Насыщенность отличает сообщение от красной подписи: без неё

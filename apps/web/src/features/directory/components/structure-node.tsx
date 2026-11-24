@@ -48,6 +48,7 @@ export function StructureNode({
   onSelect,
   onToggle,
   onCreateChild,
+  onInvite,
   onEdit,
 }: {
   node: DepartmentNode;
@@ -70,6 +71,8 @@ export function StructureNode({
   /** Шеврон футера: свернуть ветку / раскрыть узел. */
   onToggle: (id: string) => void;
   onCreateChild: (parentId: string) => void;
+  /** «⋯» карточки: приглашение с предвыбранным подразделением (#101). */
+  onInvite: (node: DepartmentNode) => void;
   /** «⋯» карточки: правка отдела (полное меню действий — #881). */
   onEdit: (node: DepartmentNode) => void;
 }) {
@@ -232,7 +235,7 @@ export function StructureNode({
           </span>
         </button>
 
-        {canManage && <StructureNodeMenu node={node} onEdit={onEdit} />}
+        {canManage && <StructureNodeMenu node={node} onInvite={onInvite} onEdit={onEdit} />}
 
         <StructureNodeFooter
           node={node}
@@ -287,6 +290,7 @@ export function StructureNode({
               onSelect={onSelect}
               onToggle={onToggle}
               onCreateChild={onCreateChild}
+              onInvite={onInvite}
               onEdit={onEdit}
             />
           ))}

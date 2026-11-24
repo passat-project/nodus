@@ -45,6 +45,13 @@ describe('RevokedUsersStore', () => {
     expect(key).toBe('nodus:auth:revoked-before:u1');
     expect(Number(seconds)).toBe(Date.UTC(2026, 9, 19, 10) / 1000 + 5);
     expect(Number(ttl)).toBeGreaterThan(60);
+
+    // UUID верхнего регистра пишется в канонический ключ (#101).
+    await store.revoke('UPPER-1');
+    const upperKey = (
+      evalFn.mock.calls[1] as unknown as [string, number, string, string, string]
+    )[2];
+    expect(upperKey).toBe('nodus:auth:revoked-before:upper-1');
   });
 
   it('revoke при неготовом Redis — ошибка (диспетчер повторит), не зависание', async () => {

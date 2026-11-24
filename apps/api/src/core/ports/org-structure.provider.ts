@@ -21,8 +21,15 @@ export class OrgStructureProvider implements OrgStructureReader {
     const rows = await this.prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
       WITH RECURSIVE
         led AS (
-          SELECT id FROM departments
-          WHERE is_active AND (head_id = ${userId}::uuid OR deputy_id = ${userId}::uuid)
+          SELECT d.id FROM departments d
+          WHERE d.is_active
+            AND (
+              d.head_id = ${userId}::uuid
+              OR EXISTS (
+                SELECT 1 FROM department_deputies dd
+                WHERE dd.department_id = d.id AND dd.user_id = ${userId}::uuid
+              )
+            )
           UNION
           SELECT d.id FROM departments d JOIN led ON d.parent_id = led.id WHERE d.is_active
         ),

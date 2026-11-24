@@ -1,82 +1,83 @@
-import { useState } from 'react';
-import { createInvitationSchema, ui } from '@nodus/contracts';
+import { useEffect, useState } from 'react';
+import type { InvitationCreated } from '@nodus/contracts';
+import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
-import { Dialog, DialogContent, DialogTitle } from '@nodus/ui/components/dialog';
-import { Input } from '@nodus/ui/components/input';
-import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@nodus/ui/components/dialog';
 
-import { api } from '../../../shared/api-client.js';
+import { InviteDialogForm } from './invite-dialog-form.js';
+import { TokenLinkField } from './invitation-link-dialog.js';
 
 /**
- * Приглашение сотрудника (модель Битрикс24, кнопка «Пригласить» в шапке
- * журнала): рабочая почта → POST /directory/invitations. Заготовка под
- * бэкенд директории (полный поток: роль, отдел, письмо-инвайт).
+ * Приглашение сотрудника по ссылке (#101): форма (ФИО, почта, должность,
+ * подразделение, необязательные ставка и дата приёма) → шаг «ссылка готова».
+ * Создаётся пользователь со статусом «Приглашён»; админ передаёт одноразовую
+ * ссылку вручную, письма пока нет (#991). Руководитель производный (ADR-0053);
+ * разметка формы — `invite-dialog-form`.
+ *
+ * Шаг «ссылка» сбрасывается НЕ на закрытии, а при следующем открытии: сброс
+ * на закрытии перерисовывал контент в форму во время fade-out, `autoFocus`
+ * поля «Фамилия» выдёргивал браузерное автозаполнение — по центру на миг
+ * появлялось чужое окно (вердикт владельца 23.11.2026).
  */
 export function InviteDialog({
   open,
   onOpenChange,
+  initialDepartmentId = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Предвыбранный отдел из панели/меню подразделения (#881). */
+  initialDepartmentId?: string | null;
 }) {
-  const [email, setEmail] = useState('');
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [created, setCreated] = useState<InvitationCreated | null>(null);
+  const link = created ? `${window.location.origin}${created.path}` : '';
+  // Новое открытие — всегда с формы: сборка сброса перенесена из закрытия.
+  useEffect(() => {
+    if (open) setCreated(null);
+  }, [open]);
 
-  async function submit() {
-    const value = email.trim();
-    // Zod-валидация с русским сообщением (аудит #45 — нативная браузерная
-    // валидация type=email говорила по-английски; канон форм patterns.md:
-    // простая форма = useState + zod-схема contracts для значений).
-    if (!createInvitationSchema.safeParse({ email: value }).success) {
-      setError(ui.employees.inviteInvalidEmail);
-      return;
-    }
-    if (pending) return;
-    setPending(true);
-    try {
-      await api('/directory/invitations', { method: 'POST', body: { email: value } });
-      toast.success(ui.employees.inviteDone);
-      setEmail('');
-      setError(null);
-      onOpenChange(false);
-    } catch {
-      toast.error(ui.common.sendError);
-    } finally {
-      setPending(false);
-    }
+  function close(): void {
+    onOpenChange(false);
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-96">
-        <DialogTitle>{ui.employees.inviteTitle}</DialogTitle>
-        <form
-          noValidate
-          className="flex flex-col gap-3 pt-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void submit();
-          }}
-        >
-          <Input
-            autoFocus
-            type="email"
-            value={email}
-            onChange={(e) => {
-              setEmail(e.target.value);
-              setError(null);
-            }}
-            placeholder={ui.employees.inviteEmailPlaceholder}
-            aria-label={ui.employees.inviteTitle}
-            aria-invalid={error !== null}
-            className="h-8 text-sm"
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) onOpenChange(true);
+        else close();
+      }}
+    >
+      <DialogContent className="w-full sm:max-w-lg">
+        <DialogTitle>
+          {created ? ui.employees.inviteLinkTitle : ui.employees.inviteTitle}
+        </DialogTitle>
+        <DialogDescription>
+          {created ? ui.employees.inviteLinkLead : ui.employees.inviteLead}
+        </DialogDescription>
+
+        {created ? (
+          <div className="flex flex-col gap-4 pt-2">
+            <TokenLinkField link={link} />
+            <p className="text-sm text-muted-foreground">
+              {ui.employees.inviteLinkExpires}{' '}
+              <span className="font-medium text-foreground">
+                {new Date(created.expiresAt).toLocaleDateString('ru-RU')}
+              </span>
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={close}>
+                {ui.common.close}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <InviteDialogForm
+            initialDepartmentId={initialDepartmentId}
+            onCreated={setCreated}
+            onClose={close}
           />
-          {error ? <span className="text-xs text-destructive">{error}</span> : null}
-          <Button type="submit" disabled={!email.trim() || pending}>
-            {ui.employees.inviteSubmit}
-          </Button>
-        </form>
+        )}
       </DialogContent>
     </Dialog>
   );

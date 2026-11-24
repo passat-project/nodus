@@ -325,6 +325,12 @@ async function main(): Promise<void> {
     );
   }
   const head = pilotRecords[0]!;
+  // #817: один человек — глава одного узла. Идемпотентный сид на живой БД:
+  // снимаем прежнюю роль, если этот сотрудник был главой другого отдела.
+  await prisma.department.updateMany({
+    where: { headId: head.id, NOT: { id: bimGroup.id } },
+    data: { headId: null },
+  });
   await prisma.department.update({ where: { id: bimGroup.id }, data: { headId: head.id } });
   // #923: руководитель — производное поле; после назначения главы отделов
   // пересчитываем всех тем же правилом, что миграция (сид обходит сервисы).

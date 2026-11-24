@@ -3,7 +3,7 @@ import type { LetterBox, LetterListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 
 import { projectsAvailable } from '../api/projects-available.js';
-import { useUsersList } from '../api/users-list.js';
+import { useActiveUsersList } from '../api/users-list.js';
 import { useAuthStore } from '../auth-store.js';
 import { isResponseOverdue } from './letter-table-fields.js';
 import type { FilterFieldDef, FilterOption, FilterValue } from './list-filters.js';
@@ -87,7 +87,7 @@ export function useLetterFilterDefs(
   rows: readonly LetterListItem[],
   { counterpartyVisible = true, box }: { counterpartyVisible?: boolean; box?: LetterBox } = {},
 ): FilterFieldDef<LetterListItem>[] {
-  const { data: users } = useUsersList();
+  const { data: users } = useActiveUsersList();
   const meId = useAuthStore((s) => s.user?.id);
   // Портфель — папка журнала «Проекты» (#559): появляется там же, где проект.
   const projectsShown = projectsAvailable('letters');

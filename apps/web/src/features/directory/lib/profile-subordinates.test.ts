@@ -33,7 +33,7 @@ function department(overrides: Partial<DepartmentOption> & { id: string }): Depa
     depth: 0,
     isActive: true,
     headId: null,
-    deputyId: null,
+    deputyIds: [],
     ...overrides,
   };
 }
@@ -56,7 +56,7 @@ describe('profileSubordinates (#923)', () => {
     const { list, deputyIds } = profileSubordinates({
       userId: CHIEF,
       users: [deputy],
-      departments: [department({ id: 'd1', headId: CHIEF, deputyId: deputy.id })],
+      departments: [department({ id: 'd1', headId: CHIEF, deputyIds: [deputy.id] })],
     });
 
     expect(list.map((item) => item.id)).toEqual(['deputy']);
@@ -69,7 +69,7 @@ describe('profileSubordinates (#923)', () => {
     const { list, deputyIds } = profileSubordinates({
       userId: CHIEF,
       users: [direct, deputy],
-      departments: [department({ id: 'd1', headId: CHIEF, deputyId: deputy.id })],
+      departments: [department({ id: 'd1', headId: CHIEF, deputyIds: [deputy.id] })],
     });
 
     expect(list.map((item) => item.id)).toEqual(['deputy', 'direct']);
@@ -82,7 +82,7 @@ describe('profileSubordinates (#923)', () => {
     const { list } = profileSubordinates({
       userId: CHIEF,
       users: [direct, deputy],
-      departments: [department({ id: 'd1', headId: CHIEF, deputyId: deputy.id })],
+      departments: [department({ id: 'd1', headId: CHIEF, deputyIds: [deputy.id] })],
     });
 
     expect(list.map((item) => item.id)).toEqual(['deputy', 'direct']);
@@ -93,7 +93,7 @@ describe('profileSubordinates (#923)', () => {
     const { list, deputyIds } = profileSubordinates({
       userId: CHIEF,
       users: [deputy],
-      departments: [department({ id: 'd1', headId: OTHER_CHIEF, deputyId: deputy.id })],
+      departments: [department({ id: 'd1', headId: OTHER_CHIEF, deputyIds: [deputy.id] })],
     });
 
     expect(list).toEqual([]);
@@ -107,7 +107,7 @@ describe('profileSubordinates (#923)', () => {
         user({ id: 'foreign-deputy' }),
         user({ id: 'foreign-member', managerId: OTHER_CHIEF }),
       ],
-      departments: [department({ id: 'd1', headId: OTHER_CHIEF, deputyId: 'foreign-deputy' })],
+      departments: [department({ id: 'd1', headId: OTHER_CHIEF, deputyIds: ['foreign-deputy'] })],
     });
 
     expect(list).toEqual([]);
@@ -118,7 +118,7 @@ describe('profileSubordinates (#923)', () => {
     const { list, deputyIds } = profileSubordinates({
       userId: CHIEF,
       users: [deputy],
-      departments: [department({ id: 'd1', headId: CHIEF, deputyId: deputy.id })],
+      departments: [department({ id: 'd1', headId: CHIEF, deputyIds: [deputy.id] })],
     });
 
     expect(list).toEqual([]);

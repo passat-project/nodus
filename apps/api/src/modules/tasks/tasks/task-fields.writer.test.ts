@@ -74,7 +74,7 @@ function setup(required: CreationFieldSlot['key'][] = []) {
     catalog as never,
     projects as never,
   );
-  return { writer, repo, projects, customFields, formulaCells };
+  return { writer, repo, projects, customFields, formulaCells, eventBus };
 }
 
 const apply = (
@@ -234,6 +234,78 @@ describe('TaskFieldsWriter: формульная блокировка ячейк
     const kit = setup();
     await apply(kit.writer, { customFields: { [FIELD_ID]: 'то же' } });
     expect(kit.formulaCells.lockedFieldIds).not.toHaveBeenCalled();
+  });
+});
+
+describe('TaskFieldsWriter: фактическая смена срока (#996)', () => {
+  const DEADLINE = '2026-12-04T21:00:00.000Z';
+
+  const rowOf = (deadline: Date | null) => ({
+    ...ROW,
+    title: 'Переезд офиса',
+    creatorId: 'cr',
+    deadline,
+    participants: [
+      { userId: 'co', role: 'coexecutor' },
+      { userId: 'ob', role: 'observer' },
+    ],
+  });
+
+  const kitWith = (beforeDeadline: Date | null, afterDeadline: Date | null) => {
+    const kit = setup();
+    kit.repo.findWithParticipants
+      .mockResolvedValueOnce(rowOf(beforeDeadline) as never)
+      .mockResolvedValueOnce(rowOf(afterDeadline) as never);
+    return kit;
+  };
+
+  const updatedPayload = (kit: ReturnType<typeof setup>): Record<string, unknown> => {
+    const call = kit.eventBus.emit.mock.calls.find(
+      (args: unknown[]) => args[1] === 'task.updated',
+    ) as unknown as [unknown, string, Record<string, unknown>];
+    return call[2];
+  };
+
+  it('срок изменён — маркер, роли участников и название в событии', async () => {
+    const kit = kitWith(null, new Date(DEADLINE));
+    await apply(kit.writer, { deadline: DEADLINE });
+    expect(updatedPayload(kit)).toMatchObject({
+      deadlineChanged: true,
+      deadline: DEADLINE,
+      title: 'Переезд офиса',
+      creatorId: 'cr',
+      assigneeId: 'bob',
+      // Наблюдатель — не адресат уведомления.
+      coexecutorIds: ['co'],
+    });
+  });
+
+  it('срок снят — тоже фактическая смена', async () => {
+    const kit = kitWith(new Date(DEADLINE), null);
+    await apply(kit.writer, { deadline: null });
+    expect(updatedPayload(kit)).toMatchObject({
+      deadlineChanged: true,
+      deadline: null,
+      title: 'Переезд офиса',
+    });
+  });
+
+  it('то же значение — deadline в событии есть, маркера и ролей нет', async () => {
+    const kit = kitWith(new Date(DEADLINE), new Date(DEADLINE));
+    await apply(kit.writer, { deadline: DEADLINE });
+    const payload = updatedPayload(kit);
+    expect(payload).toMatchObject({ deadline: DEADLINE });
+    expect(payload).not.toHaveProperty('deadlineChanged');
+    expect(payload).not.toHaveProperty('creatorId');
+    expect(payload).not.toHaveProperty('title');
+  });
+
+  it('другая правка без срока — маркера нет', async () => {
+    const kit = kitWith(new Date(DEADLINE), new Date(DEADLINE));
+    await apply(kit.writer, { title: 'Новое название' });
+    const payload = updatedPayload(kit);
+    expect(payload).not.toHaveProperty('deadlineChanged');
+    expect(payload).toMatchObject({ title: 'Переезд офиса' });
   });
 });
 

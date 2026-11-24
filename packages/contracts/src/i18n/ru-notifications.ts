@@ -67,6 +67,7 @@ export const notificationsStrings = {
     'task.cancelled': 'Задача отменена',
     'task.rejected': 'Работа отклонена',
     'task.approved': 'Работа принята',
+    'task.deadline_changed': 'Срок изменён',
     'letter.arrived': 'Поступило письмо',
     'mail.sync_failed': 'Почта не принимается',
     'letter.send_failed': 'Исходящее не отправлено',

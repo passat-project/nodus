@@ -45,14 +45,22 @@ export async function deactivateUserOf(
   actor: AuthUser,
   deps: LifecycleDeps,
 ): Promise<UserCard> {
+  // UUID канонически в нижнем регистре (ParseUUIDPipe пропускает верхний):
+  // иначе сравнение «себя» и события/ключи стоп-листа расходятся с `sub`.
+  const targetId = id.toLowerCase();
   // #923: себя уволить нельзя — правило бизнес-логики, а не только скрытая
   // кнопка (I8: сервер обязан отказать).
-  if (id === actor.id) {
+  if (targetId === actor.id.toLowerCase()) {
     throw new DomainException(ErrorCode.DIRECTORY_SELF_DEACTIVATE, 'Cannot deactivate yourself');
   }
-  const before = await deps.users.findCardById(id);
+  const before = await deps.users.findCardById(targetId);
   if (!before) {
     throw DomainException.notFound('User not found');
+  }
+  if (before.status === 'invited') {
+    // Приглашённый не активирован: «Уволить» нечего, приглашение отменяет
+    // отдельное действие (#101); старый deactivate не должен его трогать.
+    throw new DomainException(ErrorCode.CONFLICT, 'Invited user cannot be deactivated');
   }
   if (before.status === 'deactivated') {
     return toUserCard(before, deps.avatarUrlOf); // идемпотентно
@@ -68,7 +76,7 @@ export async function deactivateUserOf(
     let adminRoleId: string | null = null;
     const lockedId = await deps.roles.lockByCodeForUpdate(SystemRole.ADMIN, tx);
     if (lockedId !== null) {
-      const current = (await deps.users.findCardById(id, tx))!;
+      const current = (await deps.users.findCardById(targetId, tx))!;
       if (adminRoleOf(current) !== null) {
         adminRoleId = lockedId;
       }
@@ -78,8 +86,8 @@ export async function deactivateUserOf(
     // Снимаем ДО записи статуса: общая дисциплина замков `departments → users`,
     // как в переводе и DepartmentsService (обратный порядок давал дедлок с
     // правкой/переносом подразделения).
-    await clearLeadershipOf(id, actor.id, tx, deps);
-    await deps.users.update(id, { status: 'deactivated' }, tx);
+    await clearLeadershipOf(targetId, actor.id, tx, deps);
+    await deps.users.update(targetId, { status: 'deactivated' }, tx);
     if (
       adminRoleId !== null &&
       (await deps.roles.countActiveDirectMembers(adminRoleId, tx)) === 0
@@ -91,10 +99,10 @@ export async function deactivateUserOf(
     await deps.eventBus.emit(
       tx,
       DIRECTORY_EVENTS.USER_DEACTIVATED,
-      { userId: id },
-      { actorId: actor.id, aggregateType: 'user', aggregateId: id },
+      { userId: targetId },
+      { actorId: actor.id, aggregateType: 'user', aggregateId: targetId },
     );
-    return toUserCard((await deps.users.findCardById(id, tx))!, deps.avatarUrlOf);
+    return toUserCard((await deps.users.findCardById(targetId, tx))!, deps.avatarUrlOf);
   });
 }
 
@@ -105,18 +113,24 @@ export async function activateUserOf(
   actor: AuthUser,
   deps: LifecycleDeps,
 ): Promise<UserCard> {
-  const before = await deps.users.findCardById(id);
+  const targetId = id.toLowerCase();
+  const before = await deps.users.findCardById(targetId);
   if (!before) throw DomainException.notFound('User not found');
+  if (before.status === 'invited') {
+    // Активирует только принятие приглашения (пароль задаёт сам сотрудник);
+    // «Вернуть в работу» до активации включил бы вход без пароля/ссылки.
+    throw new DomainException(ErrorCode.CONFLICT, 'Invited user cannot be activated directly');
+  }
   if (before.status === 'active') return toUserCard(before, deps.avatarUrlOf); // идемпотентно
 
   return deps.tx.run(async (tx) => {
-    await deps.users.update(id, { status: 'active' }, tx);
+    await deps.users.update(targetId, { status: 'active' }, tx);
     await deps.eventBus.emit(
       tx,
       DIRECTORY_EVENTS.USER_ACTIVATED,
-      { userId: id },
-      { actorId: actor.id, aggregateType: 'user', aggregateId: id },
+      { userId: targetId },
+      { actorId: actor.id, aggregateType: 'user', aggregateId: targetId },
     );
-    return toUserCard((await deps.users.findCardById(id, tx))!, deps.avatarUrlOf);
+    return toUserCard((await deps.users.findCardById(targetId, tx))!, deps.avatarUrlOf);
   });
 }

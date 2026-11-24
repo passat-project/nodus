@@ -33,11 +33,11 @@ const node = (id: string, name: string, children: DepartmentNode[] = []): Depart
   kind: 'management',
   parentId: null,
   headId: null,
-  deputyId: null,
+  deputyIds: [],
   sortOrder: 0,
   isActive: true,
   headName: null,
-  deputyName: null,
+  deputies: [],
   memberCount: 1,
   children,
 });
@@ -63,6 +63,7 @@ function mount(overrides: Partial<Parameters<typeof DivisionsView>[0]> = {}) {
     statsById: new Map<string, DepartmentCardStats>(),
     onSelect: vi.fn(),
     onCreateChild: vi.fn(),
+    onInvite: vi.fn(),
     onEdit: vi.fn(),
     ...overrides,
   };

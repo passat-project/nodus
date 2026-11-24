@@ -27,6 +27,7 @@ import { directoryKeys } from './directory-keys.js';
 // Канонический хук справочника людей — shared (единый ключ/кэш); реэкспорт
 // для обратной совместимости импортов фичи.
 export { useUsersList } from '../../../shared/api/users-list.js';
+export * from './invitation-admin-api.js';
 export { directoryKeys } from './directory-keys.js';
 export { useEmployeePresence, usePresence } from './presence.js';
 
@@ -61,11 +62,11 @@ export function useCreateDepartment(kind: OrgUnitKind) {
         kind: body.kind ?? kind,
         parentId: body.parentId ?? null,
         headId: body.headId ?? null,
-        deputyId: body.deputyId ?? null,
+        deputyIds: body.deputyIds ?? [],
         sortOrder: body.sortOrder ?? 0,
         isActive: true,
         headName: null,
-        deputyName: null,
+        deputies: [],
         memberCount: 0,
         children: [],
       };
