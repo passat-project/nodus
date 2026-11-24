@@ -62,6 +62,10 @@ export const KIND_PRIORITY: Record<NotificationKind, NotificationPriority> = {
   'task.cancelled': 'medium',
   'task.rejected': 'medium',
   'task.approved': 'medium',
+  // #996: перенос срока должен всплывать личным тостом, как личные сообщения
+  // (указание владельца 24.11.2026), а не сводкой «Требуют внимания» —
+  // high, не medium.
+  'task.deadline_changed': 'high',
   // #56 (Р8): почтовые события канцелярии — обычный приоритет у всех:
   // письмо пришло — Вике видно в журнале, порог — не срочный; отказы
   // (sync/send failed) — тоже medium: срочность покажет повтор отказа.

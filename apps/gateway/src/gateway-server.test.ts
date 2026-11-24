@@ -27,6 +27,7 @@ describe('GET /health gateway (AUD-021)', () => {
       jwtSecret: 'test-secret-32-chars-aaaaaaaaaaaa',
       store,
       redis: { status } as unknown as Redis,
+      isTokenRevoked: null,
     });
     servers.push(gateway);
     await new Promise<void>((resolve) => {

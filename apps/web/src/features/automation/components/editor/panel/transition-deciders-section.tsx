@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from '@nodus/ui/components/select';
 
-import { useUsersList } from '../../../../../shared/api/users-list.js';
+import { useActiveUsersList } from '../../../../../shared/api/users-list.js';
 import { useCustomFieldDefinitions } from '../../../../../shared/custom-fields/queries.js';
 import { PanelField } from '../../../../../shared/ui/panel/panel-kit.js';
 import { PeoplePicker } from '../../../../../shared/ui/people-picker.js';
@@ -39,7 +39,7 @@ export function DecidersSection({
 }) {
   const patchTransition = useRouteDocStore((s) => s.patchTransition);
   const definitionsQuery = useCustomFieldDefinitions('task');
-  const usersQuery = useUsersList();
+  const usersQuery = useActiveUsersList();
 
   const sources = deciderSourcesOf(transition.rules);
   const userFields = (definitionsQuery.data ?? []).filter(

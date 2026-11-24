@@ -15,8 +15,9 @@
 ## Контракты (packages/contracts/auth)
 
 `loginSchema`, `authTokensSchema`, `changePasswordSchema`, `sessionInfoSchema`.
-Политика паролей — `passwordSchema` (12+, регистры, цифра, спецсимвол;
-хэширование на бэке — навык auth-password-hashing, Argon2id).
+Политика паролей — `passwordSchema` (12–128, регистры, цифра, спецсимвол —
+любой не-буквенно-цифровой; хэширование на бэке — навык auth-password-hashing,
+Argon2id).
 
 ## Поток сессии (кратко; канон — patterns.md)
 

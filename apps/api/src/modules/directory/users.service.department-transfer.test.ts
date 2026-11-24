@@ -150,12 +150,12 @@ describe('UsersService.updateUser: перевод главы/зама (#923)', (
     expect(departmentEvents()).toEqual([{ departmentId: 'dep-old', changedFields: ['headId'] }]);
   });
 
-  it('заместитель: старый отдел теряет deputyId', async () => {
+  it('заместитель: старый отдел теряет место зама (deputyIds)', async () => {
     departmentsRepo.clearLeadershipIn.mockResolvedValue({ head: false, deputy: true });
 
     await service.updateUser('user-1', { departmentId: 'dep-new' }, actor);
 
-    expect(departmentEvents()).toEqual([{ departmentId: 'dep-old', changedFields: ['deputyId'] }]);
+    expect(departmentEvents()).toEqual([{ departmentId: 'dep-old', changedFields: ['deputyIds'] }]);
   });
 
   it('перевод в «не выбрано» (null): старый отдел тоже очищается', async () => {
@@ -169,7 +169,7 @@ describe('UsersService.updateUser: перевод главы/зама (#923)', (
       'tx-handle',
     );
     expect(departmentEvents()).toEqual([
-      { departmentId: 'dep-old', changedFields: ['headId', 'deputyId'] },
+      { departmentId: 'dep-old', changedFields: ['headId', 'deputyIds'] },
     ]);
     expect(managers.recomputeUsers).toHaveBeenCalledWith(['user-1'], 'tx-handle');
   });

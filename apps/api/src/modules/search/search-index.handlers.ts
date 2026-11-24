@@ -56,6 +56,14 @@ export class SearchIndexRunner {
       case DIRECTORY_EVENTS.USER_ACTIVATED:
         return this.one('employee', text(payload['userId']));
 
+      case DIRECTORY_EVENTS.USER_DELETED: {
+        // Приглашение истекло/отменено, строку удалили (#101): убираем
+        // документ из выдачи, а не индексируем пустоту.
+        const userId = text(payload['userId']);
+        if (userId) await this.index.removeIds('employee', [userId]);
+        return;
+      }
+
       case DIRECTORY_EVENTS.DEPARTMENT_UPDATED:
       case DIRECTORY_EVENTS.DEPARTMENT_ARCHIVED: {
         const departmentId = text(payload['departmentId']);
@@ -156,6 +164,7 @@ export const SearchIndexDirectoryHandler = handlerFor('SearchIndexDirectoryHandl
   DIRECTORY_EVENTS.USER_UPDATED,
   DIRECTORY_EVENTS.USER_DEACTIVATED,
   DIRECTORY_EVENTS.USER_ACTIVATED,
+  DIRECTORY_EVENTS.USER_DELETED,
   DIRECTORY_EVENTS.DEPARTMENT_UPDATED,
   DIRECTORY_EVENTS.DEPARTMENT_ARCHIVED,
   DIRECTORY_EVENTS.POSITION_UPDATED,

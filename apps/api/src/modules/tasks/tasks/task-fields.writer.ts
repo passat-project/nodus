@@ -232,6 +232,13 @@ export class TaskFieldsWriter {
     if (opts.formulaWrite && fieldChanges.length === 0) return { customFieldChanges: [] };
     await this.repo.updateFields(tx, row.id, data);
     const after = await this.repo.findWithParticipants(row.id, tx);
+    // Фактическая смена срока (#996): PATCH присылает `deadline` и при
+    // неизменном значении («просто сохранил») — уведомление адресуется только
+    // реальной правке. Сравниваем нормализованные ISO-строки: `+03:00` и `Z`
+    // одной и той же минуты — не изменение.
+    const deadlineChanged =
+      patch.deadline !== undefined &&
+      (before.deadline?.toISOString() ?? null) !== (after.deadline?.toISOString() ?? null);
     const base = {
       taskId: row.id,
       number: row.number,
@@ -288,9 +295,22 @@ export class TaskFieldsWriter {
               ...(opts.lockReason !== undefined ? { lockReason: opts.lockReason } : {}),
             }
           : {}),
-        ...(patch.title !== undefined ? { title: after.title } : {}),
+        ...(patch.title !== undefined || deadlineChanged ? { title: after.title } : {}),
         ...(patch.deadline !== undefined
           ? { deadline: after.deadline?.toISOString() ?? null }
+          : {}),
+        // Смена срока (#996): маркер фактической правки и роли-адресаты в
+        // снимке события — notifications строит уведомление без чтения задач
+        // (I3), а наблюдатели в получатели не попадают.
+        ...(deadlineChanged
+          ? {
+              deadlineChanged: true,
+              creatorId: after.creatorId,
+              assigneeId: after.assigneeId,
+              coexecutorIds: after.participants
+                .filter((p) => p.role === 'coexecutor')
+                .map((p) => p.userId),
+            }
           : {}),
         // Перенос между проектами (#52 Р4): пересчёт участия живёт на обоих
         // концах — прежний проект теряет строку, новый получает.

@@ -142,16 +142,16 @@ describe('Назначение главы/зама переводит в под�
       name: `Ребёнок ${f.runId}`,
       kind: 'management',
       parentId: parent.id,
-      deputyId: f.users.limited.id,
+      deputyIds: [f.users.limited.id],
     });
 
     expect((await card(f.users.limited.id)).departmentId).toBe(child.id);
     // Зам узла — его член; руководитель заместителя — глава родителя.
     expect((await card(f.users.limited.id)).managerId).toBe(f.users.manager.id);
 
-    await patchDepartment(child.id, { deputyId: f.users.employee.id });
+    await patchDepartment(child.id, { deputyIds: [f.users.employee.id] });
     expect((await card(f.users.employee.id)).departmentId).toBe(child.id);
-    await patchDepartment(child.id, { deputyId: null });
+    await patchDepartment(child.id, { deputyIds: [] });
   });
 
   it('глава и зам — один человек → 400 VALIDATION_FAILED', async () => {
@@ -159,12 +159,32 @@ describe('Назначение главы/зама переводит в под�
 
     const response = await patchDepartment(node.id, {
       headId: f.users.employee.id,
-      deputyId: f.users.employee.id,
+      deputyIds: [f.users.employee.id],
     });
 
     expect(response.status).toBe(400);
     expect((response.body as { code: string }).code).toBe(ErrorCode.VALIDATION_FAILED);
     expect((await card(f.users.employee.id)).departmentId).not.toBe(node.id);
+  });
+
+  it('юрструктура: глава занимает единственное место, но сотрудника не переводит', async () => {
+    const management = await createDepartment({
+      name: `Глава-упр ${f.runId}`,
+      kind: 'management',
+      headId: f.users.manager.id,
+    });
+    const legal = await createDepartment({
+      name: `Глава-юр ${f.runId}`,
+      kind: 'legal',
+      headId: f.users.manager.id,
+    });
+
+    // Уникальность главы общая для обеих структур: последнее назначение
+    // забирает место, прежний узел остаётся без главы.
+    expect((await readDepartment(management.id)).headId).toBeNull();
+    expect((await readDepartment(legal.id)).headId).toBe(f.users.manager.id);
+    // Юридическая карточка формальная — членство не меняется.
+    expect((await card(f.users.manager.id)).departmentId).toBe(management.id);
   });
 
   it('уже состоящий в узле — назначение без лишнего user.updated', async () => {

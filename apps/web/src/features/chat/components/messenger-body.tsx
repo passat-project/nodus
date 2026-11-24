@@ -14,7 +14,7 @@ import { Input } from '@nodus/ui/components/input';
 
 import { api } from '../../../shared/api-client.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
-import { useUsersList } from '../../../shared/api/users-list.js';
+import { useActiveUsersList } from '../../../shared/api/users-list.js';
 import { chatKeys } from '../../../shared/chat/chat-keys.js';
 import { useDebouncedValue } from '../../../shared/lib/use-debounced-value.js';
 import {
@@ -104,7 +104,7 @@ export function MessengerBody({
   // ЛЮДЕЙ — клик по сотруднику открывает личный чат (find-or-create direct,
   // бэкенд создаёт беседу при первом обращении). Кто уже есть в списке
   // (личная беседа существует) — не дублируем строкой.
-  const { data: usersData } = useUsersList();
+  const { data: usersData } = useActiveUsersList();
   const queryClient = useQueryClient();
   const directPeerIds = useMemo(() => {
     const ids = new Set<string>();

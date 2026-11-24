@@ -10,7 +10,10 @@ import { useAuthStore } from '../auth-store.js';
 
 // Тяжёлые справочники реестров фильтров — заглушками: тест про «Портфель».
 vi.mock('../api/task-stages.js', () => ({ useTaskStages: () => ({ data: [] }) }));
-vi.mock('../api/users-list.js', () => ({ useUsersList: () => ({ data: { items: [] } }) }));
+vi.mock('../api/users-list.js', () => ({
+  useUsersList: () => ({ data: { items: [] } }),
+  useActiveUsersList: () => ({ data: { items: [] } }),
+}));
 vi.mock('../custom-fields/filter-defs.js', () => ({ useCustomFieldFilterDefs: () => [] }));
 vi.mock('../custom-fields/queries.js', () => ({ customFieldValuesOf: () => ({}) }));
 

@@ -1,5 +1,12 @@
 import { http, HttpResponse } from 'msw';
-import { loginSchema, updateUserPreferencesBodySchema, type UiPreferences } from '@nodus/contracts';
+import {
+  ErrorCode,
+  loginSchema,
+  updateUserPreferencesBodySchema,
+  type UiPreferences,
+} from '@nodus/contracts';
+
+import { runtimeUserByEmail } from '../../../../shared/mocks/data/runtime-users.js';
 
 import {
   demoActorFor,
@@ -37,6 +44,16 @@ export const authHandlers = [
         { code: 'VALIDATION_FAILED', message: 'Invalid credentials shape' },
         { status: 400 },
       );
+    const runtime = runtimeUserByEmail(parsed.data.email);
+    if (runtime?.status === 'invited') {
+      return HttpResponse.json(
+        {
+          code: ErrorCode.AUTH_ACCOUNT_NOT_ACTIVATED,
+          message: 'Account is not activated',
+        },
+        { status: 403 },
+      );
+    }
     rememberMockLogin(parsed.data.email);
     return HttpResponse.json(
       { ...tokens, userId: demoActorFor(parsed.data.email).id },

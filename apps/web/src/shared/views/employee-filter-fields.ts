@@ -58,7 +58,7 @@ export function useEmployeeFilterDefs(): FilterFieldDef<UserListItem>[] {
         id: 'manager',
         label: ui.employees.fieldManager,
         type: 'person' as const,
-        options: managerOptions(items),
+        options: managerOptions(items.filter((u) => u.status === 'active')),
         match: (u: UserListItem, v) => u.managerId === v,
       },
       {
@@ -67,6 +67,7 @@ export function useEmployeeFilterDefs(): FilterFieldDef<UserListItem>[] {
         type: 'select' as const,
         options: [
           { value: 'active', label: ui.employees.statusActive },
+          { value: 'invited', label: ui.employees.statusInvited },
           { value: 'deactivated', label: ui.employees.statusDeactivated },
         ],
         match: (u: UserListItem, v) => u.status === v,

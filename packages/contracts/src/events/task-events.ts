@@ -114,6 +114,16 @@ export const taskUpdatedPayloadSchema = taskEventBaseSchema.extend({
   /** Причина ручной правки закреплённого (#496, Р4): постановщик или право
    *  `task.edit_locked` — история и аудит; приходит вместе с `locks`. */
   lockReason: z.string().max(500).optional(),
+  /** Срок ФАКТИЧЕСКИ изменён (#996): PATCH присылает `deadline` и при
+   *  неизменном значении («просто сохранил»), поэтому адресатам уведомления
+   *  нужен явный маркер, а не наличие `deadline` в payload. Роли — снимок
+   *  состава на момент правки: notifications адресует по ним, без чтения
+   *  таблиц задач (I3). */
+  deadlineChanged: z.boolean().optional(),
+  creatorId: z.uuid().optional(),
+  assigneeId: z.uuid().optional(),
+  /** Соисполнители (без наблюдателей — им уведомления не шлём). */
+  coexecutorIds: z.array(z.uuid()).optional(),
 });
 export type TaskUpdatedPayload = z.infer<typeof taskUpdatedPayloadSchema>;
 

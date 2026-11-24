@@ -56,6 +56,10 @@ describe('KIND_PRIORITY', () => {
     expect(KIND_PRIORITY['chat.message_edited']).toBe('low');
     expect(KIND_PRIORITY['action.assignment']).toBe('medium');
   });
+
+  it('перенос срока — high: личный тост, как у сообщений (#996)', () => {
+    expect(KIND_PRIORITY['task.deadline_changed']).toBe('high');
+  });
 });
 
 /** Каждый ряд таблицы решений (ADR-0016 §3 → ADR-0017) — отдельный тест. */

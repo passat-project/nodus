@@ -55,7 +55,7 @@
 3. скрытые значения формы ставятся поверх введённого — значение формы важнее (`applyCreationPresets`);
 4. обязательные поля — после умолчаний: `422 PROCESS_TYPE_FIELDS_REQUIRED {reason: 'create'}`; ответственного сервер ставит сам, «не хватает» его не считает.
 
-**Обязательное нельзя очистить** (`reason: 'clear'`): `TaskFieldsWriter` (PATCH карточки и окно перехода) и снятие последнего участника обязательной роли (`ParticipantsService`). **`layout` детали** собирает сервер из типа: `{hiddenBlocks, roleLabels, requiredKeys}` — работает и для типа, невидимого зрителю.
+**Обязательное нельзя очистить** (`reason: 'clear'`): `TaskFieldsWriter` (PATCH карточки и окно перехода) и снятие последнего участника обязательной роли (`ParticipantsService`). Окно перехода выражает очистку явно (#994): `deadline`/`plannedMinutes` могут прийти `null` — писатель снимает значение, обязательность по-прежнему режет. **`layout` детали** собирает сервер из типа: `{hiddenBlocks, roleLabels, requiredKeys}` — работает и для типа, невидимого зрителю.
 
 **Единый писатель полей** — `tasks/task-fields.writer.ts` (#380): все правки полей задачи (PATCH карточки, окно перехода, bulk) идут одним кодом — локи, обязательность по форме типа, перепривязка, события; `nodeId` — там же (валидация портом, сброс сменой проекта).
 
@@ -96,7 +96,7 @@
 
 ## События (`TASK_EVENTS`, каталог api-conventions.md)
 
-`task.created / updated / stage_changed / action_pressed / status_changed / personal_stage_changed / assigned / participants_changed / checklist_changed / completed / overdue / time_logged / timer_started / timer_stopped / result_set / relation_changed / deleted / type_changed`, `task.personal_stage_created / updated / archived`. Payload несёт `audience` — gateway рассылает событие в user-комнаты (`fanout.ts`). `task.relation_changed` уходит по каждой стороне связи (своя аудитория и история у обеих карточек; удалённая вторая сторона — без события). Подписчики: notifications (`events/task-events.handler.ts`: назначение, выполнение, «работа принята», возврат, просрочка, «ждёт утверждения», «отменена» — #378); chat (#252: беседа задачи).
+`task.created / updated / stage_changed / action_pressed / status_changed / personal_stage_changed / assigned / participants_changed / checklist_changed / completed / overdue / time_logged / timer_started / timer_stopped / result_set / relation_changed / deleted / type_changed`, `task.personal_stage_created / updated / archived`. Payload несёт `audience` — gateway рассылает событие в user-комнаты (`fanout.ts`). `task.relation_changed` уходит по каждой стороне связи (своя аудитория и история у обеих карточек; удалённая вторая сторона — без события). Подписчики: notifications (`events/task-events.handler.ts`: назначение, выполнение, «работа принята», возврат, просрочка, «ждёт утверждения», «отменена» — #378; фактическая смена срока — #996); chat (#252: беседа задачи).
 
 Каталожные события типов и маршрутов — `workflow.*` модуля «Процессы» (там же); прежние `task.type_*` / `task.workflow_*` не эмитятся с #428 (имена зарезервированы, история читает старые записи). `task.stage_changed` несёт `toStageOutcome`, `cause` (`transition` | `workflow_migration` | `type_change`), `coexecutorIds` (адресаты «отменена») и при обходе гейта — `overriddenGates` + `reason` (текст причины); `task.completed` — только вход в итог «выполнена» (фазы выше); `task.type_changed` — задачное, с аудиторией участников.
 

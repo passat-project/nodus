@@ -5,7 +5,7 @@ import { ErrorCode } from '@nodus/contracts';
 
 import { DomainException } from '../errors/domain-exception.js';
 import { REDIS_COMMAND_TIMEOUT_MS } from '../redis/redis-command.js';
-import { IdempotencyInterceptor } from './idempotency.interceptor.js';
+import { IdempotencyInterceptor, isIdempotencyExcluded } from './idempotency.interceptor.js';
 import { sha256Hex, stableStringify } from './stable-stringify.js';
 
 function createContext(options: {
@@ -259,5 +259,21 @@ describe('IdempotencyInterceptor', () => {
     await vi.advanceTimersByTimeAsync(REDIS_COMMAND_TIMEOUT_MS);
     const result$ = await pending;
     expect(await lastValueFrom(result$)).toEqual({ id: 't9' });
+  });
+
+  it('маршруты с сырым одноразовым токеном не кэшируются в Redis (#101)', async () => {
+    for (const url of [
+      '/api/v1/directory/invitations',
+      '/api/v1/directory/invitations/11111111-1111-4111-8111-111111111111/reissue',
+      '/api/v1/directory/users/11111111-1111-4111-8111-111111111111/password-reset',
+    ]) {
+      redis.get.mockClear();
+      const { context } = createContext({ url, key: KEY, body: BODY });
+      const result$ = await interceptor.intercept(context, createNext({ id: 'u1', token: 'raw' }));
+      expect(await lastValueFrom(result$)).toEqual({ id: 'u1', token: 'raw' });
+      expect(redis.get).not.toHaveBeenCalled();
+      expect(isIdempotencyExcluded(url)).toBe(true);
+    }
+    expect(isIdempotencyExcluded('/api/v1/tasks')).toBe(false);
   });
 });

@@ -25,11 +25,11 @@ const node = (
   kind: 'management',
   parentId: null,
   headId: null,
-  deputyId: null,
+  deputyIds: [],
   sortOrder: 0,
   isActive: true,
   headName: null,
-  deputyName: null,
+  deputies: [],
   memberCount: 0,
   children,
   ...overrides,
@@ -97,6 +97,7 @@ function mount(options: MountOptions) {
   const onSelect = vi.fn();
   const onToggle = vi.fn();
   const onCreateChild = vi.fn();
+  const onInvite = vi.fn();
   const onEdit = vi.fn();
   render(
     <StructureNode
@@ -114,10 +115,11 @@ function mount(options: MountOptions) {
       onSelect={onSelect}
       onToggle={onToggle}
       onCreateChild={onCreateChild}
+      onInvite={onInvite}
       onEdit={onEdit}
     />,
   );
-  return { stats, onSelect, onToggle, onCreateChild, onEdit };
+  return { stats, onSelect, onToggle, onCreateChild, onInvite, onEdit };
 }
 
 const card = () => document.querySelector('[data-tree-node]') as HTMLElement;
@@ -127,7 +129,7 @@ afterEach(() => {
 });
 
 describe('StructureNode: композиция карточки (#768)', () => {
-  const bim = node('bim', [node('lab')], { headId: 'h-bim', deputyId: 'd-bim' });
+  const bim = node('bim', [node('lab')], { headId: 'h-bim', deputyIds: ['d-bim'] });
 
   it('фиксированная высота H, руководитель с должностью под именем', () => {
     mount({ subject: bim });
@@ -244,7 +246,7 @@ describe('StructureNode: композиция карточки (#768)', () => {
     expect(card().className).not.toContain('shadow-');
   });
 
-  it('«⋯» — администратору, открывает правку отдела (пока один пункт)', async () => {
+  it('«⋯» — администратору: приглашение в Nodus и правка отдела', async () => {
     const { onEdit } = mount({ subject: bim, canManage: true });
     expect(screen.queryByRole('menuitem')).toBeNull();
     const trigger = screen.getByRole('button', { name: ui.employees.departmentActions });
@@ -255,6 +257,14 @@ describe('StructureNode: композиция карточки (#768)', () => {
       await screen.findByRole('menuitem', { name: ui.employees.editDepartmentAction }),
     );
     expect(onEdit).toHaveBeenCalledWith(bim);
+    cleanup();
+
+    const next = mount({ subject: bim, canManage: true });
+    const inviteTrigger = screen.getByRole('button', { name: ui.employees.departmentActions });
+    fireEvent.pointerDown(inviteTrigger, { button: 0, pointerType: 'mouse' });
+    fireEvent.click(inviteTrigger);
+    fireEvent.click(await screen.findByRole('menuitem', { name: ui.employees.inviteToDepartment }));
+    expect(next.onInvite).toHaveBeenCalledWith(bim);
     cleanup();
 
     mount({ subject: bim, canManage: false });

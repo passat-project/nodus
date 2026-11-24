@@ -83,6 +83,9 @@ function makeDeps(overrides: Partial<Record<string, unknown>> = {}) {
     ...(overrides.org as object),
   };
   const departments = {
+    clearHeadBesides: vi.fn().mockResolvedValue([]),
+    clearDeputiesBesides: vi.fn().mockResolvedValue([]),
+    setDeputies: vi.fn(),
     findParentChain: vi.fn(async () => [DEPARTMENT_ID, ROOT_ID]),
     findNamesByIds: vi.fn(async () => [
       { id: DEPARTMENT_ID, name: 'Проектный отдел' },

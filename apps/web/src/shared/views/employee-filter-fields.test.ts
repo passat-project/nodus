@@ -51,6 +51,7 @@ const items: UserListItem[] = [
 
 vi.mock('../api/users-list.js', () => ({
   useUsersList: () => ({ data: { items, nextCursor: null } }),
+  useActiveUsersList: () => ({ data: { items, nextCursor: null } }),
 }));
 
 function defs() {
@@ -80,6 +81,7 @@ describe('useEmployeeFilterDefs (#768)', () => {
 
     expect(status.options).toEqual([
       { value: 'active', label: ui.employees.statusActive },
+      { value: 'invited', label: ui.employees.statusInvited },
       { value: 'deactivated', label: ui.employees.statusDeactivated },
     ]);
     expect(status.match(items[0]!, 'active')).toBe(true);

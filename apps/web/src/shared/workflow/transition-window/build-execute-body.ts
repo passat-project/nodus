@@ -39,11 +39,14 @@ export function buildExecuteBody({
     ) {
       fields.description = description;
     }
-    if (
-      allowed.has('deadline') &&
-      (draft.fields.deadline !== context.fields.deadline || formulaKeys.has('deadline'))
-    ) {
-      if (draft.fields.deadline) fields.deadline = draft.fields.deadline;
+    if (allowed.has('deadline')) {
+      // null — человек очистил срок («Убрать срок»): очистка уходит явно.
+      // Формульный слот с null — «нет значения», а не очистка: молчим.
+      if (draft.fields.deadline !== context.fields.deadline) {
+        fields.deadline = draft.fields.deadline;
+      } else if (formulaKeys.has('deadline') && draft.fields.deadline !== null) {
+        fields.deadline = draft.fields.deadline;
+      }
     }
     if (
       allowed.has('assignee') &&
@@ -51,12 +54,13 @@ export function buildExecuteBody({
     ) {
       if (draft.fields.assigneeId) fields.assigneeId = draft.fields.assigneeId;
     }
-    if (
-      allowed.has('plannedMinutes') &&
-      (draft.fields.plannedMinutes !== context.fields.plannedMinutes ||
-        formulaKeys.has('plannedMinutes'))
-    ) {
-      if (draft.fields.plannedMinutes) fields.plannedMinutes = draft.fields.plannedMinutes;
+    if (allowed.has('plannedMinutes')) {
+      // null — осознанная очистка поля человеком (пустой ввод).
+      if (draft.fields.plannedMinutes !== context.fields.plannedMinutes) {
+        fields.plannedMinutes = draft.fields.plannedMinutes;
+      } else if (formulaKeys.has('plannedMinutes') && draft.fields.plannedMinutes !== null) {
+        fields.plannedMinutes = draft.fields.plannedMinutes;
+      }
     }
     // Поля процесса (#431, Р7): уходят только реально изменённые значения;
     // очистка в окне не выражается (раздел «дозаполнить», не «очистить»).
