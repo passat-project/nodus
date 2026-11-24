@@ -68,9 +68,13 @@ export function TaskList({
   const canManageAny = (permissions ?? []).includes(Permission.TASK_MANAGE_ANY);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
-  /** Каскадное построение графа: база = индекс первой раскрытой строки,
-   *  key перезапускает draw-on только нового раскрытия. */
-  const [reveal, setReveal] = useState({ base: 0, key: 1 });
+  /** Каскадное построение графа: id раскрытой задачи (null — стартовая
+   *  загрузка, каскад по всему списку; null у самого reveal — сворачивание,
+   *  без анимации); key перезапускает draw-on только нового раскрытия. */
+  const [reveal, setReveal] = useState<{ taskId: string | null; key: number } | null>(() => ({
+    taskId: null,
+    key: 1,
+  }));
   const taskListFields = useTaskListFields();
   const { visibleFields, sort, setWidth, cycleSort, commitOrder, widthSet } = useViewFields(
     'tasks.list',
@@ -149,13 +153,15 @@ export function TaskList({
         return next;
       });
       if (expanding) {
-        const parentIndex = visible.findIndex((row) => row.task.id === taskId);
-        setReveal((prev) => ({ base: parentIndex + 1, key: prev.key + 1 }));
+        // Диапазон анимации граф вычисляет по id: индексы после раскрытия
+        // ещё не посчитаны, а перерисовываться должен только ствол этой
+        // ветки и её новые дети (#1018).
+        setReveal((prev) => ({ taskId, key: (prev?.key ?? 0) + 1 }));
       } else {
-        setReveal((prev) => ({ base: Number.MAX_SAFE_INTEGER, key: prev.key + 1 }));
+        setReveal(null);
       }
     },
-    [collapsed, visible],
+    [collapsed],
   );
 
   /** Автоподбор ширины (двойной клик на ручке): shared-хук, сдвиг на
@@ -258,8 +264,7 @@ export function TaskList({
           <TaskListTree
             rows={visible}
             width={graphWidth(visible.reduce((max, row) => Math.max(max, row.depth), 0))}
-            revealBase={reveal.base}
-            revealKey={reveal.key}
+            reveal={reveal}
           />
         </div>
         {hasNextPage ? (
