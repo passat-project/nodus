@@ -15,6 +15,8 @@ export interface AttachmentRow {
   kind: string;
   width: number | null;
   height: number | null;
+  /** Длительность видео, мс (#250); null — не видео/неизвестна. */
+  durationMs: number | null;
   thumbFileId: string | null;
 }
 
@@ -76,6 +78,7 @@ export class AttachmentsRepository {
       kind: string;
       width: number | null;
       height: number | null;
+      durationMs: number | null;
     },
     tx?: TransactionClient,
   ): Promise<AttachmentRow> {
@@ -119,7 +122,13 @@ export class AttachmentsRepository {
    *  не перезаписывается; проигравший дериват удаляет вызывающий. */
   async markThumbnail(
     id: string,
-    data: { thumbFileId: string; width: number; height: number },
+    data: {
+      thumbFileId: string;
+      width: number;
+      height: number;
+      /** Длительность видео (мс, #250); у изображений не передаётся. */
+      durationMs?: number | null;
+    },
   ): Promise<boolean> {
     const result = await this.prisma.messageAttachment.updateMany({
       where: { id, thumbFileId: null },

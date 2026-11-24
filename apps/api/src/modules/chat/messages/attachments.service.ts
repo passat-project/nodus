@@ -27,6 +27,8 @@ export interface UploadAttachmentInput {
   size: number;
   width?: number | undefined;
   height?: number | undefined;
+  /** Длительность видео от клиента (мс, #250); сервер перепроверит ffprobe. */
+  durationMs?: number | undefined;
 }
 
 /**
@@ -74,8 +76,12 @@ export class AttachmentsService {
       { ownerId, name: input.name, mime: input.mime, size: input.size },
       content,
     );
-    // Вид — явный (контракт): галерея для изображений, чип для остального.
-    const kind = input.mime.startsWith('image/') ? 'image' : 'file';
+    // Вид — явный (контракт): галерея для изображений/видео, чип для остального.
+    const kind = input.mime.startsWith('image/')
+      ? 'image'
+      : input.mime.startsWith('video/')
+        ? 'video'
+        : 'file';
     let row: AttachmentRow;
     try {
       // Лимит атомарно (аудит #317): лок владельца → перечёт → INSERT в одной
@@ -95,6 +101,7 @@ export class AttachmentsService {
             kind,
             width: input.width ?? null,
             height: input.height ?? null,
+            durationMs: input.durationMs ?? null,
           },
           tx,
         );
@@ -106,7 +113,7 @@ export class AttachmentsService {
       });
       throw error;
     }
-    if (kind === 'image') {
+    if (kind === 'image' || kind === 'video') {
       if (input.size <= SYNC_PREVIEW_BYTES) {
         // Синхронное превью (#221): миниатюра рождается В ответе загрузки —
         // пузырь отправителя (оптимистичный temp несёт этот DTO) и получатели
@@ -152,6 +159,7 @@ export class AttachmentsService {
     kind: string;
     width: number | null;
     height: number | null;
+    durationMs: number | null;
     thumbFileId: string | null;
   }): MessageAttachment {
     return {
@@ -160,7 +168,7 @@ export class AttachmentsService {
       name: row.name,
       size: row.size,
       mime: row.mime,
-      kind: row.kind as 'image' | 'file',
+      kind: row.kind as 'image' | 'video' | 'file',
       url: this.signedUrls.fileContentUrl(row.fileId),
       // Превью — дериват в хранилище (#150); до готовности null (клиент
       // грузит оригинал, геометрия детерминирована отдельно).
@@ -170,6 +178,7 @@ export class AttachmentsService {
       pdfUrl: null,
       width: row.width,
       height: row.height,
+      durationMs: row.durationMs,
     };
   }
 

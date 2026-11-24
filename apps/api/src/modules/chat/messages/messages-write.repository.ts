@@ -186,7 +186,7 @@ export class MessagesWriteRepository {
     }
     return tx.$queryRaw<ClaimedAttachmentRow[]>(Prisma.sql`
       SELECT id, file_id AS "fileId", name, size, mime, kind, width, height,
-             thumb_file_id AS "thumbFileId"
+             duration_ms AS "durationMs", thumb_file_id AS "thumbFileId"
       FROM message_attachments
       WHERE message_id = ${messageId}::uuid
       ORDER BY sort_order ASC, id ASC

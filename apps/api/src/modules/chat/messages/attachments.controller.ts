@@ -30,6 +30,8 @@ const uploadFieldsSchema = z.object({
   size: z.coerce.number().int().min(0),
   width: z.coerce.number().int().min(1).optional(),
   height: z.coerce.number().int().min(1).optional(),
+  /** Длительность видео от клиента (мс, #250): резерв до ffprobe. */
+  durationMs: z.coerce.number().int().min(0).optional(),
 });
 
 /**
@@ -47,7 +49,7 @@ export class AttachmentsController {
   @Post()
   @Audit({ action: 'chat.attachment_upload', entity: 'attachment' })
   @ApiOperation({
-    summary: 'Загрузка вложения (multipart: file + поля size/width/height)',
+    summary: 'Загрузка вложения (multipart: file + поля size/width/height/durationMs)',
   })
   @ApiCreatedResponse({ standardSchema: messageAttachmentSchema })
   @ApiErrors(400, 401, 403, 404, 413)
@@ -93,6 +95,7 @@ export class AttachmentsController {
           size: parsed.data.size,
           width: parsed.data.width,
           height: parsed.data.height,
+          durationMs: parsed.data.durationMs,
         },
         file.file,
       );

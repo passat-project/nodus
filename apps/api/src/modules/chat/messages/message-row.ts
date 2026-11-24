@@ -47,6 +47,8 @@ export interface ClaimedAttachmentRow {
   kind: string;
   width: number | null;
   height: number | null;
+  /** Длительность видео, мс (#250); null — не видео/неизвестна. */
+  durationMs: number | null;
   thumbFileId: string | null;
 }
 

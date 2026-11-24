@@ -9,7 +9,8 @@ import { TransactionRunner } from '../../../core/database/transaction-runner.js'
 import { EventBus } from '../../../core/events/event-bus.js';
 import { FILE_STORAGE, type FileStorage } from '../../../core/ports/file-storage.port.js';
 import { MAX_ATTACHMENT_BYTES } from './attachments.constants.js';
-import { AttachmentsRepository } from './attachments.repository.js';
+import { AttachmentsRepository, type AttachmentRow } from './attachments.repository.js';
+import { buildVideoPoster } from './video-thumbnail.js';
 
 /** Максимальная сторона превью (WebP): плитки ленты ≤480 дизайн-px ×DPR —
  *  800 хватает и для галерей, и для лайтбокс-подложки (#150). */
@@ -82,7 +83,12 @@ export class ThumbnailService {
    *  WORKER_PIXEL_LIMIT; превышение — тихий отказ (превью опционально). */
   async generateFor(attachmentId: string, pixelLimit: number = WORKER_PIXEL_LIMIT): Promise<void> {
     const attachment = await this.repository.findAnyById(attachmentId);
-    if (!attachment || attachment.kind !== 'image' || attachment.thumbFileId) return;
+    if (!attachment || attachment.thumbFileId) return;
+    if (attachment.kind === 'video') {
+      await this.generateVideoPoster(attachment);
+      return;
+    }
+    if (attachment.kind !== 'image') return;
 
     const original = await this.storage.get(attachment.fileId);
     if (!original) return;
@@ -137,12 +143,69 @@ export class ThumbnailService {
     }
   }
 
+  /** Постер видео (#250): ffprobe (габариты с поворотом, длительность) +
+   *  кадр-WebP ≤800. Контракт отказоустойчивости тот же, что у фото: сбой
+   *  превью — тихий отказ, строка живёт на клиентских метаданных; бросок
+   *  хранилища/БД — наружу (job ретраится). */
+  private async generateVideoPoster(attachment: AttachmentRow): Promise<void> {
+    const original = await this.storage.get(attachment.fileId);
+    if (!original) return;
+    try {
+      const result = await buildVideoPoster(original.stream);
+      if (!result) {
+        this.logger.warn(
+          { attachmentId: attachment.id },
+          'Постер видео: не удалось прочитать ролик',
+        );
+        return;
+      }
+      const { fileId: thumbFileId } = await this.storage.save(
+        {
+          ownerId: attachment.ownerId,
+          name: `${attachment.name}.preview.webp`,
+          mime: 'image/webp',
+          size: result.poster.byteLength,
+          derivedFrom: attachment.fileId,
+        },
+        Readable.from(result.poster),
+      );
+      const won = await this.repository.markThumbnail(attachment.id, {
+        thumbFileId,
+        width: result.width,
+        height: result.height,
+        durationMs: result.durationMs,
+      });
+      if (!won) {
+        await this.storage.remove([thumbFileId]).catch(() => undefined);
+        this.logger.info(
+          { attachmentId: attachment.id },
+          'Постер видео: проиграл гонку фиксации, дериват удалён',
+        );
+        return;
+      }
+      await this.emitPreviewReady(attachment.id, thumbFileId, {
+        width: result.width,
+        height: result.height,
+        durationMs: result.durationMs,
+      });
+    } catch (error) {
+      this.logger.warn(
+        { attachmentId: attachment.id, err: error },
+        'Постер видео: генерация не удалась (превью опционально)',
+      );
+    }
+  }
+
   /** Фоновое превью отправленного сообщения готово (#221): клиенты получают
    *  chat.attachment_preview_ready и патчат плитку на месте — получатели не
    *  грузят оригинал в ленту, пока очередь догенерировала миниатюру. Событие
    *  — только для уже отправленных (неотправленное DTO заберёт сам); сбой
    *  эвента не рушит генерацию (превью в строке уже зафиксировано). */
-  private async emitPreviewReady(attachmentId: string, thumbFileId: string): Promise<void> {
+  private async emitPreviewReady(
+    attachmentId: string,
+    thumbFileId: string,
+    meta?: { width: number | null; height: number | null; durationMs: number | null },
+  ): Promise<void> {
     try {
       const conversationId = await this.repository.findConversationIdOf(attachmentId);
       if (!conversationId) return;
@@ -152,6 +215,7 @@ export class ThumbnailService {
           conversationId,
           attachmentId,
           thumbnailUrl,
+          ...(meta ?? {}),
         }),
       );
     } catch (error) {
