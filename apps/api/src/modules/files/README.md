@@ -86,11 +86,13 @@ fileAccessContext` (`chat`, `letter`), DiscoveryService находит его с
   оставляет поток открытым. Ответ несёт
   `Content-Security-Policy: default-src 'none'; sandbox`
   (defense-in-depth для пользовательского контента, security-ревью #1005);
-  `Content-Type` санитизируется (`safeContentType`: управляющие символы или
-  не-формат из клиентского mime → `application/octet-stream`, иначе заголовок
-  роняет ответ). HEAD отдаёт заголовки без тела и без открытия потока
-  (`reply.hijack`; глобальные хуки обязаны ставить заголовки через
-  `reply.header()`, `raw.setHeader` в HEAD не попадёт). На производной
+  `Content-Type` санитизируется (`safeContentType`: управляющие символы,
+  не-формат или длиннее 128 символов → `application/octet-stream`), имя —
+  `safeFileName` (≤200 символов, расширение сохраняется; применяется при
+  сохранении и в `Content-Disposition`), иначе заголовок роняет или раздувает
+  ответ до нечитаемого клиентами. HEAD отдаёт заголовки без тела и без
+  открытия потока (`reply.hijack`; глобальные хуки обязаны ставить заголовки
+  через `reply.header()`, `raw.setHeader` в HEAD не попадёт). На производной
   (`derivative`, PDF) `Content-Type` — константа `application/pdf` (не mime
   из БД), CSP-песочницы НЕТ: pdf.js забирает её как подресурс (CSP не
   применяется), а прямой навигации `sandbox` может отключить встроенный

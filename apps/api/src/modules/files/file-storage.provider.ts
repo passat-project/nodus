@@ -11,6 +11,8 @@ import type {
 } from '../../core/ports/file-storage.port.js';
 import { FILES_CONFIG, STORAGE_MAX_FILE_BYTES, type FilesConfig } from './files.config.js';
 import { FilesRepository } from './files.repository.js';
+import { safeContentType } from './safe-content-type.js';
+import { safeFileName } from './safe-file-name.js';
 import { MinioStorageDriver } from './storage/minio-storage.driver.js';
 
 /**
@@ -41,10 +43,15 @@ export class FileStorageProvider implements FileStorage {
     }
 
     const fileId = randomUUID();
+    // Имя и mime — клиентские (multipart): санитизируем при сохранении, чтобы
+    // заголовки отдачи/вложения и метаданные хранилища не ломались длиной,
+    // управляющими символами или не-форматом (security-ревью #1005).
+    const name = safeFileName(input.name);
+    const mime = safeContentType(input.mime);
     // Ключ = детерминированная функция id: без санитизации имён (исходное имя
     // живёт в БД), карантинный префикс quarantine/ — фаза 2 (сканер).
     const key = `files/${fileId}`;
-    const { bytes } = await this.driver.put(key, input.size, input.mime, content);
+    const { bytes } = await this.driver.put(key, input.size, mime, content);
     if (bytes !== input.size) {
       // Обрыв/подмена размера: объект не храним, ссылку не выдаём.
       await this.driver.remove([key]);
@@ -60,8 +67,8 @@ export class FileStorageProvider implements FileStorage {
       ownerId: input.ownerId,
       bucket: this.config.bucket,
       key,
-      name: input.name,
-      mime: input.mime,
+      name,
+      mime,
       size: input.size,
       derivedFrom: input.derivedFrom ?? null,
     });
