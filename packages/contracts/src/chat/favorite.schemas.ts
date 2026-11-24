@@ -2,7 +2,8 @@ import { z } from 'zod';
 
 import { userRefSchema } from '../directory/user-ref.schema.js';
 import { cursorQuerySchema } from '../pagination/paginated.schema.js';
-import { conversationTypeSchema, messageAttachmentSchema } from './chat.schemas.js';
+import { conversationTypeSchema } from './chat.schemas.js';
+import { messageAttachmentSchema } from './chat-attachment.schemas.js';
 
 /** Избранное (#171): личные закладки-ссылки на сообщения. Модель «закладка,
  *  не копия» (вердикт владельца 02.10): карточка — живая ссылка на оригинал,

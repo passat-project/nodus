@@ -93,6 +93,11 @@ export const chatAttachmentPreviewReadyPayloadSchema = z.object({
   /** Подписанная ссылка превью (TTL подписи 24 ч; дальнейшие рефечи ленты
    *  обновляют её сами). */
   thumbnailUrl: z.string().min(1),
+  /** Авторитетные серверные метаданные (#250): клиент патчит плитку видео/
+   *  фотографии без рефетча; optional — старые события их не несут. */
+  width: z.number().int().min(0).nullable().optional(),
+  height: z.number().int().min(0).nullable().optional(),
+  durationMs: z.number().int().min(0).nullable().optional(),
 });
 export type ChatAttachmentPreviewReadyPayload = z.infer<
   typeof chatAttachmentPreviewReadyPayloadSchema
