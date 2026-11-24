@@ -22,6 +22,7 @@ import { ZodValidationPipe } from '../../core/pipes/zod-validation.pipe.js';
 import { FilesRepository } from './files.repository.js';
 import { DerivativesRepository } from './derivatives/derivatives.repository.js';
 import { MinioStorageDriver } from './storage/minio-storage.driver.js';
+import { decideContentRange } from './content-range.js';
 import { needsTextNormalization, normalizeTextForOffice } from './office/text-normalizer.js';
 import { FileTextService } from './text/file-text.service.js';
 
@@ -95,7 +96,11 @@ export class FilesController {
 
   @Public()
   @Get(':id/content')
-  @ApiOperation({ summary: 'Контент файла по подписанной ссылке (inline для изображений)' })
+  @ApiOperation({
+    summary:
+      'Контент файла по подписанной ссылке (inline для изображений/видео, Range/206 для перемотки медиа)',
+  })
+  @ApiErrors(401, 404, 410, 416, 429)
   async content(
     @Param('id', new ZodValidationPipe(z.uuid())) id: string,
     @Query({
@@ -132,7 +137,10 @@ export class FilesController {
     }
 
     const etag = `"${file.id}-v${version}"`;
-    if (request.headers['if-none-match'] === etag) {
+    // 304 — только для запросов БЕЗ Range (#1005): медиаэлемент приходит с
+    // диапазоном и ждёт 206 или полный файл; «возьми из кэша» на Range-запрос
+    // отдаёт клиенту решение по частичному кэшу.
+    if (!request.headers.range && request.headers['if-none-match'] === etag) {
       void reply.status(304).send();
       return;
     }
@@ -158,13 +166,31 @@ export class FilesController {
       return;
     }
 
-    const stream = await this.driver.get(key);
-    // Inline — ТОЛЬКО whitelist растровых форматов: mime приходит от клиента
-    // и не валидируется, а SVG (и пр. активный контент) в «новой вкладке»
-    // исполняет скрипты на origin портала → refresh-cookie жертвы (валидация
-    // #57: stored XSS). video/webm — стикеры #143 (проигрывание <video> без
-    // скачивания; WebM-контейнер скрипты не исполняет). Остальное —
-    // attachment; на всё — nosniff.
+    // Перемотка видео (#1005): браузер запрашивает байтовый диапазон и
+    // считает поток seekable только после 206 + Content-Range. If-Range:
+    // срез применяем, только если клиент кэшировал ЭТУ версию, иначе отдаём
+    // файл целиком — склейка срезов разных версий даёт битый ролик.
+    const ifRange = request.headers['if-range'];
+    const rangeDecision = decideContentRange(
+      ifRange === undefined || ifRange === etag ? request.headers.range : undefined,
+      size,
+    );
+    if (rangeDecision.kind === 'unsatisfiable') {
+      // 416 обязан нести полный размер ресурса (RFC 9110 §15.5.17).
+      void reply.header('Content-Range', `bytes */${size}`);
+      throw new DomainException(
+        ErrorCode.FILE_RANGE_NOT_SATISFIABLE,
+        'Requested range is not satisfiable',
+        { size },
+      );
+    }
+    const range = rangeDecision.kind === 'partial' ? rangeDecision.range : undefined;
+    // Inline — ТОЛЬКО whitelist неисполняемых форматов: mime приходит от
+    // клиента и не валидируется, а SVG (и пр. активный контент) в «новой
+    // вкладке» исполняет скрипты на origin портала → refresh-cookie жертвы
+    // (валидация #57: stored XSS). Изображения и видео-контейнеры (стикеры
+    // #143, кинозал #787, перемотка #1005) — inline; остальное — attachment;
+    // на всё — nosniff.
     const INLINE_MIME = new Set([
       'image/png',
       'image/jpeg',
@@ -173,19 +199,30 @@ export class FilesController {
       'image/avif',
       'image/bmp',
       'video/webm',
+      'video/mp4',
+      'video/quicktime',
+      'video/ogg',
+      'video/x-matroska',
+      'video/mpeg',
+      'video/x-msvideo',
+      'video/3gpp',
     ]);
     const disposition = INLINE_MIME.has(file.mime) ? 'inline' : 'attachment';
+    const headers: Record<string, string | number> = {
+      'Content-Type': file.mime,
+      // Длина — тела ответа: у 206 это срез, у 200 — весь файл.
+      'Content-Length': range ? range.end - range.start + 1 : size,
+      'Content-Disposition': `${disposition}; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+      'Accept-Ranges': 'bytes',
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'private, max-age=3600',
+      ETag: etag,
+    };
+    if (range) headers['Content-Range'] = `bytes ${range.start}-${range.end}/${size}`;
     void reply
-      .header('Content-Type', file.mime)
-      .header('Content-Length', size)
-      .header(
-        'Content-Disposition',
-        `${disposition}; filename*=UTF-8''${encodeURIComponent(file.name)}`,
-      )
-      .header('X-Content-Type-Options', 'nosniff')
-      .header('Cache-Control', 'private, max-age=3600')
-      .header('ETag', etag)
-      .send(stream);
+      .status(range ? 206 : 200)
+      .headers(headers)
+      .send(await this.driver.get(key, range));
   }
 
   /**

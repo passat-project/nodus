@@ -87,6 +87,8 @@ const CODE_TO_STATUS: Record<ErrorCode, number> = {
   [ErrorCode.CHAT_MEMBERS_LIMIT_REACHED]: HttpStatus.BAD_REQUEST,
   [ErrorCode.FILE_SIZE_MISMATCH]: HttpStatus.BAD_REQUEST,
   [ErrorCode.FILE_QUARANTINED]: HttpStatus.GONE,
+  // Range за пределами файла (#1005): протокол требует 416 и Content-Range.
+  [ErrorCode.FILE_RANGE_NOT_SATISFIABLE]: HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE,
   // Офисный просмотр (#138): движок выключен — 503 (не ошибка клиента, деградация),
   // неподдерживаемый формат и превышение потолка — 400 (выбор файла).
   [ErrorCode.FILE_OFFICE_DISABLED]: HttpStatus.SERVICE_UNAVAILABLE,
