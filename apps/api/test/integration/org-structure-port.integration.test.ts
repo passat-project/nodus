@@ -35,6 +35,16 @@ describe('Порт оргструктуры: решающие (#441)', () => {
   });
 
   const department = async (name: string, headId: string | null, parentId?: string) => {
+    // #817: «один человек — глава одного узла» держится уникальным индексом
+    // `UNIQUE(head_id)`. Фикстура пишет в обход сервиса (#946), поэтому
+    // переиспользуемый глава снимается с прежних узлов набора вручную —
+    // иначе создание падает P2002 на повторном headId.
+    if (headId) {
+      await chat.prisma.department.updateMany({
+        where: { id: { in: departmentIds }, headId },
+        data: { headId: null },
+      });
+    }
     const created = await chat.prisma.department.create({
       data: {
         name: `${name} ${chat.runId}`,

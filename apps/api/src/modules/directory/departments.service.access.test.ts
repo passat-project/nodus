@@ -19,7 +19,7 @@ function row(id: string, parentId: string | null) {
     kind: 'management',
     parentId,
     headId: null,
-    deputyId: null,
+    deputyIds: [],
     sortOrder: 0,
     isActive: true,
     head: null,
@@ -35,6 +35,9 @@ function row(id: string, parentId: string | null) {
  */
 describe('DepartmentsService: отзыв доступа при изменении оргструктуры (#866)', () => {
   const departments = {
+    clearHeadBesides: vi.fn().mockResolvedValue([]),
+    clearDeputiesBesides: vi.fn().mockResolvedValue([]),
+    setDeputies: vi.fn(),
     findById: vi.fn(),
     lockForUpdate: vi.fn(),
     lockTree: vi.fn(),

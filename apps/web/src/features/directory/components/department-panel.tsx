@@ -128,10 +128,10 @@ export function DepartmentPanel({
     );
   }
 
-  /** Подпись роли в «Руководителях»: руководитель и заместитель (нет — пусто). */
+  /** Подпись роли в «Руководителях»: руководитель и заместители (#817). */
   function headRole(person: UserListItem): string | undefined {
     if (node.headId === person.id) return ui.employees.fieldHead;
-    if (node.deputyId === person.id) return ui.employees.fieldDeputy;
+    if (node.deputyIds.includes(person.id)) return ui.employees.fieldDeputy;
     return undefined;
   }
 

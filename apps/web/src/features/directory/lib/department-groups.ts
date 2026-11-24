@@ -28,9 +28,11 @@ export function structurePanelGroups(
 ): StructurePanelGroups {
   const active = users.filter((user) => user.status === 'active');
   const head = node.headId !== null ? active.find((user) => user.id === node.headId) : undefined;
-  const deputy =
-    node.deputyId !== null ? active.find((user) => user.id === node.deputyId) : undefined;
-  const heads = [head, deputy].filter(
+  // Заместителей несколько (#817): все — в группе «Руководители».
+  const deputies = node.deputyIds
+    .map((deputyId) => active.find((user) => user.id === deputyId))
+    .filter((user): user is UserListItem => user !== undefined);
+  const heads = [head, ...deputies].filter(
     (user, index, list): user is UserListItem =>
       user !== undefined && list.findIndex((other) => other?.id === user.id) === index,
   );

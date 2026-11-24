@@ -25,11 +25,11 @@ const node = (
   kind: 'management',
   parentId: null,
   headId: null,
-  deputyId: null,
+  deputyIds: [],
   sortOrder: 0,
   isActive: true,
   headName: null,
-  deputyName: null,
+  deputies: [],
   memberCount: 0,
   children,
   ...overrides,
@@ -127,7 +127,7 @@ afterEach(() => {
 });
 
 describe('StructureNode: композиция карточки (#768)', () => {
-  const bim = node('bim', [node('lab')], { headId: 'h-bim', deputyId: 'd-bim' });
+  const bim = node('bim', [node('lab')], { headId: 'h-bim', deputyIds: ['d-bim'] });
 
   it('фиксированная высота H, руководитель с должностью под именем', () => {
     mount({ subject: bim });

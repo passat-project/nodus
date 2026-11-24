@@ -35,7 +35,7 @@ export async function clearLeadershipOf(
   for (const department of cleared) {
     const changedFields = [
       ...(department.head ? ['headId'] : []),
-      ...(department.deputy ? ['deputyId'] : []),
+      ...(department.deputy ? ['deputyIds'] : []),
     ];
     await deps.eventBus.emit(
       tx,
@@ -65,7 +65,7 @@ export async function clearLeadershipInDepartment(
   await deps.managers.recomputeDepartments([departmentId], tx);
   const changedFields = [
     ...(cleared.head ? ['headId'] : []),
-    ...(cleared.deputy ? ['deputyId'] : []),
+    ...(cleared.deputy ? ['deputyIds'] : []),
   ];
   await deps.eventBus.emit(
     tx,
