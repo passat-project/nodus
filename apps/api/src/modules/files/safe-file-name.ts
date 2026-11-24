@@ -18,10 +18,16 @@ export const FALLBACK_FILE_NAME = 'файл';
 /** Расширение, которое стоит сохранить при обрезке (`.tar.gz` и т.п. — до 11). */
 const MAX_EXTENSION_LENGTH = 11;
 
-/** Печатный символ: не управляющий, не DEL и не одиночный суррогат. */
+/** Печатный символ: не управляющий, не DEL, не суррогат и не bidi-управление. */
 function isSafeCodePoint(code: number): boolean {
   if (code < 0x20 || code === 0x7f) return false;
-  return !(code >= 0xd800 && code <= 0xdfff);
+  if (code >= 0xd800 && code <= 0xdfff) return false;
+  // Невидимые RTL/LTR-переопределения подменяют расширение в отображении
+  // («счёт<RTL>fdp.exe» читается как «счётexe.pdf», CWE-451).
+  if (code === 0x061c || code === 0x200e || code === 0x200f) return false;
+  if (code >= 0x202a && code <= 0x202e) return false;
+  if (code >= 0x2066 && code <= 0x2069) return false;
+  return true;
 }
 
 export function safeFileName(name: string, max = MAX_FILE_NAME_LENGTH): string {
