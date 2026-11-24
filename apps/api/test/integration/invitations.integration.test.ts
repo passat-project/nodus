@@ -174,7 +174,7 @@ describe('приглашения (integration, #101)', () => {
     expect(audit?.actorId).toBeNull();
   }, 60_000);
 
-  it('сброс пароля гасит сессии сотрудника событием (без стоп-листа)', async () => {
+  it('сброс пароля: сессии до события погашены, старый access-токен в стоп-листе', async () => {
     const email = `reset.${Date.now()}@nodus.local`;
     const invitation = await createInvitation(email);
     expect((await accept(invitation.token, email)).ok).toBe(true);

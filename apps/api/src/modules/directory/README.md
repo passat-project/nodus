@@ -70,7 +70,7 @@
 
 - **Модель:** приглашённый — строка `users` со статусом `invited` без `password_hash`; в списке виден с чипом, в структуре/пикерах/поиске/ролях — нет. Активация — только принятие одноразовой ссылки (сверка рабочей почты + пароль по общей политике + авто-привязка базовой роли `employee`, если прямых ролей нет).
 - **Токены:** `user_tokens` (`invite` 7 дней, `reset` 24 часа), в БД только SHA-256; одноразовость — CAS, перевыпуск/отмена — `revoked_at`; сырой токен отдаётся один раз и не попадает в логи/аудит/Redis (маскирование пути, публичные префиксы исключены из идемпотентности).
-- **API админа (`directory.manage`, `@Audit`, `@ApiIdempotencyKey`):** `POST /directory/invitations`, `POST /directory/invitations/:id/reissue`, `DELETE /directory/invitations/:id`; сброс пароля — `POST /directory/users/:id/password-reset` требует ещё и `user.manage` (каталог прав: «Блокировать вход и сбрасывать пароли»), доступен только `active` и не себе (`DIRECTORY_SELF_RESET`; уволенного сначала возвращают в работу). Маршруты, возвращающие сырой токен, исключены из idempotency-кэша (токен не лежит в Redis).
+- **API админа (`directory.manage`, `@Audit`):** `POST /directory/invitations`, `POST /directory/invitations/:id/reissue`, `DELETE /directory/invitations/:id`; сброс пароля — `POST /directory/users/:id/password-reset` требует ещё и `user.manage` (каталог прав: «Блокировать вход и сбрасывать пароли»), доступен только `active` и не себе (`DIRECTORY_SELF_RESET`; уволенного сначала возвращают в работу). `@ApiIdempotencyKey` стоит только на `DELETE`; маршруты, возвращающие сырой токен (создание, перевыпуск, сброс), из idempotency-кэша исключены — токен не лежит в Redis (ADR-0054 §8/O4).
 - **Публичные (`@Public`, троттлинг по хешу токена):** `GET/POST /invitations/:token[/accept]`, `GET/POST /password-resets/:token[/accept]`; reset принимается только у `active`.
 - **События:** `directory.invitation.created|accepted|revoked|expired`, `directory.user.deleted`, `directory.user.password_reset_issued|password_changed`; auth по reset-событиям гасит сессии, а по выпуску ссылки — ещё и действующие access-токены (стоп-лист Redis), search по `user.deleted` удаляет документ.
 - **Приглашение задаёт HR-поля:** `workRate` и `hiredAt` необязательны в `POST /directory/invitations` — сотрудник их сам не правит, после активации задать может только администратор.
@@ -81,4 +81,5 @@
 
 Контроллеры аннотированы для генерации спеки из кода (ADR-0006): схемы — те же контракты
 (`userCardSchema`, `paginatedSchema(userListItemSchema)`, `departmentNodeSchema`, …),
-`@ApiBearerAuth` на контроллерах, ошибки — `@ApiErrors`, мутации — `@ApiIdempotencyKey`.
+`@ApiBearerAuth` на контроллерах, ошибки — `@ApiErrors`, мутации — `@ApiIdempotencyKey`
+(кроме маршрутов, возвращающих сырой токен, — ADR-0054 §8/O4).

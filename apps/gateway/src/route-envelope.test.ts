@@ -2,12 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Server } from 'socket.io';
 import type { RealtimeEnvelope } from '@nodus/contracts';
 
-import {
-  routeEnvelope,
-  USER_DEACTIVATED_EVENT,
-  USER_PASSWORD_CHANGED_EVENT,
-  USER_PASSWORD_RESET_ISSUED_EVENT,
-} from './route-envelope.js';
+import { routeEnvelope, USER_DEACTIVATED_EVENT } from './route-envelope.js';
 import type { MembershipStore } from './membership.js';
 
 const CONV = '00000000-0000-4000-8000-0000000000c1';
@@ -301,7 +296,7 @@ describe('routeEnvelope', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it('directory.user.deactivated / password_reset_issued: сокеты пользователя рвутся', async () => {
+  it('directory.user.deactivated: все сокеты пользователя отключаются (с закрытием транспорта)', async () => {
     const { io, calls } = fakeIo();
     const disconnectSockets = vi.fn();
     const inRoom = vi.fn(() => ({ disconnectSockets }));
@@ -313,19 +308,6 @@ describe('routeEnvelope', () => {
     expect(inRoom).toHaveBeenCalledWith(`user:${USER_B}`);
     expect(disconnectSockets).toHaveBeenCalledWith(true);
     expect(calls).toHaveLength(0); // событие клиентам не ретранслируется
-
-    // Выпуск reset-ссылки (#101): доступ закрывается сразу, включая реалтайм.
-    inRoom.mockClear();
-    await routeEnvelope(io, store, envelope(USER_PASSWORD_RESET_ISSUED_EVENT, { userId: USER_A }));
-    expect(inRoom).toHaveBeenCalledWith(`user:${USER_A}`);
-    expect(disconnectSockets).toHaveBeenCalledTimes(2);
-
-    // Фактическая смена пароля: сокет, открытый по старому паролю, не живёт.
-    inRoom.mockClear();
-    await routeEnvelope(io, store, envelope(USER_PASSWORD_CHANGED_EVENT, { userId: USER_A }));
-    expect(inRoom).toHaveBeenCalledWith(`user:${USER_A}`);
-    expect(disconnectSockets).toHaveBeenCalledTimes(3);
-    expect(calls).toHaveLength(0);
   });
 
   it('directory.user.deactivated без userId — ничего не отключаем', async () => {
