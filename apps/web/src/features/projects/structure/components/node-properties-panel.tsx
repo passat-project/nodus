@@ -20,6 +20,7 @@ import {
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useFrameReady } from '../../../../shared/ui/use-frame-ready.js';
+import { hasOpenPopperLayer } from '../../../../shared/lib/overlay-layers.js';
 import { CommitInput } from '../../../../shared/ui/panel/commit-field.js';
 import { PanelField } from '../../../../shared/ui/panel/panel-kit.js';
 import { NodeKindTile } from '../lib/node-kind-icon.js';
@@ -64,7 +65,7 @@ export function NodePropertiesPanel({
     if (!node) return;
     const handler = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
-      if (document.querySelector('[data-radix-popper-content-wrapper], [role="dialog"]')) return;
+      if (hasOpenPopperLayer() || document.querySelector('[role="dialog"]')) return;
       event.preventDefault();
       if (pendingKindId) setPendingKindId(null);
       else onClose();

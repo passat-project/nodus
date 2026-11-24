@@ -58,7 +58,8 @@ const base = {
   lastReplyAt: null,
   threadUnread: false,
   reactionsHidden: true,
-  onOpenThread: vi.fn(),
+  threadOpen: false,
+  onToggleThread: vi.fn(),
 };
 
 afterEach(cleanup);
@@ -73,32 +74,55 @@ describe('PostCard — карточка поста канала с аватар�
     expect(card.className).toContain('rounded-xl'); // мягкая карточка, не пузырь
   });
 
-  it('живой пост: клик по карточке открывает тред', () => {
-    const onOpenThread = vi.fn();
+  it('живой пост: клик по телу карточки НЕ открывает тред (#1021 — только полоса)', () => {
+    const onToggleThread = vi.fn();
     const { container } = renderCard(
-      <PostCard {...base} message={message()} onOpenThread={onOpenThread} />,
+      <PostCard {...base} message={message()} onToggleThread={onToggleThread} />,
     );
     const card = container.querySelector('[data-slot="post-surface"]') as HTMLElement;
     card.click();
-    expect(onOpenThread).toHaveBeenCalledTimes(1);
+    expect(onToggleThread).not.toHaveBeenCalled();
   });
 
-  it('надгробие с живым тредом: строка удаления + полоса-кнопка «Обсудить» → тред', () => {
-    const onOpenThread = vi.fn();
+  it('полоса «Обсудить» — тумблер треда: клик зовёт onToggleThread, aria-expanded по threadOpen', () => {
+    const onToggleThread = vi.fn();
+    const { container, rerender } = renderCard(
+      <PostCard {...base} message={message()} onToggleThread={onToggleThread} />,
+    );
+    // Полоса — единственная кнопка текстового поста без реакций/вложений.
+    const strip = container.querySelector('[data-slot="post-surface"] button') as HTMLElement;
+    expect(strip.getAttribute('aria-expanded')).toBe('false');
+    strip.click();
+    expect(onToggleThread).toHaveBeenCalledTimes(1);
+    // Открытый тред этого поста — aria-expanded=true.
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <PostCard {...base} threadOpen message={message()} onToggleThread={onToggleThread} />
+        </TooltipProvider>
+      </QueryClientProvider>,
+    );
+    expect(
+      container.querySelector('[data-slot="post-surface"] button')!.getAttribute('aria-expanded'),
+    ).toBe('true');
+  });
+
+  it('надгробие с живым тредом: строка удаления + полоса-кнопка «Обсудить» → тумблер треда', () => {
+    const onToggleThread = vi.fn();
     const { container } = renderCard(
       <PostCard
         {...base}
         message={message({ deletedAt: '2026-09-30T10:00:00Z', text: '', attachments: [] })}
         repliesCount={3}
-        onOpenThread={onOpenThread}
+        onToggleThread={onToggleThread}
       />,
     );
     // двухуровневость: строка удаления (data-slot tombstone) И полоса обсуждения
     expect(container.querySelector('[data-slot="message-tombstone"]')).not.toBeNull();
-    const strip = container.querySelector('button')!;
+    const strip = container.querySelector('button') as HTMLElement;
     expect(strip.textContent).toContain('Обсудить');
     strip.click();
-    expect(onOpenThread).toHaveBeenCalledTimes(1);
+    expect(onToggleThread).toHaveBeenCalledTimes(1);
   });
 
   it('надгробие без ответов: полосы обсуждения нет', () => {
@@ -158,8 +182,8 @@ describe('PostCard — карточка поста канала с аватар�
     expect(card.textContent).toContain('Иван Петров');
   });
 
-  it('клик по заднику лайтбокса закрывает его и НЕ открывает тред (#409)', () => {
-    const onOpenThread = vi.fn();
+  it('клик по заднику лайтбокса закрывает его и НЕ трогает тред (#409)', () => {
+    const onToggleThread = vi.fn();
     const img = {
       id: 'f1',
       fileId: '00000000-0000-4000-8000-000000000001',
@@ -178,18 +202,19 @@ describe('PostCard — карточка поста канала с аватар�
       <PostCard
         {...base}
         message={message({ attachments: [img], text: '' })}
-        onOpenThread={onOpenThread}
+        onToggleThread={onToggleThread}
       />,
     );
     const card = container.querySelector('[data-slot="post-surface"]') as HTMLElement;
-    // Плитка галереи — единственная кнопка карточки в соло-медиа.
+    // Плитка галереи — первая кнопка карточки (вторая — полоса «Обсудить»).
     fireEvent.click(card.querySelector('button')!);
     const dialog = document.querySelector('[role="dialog"][aria-modal="true"]') as HTMLElement;
     expect(dialog).not.toBeNull();
 
     // Клик мимо картинки: лайтбокс — портал, его React-событие всплывает
-    // через дерево компонентов в карточку поста — та не должна открыть тред.
-    // Закрытие отложено на паузу двойного клика (#721), поэтому ждём таймер.
+    // через дерево компонентов в карточку поста — та тред не открывает
+    // (карточка вообще без onClick, #1021). Закрытие отложено на паузу
+    // двойного клика (#721), поэтому ждём таймер.
     vi.useFakeTimers();
     fireEvent.click(dialog);
     act(() => {
@@ -198,7 +223,7 @@ describe('PostCard — карточка поста канала с аватар�
     vi.useRealTimers();
 
     expect(document.querySelector('[role="dialog"][aria-modal="true"]')).toBeNull();
-    expect(onOpenThread).not.toHaveBeenCalled();
+    expect(onToggleThread).not.toHaveBeenCalled();
   });
 
   it('соло-медиа пост с реакциями: чипы ПОД карточкой, не бар внутри (р.5 п.6)', () => {
@@ -227,10 +252,10 @@ describe('PostCard — карточка поста канала с аватар�
       />,
     );
     const card = container.querySelector('[data-slot="post-surface"]')!;
-    // внутри карточки реакций НЕТ: единственная кнопка — плитка-зум
-    // картинки, последний блок клипа — полоса обсуждения
+    // внутри карточки реакций НЕТ: кнопки — плитка-зум картинки и полоса
+    // «Обсудить» (#1021 — тумблер треда); последний блок клипа — полоса
     expect(card.querySelector('img')).toBeTruthy();
-    expect(card.querySelectorAll('button').length).toBe(1);
+    expect(card.querySelectorAll('button').length).toBe(2);
     // чипы реакций — сиблинг карточки СНИЗУ, на фоне ленты
     const after = card.nextElementSibling!;
     expect(after.querySelector('button')).toBeTruthy();

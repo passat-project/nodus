@@ -6,13 +6,14 @@ import { cn } from '@nodus/ui/lib/utils';
 import { ArrowLeft, X } from 'lucide-react';
 
 import { useFrameReady } from '../use-frame-ready.js';
+import { hasOpenPopperLayer } from '../../lib/overlay-layers.js';
 
 /** Ширина правой панели окна-сплита (общий канон). */
 export const SIDE_PANEL_WIDTH = 384;
 
 /** Открыт ли сейчас оверлей Radix (меню, поповер, список, диалог) — Esc его. */
 function overlayOpen(): boolean {
-  return document.querySelector('[data-radix-popper-content-wrapper], [role="dialog"]') !== null;
+  return hasOpenPopperLayer() || document.querySelector('[role="dialog"]') !== null;
 }
 
 /**

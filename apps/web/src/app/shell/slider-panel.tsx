@@ -12,6 +12,7 @@ import { Button } from '@nodus/ui/components/button';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { inputModality } from '../../shared/lib/input-modality.js';
+import { hasOpenPopperLayer } from '../../shared/lib/overlay-layers.js';
 import { SurfaceVisibilityProvider } from '../../shared/lib/surface-visibility.js';
 import { CardHeaderActionsContext } from './card-header-actions.js';
 import { useRailHidden } from './rail-visibility.js';
@@ -227,7 +228,7 @@ export function SliderPanel({
       // этот слушатель на window видит то же событие ПОСЛЕ document-обработчиков
       // Radix (баблинг document → window), поэтому отфильтровываем обработанное.
       if (event.defaultPrevented) return;
-      if (document.querySelector('[data-radix-popper-content-wrapper]')) return;
+      if (hasOpenPopperLayer()) return;
       requestCloseRef.current();
     };
     window.addEventListener('keydown', onKey);

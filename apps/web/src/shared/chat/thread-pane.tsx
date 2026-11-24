@@ -1,5 +1,5 @@
 import { Fragment, memo, useMemo, useRef } from 'react';
-import { ArrowLeft, Eye, EyeOff, X } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { NodeLabel } from '@nodus/ui/components/node-label';
@@ -51,7 +51,9 @@ import { useConversationHost } from './use-conversation-host.js';
  *
  * Два варианта шапки (окно треда, #42): 'drill' — тред ЗАМЕНИЛ ленту (узкая
  * зона, карточки): кнопка «К ленте»; 'side' — тред ПОЛНОВЫСОТНЫМ окном РАДОМ
- * с лентой (Slack-паттерн, вердикт владельца 15.09.2026).
+ * с лентой (Slack-паттерн, вердикт владельца 15.09.2026). Закрытие окна —
+ * повторный клик по полосе «Обсудить» поста или Esc; крестика в шапке нет
+ * (вердикт владельца 24.11.2026, #1021).
  */
 export const ThreadPane = memo(function ThreadPane({
   conversationId,
@@ -173,8 +175,11 @@ export const ThreadPane = memo(function ThreadPane({
     );
   }
 
+  // Обои чата — ТОЛЬКО НИЖЕ бара (канон «зона чата темнее только НИЖЕ бара»,
+  // репорт владельца 24.11.2026 #1021): корень — тон рамы, как у колонки
+  // ленты (ConversationBar вне ThreadFeed), обои накрывают ленту + композер.
   return (
-    <div className="flex h-full min-w-0 flex-1 flex-col chat-wallpaper bg-chat-zone">
+    <div className="flex h-full min-w-0 flex-1 flex-col">
       <header
         className={cn('flex shrink-0 items-center gap-2 border-b border-border px-3', barClass)}
       >
@@ -206,139 +211,133 @@ export const ThreadPane = memo(function ThreadPane({
             )}
             <span className="text-xs">{watched ? ui.chat.unwatchThread : ui.chat.watchThread}</span>
           </Button>
-          {variant === 'side' ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="hover:bg-accent"
-              aria-label={ui.common.close}
-              onClick={onClose}
-            >
-              <X />
-            </Button>
-          ) : null}
+          {/* Крестика в шапке НЕТ (решение владельца 24.11.2026 #1021):
+              окно треда закрывается повторным кликом по полосе «Обсудить»
+              поста или Esc — не отдельной кнопкой. */}
         </span>
       </header>
-      <FeedDropzone
-        className="relative flex min-h-0 flex-1 flex-col"
-        onFiles={(files) => addFiles(scope, files)}
-      >
-        <MessageScrollerProvider autoScroll>
-          <ScrollEndResponder scope={scope} />
-          <JumpResponder
-            conversationId={conversationId}
-            threadRootId={threadRootId}
-            itemCount={items.length}
-            containerRef={viewportRef}
-          />
-          <MessageScroller className="min-h-0 flex-1">
-            <MessageScrollerViewport ref={viewportRef}>
-              <MessageScrollerContent
-                className={cn(
-                  'feed-reveal px-4 pt-4 pb-0',
-                  (selection.selectionActive || box.active) && 'select-none',
-                )}
-              >
-                {/* Р.12: скелетоны-полоски убраны (артефакт первого
+      <div className="flex min-h-0 flex-1 flex-col chat-wallpaper bg-chat-zone">
+        <FeedDropzone
+          className="relative flex min-h-0 flex-1 flex-col"
+          onFiles={(files) => addFiles(scope, files)}
+        >
+          <MessageScrollerProvider autoScroll>
+            <ScrollEndResponder scope={scope} />
+            <JumpResponder
+              conversationId={conversationId}
+              threadRootId={threadRootId}
+              itemCount={items.length}
+              containerRef={viewportRef}
+            />
+            <MessageScroller className="min-h-0 flex-1">
+              <MessageScrollerViewport ref={viewportRef}>
+                <MessageScrollerContent
+                  className={cn(
+                    'feed-reveal px-4 pt-4 pb-0',
+                    (selection.selectionActive || box.active) && 'select-none',
+                  )}
+                >
+                  {/* Р.12: скелетоны-полоски убраны (артефакт первого
                     открытия, см. conversation-pane); пусто → feed-reveal. */}
-                {isLoading ? null : (
-                  <MessageGroup className="gap-3">
-                    {/* Sentinel истории — первый элемент окна трэда (#307). */}
-                    {topSentinel}
-                    {root ? (
-                      <MessageScrollerItem messageId={root.id}>
-                        {renderRoot(root)}
-                        <span
-                          aria-hidden
-                          className="mt-3 block border-b border-dashed border-border"
-                        />
-                      </MessageScrollerItem>
-                    ) : null}
+                  {isLoading ? null : (
+                    <MessageGroup className="gap-3">
+                      {/* Sentinel истории — первый элемент окна трэда (#307). */}
+                      {topSentinel}
+                      {root ? (
+                        <MessageScrollerItem messageId={root.id}>
+                          {renderRoot(root)}
+                          <span
+                            aria-hidden
+                            className="mt-3 block border-b border-dashed border-border"
+                          />
+                        </MessageScrollerItem>
+                      ) : null}
 
-                    {runs.map((run, runIndex) => {
-                      const prevLast = runIndex === 0 ? root : runs[runIndex - 1]?.last;
-                      const { first } = run;
-                      return (
-                        <Fragment key={first.id}>
-                          {startsNewDay(prevLast, first) ? (
-                            <MessageScrollerItem>
-                              <DayChip label={formatDayLabel(first.createdAt)} />
-                            </MessageScrollerItem>
-                          ) : null}
-                          <MessageRunView
-                            run={run}
-                            showName={!run.mine}
-                            renderItem={(message, attrs) => (
-                              <MessageScrollerItem messageId={message.id} style={attrs.style}>
-                                <MessageRow
-                                  messageId={message.id}
-                                  selectionKey={message.clientMessageId}
-                                  selectable={selection.selectionActive && !message.deletedAt}
-                                  selected={selection.selectedSet.has(message.clientMessageId)}
-                                  onToggle={(shift) =>
-                                    selection.toggle(message.clientMessageId, shift)
-                                  }
-                                >
-                                  {message.deletedAt ? (
-                                    <ChatMessageItem
-                                      message={message}
-                                      mine={run.mine}
-                                      showName={attrs.showName}
-                                      avatarSlot="none"
-                                      tail={attrs.tail}
-                                    />
-                                  ) : (
-                                    <MessageMenu
-                                      message={message}
-                                      mine={run.mine}
-                                      conversationId={conversationId}
-                                      scope={scope}
-                                      messagesOfSelection={selection.getSelectedMessages}
-                                      /* #968: ответы треда — цитата соседнего
-                                         сообщения тем же композером треда. */
-                                      inThread
-                                    >
+                      {runs.map((run, runIndex) => {
+                        const prevLast = runIndex === 0 ? root : runs[runIndex - 1]?.last;
+                        const { first } = run;
+                        return (
+                          <Fragment key={first.id}>
+                            {startsNewDay(prevLast, first) ? (
+                              <MessageScrollerItem>
+                                <DayChip label={formatDayLabel(first.createdAt)} />
+                              </MessageScrollerItem>
+                            ) : null}
+                            <MessageRunView
+                              run={run}
+                              showName={!run.mine}
+                              renderItem={(message, attrs) => (
+                                <MessageScrollerItem messageId={message.id} style={attrs.style}>
+                                  <MessageRow
+                                    messageId={message.id}
+                                    selectionKey={message.clientMessageId}
+                                    selectable={selection.selectionActive && !message.deletedAt}
+                                    selected={selection.selectedSet.has(message.clientMessageId)}
+                                    onToggle={(shift) =>
+                                      selection.toggle(message.clientMessageId, shift)
+                                    }
+                                  >
+                                    {message.deletedAt ? (
                                       <ChatMessageItem
                                         message={message}
                                         mine={run.mine}
                                         showName={attrs.showName}
                                         avatarSlot="none"
                                         tail={attrs.tail}
-                                        reactionsHidden={selection.selectionActive}
                                       />
-                                    </MessageMenu>
-                                  )}
-                                </MessageRow>
-                              </MessageScrollerItem>
-                            )}
-                          />
-                        </Fragment>
-                      );
-                    })}
-                    <ConversationViewsLine
-                      conversationId={conversationId}
-                      messages={items}
-                      className="-mt-[3px]"
-                    />
-                  </MessageGroup>
-                )}
-              </MessageScrollerContent>
-            </MessageScrollerViewport>
-            <DayBubble viewportRef={viewportRef} />
-            <MessageScrollerButton />
-          </MessageScroller>
-        </MessageScrollerProvider>
-      </FeedDropzone>
-      <ChatComposer
-        placeholder={ui.chat.replyPlaceholder}
-        focusId={scope}
-        conversationId={conversationId}
-        typingThreadRootId={threadRootId}
-        attachmentsEnabled
-        onEditLast={handleEditLast}
-        selection={selectionComposerProps(conversationId, selection)}
-        onSubmit={handleSubmit}
-      />
+                                    ) : (
+                                      <MessageMenu
+                                        message={message}
+                                        mine={run.mine}
+                                        conversationId={conversationId}
+                                        scope={scope}
+                                        messagesOfSelection={selection.getSelectedMessages}
+                                        /* #968: ответы треда — цитата соседнего
+                                         сообщения тем же композером треда. */
+                                        inThread
+                                      >
+                                        <ChatMessageItem
+                                          message={message}
+                                          mine={run.mine}
+                                          showName={attrs.showName}
+                                          avatarSlot="none"
+                                          tail={attrs.tail}
+                                          reactionsHidden={selection.selectionActive}
+                                        />
+                                      </MessageMenu>
+                                    )}
+                                  </MessageRow>
+                                </MessageScrollerItem>
+                              )}
+                            />
+                          </Fragment>
+                        );
+                      })}
+                      <ConversationViewsLine
+                        conversationId={conversationId}
+                        messages={items}
+                        className="-mt-[3px]"
+                      />
+                    </MessageGroup>
+                  )}
+                </MessageScrollerContent>
+              </MessageScrollerViewport>
+              <DayBubble viewportRef={viewportRef} />
+              <MessageScrollerButton />
+            </MessageScroller>
+          </MessageScrollerProvider>
+        </FeedDropzone>
+        <ChatComposer
+          placeholder={ui.chat.replyPlaceholder}
+          focusId={scope}
+          conversationId={conversationId}
+          typingThreadRootId={threadRootId}
+          attachmentsEnabled
+          onEditLast={handleEditLast}
+          selection={selectionComposerProps(conversationId, selection)}
+          onSubmit={handleSubmit}
+        />
+      </div>
     </div>
   );
 });

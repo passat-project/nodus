@@ -61,7 +61,14 @@ export function AttachmentViewer({ stripW = 0 }: { stripW?: number }) {
 
   const closeOnEsc = useCallback(
     (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closeWithInvalidate();
+      if (event.key === 'Escape') {
+        // Один Esc = один слой (канон, как у лайтбокса): гасим событие, чтобы
+        // карточка сущности под плеером не закрылась тем же нажатием — первый
+        // Esc закрывает только вьюер, второй уже карточку (#1021).
+        event.preventDefault();
+        event.stopPropagation();
+        closeWithInvalidate();
+      }
     },
     [closeWithInvalidate],
   );

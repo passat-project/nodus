@@ -183,10 +183,23 @@ describe('AssistantPanel: Esc', () => {
     renderPanel();
     const popper = document.createElement('div');
     popper.setAttribute('data-radix-popper-content-wrapper', '');
+    // Гейт #1021: блокирует только РЕАЛЬНО открытое содержимое обёртки.
+    popper.innerHTML = '<div data-state="open" role="dialog">список сессий</div>';
     document.body.append(popper);
 
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(useAssistantStore.getState().open).toBe(true);
+  });
+
+  it('обёртка без открытого содержимого (exit-анимация после закрытия) Esc не глотает (#1021)', () => {
+    useAssistantStore.setState({ open: true });
+    renderPanel();
+    const popper = document.createElement('div');
+    popper.setAttribute('data-radix-popper-content-wrapper', '');
+    document.body.append(popper);
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(useAssistantStore.getState().open).toBe(false);
   });
 
   it('другие клавиши окно не закрывают', () => {

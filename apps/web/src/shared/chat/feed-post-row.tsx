@@ -28,6 +28,8 @@ export const FeedPostRow = memo(function FeedPostRow({
   conversationId,
   scope,
   onOpenThread,
+  onCloseThread,
+  openThreadId,
   getSelectedMessages,
   style,
 }: {
@@ -44,6 +46,10 @@ export const FeedPostRow = memo(function FeedPostRow({
   conversationId: string;
   scope: string;
   onOpenThread: (rootId: string) => void;
+  /** Закрыть открытое окно треда (тумблер полосы «Обсудить», #1021). */
+  onCloseThread: () => void;
+  /** Какой тред канала сейчас открыт (для состояния полосы). */
+  openThreadId: string | null;
   getSelectedMessages: () => ChatMessage[];
   style?: React.CSSProperties;
 }) {
@@ -51,6 +57,8 @@ export const FeedPostRow = memo(function FeedPostRow({
   const participants = [...new Map(replies.map((r) => [r.author.id, r.author])).values()];
   const last = replies[replies.length - 1];
   const deleted = Boolean(message.deletedAt);
+  const threadOpen = openThreadId === message.id;
+  const toggleThread = () => (threadOpen ? onCloseThread() : onOpenThread(message.id));
 
   return (
     <MessageScrollerItem messageId={message.id} style={style}>
@@ -73,7 +81,8 @@ export const FeedPostRow = memo(function FeedPostRow({
               lastReplyAt={last?.createdAt ?? null}
               threadUnread={threadUnread}
               reactionsHidden
-              onOpenThread={() => onOpenThread(message.id)}
+              threadOpen={threadOpen}
+              onToggleThread={toggleThread}
             />
           ) : (
             <MessageMenu
@@ -95,7 +104,8 @@ export const FeedPostRow = memo(function FeedPostRow({
                 lastReplyAt={last?.createdAt ?? null}
                 threadUnread={threadUnread}
                 reactionsHidden={selectionActive}
-                onOpenThread={() => onOpenThread(message.id)}
+                threadOpen={threadOpen}
+                onToggleThread={toggleThread}
               />
             </MessageMenu>
           )}

@@ -1,10 +1,7 @@
-import { Bot } from 'lucide-react';
 import type { ConversationListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
-import { useAssistantStore } from '../../features/assistant/model/assistant-store.js';
-import { useAssistantEnabled } from '../../features/assistant/model/use-assistant-enabled.js';
 import { useConversations } from '../../features/chat/api/chat-api.js';
 import {
   conversationTitle,
@@ -22,9 +19,11 @@ import { useCardStack, useOpenCard, useReplaceTopCard } from './use-card-stack.j
 
 /** Ширина полосы аватарок. Экспортируется для карточек-слайдеров: их правый
  *  край = правый край мягкой рамы = левый край полосы (единая геометрия шелла).
- *  Раскрытие полосы имён (40⇄192) убрано (вердикт владельца 16.11.2026):
- *  кнопка агента внизу полосы открывает плавающее окно ассистента поверх
- *  рабочей зоны — структура окна не двигается. */
+ *  Раскрытие полосы имён (40⇄192) убрано (вердикт владельца 16.11.2026);
+ *  кнопка агента внизу полосы убрана (#1021, решение владельца 24.11.2026):
+ *  вход в ассистента — кнопкой-роботом в топбаре, полоса — только список
+ *  бесед до самого низа (служебный градиент-затухание над кнопкой убран
+ *  вместе с ней). */
 export const EDGE_W_COLLAPSED = uiPx(40);
 
 /** Маркеры типа беседы на аватарках полосы УБРАНЫ (вердикт владельца
@@ -88,18 +87,12 @@ function ChatRailRow({
  * Свой СКРЫТЫЙ скролл (data-no-scrollbar). Полоса живёт ЗА ПРЕДЕЛАМИ мягкой
  * рамы — в правом периметре, на его тоне и БЕЗ вертикальных границ.
  *
- * КНОПКА АГЕНТА ВНИЗУ полосы (вердикт владельца 16.11.2026): вместо шеврона
- * раскрытия имён (режим не использовался, убран) открывает ОКНО АССИСТЕНТА —
- * плавающий лист поверх правой части рамы; ширина окна тянется перегородкой
- * с памятью. Полоса остаётся свёрнутой (40px) и кликабельной при открытом
- * окне. Закрытие — той же кнопкой, крестиком окна, Esc или Ctrl+J.
+ * Кнопка агента внизу полосы УБРАНА (#1021, решение владельца 24.11.2026):
+ * вход в окно ассистента — роботом в топбаре (или Ctrl+J).
  */
 export function RightRail() {
   const { data } = useConversations();
   const me = useAuthStore((s) => s.user);
-  const assistantOpen = useAssistantStore((s) => s.open);
-  const setOpen = useAssistantStore((s) => s.setOpen);
-  const assistantEnabled = useAssistantEnabled();
   const stack = useCardStack();
   const openCard = useOpenCard();
   const replaceTop = useReplaceTopCard();
@@ -132,48 +125,21 @@ export function RightRail() {
         hidden ? 'pointer-events-none w-0 overflow-hidden opacity-0' : 'w-10',
       )}
     >
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        <div
-          data-no-scrollbar
-          className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto pt-1 pb-1"
-        >
-          {chats.map((conversation) => (
-            <ChatRailRow
-              key={conversation.id}
-              conversation={conversation}
-              meId={me?.id}
-              onOpen={showChat}
-            />
-          ))}
-        </div>
-        {/* Плавный переход списка к кнопке агента (замечание владельца
-            17.11.2026): при длинном списке аватарки обрезались жёсткой
-            горизонтальной границей у кнопки. Подложка-затухание в тон
-            периметра (--background = --sidebar, обе темы) растворяет нижние
-            аватарки ПОВЕРХ списка; pointer-events-none — клики проходят
-            к строкам. Градиент — служебное затухание, не декор (исключение
-            по замечанию владельца, как обои чата ADR-0040). */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-background to-transparent"
-        />
-      </div>
-      {/* Кнопка агента внизу полосы (вместо шеврона раскрытия имён, вердикт
-          владельца 16.11.2026): открывает окно ассистента поверх правой части
-          рабочей зоны; аватарки остаются на месте. Без флага `assistant` (I10)
-          и права `assistant.use` (I8) входа нет вовсе. */}
-      <div className={cn('shrink-0 p-1', !assistantEnabled && 'hidden')}>
-        <button
-          type="button"
-          onClick={() => setOpen(!assistantOpen)}
-          aria-label={assistantOpen ? ui.assistant.close : ui.assistant.openHint}
-          title={assistantOpen ? ui.assistant.close : ui.assistant.openHint}
-          // Робот ВСЕГДА цветной (индиго — заметный вход, вердикт владельца
-          // 16.11.2026); ховер как у шеврона: фон не меняется, значок темнеет.
-          className="flex h-8 w-full items-center justify-center rounded-md text-primary hover:text-primary-hover"
-        >
-          <Bot className="size-4" />
-        </button>
+      {/* Список бесед до самого низа: кнопки агента больше нет (#1021) —
+          и служебного градиента-затухания над ней тоже (он существовал
+          только ради мягкой посадки списка на кнопку). */}
+      <div
+        data-no-scrollbar
+        className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto pt-1 pb-1"
+      >
+        {chats.map((conversation) => (
+          <ChatRailRow
+            key={conversation.id}
+            conversation={conversation}
+            meId={me?.id}
+            onOpen={showChat}
+          />
+        ))}
       </div>
     </aside>
   );

@@ -4,6 +4,7 @@ import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { usePaneWidth } from '../ui/use-pane-width.js';
+import { hasOpenPopperLayer } from '../lib/overlay-layers.js';
 import {
   isSideBySide,
   MIN_THREAD_W,
@@ -21,9 +22,11 @@ import { ThreadPane } from './thread-pane.js';
  * тред — отдельная панель, не оверлей и не замена ленты). Окно треда —
  * ПОЛНОВЫСОТНАЯ колонка-сиблинг (вердикт владельца 15.09.2026, приём панели
  * беседы): её бар стоит НА ЛИНИИ баров хоста (`threadBarClass`: мессенджер
- * h-14, проект h-10), крестик — у правого края колонки; бар беседы (`header`)
- * живёт в колонке ленты и сжимается вместе с ней — тоггл панели на его
- * правом краю. Перегородка тянется мышью с памятью (`nodus-thread-w-v1`,
+ * h-14, проект h-10); крестика закрытия НЕТ (ред. 24.11.2026, #1021 — окно
+ * закрывают повторный клик по полосе «Обсудить» поста или Esc); бар беседы
+ * (`header`) живёт в колонке ленты и сжимается вместе с ней — тоггл панели
+ * на его правом краю. Перегородка тянется мышью с памятью
+ * (`nodus-thread-w-v2`,
  * императивный drag по канону use-chat-width); открытие — вталкивание окна
  * шириной (transition-[width], как панель «О задаче»); transition — ТОЛЬКО
  * на toggle: при внешнем resize контейнера окно следует 1:1 (гейт
@@ -126,7 +129,7 @@ export function ChannelView({
     if (!threadRootId) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return;
-      if (document.querySelector('[data-radix-popper-content-wrapper]')) return;
+      if (hasOpenPopperLayer()) return;
       // Слойность (канон «один Escape = один слой», ADR-0009): если поверх
       // страницы с тредом открыта карточка слайдера — клавиша её, фоновый
       // тред молчит; тред ВНУТРИ верхней карточки закрывается как обычно.
@@ -166,6 +169,8 @@ export function ChannelView({
               <ThreadFeed
                 conversationId={conversationId}
                 onOpenThread={onOpenThread}
+                onCloseThread={onCloseThread}
+                openThreadId={threadRootId}
                 canPost={canPost}
               />
             </div>

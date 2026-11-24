@@ -61,10 +61,16 @@ import { useConversationHost } from './use-conversation-host.js';
 export const ThreadFeed = memo(function ThreadFeed({
   conversationId,
   onOpenThread,
+  onCloseThread,
+  openThreadId,
   canPost,
 }: {
   conversationId: string;
   onOpenThread: (rootId: string) => void;
+  /** Тумблер полосы «Обсудить» (#1021): повторный клик закрывает окно треда. */
+  onCloseThread: () => void;
+  /** Открытый сейчас тред канала — состояние полосы у его поста. */
+  openThreadId: string | null;
   /** Доменный гейт публикации поверх матрицы беседы: канал проекта —
    *  объявление, пишут только руководство и `project.channel.post` (Р8 #52);
    *  треды при этом открыты всем участникам. */
@@ -243,6 +249,8 @@ export const ThreadFeed = memo(function ThreadFeed({
                                 conversationId={conversationId}
                                 scope={scope}
                                 onOpenThread={onOpenThread}
+                                onCloseThread={onCloseThread}
+                                openThreadId={openThreadId}
                                 getSelectedMessages={selection.getSelectedMessages}
                                 style={attrs.style}
                               />

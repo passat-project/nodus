@@ -1,10 +1,12 @@
-import { Moon, Search, Sun } from 'lucide-react';
+import { Bot, Moon, Search, Sun } from 'lucide-react';
 import { useLayoutEffect } from 'react';
 import { Link, useRouterState } from '@tanstack/react-router';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { cn } from '@nodus/ui/lib/utils';
 
+import { useAssistantEnabled } from '../../features/assistant/model/use-assistant-enabled.js';
+import { useAssistantStore } from '../../features/assistant/model/assistant-store.js';
 import { HomeGreeting } from '../../features/home/components/home-greeting.js';
 import { BellPopover } from '../../features/notifications/components/bell-popover.js';
 import { RunningTimerChip } from '../../features/tasks/components/running-timer-chip.js';
@@ -25,7 +27,8 @@ import { useShellStore } from './shell-store.js';
  * верхние вкладки без кастомизации — персональный порядок и «Скрытое»
  * живут только в левой рейке); правой группой — глобальный «Умный поиск»
  * ЛУПОЙ (модель позднего Битрикс24: не конкурирует с локальным поиском
- * списков за глаза; Ctrl+K работает), уведомления, тумблер темы. Профиль —
+ * списков за глаза; Ctrl+K работает), кнопка ИИ-ассистента (#1021 —
+ * вместо неработающей плашки «RU»), уведомления, тумблер темы. Профиль —
  * ВЕРХ служебной полосы за пределами мягкой рамы (ProfileMenu, план R3/R4).
  */
 const NO_PERMISSIONS: readonly string[] = [];
@@ -39,6 +42,10 @@ export function TopBar() {
   const openSearch = useSearchStore((s) => s.openSearch);
   const { data: unread } = useChatUnreadSummary();
   const permissions = useAuthStore((s) => s.user?.permissions ?? NO_PERMISSIONS);
+  // Окно ассистента — оверлей внутри рамы: тоггл живёт в топбаре (#1021).
+  const assistantOpen = useAssistantStore((s) => s.open);
+  const setAssistantOpen = useAssistantStore((s) => s.setOpen);
+  const assistantEnabled = useAssistantEnabled();
 
   /** Счётчик вкладки (#409): только у мессенджера; «Настройка» — без числа. */
   const tabCount = (moduleId: string | undefined, tabId: string): number => {
@@ -117,9 +124,26 @@ export function TopBar() {
             точка обновления (#263); без раздачи /desktop/ кнопки нет */}
         <DownloadAppButton />
 
-        <span className="flex h-8 items-center rounded-md border border-border px-2.5 font-mono text-label font-medium tracking-wider text-muted-foreground">
-          RU
-        </span>
+        {/* ИИ-ассистент — ЕДИНСТВЕННЫЙ видимый вход в топбаре (решение
+            владельца 24.11.2026, #1021): вместо неработающей плашки «RU»;
+            плавающий робот у кромки мессенджера и робот внизу служебной
+            полосы убраны. Дублирующая горячая клавиша — Ctrl+J. Иконка —
+            В ОБЩЕМ СТИЛЕ группы (muted, «как все» — правка владельца
+            24.11.2026; прежнее «робот всегда цветной» было про робота в
+            полосе, больше не существует). */}
+        {assistantEnabled ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setAssistantOpen(!assistantOpen)}
+            aria-label={assistantOpen ? ui.assistant.close : ui.assistant.openHint}
+            title={assistantOpen ? ui.assistant.close : ui.assistant.openHint}
+            aria-pressed={assistantOpen}
+            className="text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <Bot />
+          </Button>
+        ) : null}
 
         <Button
           variant="ghost"

@@ -1,9 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ChatMessage, MessageAttachment, Paginated, ReplyPreview } from '@nodus/contracts';
+import type { UserListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { toast } from 'sonner';
 
 import { api } from '../api-client.js';
+import { usersListKey } from '../api/users-list.js';
 import { useAuthStore } from '../auth-store.js';
 import { useChatDrafts } from './chat-drafts.js';
 import { chatKeys } from './chat-keys.js';
@@ -88,6 +90,13 @@ export function useSendChatMessage(conversationId: string, draftScope?: string) 
         : listKey;
       await queryClient.cancelQueries({ queryKey: threadKey });
 
+      // Аватар СВОЕЙ карточки — из кэша справочника (#1021): null в темпе
+      // давал мигание «инициалы → фото» до ответа сервера. Список мог не
+      // доехать (холодный вход) — тогда как раньше, фото принесёт сервер.
+      const meCard = queryClient
+        .getQueryData<Paginated<UserListItem>>(usersListKey)
+        ?.items.find((u) => u.id === user?.id);
+
       const temp: ChatMessage = {
         id: vars.tempId,
         conversationId,
@@ -95,7 +104,11 @@ export function useSendChatMessage(conversationId: string, draftScope?: string) 
         // Связка темпа с серверной записью (#243): Idempotency-Key отправки;
         // WS-эхо и рефечи по этому полю узнают свой темп.
         clientMessageId: vars.tempId,
-        author: { id: user?.id ?? '', displayName: user?.displayName ?? '', avatarUrl: null },
+        author: {
+          id: user?.id ?? '',
+          displayName: user?.displayName ?? '',
+          avatarUrl: meCard?.avatarUrl ?? null,
+        },
         text: vars.text,
         replyToId: vars.replyToId ?? null,
         reply: vars.reply ?? null,

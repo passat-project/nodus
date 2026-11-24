@@ -6,7 +6,6 @@ import { Skeleton } from '@nodus/ui/components/skeleton';
 import { Toaster } from '@nodus/ui/components/sonner';
 import { TooltipProvider } from '@nodus/ui/components/tooltip';
 
-import { AssistantEdgeEntry } from '../../features/assistant/components/assistant-edge-entry.js';
 import { useAssistantHotkey } from '../../features/assistant/components/assistant-entry.js';
 import { AssistantPanel } from '../../features/assistant/components/assistant-panel.js';
 import { SearchCommand } from '../../features/search/components/search-command.js';
@@ -190,9 +189,9 @@ export function AppShell() {
               рамы, в правом периметре (план владельца 14.09.2026, R4): у рамы
               нет правого отступа, её правый край = левый край полосы; щель
               периметра 8px — справа от полосы (mr-2 полосы). Полоса всегда
-              свёрнута (40px): раскрытие имён убрано (вердикт 16.11.2026),
-              кнопка-робот внизу открывает окно ассистента — оверлей внутри
-              рамы, геометрию рамы/карточек не двигает; скроллбар страниц —
+              свёрнута (40px), только список бесед: вход в ассистента —
+              роботом в топбаре (#1021), окно — оверлей внутри рамы,
+              геометрию рамы/карточек не двигает; скроллбар страниц —
               у правого шва рамы. */}
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
             <div
@@ -240,8 +239,6 @@ export function AppShell() {
           действия, выдающие номер (кнопка процесса, создание, смена типа). */}
       <NumberConfirmHost />
       <AttachmentViewer stripW={viewerStripW} />
-      {/* Мессенджер: полоса скрыта — вход роботом у правого края по hover. */}
-      <AssistantEdgeEntry railHidden={railHidden} />
       <Toaster richColors theme={theme} />
     </TooltipProvider>
   );

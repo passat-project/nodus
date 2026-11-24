@@ -22,6 +22,7 @@ import { closeMenuThenRun } from './menu-close.js';
 import { buildMessageItems, buildSelectionItems, type MenuItem } from './message-menu-items.js';
 import { MessageReplyProvider, type MessageReplyAction } from './message-reply.js';
 import { usePinToggle } from './pin-mutations.js';
+import { selectionFragmentIn } from './selection-fragment.js';
 import { useSelectionStore } from './selection-store.js';
 import { useCanModerateMessages } from './use-can-moderate.js';
 import { copyMessagesAsText } from './use-selection-keys.js';
@@ -119,7 +120,9 @@ export function MessageMenu({
     const anchor = selection.anchorNode;
     const focus = selection.focusNode;
     const inside = anchor && focus && trigger.contains(anchor) && trigger.contains(focus);
-    setFragment(inside ? selection.toString().trim() || null : null);
+    // Фрагмент — ТОЛЬКО текст сообщения (#1021): заезд выделения на имя,
+    // мету или чип файла цитату не порождает.
+    setFragment(inside ? selectionFragmentIn(trigger) : null);
   }
 
   function setReply(quoteText?: string | null) {
