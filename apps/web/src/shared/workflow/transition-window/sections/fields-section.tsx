@@ -3,7 +3,6 @@ import { customFieldIdOfKey, formFieldWidth, isFormDecor, ui } from '@nodus/cont
 import { Button } from '@nodus/ui/components/button';
 import { Textarea } from '@nodus/ui/components/textarea';
 
-import { formatDuration, parseDuration } from '../../../lib/minutes.js';
 import { useActiveUsersList } from '../../../api/users-list.js';
 import { CustomFieldEditor } from '../../../custom-fields/value-editor.js';
 import { DateTimePicker } from '../../../ui/date-time-picker.js';
