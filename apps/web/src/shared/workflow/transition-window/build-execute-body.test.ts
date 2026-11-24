@@ -102,6 +102,40 @@ describe('buildExecuteBody (#380)', () => {
   });
 });
 
+describe('очистка системных полей окна (#994)', () => {
+  const fieldsSection = (fields: string[], formulas?: Record<string, unknown>) =>
+    ({
+      kind: 'fields',
+      fields,
+      elements: fields.map((key) => ({ key })),
+      gateKeys: [],
+      ...(formulas ? { formulas } : {}),
+      origin: 'form',
+    }) as never;
+
+  it('«Убрать срок» и пустое плановое время уходят null', () => {
+    const body = buildExecuteBody({
+      sections: sections(fieldsSection(['deadline', 'plannedMinutes'])),
+      context,
+      draft: draft({
+        fields: { ...context.fields, deadline: null, plannedMinutes: null },
+      }),
+    });
+    expect(body).toEqual({ form: { fields: { deadline: null, plannedMinutes: null } } });
+  });
+
+  it('формульный слот уходит всегда, даже без правки', () => {
+    const body = buildExecuteBody({
+      sections: sections(
+        fieldsSection(['deadline'], { deadline: { kind: 'literal', value: 'x' } }),
+      ),
+      context,
+      draft: draft(),
+    });
+    expect(body).toEqual({ form: { fields: { deadline: context.fields.deadline } } });
+  });
+});
+
 describe('поля процесса в теле перехода (#431, Р7)', () => {
   const CF = '50000000-0000-4000-8000-000000000001';
   const CF_CLEARED = '50000000-0000-4000-8000-000000000002';
