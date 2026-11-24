@@ -1,6 +1,7 @@
 import { Controller, Get, Header, Param, Query, Req, Res } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { OutgoingHttpHeaders } from 'node:http';
 import { z } from 'zod';
 import {
   ErrorCode,
@@ -24,6 +25,7 @@ import { DerivativesRepository } from './derivatives/derivatives.repository.js';
 import { MinioStorageDriver } from './storage/minio-storage.driver.js';
 import { decideContentRange } from './content-range.js';
 import { needsTextNormalization, normalizeTextForOffice } from './office/text-normalizer.js';
+import { safeContentType } from './safe-content-type.js';
 import { FileTextService } from './text/file-text.service.js';
 
 const contentQuerySchema = z.object({
@@ -219,7 +221,8 @@ export class FilesController {
     ]);
     const disposition = INLINE_MIME.has(file.mime) ? 'inline' : 'attachment';
     const headers: Record<string, string | number> = {
-      'Content-Type': file.mime,
+      // mime клиентский: управляющие символы не должны уронить заголовок.
+      'Content-Type': safeContentType(file.mime),
       // Длина — тела ответа: у 206 это срез, у 200 — весь файл.
       'Content-Length': range ? range.end - range.start + 1 : size,
       'Content-Disposition': `${disposition}; filename*=UTF-8''${encodeURIComponent(file.name)}`,
@@ -232,10 +235,16 @@ export class FilesController {
     if (range) headers['Content-Range'] = `bytes ${range.start}-${range.end}/${size}`;
     // HEAD: тело не нужно — поток из хранилища не открываем вовсе. Заголовки
     // пишем напрямую: `reply.send()` без тела обнулил бы Content-Length,
-    // а HEAD обязан повторять заголовки GET (RFC 9110 §9.3.2).
+    // а HEAD обязан повторять заголовки GET (RFC 9110 §9.3.2). `writeHead`
+    // ДО `hijack()`: негодный заголовок должен уйти конвертом ошибки, а не
+    // оставить запрос без ответа (security-ревью #1005). Заголовки глобальных
+    // хуков (CORS/HSTS в будущем) сохраняем через reply.getHeaders().
     if (request.method === 'HEAD') {
+      // Заголовки глобальных хуков (CORS/HSTS в будущем) сохраняем: getHeaders
+      // типизирован Record<HttpHeader> — для writeHead приводим к Node-типу.
+      const rawHeaders = { ...reply.getHeaders(), ...headers } as OutgoingHttpHeaders;
+      reply.raw.writeHead(range ? 206 : 200, rawHeaders);
       reply.hijack();
-      reply.raw.writeHead(range ? 206 : 200, headers);
       reply.raw.end();
       return;
     }
@@ -290,17 +299,24 @@ export class FilesController {
     const etag = `"${id}-v${file.version}-deriv-${kind}"`;
     // Заголовки (и кодирование имени) — до открытия потока, как в content:
     // бросок не оставляет соединение с хранилищем открытым (security-ревью
-    // #1005). CSP-песочница — та же, что у пользовательского контента.
+    // #1005). CSP-песочницу на производную НЕ ставим: PDF забирается pdf.js
+    // как подресурс (CSP к нему не применяется), а при прямой навигации
+    // `sandbox` может отключить встроенный просмотрщик Chrome; `nosniff` +
+    // `application/pdf` уже не дают исполнить содержимое как HTML.
     const headers: Record<string, string | number> = {
-      'Content-Type': derivative.mime,
+      'Content-Type': safeContentType(derivative.mime),
       'Content-Length': derivative.size,
       'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(`${file.name}.pdf`)}`,
       'X-Content-Type-Options': 'nosniff',
-      'Content-Security-Policy': USER_CONTENT_CSP,
       'Cache-Control': 'private, max-age=3600',
       ETag: etag,
     };
     const stream = await this.driver.get(derivative.key);
-    void reply.headers(headers).send(stream);
+    try {
+      void reply.headers(headers).send(stream);
+    } catch (error) {
+      stream.destroy();
+      throw error;
+    }
   }
 }
