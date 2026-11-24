@@ -173,13 +173,18 @@ describe.skipIf(!process.env.DATABASE_URL || !process.env.STORAGE_ACCESS_KEY)(
       const image = await upload(alice, IMAGE_BYTES, 'del.png', 'image/png');
       const attachment = (await image.json()) as { id: string };
       fileIds.push(attachment.id);
+      // #250: видео — отдельный вид вложения; удаление обязано обнулить и его
+      // (пересчёт по видам не должен «терять» kind='video').
+      const video = await upload(alice, FILE_BYTES, 'del.mp4', 'video/mp4');
+      const videoAttachment = (await video.json()) as { id: string };
+      fileIds.push(videoAttachment.id);
       const messageId = await send(alice, conv, {
         text: 'https://gone.example/a',
-        attachmentIds: [attachment.id],
+        attachmentIds: [attachment.id, videoAttachment.id],
       });
       expect((await vault(alice, conv, 'type=image')).page!.counts).toEqual({
         image: 1,
-        video: 0,
+        video: 1,
         audio: 0,
         document: 0,
         link: 1,
@@ -289,15 +294,12 @@ describe.skipIf(!process.env.DATABASE_URL || !process.env.STORAGE_ACCESS_KEY)(
       fileIds.push(docAttachment.id);
       // Привязка вложения одноразовая и только своим владельцем — все три
       // файла уходят одним сообщением alice.
-      const messageId = await send(alice, conv, {
+      await send(alice, conv, {
         attachmentIds: [videoAttachment.id, audioAttachment.id, docAttachment.id],
       });
 
-      const countsRes = await fx.api(
-        alice,
-        'GET',
-        `/chat/conversations/${conv}/attachments/counts`,
-      );
+      const countsUrl = `/chat/conversations/${conv}/attachments/counts`;
+      const countsRes = await fx.api(alice, 'GET', countsUrl);
       expect(countsRes.status).toBe(200);
       expect(await countsRes.json()).toEqual({
         image: 0,
@@ -326,30 +328,8 @@ describe.skipIf(!process.env.DATABASE_URL || !process.env.STORAGE_ACCESS_KEY)(
       });
 
       // Не-участник — 404 и на счётчиках.
-      const carolCounts = await fx.api(
-        carol,
-        'GET',
-        `/chat/conversations/${conv}/attachments/counts`,
-      );
+      const carolCounts = await fx.api(carol, 'GET', countsUrl);
       expect(carolCounts.status).toBe(404);
-
-      // #250: удаление видео-сообщения возвращает счётчики в ноль —
-      // пересчёт по видам вложений обязан понимать kind='video' (регрессия
-      // витрины: видео «застревало» в счётчиках).
-      const deleted = await fx.api(
-        alice,
-        'DELETE',
-        `/chat/conversations/${conv}/messages/${messageId}`,
-      );
-      expect(deleted.status).toBe(204);
-      const afterRes = await fx.api(alice, 'GET', `/chat/conversations/${conv}/attachments/counts`);
-      expect(await afterRes.json()).toEqual({
-        image: 0,
-        video: 0,
-        audio: 0,
-        document: 0,
-        link: 0,
-      });
     });
   },
 );
