@@ -2,8 +2,14 @@
  * Ввод длительности в деловой форме (учёт времени, плановое время, #311):
  * «1ч 30м», «1 ч», «45м», «1:30», «1.5»/«1,5» (часы), «90» (минуты — голое
  * целое больше 12 — минуты, до 12 включительно — часы: «2» = 2 часа, как в
- * Битрикс24/Jira «2h»). null — не распознано или ноль.
+ * Битрикс24/Jira «2h»). null — не распознано, ноль или больше предела.
  */
+
+/** Предел планового времени, минут — тот же, что в серверных схемах задачи
+ *  и окна перехода (`task.schemas.ts`, `transition-form.schemas.ts`): клиент
+ *  не должен отправлять значение, которое сервер отклонит (#1009). */
+export const MAX_PLANNED_MINUTES = 100_000;
+
 export function parseDuration(raw: string): number | null {
   const text = raw.trim().toLowerCase().replace(',', '.');
   if (!text) return null;
@@ -27,7 +33,7 @@ export function parseDuration(raw: string): number | null {
 }
 
 function positive(minutes: number): number | null {
-  return Number.isFinite(minutes) && minutes > 0 ? minutes : null;
+  return Number.isFinite(minutes) && minutes > 0 && minutes <= MAX_PLANNED_MINUTES ? minutes : null;
 }
 
 /** «1 ч 30 м» / «45 м» / «2 ч» — для подписей (таблицы — formatMinutes «1:30»). */
