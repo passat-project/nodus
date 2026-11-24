@@ -50,6 +50,7 @@ function makeService(
       kind: 'image',
       width: 640,
       height: 480,
+      durationMs: null,
       thumbFileId: THUMB_FILE_ID,
     })),
     findUnclaimed: vi.fn(async () => null),
@@ -132,6 +133,7 @@ describe('AttachmentsService (#57, синхронное превью #221)', () 
           kind: 'image',
           width: 16383,
           height: 16383,
+          durationMs: null,
           thumbFileId: null,
         })),
       },
@@ -169,6 +171,46 @@ describe('AttachmentsService (#57, синхронное превью #221)', () 
     expect(dto.kind).toBe('file');
     expect(thumbnailQueue.enqueue).not.toHaveBeenCalled();
     expect(thumbnails.generateFor).not.toHaveBeenCalled();
+  });
+
+  it('видео: kind=video, синхронный постер и авторитетная длительность в DTO (#250)', async () => {
+    const { service, thumbnails, thumbnailQueue } = makeService(
+      {},
+      {
+        findAnyById: vi.fn(async (id: string): Promise<AttachmentRow | null> => ({
+          id,
+          fileId: '00000000-0000-0000-0000-00000000000f',
+          ownerId: OWNER,
+          name: 'clip.mp4',
+          size: 10,
+          mime: 'video/mp4',
+          kind: 'video',
+          width: 1080,
+          height: 1920,
+          durationMs: 12_345,
+          thumbFileId: THUMB_FILE_ID,
+        })),
+      },
+    );
+    const dto = await service.upload(
+      OWNER,
+      {
+        name: 'clip.mp4',
+        mime: 'video/mp4',
+        size: 10,
+        width: 1920,
+        height: 1080,
+        durationMs: 1000,
+      },
+      content(),
+    );
+    expect(dto.kind).toBe('video');
+    expect(dto.durationMs).toBe(12_345);
+    expect(dto.width).toBe(1080);
+    expect(dto.height).toBe(1920);
+    expect(dto.thumbnailUrl).toMatch(/^\/api\/v1\/files\/.+\/content\?exp=\d+&sig=/);
+    expect(thumbnails.generateFor).toHaveBeenCalledTimes(1);
+    expect(thumbnailQueue.enqueue).not.toHaveBeenCalled();
   });
 
   it(`файл > ${MAX_ATTACHMENT_BYTES} байт — CHAT_ATTACHMENT_TOO_LARGE (413) до записи`, async () => {
@@ -248,6 +290,7 @@ describe('AttachmentsService (#57, синхронное превью #221)', () 
           kind: 'file',
           width: null,
           height: null,
+          durationMs: null,
           thumbFileId: null,
         })),
       },

@@ -8,6 +8,10 @@ import { SignedUrlService } from '../../../core/crypto/signed-url.service.js';
 import type { FileStorage } from '../../../core/ports/file-storage.port.js';
 import { AttachmentsRepository, type AttachmentRow } from './attachments.repository.js';
 import { ThumbnailService } from './thumbnail.service.js';
+import { buildVideoPoster } from './video-thumbnail.js';
+
+vi.mock('./video-thumbnail.js', () => ({ buildVideoPoster: vi.fn() }));
+const buildPoster = vi.mocked(buildVideoPoster);
 
 const OWNER = '00000000-0000-0000-0000-000000000001';
 const FILE_ID = '00000000-0000-4000-8000-00000000000f';
@@ -23,6 +27,7 @@ const attachment = (overrides: Partial<AttachmentRow> = {}): AttachmentRow => ({
   kind: 'image',
   width: 1200,
   height: 600,
+  durationMs: null,
   thumbFileId: null,
   ...overrides,
 });
@@ -47,12 +52,21 @@ interface Harness {
   service: ThumbnailService;
   storage: FileStorage;
   saved: { input: SavedDerivative | null; buffer: Buffer };
-  marked: { thumbFileId: string; width: number; height: number }[];
+  marked: {
+    thumbFileId: string;
+    width: number;
+    height: number;
+    durationMs?: number | null;
+  }[];
   emitted: { type: string; payload: Record<string, unknown> }[];
   findConversationIdOf: (id: string) => Promise<string | null>;
 }
 
-function makeHarness(original: Buffer, attachmentRow: AttachmentRow | null): Harness {
+function makeHarness(
+  original: Buffer,
+  attachmentRow: AttachmentRow | null,
+  conversationId: string | null = null,
+): Harness {
   const saved: Harness['saved'] = { input: null, buffer: Buffer.alloc(0) };
   const storage: FileStorage = {
     save: vi.fn(async (input, content) => {
@@ -72,12 +86,20 @@ function makeHarness(original: Buffer, attachmentRow: AttachmentRow | null): Har
   };
   const marked: Harness['marked'] = [];
   const emitted: Harness['emitted'] = [];
-  const findConversationIdOf = vi.fn(async (): Promise<string | null> => null);
+  const findConversationIdOf = vi.fn(async (): Promise<string | null> => conversationId);
   const repo = {
     findAnyById: vi.fn(async () => attachmentRow),
     findConversationIdOf,
     markThumbnail: vi.fn(
-      async (_id: string, data: { thumbFileId: string; width: number; height: number }) => {
+      async (
+        _id: string,
+        data: {
+          thumbFileId: string;
+          width: number;
+          height: number;
+          durationMs?: number | null;
+        },
+      ) => {
         marked.push(data);
         return true; // фиксация выиграла ( гонка #156 — отдельной веткой ниже )
       },
@@ -196,6 +218,53 @@ describe('ThumbnailService — серверные превью (#150)', () => {
     const h = makeHarness(png, attachment()); // findConversationIdOf → null
     await h.service.generateFor('att-1');
     expect(h.marked).toHaveLength(1);
+    expect(h.emitted).toHaveLength(0);
+  });
+
+  it('видео: постер ffmpeg, авторитетная длительность и событие готовности (#250)', async () => {
+    buildPoster.mockResolvedValueOnce({
+      width: 1080,
+      height: 1920,
+      durationMs: 12_345,
+      poster: Buffer.from([1, 2, 3]),
+    });
+    const h = makeHarness(
+      Buffer.alloc(0),
+      attachment({
+        id: 'att-1',
+        kind: 'video',
+        mime: 'video/mp4',
+        width: 1920,
+        height: 1080,
+        durationMs: 1000,
+      }),
+    );
+    vi.mocked(h.findConversationIdOf).mockResolvedValue('conv-1');
+    await h.service.generateFor('att-1');
+
+    expect(buildPoster).toHaveBeenCalledTimes(1);
+    expect(h.saved.input).toMatchObject({
+      mime: 'image/webp',
+      size: 3,
+      derivedFrom: FILE_ID,
+    });
+    expect(h.marked).toEqual([
+      { thumbFileId: THUMB_ID, width: 1080, height: 1920, durationMs: 12_345 },
+    ]);
+    expect(h.emitted[0]?.payload).toMatchObject({
+      conversationId: 'conv-1',
+      attachmentId: 'att-1',
+      width: 1080,
+      height: 1920,
+      durationMs: 12_345,
+    });
+  });
+
+  it('видео без читаемого постера — тихий отказ, метаданные не пишутся', async () => {
+    buildPoster.mockResolvedValueOnce(null);
+    const h = makeHarness(Buffer.alloc(0), attachment({ kind: 'video', mime: 'video/mp4' }));
+    await h.service.generateFor('att-1');
+    expect(h.marked).toEqual([]);
     expect(h.emitted).toHaveLength(0);
   });
 });
