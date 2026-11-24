@@ -173,25 +173,8 @@ describe('AttachmentsService (#57, синхронное превью #221)', () 
     expect(thumbnails.generateFor).not.toHaveBeenCalled();
   });
 
-  it('видео: kind=video, синхронный постер и авторитетная длительность в DTO (#250)', async () => {
-    const { service, thumbnails, thumbnailQueue } = makeService(
-      {},
-      {
-        findAnyById: vi.fn(async (id: string): Promise<AttachmentRow | null> => ({
-          id,
-          fileId: '00000000-0000-0000-0000-00000000000f',
-          ownerId: OWNER,
-          name: 'clip.mp4',
-          size: 10,
-          mime: 'video/mp4',
-          kind: 'video',
-          width: 1080,
-          height: 1920,
-          durationMs: 12_345,
-          thumbFileId: THUMB_FILE_ID,
-        })),
-      },
-    );
+  it('видео: kind=video, постер всегда в очереди, клиентские метаданные — резерв (#250)', async () => {
+    const { service, thumbnails, thumbnailQueue } = makeService();
     const dto = await service.upload(
       OWNER,
       {
@@ -205,12 +188,31 @@ describe('AttachmentsService (#57, синхронное превью #221)', () 
       content(),
     );
     expect(dto.kind).toBe('video');
-    expect(dto.durationMs).toBe(12_345);
-    expect(dto.width).toBe(1080);
-    expect(dto.height).toBe(1920);
-    expect(dto.thumbnailUrl).toMatch(/^\/api\/v1\/files\/.+\/content\?exp=\d+&sig=/);
-    expect(thumbnails.generateFor).toHaveBeenCalledTimes(1);
-    expect(thumbnailQueue.enqueue).not.toHaveBeenCalled();
+    // До ffprobe/постера DTO несёт клиентскую подсказку; авторитетные
+    // значения привезёт chat.attachment_preview_ready (см. thumbnail.service).
+    expect(dto.durationMs).toBe(1000);
+    expect(dto.width).toBe(1920);
+    expect(dto.height).toBe(1080);
+    expect(dto.thumbnailUrl).toBeNull();
+    // ffmpeg/ffprobe — тяжёлые внешние процессы: НИКОГДА в HTTP-пути.
+    expect(thumbnails.generateFor).not.toHaveBeenCalled();
+    expect(thumbnailQueue.enqueue).toHaveBeenCalledTimes(1);
+  });
+
+  it('имя вложения санитизируется до хранения и DTO (security #250)', async () => {
+    const { service, repo } = makeService();
+    const dto = await service.upload(
+      OWNER,
+      {
+        name: `${'очень длинное имя '.repeat(40)}.mp4`,
+        mime: 'video/mp4',
+        size: 10,
+      },
+      content(),
+    );
+    expect(dto.name.length).toBeLessThanOrEqual(200);
+    expect(dto.name.endsWith('.mp4')).toBe(true);
+    expect(vi.mocked(repo.insertAttachment).mock.calls[0]?.[0].name).toBe(dto.name);
   });
 
   it(`файл > ${MAX_ATTACHMENT_BYTES} байт — CHAT_ATTACHMENT_TOO_LARGE (413) до записи`, async () => {

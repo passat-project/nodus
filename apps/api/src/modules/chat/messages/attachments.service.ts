@@ -8,6 +8,7 @@ import { SignedUrlService } from '../../../core/crypto/signed-url.service.js';
 import { TransactionRunner } from '../../../core/database/transaction-runner.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import { FILE_STORAGE, type FileStorage } from '../../../core/ports/file-storage.port.js';
+import { safeFileName } from '../../../core/http/safe-file-name.js';
 import {
   MAX_ATTACHMENT_BYTES,
   MAX_PENDING_ATTACHMENTS,
@@ -72,8 +73,11 @@ export class AttachmentsService {
     // Авторитетная проверка — ниже, под локом в транзакции вставки.
     this.assertPendingBelowLimit(await this.repository.countUnclaimed(ownerId));
 
+    // Имя — санитизируется один раз для объекта и строки (#250, security):
+    // multipart-имя не ограничено, а DTO размножает его всем участникам.
+    const name = safeFileName(input.name);
     const { fileId } = await this.storage.save(
-      { ownerId, name: input.name, mime: input.mime, size: input.size },
+      { ownerId, name, mime: input.mime, size: input.size },
       content,
     );
     // Вид — явный (контракт): галерея для изображений/видео, чип для остального.
@@ -95,7 +99,7 @@ export class AttachmentsService {
             id: randomUUID(),
             fileId,
             ownerId,
-            name: input.name,
+            name,
             size: input.size,
             mime: input.mime,
             kind,
@@ -113,7 +117,16 @@ export class AttachmentsService {
       });
       throw error;
     }
-    if (kind === 'image' || kind === 'video') {
+    if (kind === 'video') {
+      // Видео — ВСЕГДА очередь (#250, security-ревью): ffprobe+ffmpeg — два
+      // внешних процесса с потолком до ~40 с; синхронный путь превращал одну
+      // загрузку в двойной форк, а два десятка параллельных — в 40 процессов
+      // и выедание CPU/RAM api (он же обслуживает весь портал). Плитка до
+      // готовности живёт на клиентских метаданных (контракт допускает), а
+      // авторитетные габариты/длительность и постер привозит событие
+      // chat.attachment_preview_ready.
+      await this.thumbnailQueue.enqueue(row.id, fileId);
+    } else if (kind === 'image') {
       if (input.size <= SYNC_PREVIEW_BYTES) {
         // Синхронное превью (#221): миниатюра рождается В ответе загрузки —
         // пузырь отправителя (оптимистичный temp несёт этот DTO) и получатели

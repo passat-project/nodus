@@ -18,6 +18,7 @@ import { ApiErrors } from '../../../core/openapi/api-errors.decorator.js';
 import { ApiIdempotencyKey } from '../../../core/openapi/api-idempotency.decorator.js';
 import { ZodValidationPipe } from '../../../core/pipes/zod-validation.pipe.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
+import { MAX_ATTACHMENT_BYTES } from './attachments.constants.js';
 import { AttachmentsService } from './attachments.service.js';
 
 const uuidSchema = z.uuid();
@@ -27,11 +28,14 @@ const uuidSchema = z.uuid();
  *  хранилище), width/height — габариты изображения от клиента (резерв бокса
  *  ленты без сдвига). previewUrl — мок-поле, живой контур игнорирует. */
 const uploadFieldsSchema = z.object({
-  size: z.coerce.number().int().min(0),
-  width: z.coerce.number().int().min(1).optional(),
-  height: z.coerce.number().int().min(1).optional(),
+  size: z.coerce.number().int().min(0).max(MAX_ATTACHMENT_BYTES),
+  // Потолки — гигиена входа (security #250): без max клиентский мусор
+  // роняет int4-вставку в 500 вместо 400; авторитетные значения всё равно
+  // приходят от sharp/ffprobe.
+  width: z.coerce.number().int().min(1).max(16_384).optional(),
+  height: z.coerce.number().int().min(1).max(16_384).optional(),
   /** Длительность видео от клиента (мс, #250): резерв до ffprobe. */
-  durationMs: z.coerce.number().int().min(0).optional(),
+  durationMs: z.coerce.number().int().min(0).max(86_400_000).optional(),
 });
 
 /**

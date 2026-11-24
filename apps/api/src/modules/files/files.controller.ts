@@ -26,7 +26,7 @@ import { MinioStorageDriver } from './storage/minio-storage.driver.js';
 import { decideContentRange } from './content-range.js';
 import { needsTextNormalization, normalizeTextForOffice } from './office/text-normalizer.js';
 import { safeContentType } from './safe-content-type.js';
-import { safeFileName } from './safe-file-name.js';
+import { safeFileName } from '../../core/http/safe-file-name.js';
 import { FileTextService } from './text/file-text.service.js';
 
 const contentQuerySchema = z.object({

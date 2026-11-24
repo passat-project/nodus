@@ -97,13 +97,30 @@ describe('buildVideoPoster — постер из стрима (#250)', () => {
     const calls = vi.mocked(run).mock.calls;
     expect(calls[0]?.[0]).toBe('ffprobe');
     expect(calls[0]?.[1]).toContain('-show_format');
+    // SSRF-защита: вход — локальный файл, никаких URL из демуксера.
+    expect(calls[0]?.[1]).toContain('-protocol_whitelist');
+    expect(calls[0]?.[1]).toContain('file');
     expect(calls[0]?.[1]?.at(-1)).toMatch(/input\.bin$/);
     expect(calls[1]?.[0]).toBe('ffmpeg');
     const ffmpeg = calls[1]?.[1] ?? [];
     expect(ffmpeg[ffmpeg.indexOf('-ss') + 1]).toBe(String(posterPositionSeconds(12_345)));
+    expect(ffmpeg).toContain('-protocol_whitelist');
+    expect(ffmpeg).toContain('-max_alloc');
+    expect(ffmpeg).toContain('1'); // -threads 1
     expect(ffmpeg).toContain(
       'thumbnail=n=40,scale=w=800:h=-2:force_original_aspect_ratio=decrease',
     );
+  });
+
+  it('бомба разрешения: гигантские габариты → null, кадр не декодируется', async () => {
+    const bomb = JSON.stringify({
+      streams: [{ codec_type: 'video', width: 100_000, height: 100_000 }],
+      format: { duration: '5' },
+    });
+    const run = runWritingPoster(Buffer.from('x'), bomb);
+    await expect(buildVideoPoster(Readable.from(['v']), tools(run))).resolves.toBeNull();
+    // Кадр не снимался: вызван только ffprobe.
+    expect(vi.mocked(run).mock.calls).toHaveLength(1);
   });
 
   it('ffprobe вернул не JSON — постера нет (тихий null)', async () => {

@@ -12,7 +12,7 @@ import type {
 import { FILES_CONFIG, STORAGE_MAX_FILE_BYTES, type FilesConfig } from './files.config.js';
 import { FilesRepository } from './files.repository.js';
 import { safeContentType } from './safe-content-type.js';
-import { safeFileName } from './safe-file-name.js';
+import { safeFileName } from '../../core/http/safe-file-name.js';
 import { MinioStorageDriver } from './storage/minio-storage.driver.js';
 
 /**

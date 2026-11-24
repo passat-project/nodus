@@ -11,6 +11,15 @@ import { parseVideoProbe, type VideoProbe } from './video-probe.js';
 /** Максимальная сторона постера (WebP): ленты/галереи ≤800, как у фото. */
 export const VIDEO_POSTER_MAX_EDGE = 800;
 
+/** Потолки декодирования (security-ревью #250): крафтовый контейнер может
+ *  объявить 100000×100000 — кадр такого размера убивает контейнер api по
+ *  памяти. 8K (33 МП) проходит с запасом, выше — постера не будет. */
+export const VIDEO_MAX_EDGE = 16_384;
+export const VIDEO_MAX_PIXELS = 40_000_000;
+
+/** Потолок одной аллокации ffmpeg (256 МиБ): фильтры/декодер не съедят RAM. */
+const FFMPEG_MAX_ALLOC = '268435456';
+
 const PROBE_TIMEOUT_MS = 10_000;
 const POSTER_TIMEOUT_MS = 30_000;
 /** Постер — 10% длительности, но не позже 30 с: почти все ролики открываются
@@ -122,7 +131,19 @@ export async function buildVideoPoster(
 
     const probed = await tools.run(
       tools.ffprobe,
-      ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', input],
+      [
+        '-v',
+        'error',
+        // `-i` — это URL, а не путь: без whitelist демуксер (DASH/HLS)
+        // сходит по адресу из пользовательского файла (SSRF, security #250).
+        '-protocol_whitelist',
+        'file',
+        '-print_format',
+        'json',
+        '-show_streams',
+        '-show_format',
+        input,
+      ],
       PROBE_TIMEOUT_MS,
     );
     let raw: unknown;
@@ -133,6 +154,14 @@ export async function buildVideoPoster(
     }
     const meta = parseVideoProbe(raw);
     if (!meta) return null;
+    // Бомба разрешения: не декодируем кадр гигантских габаритов (см. потолки).
+    if (
+      meta.width > VIDEO_MAX_EDGE ||
+      meta.height > VIDEO_MAX_EDGE ||
+      meta.width * meta.height > VIDEO_MAX_PIXELS
+    ) {
+      return null;
+    }
 
     const at = posterPositionSeconds(meta.durationMs);
     await tools.run(
@@ -140,6 +169,13 @@ export async function buildVideoPoster(
       [
         '-v',
         'error',
+        // Тот же whitelist, что у ffprobe: только локальный файл.
+        '-protocol_whitelist',
+        'file',
+        '-max_alloc',
+        FFMPEG_MAX_ALLOC,
+        '-threads',
+        '1',
         '-ss',
         String(at),
         '-i',
