@@ -1,8 +1,11 @@
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Download, X } from 'lucide-react';
 import { ui } from '@nodus/contracts';
 
 import { Button } from '@nodus/ui/components/button';
+
+import { handleVideoSeekKey } from './video-seek-keys.js';
 
 /**
  * «Кинозал» видео (#787, решение владельца 11.11.2026): видео открывается
@@ -16,6 +19,14 @@ import { Button } from '@nodus/ui/components/button';
  * приглушён, но виден — канон лайтбокса Битрикса (`rgba(0,0,0,.7)`).
  * Портал z-80 — тот же слой, что у лайтбокса. Esc и возврат фокуса — у
  * хоста (`AttachmentViewer`), клик мимо плеера и по шапке гасится здесь.
+ *
+ * Клавиатура (#1005): фокус ставится на `<video>` при открытии явно —
+ * React `autoFocus` для медиаэлементов не работает (`commitMount` фокусирует
+ * только button/input/select/textarea/img), без этого ←/→ уходили в
+ * интерфейс под плеером. `tabIndex={0}` вдобавок не даёт «вечному курсору»
+ * композера утащить фокус из оверлея: он не трогает элементы с tabIndex ≥ 0.
+ * ←/→ — свои ±5 с (`handleVideoSeekKey`): нативный шаг Chromium — 1%
+ * длительности, на коротком ролике это доли секунды.
  */
 export function VideoPlayerView({
   url,
@@ -26,6 +37,13 @@ export function VideoPlayerView({
   name: string;
   onClose: () => void;
 }) {
+  const playerRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    // preventScroll — канон программного фокуса (#132): не двигать предков.
+    playerRef.current?.focus({ preventScroll: true });
+  }, [url]);
+
   return createPortal(
     <div
       role="dialog"
@@ -65,13 +83,15 @@ export function VideoPlayerView({
       </header>
       <div className="flex size-full items-center justify-center p-3 pt-14">
         <video
+          ref={playerRef}
           key={url}
           src={url}
           controls
-          autoFocus
+          tabIndex={0}
           playsInline
           className="max-h-full max-w-full object-contain"
           aria-label={name}
+          onKeyDown={handleVideoSeekKey}
           onClick={(event) => event.stopPropagation()}
         />
       </div>
