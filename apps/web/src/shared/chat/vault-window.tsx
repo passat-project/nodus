@@ -187,7 +187,7 @@ function VaultWindowBody({
                       <MediaTile
                         key={item.attachment.id}
                         name={item.attachment.name}
-                        meta={item.author.displayName}
+                        meta={`${item.author.displayName} · ${formatDay(item.createdAt)}`}
                         src={item.attachment.thumbnailUrl ?? undefined}
                         onOpen={() => setLightbox(images.indexOf(item.attachment))}
                         onJump={() =>
@@ -202,7 +202,7 @@ function VaultWindowBody({
                       <MediaTile
                         key={item.attachment.id}
                         name={item.attachment.name}
-                        meta={item.author.displayName}
+                        meta={`${item.author.displayName} · ${formatDay(item.createdAt)}`}
                         src={item.attachment.thumbnailUrl ?? undefined}
                         isVideo
                         durationMs={item.attachment.durationMs ?? null}
@@ -277,4 +277,9 @@ function groupByDay(items: VaultItem[]): { key: string; items: VaultItem[] }[] {
     else groups.push({ key, items: [item] });
   }
   return groups;
+}
+
+/** Короткая дата плитки (без повторения автора — контекст и так виден). */
+function formatDay(iso: string): string {
+  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(new Date(iso));
 }

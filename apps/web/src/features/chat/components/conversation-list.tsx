@@ -68,11 +68,13 @@ function RowPreview({ conversation }: { conversation: ConversationListItem }) {
         stripMentionTokens(last.text) ||
         (last.attachments[0]?.kind === 'image'
           ? ui.chat.quotePhoto
-          : last.attachments[0]?.kind === 'sticker'
-            ? ui.chat.stickerPreview
-            : last.attachments[0]
-              ? ui.chat.quoteFile
-              : '')
+          : last.attachments[0]?.kind === 'video'
+            ? ui.chat.quoteVideo
+            : last.attachments[0]?.kind === 'sticker'
+              ? ui.chat.stickerPreview
+              : last.attachments[0]
+                ? ui.chat.quoteFile
+                : '')
     : '';
   return <span className="truncate text-xs text-muted-foreground">{text}</span>;
 }

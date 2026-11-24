@@ -117,7 +117,9 @@ export function uploadAttachment(file: File, onProgress: (fraction: number) => v
     // ТЕКСТОВЫЕ ПОЛЯ ДО ФАЙЛА (контракт @fastify/multipart: request.file()
     // видит только части раньше файловой — на больших файлах поля после
     // файла теряются, size=NaN → 400; репро #57).
-    if (isImage) form.append('previewUrl', objectUrl);
+    // previewUrl — objectURL страницы: мок-соглашение (blob из SW не резолвится).
+    // У видео он играет роль src инлайн-плеера; у картинок — превью.
+    if (isImage || isVideo) form.append('previewUrl', objectUrl);
     // size — заявленный размер (File.size): живой контур стримит в хранилище,
     // а putObject из стрима требует размер заранее; сервер сверит с байтами.
     form.append('size', String(file.size));

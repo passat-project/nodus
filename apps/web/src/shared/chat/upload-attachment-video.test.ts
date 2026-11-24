@@ -93,8 +93,8 @@ describe('uploadAttachment — видео-метаданные (#250)', () => {
     expect(form.get('width')).toBe('1920');
     expect(form.get('height')).toBe('1080');
     expect(form.get('durationMs')).toBe('65400');
-    // previewUrl — только для картинок (мок-соглашение): у видео его нет.
-    expect(form.get('previewUrl')).toBeNull();
+    // previewUrl — objectURL страницы: у видео он играет роль src инлайн-плеера.
+    expect(form.get('previewUrl')).toBe('blob:video');
     expect(form.get('file')).toBe(file);
   });
 

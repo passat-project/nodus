@@ -15,6 +15,7 @@ function replySnippet(draft: ChatDraft): string {
   if (reply.quoteText) return `«${reply.quoteText}»`;
   if (reply.snippet) return reply.snippet;
   if (reply.attachmentKind === 'image') return ui.chat.quotePhoto;
+  if (reply.attachmentKind === 'video') return ui.chat.quoteVideo;
   if (reply.attachmentKind === 'sticker')
     return reply.stickerEmoji
       ? `${ui.chat.stickerPreview} ${reply.stickerEmoji}`
