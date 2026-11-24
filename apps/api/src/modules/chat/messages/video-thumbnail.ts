@@ -24,17 +24,39 @@ export interface VideoPosterResult extends VideoProbe {
   poster: Buffer;
 }
 
-function ffmpegBin(): string {
-  return process.env.FFMPEG_PATH?.trim() || 'ffmpeg';
+/** Запуск внешнего бинаря (инъекция для unit-тестов: ffmpeg в CI unit-джобе
+ *  не обязан стоять; интеграционный тест гоняет настоящий). */
+export type ToolRun = (
+  bin: string,
+  args: string[],
+  timeoutMs: number,
+) => Promise<{ stdout: string; stderr: string }>;
+
+export interface VideoTools {
+  ffmpeg: string;
+  ffprobe: string;
+  run: ToolRun;
 }
 
-function ffprobeBin(): string {
-  return process.env.FFPROBE_PATH?.trim() || 'ffprobe';
+/** Пути бинарей: env-переопределение — для хост-контура, где ffmpeg не в PATH. */
+export function resolveVideoBinaries(env: NodeJS.ProcessEnv = process.env): {
+  ffmpeg: string;
+  ffprobe: string;
+} {
+  return {
+    ffmpeg: env.FFMPEG_PATH?.trim() || 'ffmpeg',
+    ffprobe: env.FFPROBE_PATH?.trim() || 'ffprobe',
+  };
+}
+
+/** Боевой набор: бинари из env и реальный spawn. */
+export function defaultVideoTools(): VideoTools {
+  return { ...resolveVideoBinaries(), run: runTool };
 }
 
 /** Запуск внешнего бинаря без shell: аргументы — массив (никаких инъекций),
  *  потолок времени + добивка SIGKILL (ffmpeg умеет висеть на stalled-read). */
-function run(
+export function runTool(
   bin: string,
   args: string[],
   timeoutMs: number,
@@ -88,15 +110,18 @@ export function posterPositionSeconds(durationMs: number | null): number {
  * плитка живёт на клиентских метаданных и заглушке). Броски ffmpeg/IO —
  * наружу, вызывающий логирует и оставляет thumbFileId=null.
  */
-export async function buildVideoPoster(stream: Readable): Promise<VideoPosterResult | null> {
+export async function buildVideoPoster(
+  stream: Readable,
+  tools: VideoTools = defaultVideoTools(),
+): Promise<VideoPosterResult | null> {
   const dir = await mkdtemp(path.join(tmpdir(), 'nodus-video-'));
   const input = path.join(dir, 'input.bin');
   const output = path.join(dir, 'poster.webp');
   try {
     await pipeline(stream, createWriteStream(input));
 
-    const probed = await run(
-      ffprobeBin(),
+    const probed = await tools.run(
+      tools.ffprobe,
       ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', input],
       PROBE_TIMEOUT_MS,
     );
@@ -110,8 +135,8 @@ export async function buildVideoPoster(stream: Readable): Promise<VideoPosterRes
     if (!meta) return null;
 
     const at = posterPositionSeconds(meta.durationMs);
-    await run(
-      ffmpegBin(),
+    await tools.run(
+      tools.ffmpeg,
       [
         '-v',
         'error',

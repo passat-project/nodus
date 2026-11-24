@@ -58,7 +58,10 @@ describe('AttachmentGallery — видео-плитка (#250)', () => {
 
     fireEvent.error(inline!);
     expect(screen.getByText(ui.chat.videoUnsupported, { exact: false })).toBeTruthy();
-    expect(screen.getByRole('link', { name: ui.files.download })).toBeTruthy();
+    const download = screen.getByRole('link', { name: ui.files.download });
+    // Клик по «скачать» не всплывает до плитки (иначе открылся бы плеер).
+    fireEvent.click(download);
+    expect(useViewerStore.getState().target).toBeNull();
   });
 
   it('без постера — заглушка, без бейджа (длительность неизвестна)', () => {

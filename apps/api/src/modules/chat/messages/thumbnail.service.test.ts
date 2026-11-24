@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import sharp from 'sharp';
 import { PinoLogger } from 'nestjs-pino';
 import { CHAT_EVENTS } from '@nodus/contracts';
@@ -66,7 +66,7 @@ function makeHarness(
   original: Buffer,
   attachmentRow: AttachmentRow | null,
   conversationId: string | null = null,
-): Harness {
+): Harness & { repo: AttachmentsRepository } {
   const saved: Harness['saved'] = { input: null, buffer: Buffer.alloc(0) };
   const storage: FileStorage = {
     save: vi.fn(async (input, content) => {
@@ -121,10 +121,14 @@ function makeHarness(
     eventBus as never,
     { setContext: vi.fn(), info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger,
   );
-  return { service, storage, saved, marked, emitted, findConversationIdOf };
+  return { service, storage, saved, marked, emitted, findConversationIdOf, repo };
 }
 
 describe('ThumbnailService — серверные превью (#150)', () => {
+  beforeEach(() => {
+    buildPoster.mockReset();
+  });
+
   it('генерирует WebP ≤800 по большей стороне, пишет дериват и авторитетные размеры', async () => {
     const png = await fixturePng(1200, 600);
     const h = makeHarness(png, attachment());
@@ -265,6 +269,36 @@ describe('ThumbnailService — серверные превью (#150)', () => {
     const h = makeHarness(Buffer.alloc(0), attachment({ kind: 'video', mime: 'video/mp4' }));
     await h.service.generateFor('att-1');
     expect(h.marked).toEqual([]);
+    expect(h.emitted).toHaveLength(0);
+  });
+
+  it('видео: оригинала нет в хранилище — без постера и без ошибок', async () => {
+    const h = makeHarness(Buffer.alloc(0), attachment({ kind: 'video', mime: 'video/mp4' }));
+    vi.mocked(h.storage.get).mockResolvedValueOnce(null);
+    await h.service.generateFor('att-1');
+    expect(buildPoster).not.toHaveBeenCalled();
+    expect(h.marked).toEqual([]);
+  });
+
+  it('видео: сбой ffmpeg — тихий warn, строка живёт на клиентских метаданных', async () => {
+    buildPoster.mockRejectedValueOnce(new Error('ffmpeg: код 1'));
+    const h = makeHarness(Buffer.alloc(0), attachment({ kind: 'video', mime: 'video/mp4' }));
+    await expect(h.service.generateFor('att-1')).resolves.toBeUndefined();
+    expect(h.marked).toEqual([]);
+    expect(h.emitted).toHaveLength(0);
+  });
+
+  it('видео: проиграл гонку фиксации — дериват удаляется, события нет', async () => {
+    buildPoster.mockResolvedValueOnce({
+      width: 640,
+      height: 360,
+      durationMs: 5_000,
+      poster: Buffer.from([9]),
+    });
+    const h = makeHarness(Buffer.alloc(0), attachment({ kind: 'video', mime: 'video/mp4' }));
+    vi.mocked(h.repo.markThumbnail).mockResolvedValueOnce(false);
+    await h.service.generateFor('att-1');
+    expect(h.storage.remove).toHaveBeenCalledWith([THUMB_ID]);
     expect(h.emitted).toHaveLength(0);
   });
 });
