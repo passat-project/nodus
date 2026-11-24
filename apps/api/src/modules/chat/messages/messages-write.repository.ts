@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../../generated/prisma/client.js';
 import { PrismaService } from '../../../core/database/prisma.service.js';
+import { safeFileName } from '../../../core/http/safe-file-name.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import { MESSAGE_COLS, type ClaimedAttachmentRow, type MessageRow } from './message-row.js';
 
@@ -178,7 +179,7 @@ export class MessagesWriteRepository {
         SET name = r.name
         FROM unnest(
           ${renames.map((r) => r.id)}::uuid[],
-          ${renames.map((r) => r.name)}::text[]
+          ${renames.map((r) => safeFileName(r.name))}::text[]
         ) AS r(id, name)
         WHERE ma.id = r.id AND ma.message_id = ${messageId}::uuid
           AND ma.owner_id = ${ownerId}::uuid
@@ -207,10 +208,10 @@ export class MessagesWriteRepository {
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO message_attachments (
         id, message_id, file_id, owner_id, name, size, mime, kind, width, height,
-        thumb_file_id, sort_order, sticker_meta
+        duration_ms, thumb_file_id, sort_order, sticker_meta
       )
       SELECT gen_random_uuid(), ${targetMessageId}::uuid, file_id, owner_id, name, size,
-             mime, kind, width, height, thumb_file_id, sort_order, sticker_meta
+             mime, kind, width, height, duration_ms, thumb_file_id, sort_order, sticker_meta
       FROM message_attachments WHERE message_id = ${sourceMessageId}::uuid
     `);
   }

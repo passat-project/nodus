@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../../generated/prisma/client.js';
 
 import { PrismaService } from '../../../core/database/prisma.service.js';
+import { safeFileName } from '../../../core/http/safe-file-name.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 
 /** Строка вложения (сырой ряд, camelCase). */
@@ -189,7 +190,7 @@ export class AttachmentsRepository {
   ): Promise<void> {
     if (renames.length === 0) return;
     const ids = renames.map((r) => r.id);
-    const names = renames.map((r) => r.name);
+    const names = renames.map((r) => safeFileName(r.name));
     await tx.$executeRaw(Prisma.sql`
       UPDATE message_attachments ma
       SET name = r.name

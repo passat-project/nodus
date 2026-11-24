@@ -44,7 +44,7 @@ export type MessageAttachment = z.infer<typeof messageAttachmentSchema>;
  *  сообщения: тело окна одно, меняется лишь маршрут применения. */
 export const attachmentRenameSchema = z.object({
   id: z.uuid(),
-  name: z.string().trim().min(1).max(255),
+  name: z.string().trim().min(1).max(200),
 });
 
 export type AttachmentRename = z.infer<typeof attachmentRenameSchema>;
