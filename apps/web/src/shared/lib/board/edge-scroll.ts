@@ -43,18 +43,23 @@ export function scrollRoom(
  * Курсор в горячей зоне? `depth` 0..1 — насколько глубоко к краю (1 — у самой
  * кромки). Зона стороны работает, только если в эту сторону есть куда
  * листать: у конца доски зона гаснет и не мешает крайней колонке.
+ * `insetLeft` — ширина закреплённой слева колонки (px): левая горячая зона
+ * начинается правее неё, иначе подвод курсора над неподвижной колонкой
+ * листал бы таблицу (#1006).
  */
 export function edgeHit(
   x: number,
   bounds: { left: number; right: number },
   room: ScrollRoom,
   zone = EDGE_ZONE_PX,
+  insetLeft = 0,
 ): { side: EdgeSide; depth: number } | null {
   const width = bounds.right - bounds.left;
   // Узкая доска: зоны не должны съесть её целиком.
-  const z = Math.min(zone, width / 4);
+  const available = Math.max(0, width - insetLeft);
+  const z = Math.min(zone, available / 4);
   if (z <= 0) return null;
-  const fromLeft = x - bounds.left;
+  const fromLeft = x - (bounds.left + insetLeft);
   const fromRight = bounds.right - x;
   if (room.left && fromLeft >= 0 && fromLeft < z) {
     return { side: 'left', depth: 1 - fromLeft / z };

@@ -44,33 +44,56 @@ export function BoardScroller({
 
 /** Индикаторы краёв широкой области (доски и таблицы журналов): кладутся
  *  СОСЕДЯМИ скролл-контейнера в relative-обёртку — стоят на месте при
- *  вертикальной прокрутке, указатель не перехватывают. */
+ *  вертикальной прокрутке, указатель не перехватывают. `insetLeft` — ширина
+ *  закреплённой слева колонки: левая стрелка встаёт на левый край ДВИЖУЩЕЙСЯ
+ *  области, а не поверх колонки (#1006). */
 export function EdgeHints({
   room,
   hot,
   show = true,
+  insetLeft = 0,
 }: {
   room: { left: boolean; right: boolean };
   hot: EdgeSide | null;
   /** Таблицы: индикатор всплывает только при наведении на список (вердикт
    *  владельца 25.10.2026 — «невидимые кнопки»); доска — всегда. */
   show?: boolean;
+  /** Отступ левой стрелки от левого края обёртки, px (закреплённая колонка). */
+  insetLeft?: number;
 }) {
   return (
     <>
-      <EdgeHint side="left" visible={room.left && show} hot={hot === 'left'} />
+      <EdgeHint
+        side="left"
+        visible={room.left && show}
+        hot={hot === 'left'}
+        insetLeft={insetLeft}
+      />
       <EdgeHint side="right" visible={room.right && show} hot={hot === 'right'} />
     </>
   );
 }
 
-function EdgeHint({ side, visible, hot }: { side: EdgeSide; visible: boolean; hot: boolean }) {
+function EdgeHint({
+  side,
+  visible,
+  hot,
+  insetLeft = 0,
+}: {
+  side: EdgeSide;
+  visible: boolean;
+  hot: boolean;
+  insetLeft?: number;
+}) {
   const Icon = side === 'left' ? ChevronLeft : ChevronRight;
   return (
     <div
       aria-hidden
       data-edge-hint={side}
-      style={{ width: EDGE_ZONE_PX }}
+      style={{
+        width: EDGE_ZONE_PX,
+        ...(side === 'left' && insetLeft > 0 ? { left: insetLeft } : {}),
+      }}
       className={cn(
         'pointer-events-none absolute inset-y-0 z-40 flex items-center justify-center rounded-lg transition-[opacity,background-color] duration-150',
         side === 'left' ? 'left-0' : 'right-0',

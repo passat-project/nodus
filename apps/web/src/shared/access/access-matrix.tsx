@@ -20,7 +20,9 @@ import { uiPx } from '../ui/ui-scale.js';
  *
  * Закрепление: шапка `sticky top-0`, колонка прав — `sticky left-0` на
  * непрозрачном `bg-card` (тонируется ховером строки через слой-оверлей,
- * чтобы прокручиваемые ячейки не просвечивали).
+ * чтобы прокручиваемые ячейки не просвечивали). Левая подсказка прокрутки и
+ * её горячая зона начинаются на правом краю колонки — над неподвижной
+ * колонкой таблица не листается (#1006).
  */
 
 export interface AccessMatrixRow {
@@ -82,7 +84,13 @@ export function AccessMatrix({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState(false);
-  const edge = useBoardEdgeScroll(containerRef, { pan: false, mounted: rows.length > 0 });
+  // Закреплённая колонка прав неподвижна: и горячая зона, и левая стрелка
+  // начинаются на её правом краю (#1006).
+  const edge = useBoardEdgeScroll(containerRef, {
+    pan: false,
+    mounted: rows.length > 0,
+    insetLeft: ROW_HEADER_W,
+  });
   const hintPrefix = useId();
   const gridTemplateColumns = [
     ROW_HEADER_W,
@@ -209,7 +217,7 @@ export function AccessMatrix({
           </Fragment>
         ))}
       </div>
-      <EdgeHints room={edge.room} hot={edge.hot} show={hovered} />
+      <EdgeHints room={edge.room} hot={edge.hot} show={hovered} insetLeft={ROW_HEADER_W} />
     </div>
   );
 }
