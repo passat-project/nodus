@@ -21,13 +21,10 @@ export interface SearchVisibility {
   enabledTypes: SearchSourceType[];
 }
 
-/** Типы источников по фичефлагу модуля; сотрудники — ядро (право решает). */
-const TYPE_BY_FLAG: ReadonlyArray<{ type: SearchSourceType; flag: string }> = [
-  { type: 'task', flag: 'tasks' },
-  { type: 'letter', flag: 'correspondence' },
-  { type: 'message', flag: 'chat' },
-  { type: 'project', flag: 'projects' },
-];
+/** Типы источников по фичефлагу модуля; сотрудники — ядро (право решает).
+ *  Ключи читаются литералами в `enabledTypes`: тест-страж инвентаризации
+ *  флагов (#878) видит их наравне с `@RequireFeature`, иначе isEnabled-only
+ *  флаг без миграции остался бы незамеченным. */
 
 /**
  * Pre-filter видимости (#952, Р4): наборы берутся у модулей-владельцев
@@ -83,9 +80,10 @@ export class SearchVisibilityService {
 
   private async enabledTypes(): Promise<SearchSourceType[]> {
     const enabled: SearchSourceType[] = ['employee'];
-    for (const { type, flag } of TYPE_BY_FLAG) {
-      if (await this.flags.isEnabled(flag)) enabled.push(type);
-    }
+    if (await this.flags.isEnabled('tasks')) enabled.push('task');
+    if (await this.flags.isEnabled('correspondence')) enabled.push('letter');
+    if (await this.flags.isEnabled('chat')) enabled.push('message');
+    if (await this.flags.isEnabled('projects')) enabled.push('project');
     return enabled;
   }
 
