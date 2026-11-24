@@ -80,7 +80,10 @@ fileAccessContext` (`chat`, `letter`), DiscoveryService находит его с
   перемотка видео недоступна. `If-Range` не даёт склеить срезы разных
   версий; диапазон вне файла — 416 `FILE_RANGE_NOT_SATISFIABLE`
   (`Content-Range` с полным размером); негодный/многодиапазонный `Range`
-  игнорируется (200 целиком).
+  игнорируется (200 целиком). Поток открывается ДО заголовков — сбой
+  хранилища уходит чистым конвертом ошибки, без медиа-заголовков. Ответ
+  несёт `Content-Security-Policy: default-src 'none'; sandbox`
+  (defense-in-depth для пользовательского контента, security-ревью #1005).
 - **Текст для ассистента (#922, ADR-0050)**: `GET /api/v1/files/:id/text` —
   обычная авторизация (не `@Public`, не HMAC), фичефлаг `assistant` (I10) и право
   `assistant.use` (I8): права через `OfficeSessionService.resolveAccess`
