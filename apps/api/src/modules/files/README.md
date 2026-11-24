@@ -85,9 +85,14 @@ fileAccessContext` (`chat`, `letter`), DiscoveryService находит его с
   конвертом ошибки, без медиа-заголовков, а бросок на сборке заголовков не
   оставляет поток открытым. Ответ несёт
   `Content-Security-Policy: default-src 'none'; sandbox`
-  (defense-in-depth для пользовательского контента, security-ревью #1005;
-  та же политика — на inline-выдаче производной `derivative`). HEAD отдаёт
-  заголовки без тела и без открытия потока.
+  (defense-in-depth для пользовательского контента, security-ревью #1005);
+  `Content-Type` санитизируется (`safeContentType`: управляющие символы из
+  клиентского mime → `application/octet-stream`, иначе заголовок роняет
+  ответ). HEAD отдаёт заголовки без тела и без открытия потока. На
+  производной (`derivative`, PDF) CSP-песочницы НЕТ: pdf.js забирает её как
+  подресурс (CSP не применяется), а прямой навигации `sandbox` может
+  отключить встроенный просмотрщик Chrome — `nosniff` + `application/pdf`
+  достаточно.
 - **Текст для ассистента (#922, ADR-0050)**: `GET /api/v1/files/:id/text` —
   обычная авторизация (не `@Public`, не HMAC), фичефлаг `assistant` (I10) и право
   `assistant.use` (I8): права через `OfficeSessionService.resolveAccess`

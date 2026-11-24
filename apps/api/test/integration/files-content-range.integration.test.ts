@@ -115,6 +115,36 @@ describe.skipIf(!process.env.DATABASE_URL || !process.env.STORAGE_ACCESS_KEY)(
       expect(new Uint8Array(await res.arrayBuffer())).toEqual(BYTES);
     });
 
+    it('mime с управляющим символом: ответ уходит, Content-Type безопасный', async () => {
+      // Security-ревью #1005: клиентский mime попадает в заголовок ответа;
+      // управляющий символ раньше ронял setHeader/writeHead и «вешал» запрос.
+      const form = new FormData();
+      const body = Uint8Array.from([1, 2, 3, 4]);
+      form.append('size', String(body.length));
+      form.append('file', new Blob([body], { type: 'text/pl\u0001ain' }), 'bad-mime.bin');
+      const uploaded = await fetch(`${fx.baseUrl}/chat/attachments`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${alice.token}` },
+        body: form,
+      });
+      expect(uploaded.status).toBe(201);
+      const att = (await uploaded.json()) as { id: string; url: string };
+
+      const get = await fetch(`${origin}${att.url}`);
+      expect(get.status).toBe(200);
+      expect(get.headers.get('content-type')).toBe('application/octet-stream');
+
+      const head = await fetch(`${origin}${att.url}`, { method: 'HEAD' });
+      expect(head.status).toBe(200);
+      expect(head.headers.get('content-type')).toBe('application/octet-stream');
+      expect(head.headers.get('content-length')).toBe(String(body.length));
+
+      await fetch(`${fx.baseUrl}/chat/attachments/${att.id}`, {
+        method: 'DELETE',
+        headers: { authorization: `Bearer ${alice.token}` },
+      });
+    });
+
     it('If-Range: чужая версия — весь файл; своя — 206', async () => {
       const stale = await fetch(`${origin}${url}`, {
         headers: { range: 'bytes=0-9', 'if-range': '"other-version"' },
