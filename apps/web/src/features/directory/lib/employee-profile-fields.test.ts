@@ -97,7 +97,13 @@ describe('employeeProfileDefs — иконки полей', () => {
   it('почта ужимается многоточием, полное значение — в подсказке (#999)', () => {
     const email = 'very.long.employee.mailbox@construction-holding.by';
     const def = employeeProfileDefs({
-      card: { id: 'u1', email, displayName: 'Иван', avatarUrl: null, roles: [] } as UserCard,
+      card: {
+        id: 'u1',
+        email,
+        displayName: 'Иван',
+        avatarUrl: null,
+        roles: [],
+      } as unknown as UserCard,
       listItem: { managerId: null, positionName: null } as UserListItem,
       manager: undefined,
       openCard: () => {},

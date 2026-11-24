@@ -14,13 +14,3 @@ export function canEditProject(project: ProjectRightsFacts, canManageAny: boolea
   const role = primaryProjectRole(project.myMembership);
   return role === 'manager' || role === 'assistant' || canManageAny;
 }
-
-/**
- * Можно ли сменить портфель перетаскиванием (#559). Архивный проект
- * заморожен: его поля правит только `project.manage` (сервер), поэтому
- * руководителю архивного договора drag не предлагаем — иначе 403-тост.
- */
-export function canDragProject(project: ProjectRightsFacts, canManageAny: boolean): boolean {
-  if (!canEditProject(project, canManageAny)) return false;
-  return project.status !== 'archived' || canManageAny;
-}

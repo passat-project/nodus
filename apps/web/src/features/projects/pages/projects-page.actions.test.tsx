@@ -15,9 +15,9 @@ import { ProjectsPage } from './projects-page.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 
 /**
- * Действия журнала проектов (#559): drag строки на папку, меню папки и
- * строки, окна портфеля. Хуки API замоканы — проверяем проводку действий
- * страницы до мутаций (I4), а не сеть.
+ * Действия журнала проектов (#559): меню папки и строки, окна портфеля.
+ * Хуки API замоканы — проверяем проводку действий страницы до мутаций (I4),
+ * а не сеть.
  */
 const mocks = vi.hoisted(() => ({
   journal: vi.fn(),
@@ -27,7 +27,6 @@ const mocks = vi.hoisted(() => ({
   renameGroup: vi.fn(),
   deleteGroup: vi.fn(),
   statusMutate: vi.fn(),
-  moveMutate: vi.fn(),
   openCreate: vi.fn(),
   openCard: vi.fn(),
 }));
@@ -46,9 +45,6 @@ vi.mock('../api/project-catalog-mutations.js', () => ({
 }));
 vi.mock('../api/project-mutations.js', () => ({
   useProjectStatus: () => ({ mutate: mocks.statusMutate }),
-}));
-vi.mock('../api/project-portfolio-mutation.js', () => ({
-  useMoveProjectPortfolio: () => ({ mutate: mocks.moveMutate }),
 }));
 vi.mock('../../../shared/views/project-table-fields.js', () => {
   const fields = [
@@ -110,18 +106,6 @@ function openMenu(scope: HTMLElement) {
   fireEvent.click(button);
 }
 
-const DATA_TRANSFER = () => ({ setData: vi.fn(), effectAllowed: '' });
-
-function dragProject(rowName: string) {
-  fireEvent.dragStart(tableRow(rowName), { dataTransfer: DATA_TRANSFER() });
-}
-
-function dropOn(folderName: string) {
-  const folder = folderRow(folderName);
-  fireEvent.dragOver(folder, { dataTransfer: { dropEffect: '' } });
-  fireEvent.drop(folder);
-}
-
 beforeEach(() => {
   localStorage.clear();
   vi.clearAllMocks();
@@ -144,62 +128,20 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('перетаскивание проекта на папку (#559)', () => {
-  it('бросок на другую папку меняет портфель проекта', () => {
+describe('журнал без перетаскивания на портфели (#1014)', () => {
+  it('строка проекта не тянется, бросок на папку не открывает поповер и не меняет портфель', () => {
     render(<ProjectsPage />);
 
-    dragProject(ARCHIVED_PROJECT.name);
-    dropOn(PORTFOLIO.name);
-    // Конец перетаскивания сбрасывает подсветку и не дублирует запрос.
-    fireEvent.dragEnd(tableRow(ARCHIVED_PROJECT.name));
+    const row = tableRow(ACTIVE_PROJECT.name);
+    expect(row.hasAttribute('draggable')).toBe(false);
+    expect(row.className).not.toContain('cursor-grab');
 
-    expect(mocks.moveMutate).toHaveBeenCalledTimes(1);
-    expect(mocks.moveMutate).toHaveBeenCalledWith({
-      id: ARCHIVED_PROJECT.id,
-      portfolioId: PORTFOLIO.id,
-    });
-  });
+    fireEvent.dragStart(row, { dataTransfer: { setData: vi.fn(), effectAllowed: '' } });
+    // Поповер «Портфели» сам не открылся — цели броска в DOM нет.
+    expect(screen.queryByText(PORTFOLIO.name)).toBeNull();
 
-  it('«Без портфеля» — portfolioId: null', () => {
-    render(<ProjectsPage />);
-
-    dragProject(ARCHIVED_PROJECT.name);
-    dropOn(ui.projects.portfolioNone);
-
-    expect(mocks.moveMutate).toHaveBeenCalledWith({
-      id: ARCHIVED_PROJECT.id,
-      portfolioId: null,
-    });
-  });
-
-  it('бросок в ту же папку сеть не дёргает', () => {
-    render(<ProjectsPage />);
-
-    dragProject(ACTIVE_PROJECT.name);
-    dropOn(PORTFOLIO.name);
-
-    expect(mocks.moveMutate).not.toHaveBeenCalled();
-  });
-
-  it('подсветка папки: dragOver включает, dragLeave снимает (броска нет)', () => {
-    render(<ProjectsPage />);
-    dragProject(ARCHIVED_PROJECT.name);
-
-    const folder = folderRow(PORTFOLIO.name);
-    fireEvent.dragOver(folder, { dataTransfer: { dropEffect: '' } });
-    expect(folder.className).toContain('ring-ring');
-
-    fireEvent.dragLeave(folder);
-    expect(folder.className).not.toContain('ring-ring');
-    expect(mocks.moveMutate).not.toHaveBeenCalled();
-  });
-
-  it('архивный проект тянет только project.manage; живой — руководство проекта', () => {
-    authWith([Permission.PROJECT_CREATE]);
-    render(<ProjectsPage />);
-
-    expect(tableRow(ARCHIVED_PROJECT.name).hasAttribute('draggable')).toBe(false);
-    expect(tableRow(ACTIVE_PROJECT.name).getAttribute('draggable')).toBe('true');
+    fireEvent.dragEnd(row);
+    expect(screen.queryByText(PORTFOLIO.name)).toBeNull();
   });
 });
 

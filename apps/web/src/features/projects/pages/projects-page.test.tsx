@@ -28,7 +28,6 @@ const mocks = vi.hoisted(() => ({
   renameGroup: vi.fn(),
   deleteGroup: vi.fn(),
   statusMutate: vi.fn(),
-  moveMutate: vi.fn(),
   openCreate: vi.fn(),
   openCard: vi.fn(),
 }));
@@ -47,9 +46,6 @@ vi.mock('../api/project-catalog-mutations.js', () => ({
 }));
 vi.mock('../api/project-mutations.js', () => ({
   useProjectStatus: () => ({ mutate: mocks.statusMutate }),
-}));
-vi.mock('../api/project-portfolio-mutation.js', () => ({
-  useMoveProjectPortfolio: () => ({ mutate: mocks.moveMutate }),
 }));
 vi.mock('../../../shared/views/project-table-fields.js', () => {
   const fields = [
