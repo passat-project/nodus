@@ -297,9 +297,11 @@ export const transitionFormInputSchema = z
     fields: z
       .object({
         description: z.string().trim().min(1).max(5000).optional(),
-        deadline: z.iso.datetime().optional(),
+        /** `null` — осознанная очистка срока (кнопка «Убрать срок» в окне). */
+        deadline: z.iso.datetime().nullable().optional(),
         assigneeId: z.uuid().optional(),
-        plannedMinutes: z.number().int().min(1).max(100_000).optional(),
+        /** `null` — осознанная очистка планового времени (пустое поле). */
+        plannedMinutes: z.number().int().min(1).max(100_000).nullable().optional(),
         customFields: customFieldValuesInputSchema.optional(),
       })
       .strict()
