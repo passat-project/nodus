@@ -42,14 +42,16 @@ export function ReplyHeader({
     : reply.text ||
       (reply.attachmentKind === 'image'
         ? ui.chat.quotePhoto
-        : reply.attachmentKind === 'file'
-          ? ui.chat.quoteFile
-          : reply.attachmentKind === 'sticker'
-            ? // #288 (референс Telegram): «Стикер 🙂» — эмодзи пака в подписи.
-              stickerEmoji
-              ? `${ui.chat.stickerPreview} ${stickerEmoji}`
-              : ui.chat.stickerPreview
-            : '');
+        : reply.attachmentKind === 'video'
+          ? ui.chat.quoteVideo
+          : reply.attachmentKind === 'file'
+            ? ui.chat.quoteFile
+            : reply.attachmentKind === 'sticker'
+              ? // #288 (референс Telegram): «Стикер 🙂» — эмодзи пака в подписи.
+                stickerEmoji
+                ? `${ui.chat.stickerPreview} ${stickerEmoji}`
+                : ui.chat.stickerPreview
+              : '');
   // Кликабельна: живой оригинал ИЛИ надгробие (#163). obliterated — нет якоря.
   const interactive = (!reply.deleted || !reply.obliterated) && onClick !== undefined;
   const Tag = interactive ? 'button' : 'span';

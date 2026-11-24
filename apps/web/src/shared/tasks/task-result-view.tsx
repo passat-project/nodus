@@ -33,7 +33,7 @@ export function TaskResultView({
   const { data } = useMessagesLookup(conversationId, result.messageIds, conversationId !== null);
   const messages = data?.items ?? [];
   const attachments = messages.flatMap((m) =>
-    m.attachments.filter((a) => a.kind === 'image' || a.kind === 'file'),
+    m.attachments.filter((a) => a.kind === 'image' || a.kind === 'video' || a.kind === 'file'),
   );
   const messagesWithAttachments = new Set(
     messages.filter((m) => m.attachments.length > 0).map((m) => m.id),

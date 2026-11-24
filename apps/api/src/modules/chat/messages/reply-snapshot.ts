@@ -10,7 +10,7 @@ export interface ReplyOriginalInput {
   text: string;
   deleted: boolean;
   /** Вид первого вложения — подпись «Фото»/«Файл»/«Стикер» в цитате без текста. */
-  attachmentKind: 'image' | 'file' | 'sticker' | null;
+  attachmentKind: 'image' | 'video' | 'file' | 'sticker' | null;
   /** #288: оригинал-стикер — fileId для мини-глифа в цитате (url строится
    *  ПОДПИСЬЮ при чтении: замороженный снапшот не хранит протухающие ссылки)
    *  и первый эмодзи пака. */

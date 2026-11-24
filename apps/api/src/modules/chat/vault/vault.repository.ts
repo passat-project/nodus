@@ -42,7 +42,8 @@ export interface VaultLinkRow {
 
 const ATTACHMENT_COLS = Prisma.sql`
   a.id, a.file_id AS "fileId", a.name, a.size, a.mime, a.kind,
-  a.width, a.height, a.thumb_file_id AS "thumbFileId", a.sort_order AS "sortOrder",
+  a.width, a.height, a.duration_ms AS "durationMs", a.thumb_file_id AS "thumbFileId",
+  a.sort_order AS "sortOrder",
   m.id AS "messageId", m.thread_root_id AS "threadRootId", m.seq,
   m.author_id AS "authorId", m.created_at AS "messageCreatedAt"
 `;
@@ -83,7 +84,7 @@ export class VaultRepository {
       opts.kind === 'image'
         ? Prisma.sql`a.kind = 'image'`
         : opts.kind === 'video'
-          ? Prisma.sql`a.kind = 'file' AND a.mime LIKE 'video/%'`
+          ? Prisma.sql`(a.kind = 'video' OR (a.kind = 'file' AND a.mime LIKE 'video/%'))`
           : opts.kind === 'audio'
             ? Prisma.sql`a.kind = 'file' AND a.mime LIKE 'audio/%'`
             : Prisma.sql`a.kind = 'file' AND a.mime NOT LIKE 'video/%' AND a.mime NOT LIKE 'audio/%'`;
@@ -187,7 +188,7 @@ export class VaultRepository {
           WHERE m.conversation_id = ${conversationId}::uuid
             AND (${threadScope})
             AND m.deleted_at IS NULL AND NOT m.obliterated
-            AND a.kind = 'file' AND a.mime LIKE 'video/%') AS video_count,
+            AND (a.kind = 'video' OR (a.kind = 'file' AND a.mime LIKE 'video/%'))) AS video_count,
         (SELECT COUNT(*) FROM message_attachments a
           JOIN messages m ON m.id = a.message_id
           WHERE m.conversation_id = ${conversationId}::uuid

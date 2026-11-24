@@ -130,7 +130,10 @@ export function TransitionWindow({
   );
   const attachmentCount = (resultMessages?.items ?? []).reduce(
     (sum, message) =>
-      sum + message.attachments.filter((a) => a.kind === 'image' || a.kind === 'file').length,
+      sum +
+      message.attachments.filter(
+        (a) => a.kind === 'image' || a.kind === 'video' || a.kind === 'file',
+      ).length,
     0,
   );
 

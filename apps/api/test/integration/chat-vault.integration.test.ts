@@ -289,7 +289,7 @@ describe.skipIf(!process.env.DATABASE_URL || !process.env.STORAGE_ACCESS_KEY)(
       fileIds.push(docAttachment.id);
       // Привязка вложения одноразовая и только своим владельцем — все три
       // файла уходят одним сообщением alice.
-      await send(alice, conv, {
+      const messageId = await send(alice, conv, {
         attachmentIds: [videoAttachment.id, audioAttachment.id, docAttachment.id],
       });
 
@@ -311,7 +311,8 @@ describe.skipIf(!process.env.DATABASE_URL || !process.env.STORAGE_ACCESS_KEY)(
       expect(videos.page!.items).toHaveLength(1);
       expect(videos.page!.items[0]).toMatchObject({
         type: 'video',
-        attachment: { name: 'briefing.mp4', kind: 'file' },
+        // #250: видео — явный вид вложения (не «файл с видео-mime»).
+        attachment: { name: 'briefing.mp4', kind: 'video', durationMs: null },
       });
       const audios = await vault(alice, conv, 'type=audio');
       expect(audios.page!.items[0]).toMatchObject({
@@ -331,6 +332,24 @@ describe.skipIf(!process.env.DATABASE_URL || !process.env.STORAGE_ACCESS_KEY)(
         `/chat/conversations/${conv}/attachments/counts`,
       );
       expect(carolCounts.status).toBe(404);
+
+      // #250: удаление видео-сообщения возвращает счётчики в ноль —
+      // пересчёт по видам вложений обязан понимать kind='video' (регрессия
+      // витрины: видео «застревало» в счётчиках).
+      const deleted = await fx.api(
+        alice,
+        'DELETE',
+        `/chat/conversations/${conv}/messages/${messageId}`,
+      );
+      expect(deleted.status).toBe(204);
+      const afterRes = await fx.api(alice, 'GET', `/chat/conversations/${conv}/attachments/counts`);
+      expect(await afterRes.json()).toEqual({
+        image: 0,
+        video: 0,
+        audio: 0,
+        document: 0,
+        link: 0,
+      });
     });
   },
 );

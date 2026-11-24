@@ -7,10 +7,10 @@ import type { ChatMessageAccess, ChatMessageSnapshot } from './message-access.po
 
 const EXCERPT_MAX = 160;
 
-/** Число живых вложений-файлов/изображений сообщения (стикеры — нет). */
+/** Число живых вложений-файлов/изображений/видео сообщения (стикеры — нет). */
 const ATTACHMENT_COUNT = Prisma.sql`(
   SELECT count(*)::int FROM message_attachments ma
-  WHERE ma.message_id = m.id AND ma.kind IN ('image', 'file')
+  WHERE ma.message_id = m.id AND ma.kind IN ('image', 'video', 'file')
 )`;
 
 /** Реализация read-порта доступа к сообщению (таблицы чата — только здесь). */
@@ -92,7 +92,7 @@ export class MessageAccessProvider implements ChatMessageAccess {
       FROM message_attachments ma
       JOIN messages m ON m.id = ma.message_id
       WHERE ma.message_id = ANY(${[...messageIds]}::uuid[])
-        AND ma.kind IN ('image', 'file')
+        AND ma.kind IN ('image', 'video', 'file')
         AND m.deleted_at IS NULL AND NOT m.obliterated
     `);
     return rows[0]?.count ?? 0;
