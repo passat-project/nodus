@@ -18,6 +18,7 @@ import { useConversationMessages, useConversations } from './chat-queries.js';
 import { ChatComposer } from './chat-composer.js';
 import { ChatMessageItem } from './chat-message.js';
 import { addFiles } from './composer-files.js';
+import { DayBubble } from './day-bubble.js';
 import { DayChip } from './day-chip.js';
 import { FeedDropzone } from './feed-dropzone.js';
 import { FeedScrollerButton } from './feed-scroller-button.js';
@@ -372,7 +373,7 @@ function ConversationFeed({
                                   сгибом); my-[5px] держит ритм 12px (gap-3). */
                               <MessageScrollerItem>
                                 <div className="my-[5px]">
-                                  <DayChip label={ui.chat.unreadDivider} />
+                                  <DayChip label={ui.chat.unreadDivider} kind="marker" />
                                 </div>
                               </MessageScrollerItem>
                             }
@@ -433,6 +434,8 @@ function ConversationFeed({
                 )}
               </MessageScrollerContent>
             </MessageScrollerViewport>
+            {/* Плавающая дата (#997): дата верхней видимой части ленты. */}
+            <DayBubble viewportRef={viewportRef} />
             {/* Стрелка «вниз»: с непрочитанными — к первому непрочитанному
                 (модель Telegram, раунд 4), без — в конец; чип-счётчик
                 непрочитанных — #132. */}

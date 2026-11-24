@@ -84,6 +84,7 @@ var(--border)`) в ОБЕИХ темах (вердикт 17.11.2026: не бел
 Лента рендерится КАНОНОМ чатов: `buildMessageRuns` + `MessageRunView` (серии,
 sticky-аватар) + `ChatMessageItem` (пузыри bubble-*, хвосты, мета времени) +
 `DayChip`; композер — канонический `ChatComposer` (островок, гексагон отправки).
+Над лентой — общая с мессенджером плавающая дата (`DayBubble`, #997).
 Сообщения диалога маппятся в `ChatMessage` (`model/assistant-messages.ts`).
 Аватар ассистента — глиф через опциональный `renderAvatar` у `MessageRunView`
 (дефолт не меняется: мессенджер рисует `MessageAuthorAvatar`).

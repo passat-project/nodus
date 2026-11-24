@@ -21,6 +21,7 @@ import { useWatchThread } from './conversation-actions.js';
 import { ChatComposer } from './chat-composer.js';
 import { ChatMessageItem } from './chat-message.js';
 import { addFiles } from './composer-files.js';
+import { DayBubble } from './day-bubble.js';
 import { DayChip } from './day-chip.js';
 import { FeedDropzone } from './feed-dropzone.js';
 import { MessageMenu } from './message-menu.js';
@@ -323,6 +324,7 @@ export const ThreadPane = memo(function ThreadPane({
                 )}
               </MessageScrollerContent>
             </MessageScrollerViewport>
+            <DayBubble viewportRef={viewportRef} />
             <MessageScrollerButton />
           </MessageScroller>
         </MessageScrollerProvider>

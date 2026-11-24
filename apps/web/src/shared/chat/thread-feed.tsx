@@ -20,6 +20,7 @@ import { addFiles } from './composer-files.js';
 import { FeedDropzone } from './feed-dropzone.js';
 import { FeedScrollerButton } from './feed-scroller-button.js';
 import { buildMessageRuns, formatDayLabel, startsNewDay } from './message-groups.js';
+import { DayBubble } from './day-bubble.js';
 import { DayChip } from './day-chip.js';
 import { MessageRunView } from './message-run.js';
 import { FeedPostRow } from './feed-post-row.js';
@@ -264,6 +265,7 @@ export const ThreadFeed = memo(function ThreadFeed({
                 )}
               </MessageScrollerContent>
             </MessageScrollerViewport>
+            <DayBubble viewportRef={viewportRef} />
             {/* Стрелка «вниз» (#175): та же, что в чатах, — с непрочитанными
                 плавный прыжок к первому непрочитанному посту, без — в конец;
                 чип-счётчик непрочитанных живёт на кнопке. */}
