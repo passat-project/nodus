@@ -76,6 +76,15 @@ describe.skipIf(!process.env.DATABASE_URL || !process.env.STORAGE_ACCESS_KEY)(
       expect(etag).toBeTruthy();
     });
 
+    it('HEAD — те же заголовки без тела (поток не открывается)', async () => {
+      const res = await fetch(`${origin}${url}`, { method: 'HEAD' });
+      expect(res.status).toBe(200);
+      expect(res.headers.get('accept-ranges')).toBe('bytes');
+      expect(res.headers.get('content-length')).toBe(String(SIZE));
+      expect(res.headers.get('content-security-policy')).toBe("default-src 'none'; sandbox");
+      expect((await res.arrayBuffer()).byteLength).toBe(0);
+    });
+
     it('Range: bytes=0-99 — 206, точный срез и Content-Range', async () => {
       const res = await fetch(`${origin}${url}`, { headers: { range: 'bytes=0-99' } });
       expect(res.status).toBe(206);

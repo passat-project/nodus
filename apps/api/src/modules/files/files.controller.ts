@@ -42,6 +42,13 @@ const derivativeQuerySchema = z.object({
 });
 
 /**
+ * CSP-песочница пользовательского контента (#1005, security-ревью): прямая
+ * навигация по подписной ссылке не исполняет активный контент на origin
+ * портала (там refresh-cookie), даже если sniffing когда-нибудь обойдут.
+ */
+const USER_CONTENT_CSP = "default-src 'none'; sandbox";
+
+/**
  * Отдача файлов (`/api/v1/files`): контент по HMAC-подписи (ADR-0013).
  * `@Public`: ссылку открывают <img>/«скачать»/новая вкладка — Authorization-
  * заголовка нет; подпись = виза, выданная при формировании DTO вложения
@@ -185,10 +192,9 @@ export class FilesController {
       );
     }
     const range = rangeDecision.kind === 'partial' ? rangeDecision.range : undefined;
-    // Поток читаем ДО выставления заголовков файла: сбой хранилища должен
-    // уйти в единый конверт ошибки без медиа-заголовков (`inline`, кеш, ETag)
-    // на ответе-ошибке (security-ревью #1005).
-    const stream = await this.driver.get(key, range);
+    // Заголовки собираем ДО открытия потока: битое имя (одиночный суррогат)
+    // или mime, который Fastify отвергнет, не должны оставить соединение
+    // к хранилищу открытым (security-ревью #1005).
     // Inline — ТОЛЬКО whitelist неисполняемых форматов: mime приходит от
     // клиента и не валидируется, а SVG (и пр. активный контент) в «новой
     // вкладке» исполняет скрипты на origin портала → refresh-cookie жертвы
@@ -219,18 +225,34 @@ export class FilesController {
       'Content-Disposition': `${disposition}; filename*=UTF-8''${encodeURIComponent(file.name)}`,
       'Accept-Ranges': 'bytes',
       'X-Content-Type-Options': 'nosniff',
-      // Defense-in-depth для пользовательского контента (security-ревью #1005):
-      // прямая навигация по ссылке не исполнит активный контент на origin
-      // портала (где refresh-cookie), даже если sniffing когда-нибудь обойдут.
-      'Content-Security-Policy': "default-src 'none'; sandbox",
+      'Content-Security-Policy': USER_CONTENT_CSP,
       'Cache-Control': 'private, max-age=3600',
       ETag: etag,
     };
     if (range) headers['Content-Range'] = `bytes ${range.start}-${range.end}/${size}`;
-    void reply
-      .status(range ? 206 : 200)
-      .headers(headers)
-      .send(stream);
+    // HEAD: тело не нужно — поток из хранилища не открываем вовсе. Заголовки
+    // пишем напрямую: `reply.send()` без тела обнулил бы Content-Length,
+    // а HEAD обязан повторять заголовки GET (RFC 9110 §9.3.2).
+    if (request.method === 'HEAD') {
+      reply.hijack();
+      reply.raw.writeHead(range ? 206 : 200, headers);
+      reply.raw.end();
+      return;
+    }
+    // Поток открываем ПОСЛЕ сборки заголовков: сбой хранилища уходит в единый
+    // конверт ошибки без медиа-заголовков (`inline`, кеш, ETag) на ответе
+    // (security-ревью #1005). Бросок на выставлении заголовков (негодный
+    // mime/имя) не должен оставить соединение с хранилищем открытым.
+    const stream = await this.driver.get(key, range);
+    try {
+      void reply
+        .status(range ? 206 : 200)
+        .headers(headers)
+        .send(stream);
+    } catch (error) {
+      stream.destroy();
+      throw error;
+    }
   }
 
   /**
@@ -265,18 +287,20 @@ export class FilesController {
     if (derivative?.status !== 'ready' || !derivative.key) {
       throw DomainException.notFound('File derivative is not ready');
     }
-    const stream = await this.driver.get(derivative.key);
     const etag = `"${id}-v${file.version}-deriv-${kind}"`;
-    void reply
-      .header('Content-Type', derivative.mime)
-      .header('Content-Length', derivative.size)
-      .header(
-        'Content-Disposition',
-        `inline; filename*=UTF-8''${encodeURIComponent(`${file.name}.pdf`)}`,
-      )
-      .header('X-Content-Type-Options', 'nosniff')
-      .header('Cache-Control', 'private, max-age=3600')
-      .header('ETag', etag)
-      .send(stream);
+    // Заголовки (и кодирование имени) — до открытия потока, как в content:
+    // бросок не оставляет соединение с хранилищем открытым (security-ревью
+    // #1005). CSP-песочница — та же, что у пользовательского контента.
+    const headers: Record<string, string | number> = {
+      'Content-Type': derivative.mime,
+      'Content-Length': derivative.size,
+      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(`${file.name}.pdf`)}`,
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': USER_CONTENT_CSP,
+      'Cache-Control': 'private, max-age=3600',
+      ETag: etag,
+    };
+    const stream = await this.driver.get(derivative.key);
+    void reply.headers(headers).send(stream);
   }
 }
