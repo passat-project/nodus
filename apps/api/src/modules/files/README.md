@@ -86,13 +86,15 @@ fileAccessContext` (`chat`, `letter`), DiscoveryService находит его с
   оставляет поток открытым. Ответ несёт
   `Content-Security-Policy: default-src 'none'; sandbox`
   (defense-in-depth для пользовательского контента, security-ревью #1005);
-  `Content-Type` санитизируется (`safeContentType`: управляющие символы из
-  клиентского mime → `application/octet-stream`, иначе заголовок роняет
-  ответ). HEAD отдаёт заголовки без тела и без открытия потока. На
-  производной (`derivative`, PDF) CSP-песочницы НЕТ: pdf.js забирает её как
-  подресурс (CSP не применяется), а прямой навигации `sandbox` может
-  отключить встроенный просмотрщик Chrome — `nosniff` + `application/pdf`
-  достаточно.
+  `Content-Type` санитизируется (`safeContentType`: управляющие символы или
+  не-формат из клиентского mime → `application/octet-stream`, иначе заголовок
+  роняет ответ). HEAD отдаёт заголовки без тела и без открытия потока
+  (`reply.hijack`; глобальные хуки обязаны ставить заголовки через
+  `reply.header()`, `raw.setHeader` в HEAD не попадёт). На производной
+  (`derivative`, PDF) `Content-Type` — константа `application/pdf` (не mime
+  из БД), CSP-песочницы НЕТ: pdf.js забирает её как подресурс (CSP не
+  применяется), а прямой навигации `sandbox` может отключить встроенный
+  просмотрщик Chrome — `nosniff` + `application/pdf` достаточно.
 - **Текст для ассистента (#922, ADR-0050)**: `GET /api/v1/files/:id/text` —
   обычная авторизация (не `@Public`, не HMAC), фичефлаг `assistant` (I10) и право
   `assistant.use` (I8): права через `OfficeSessionService.resolveAccess`

@@ -238,7 +238,9 @@ export class FilesController {
     // а HEAD обязан повторять заголовки GET (RFC 9110 §9.3.2). `writeHead`
     // ДО `hijack()`: негодный заголовок должен уйти конвертом ошибки, а не
     // оставить запрос без ответа (security-ревью #1005). Заголовки глобальных
-    // хуков (CORS/HSTS в будущем) сохраняем через reply.getHeaders().
+    // хуков (CORS/HSTS в будущем) сохраняем через reply.getHeaders(); хуки
+    // обязаны ставить их через reply.header(), а НЕ reply.raw.setHeader —
+    // иначе HEAD файлов молча выпадет из политики.
     if (request.method === 'HEAD') {
       // Заголовки глобальных хуков (CORS/HSTS в будущем) сохраняем: getHeaders
       // типизирован Record<HttpHeader> — для writeHead приводим к Node-типу.
@@ -304,7 +306,11 @@ export class FilesController {
     // `sandbox` может отключить встроенный просмотрщик Chrome; `nosniff` +
     // `application/pdf` уже не дают исполнить содержимое как HTML.
     const headers: Record<string, string | number> = {
-      'Content-Type': safeContentType(derivative.mime),
+      // Производная — всегда PDF (`kind` — z.enum(['pdf'])): константа, а не
+      // mime из БД. При ручном/миграционном рассинхроне данных прямая
+      // навигация не отдаст содержимое как HTML на origin портала
+      // (security-ревью #1005).
+      'Content-Type': 'application/pdf',
       'Content-Length': derivative.size,
       'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(`${file.name}.pdf`)}`,
       'X-Content-Type-Options': 'nosniff',
