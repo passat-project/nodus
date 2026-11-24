@@ -120,3 +120,27 @@ describe('MinioStorageDriver: периодическая уборка (#715)', (
     await expect(driver.abortIncompleteUpload('files/a', 'u-1')).rejects.toThrow('S3 down');
   });
 });
+
+describe('MinioStorageDriver: чтение среза (#1005, перемотка видео)', () => {
+  it('без диапазона — весь объект', async () => {
+    const getObject = vi.fn(() => Promise.resolve(Readable.from(['x'])));
+    const getPartialObject = vi.fn();
+    const driver = driverWith({ getObject, getPartialObject });
+
+    await driver.get('files/a');
+
+    expect(getObject).toHaveBeenCalledWith('files', 'files/a');
+    expect(getPartialObject).not.toHaveBeenCalled();
+  });
+
+  it('с диапазоном — offset/length S3 (конец включительно → length = end−start+1)', async () => {
+    const getObject = vi.fn();
+    const getPartialObject = vi.fn(() => Promise.resolve(Readable.from(['x'])));
+    const driver = driverWith({ getObject, getPartialObject });
+
+    await driver.get('files/a', { start: 10, end: 19 });
+
+    expect(getPartialObject).toHaveBeenCalledWith('files', 'files/a', 10, 10);
+    expect(getObject).not.toHaveBeenCalled();
+  });
+});

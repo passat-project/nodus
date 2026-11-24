@@ -119,6 +119,8 @@ export const ErrorCode = {
   FILE_SIZE_MISMATCH: 'FILE_SIZE_MISMATCH',
   /** Файл помещён в карантин (сканер пометил) и не отдаётся (ADR-0013). */
   FILE_QUARANTINED: 'FILE_QUARANTINED',
+  /** Запрошенный байтовый диапазон вне файла (HTTP Range) — 416, #1005. */
+  FILE_RANGE_NOT_SATISFIABLE: 'FILE_RANGE_NOT_SATISFIABLE',
   /** Движок офисного просмотра выключен (ONLYOFFICE не поднят, #138). */
   FILE_OFFICE_DISABLED: 'FILE_OFFICE_DISABLED',
   /** Формат не открывается в ONLYOFFICE (реестр office-formats, #138). */

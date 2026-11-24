@@ -59,6 +59,8 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.CHAT_MEMBERS_LIMIT_REACHED]: 'В беседе уже максимум участников (200)',
   [ErrorCode.FILE_SIZE_MISMATCH]: 'Файл передался не полностью — попробуйте ещё раз',
   [ErrorCode.FILE_QUARANTINED]: 'Файл заблокирован проверкой безопасности',
+  [ErrorCode.FILE_RANGE_NOT_SATISFIABLE]:
+    'Запрошенный фрагмент файла недоступен — обновите страницу',
   [ErrorCode.FILE_OFFICE_DISABLED]: 'Просмотр документов недоступен — скачайте файл',
   [ErrorCode.FILE_OFFICE_UNSUPPORTED]: 'Этот формат не открывается в браузере — скачайте файл',
   [ErrorCode.FILE_OFFICE_TOO_LARGE]: 'Файл слишком большой для просмотра — скачайте его',

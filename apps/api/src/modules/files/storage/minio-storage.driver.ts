@@ -5,6 +5,7 @@ import { ErrorCode } from '@nodus/contracts';
 
 import { DomainException } from '../../../core/errors/domain-exception.js';
 import { FILES_CONFIG, type FilesConfig } from '../files.config.js';
+import type { ByteRange } from '../content-range.js';
 
 export interface PutResult {
   etag: string | null;
@@ -134,8 +135,19 @@ export class MinioStorageDriver implements OnModuleInit {
     await this.client.abortMultipartUpload(this.config.bucket, key, uploadId);
   }
 
-  async get(key: string): Promise<Readable> {
-    return this.client.getObject(this.config.bucket, key);
+  /**
+   * Поток объекта. `range` — чтение только запрошенного среза (#1005,
+   * перемотка видео): S3-запрос с `Range`, без буферизации; без диапазона —
+   * весь объект. Конец диапазона включительно, как в HTTP.
+   */
+  async get(key: string, range?: ByteRange): Promise<Readable> {
+    if (!range) return this.client.getObject(this.config.bucket, key);
+    return this.client.getPartialObject(
+      this.config.bucket,
+      key,
+      range.start,
+      range.end - range.start + 1,
+    );
   }
 
   async remove(keys: string[]): Promise<void> {
