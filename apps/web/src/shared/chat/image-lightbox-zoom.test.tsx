@@ -137,9 +137,16 @@ describe('ImageLightbox: масштаб', () => {
     expect(toolbar.className).toContain('backdrop-blur-sm');
     expect(toolbar.className).not.toContain('bg-card');
     expect(toolbar.className).toContain('text-white/90');
-    // Правая группа не наезжает на крестик: у полосы место под него.
-    expect(toolbar.className).toContain('pr-12');
-    expect(screen.getByRole('button', { name: ui.common.close }).className).toContain('z-20');
+    // Крестик — отдельная плашка ПОД полосой (не в одном ряду с кнопками
+    // окна): полоса места под него не резервирует, кнопка вне тулбара,
+    // скругление наше кнопочное (не круг) — замечание владельца 24.11.2026.
+    const close = screen.getByRole('button', { name: ui.common.close });
+    expect(toolbar.className).not.toContain('pr-12');
+    expect(toolbar.contains(close)).toBe(false);
+    expect(close.className).toContain('z-20');
+    expect(close.className).toContain('top-12');
+    expect(close.className).toContain('size-9');
+    expect(close.className).not.toContain('rounded-full');
   });
 
   it('смена кадра сбрасывает зум к вписыванию', () => {

@@ -9,7 +9,9 @@ import { Button } from '@nodus/ui/components/button';
  * не в карточке файла (её шапка — хром документов: версия, «Редактировать»),
  * а во весь экран. Плеер вписан по обеим осям с сохранением пропорций
  * (`object-contain`) — поля по краям читаются как кадр кинозала, а не
- * пустая карточка. Сверху тонкая строка: имя, «Скачать», закрыть.
+ * пустая карточка. Сверху тонкая строка: имя, «Скачать», закрыть. Закрытие —
+ * плашка со скруглением нашего контрола и обводкой, а не голый крестик впритык
+ * к кнопкам окна (замечание владельца 24.11.2026, как в лайтбоксе).
  * Нативные `controls` остаются — это единственная полоса управления.
  *
  * Фон — полупрозрачное затемнение `black/75` (#790): портал под плеером
@@ -54,8 +56,8 @@ export function VideoPlayerView({
         </Button>
         <Button
           variant="ghost"
-          size="icon-sm"
-          className="text-white/70 hover:bg-white/10 hover:text-white"
+          size="icon-lg"
+          className="border-white/25 bg-black/45 text-white backdrop-blur-sm hover:border-white/40 hover:bg-white/15 hover:text-white"
           onClick={onClose}
           aria-label={ui.files.close}
           title={ui.files.close}

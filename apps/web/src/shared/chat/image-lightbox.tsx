@@ -24,6 +24,10 @@ import { LightboxFrame } from './lightbox-frame.js';
  * области просмотра И картинка больше окна — стрелки сдвигают её (панорама),
  * иначе — листают галерею, как раньше; `+`/`−`/`0` работают только при фокусе
  * в области. Смена кадра сбрасывает масштаб и сдвиг.
+ *
+ * Крестик — отдельная плашка со скруглением НИЖЕ полосы (24.11.2026): в
+ * оболочке он стоял впритык под системным крестиком окна и читался второй
+ * кнопкой закрытия окна; промах сворачивал программу в трей.
  */
 
 /** Доля экрана под вписанную картинку — те же поля, что у кадра лайтбокса. */
@@ -132,8 +136,11 @@ export function ImageLightbox({
       {/* Хром лайтбокса — ОТДЕЛЬНЫЙ слой над кадром (z-20 против z-0 кадра).
           Подложка СПЛОШНАЯ (`bg-black/60` + blur), не градиент: на светлом
           скриншоте градиентный скрим не читался и полоса сливалась с фото
-          (живая проверка 11.11). Справа `pr-12` — место под крестик, чтобы
-          группа масштаба его не наезжала. */}
+          (живая проверка 11.11). Крестик — отдельная плашка НИЖЕ полосы
+          (замечание владельца 24.11.2026): в оболочке он стоял вплотную
+          под системным крестиком окна, выглядел так же и читался второй
+          кнопкой закрытия окна (промах сворачивает программу в трей).
+          Полоса места под него больше не резервирует. */}
       <div className="absolute inset-x-0 top-0 z-20" onClick={(event) => event.stopPropagation()}>
         <ViewerZoomBar
           leading={`${index + 1} / ${images.length}`}
@@ -144,15 +151,16 @@ export function ImageLightbox({
           onZoomIn={zoom.zoomIn}
           onZoomOut={zoom.zoomOut}
           onReset={zoom.reset}
-          className="bg-black/60 pr-12 text-white/90 backdrop-blur-sm"
+          className="bg-black/60 text-white/90 backdrop-blur-sm"
           controlClassName="text-white hover:bg-white/15 hover:text-white"
         />
       </div>
       <Button
         variant="ghost"
-        size="icon-sm"
+        size="icon-lg"
         aria-label={ui.common.close}
-        className="absolute top-1 right-3 z-20 text-white hover:bg-white/15"
+        title={ui.common.close}
+        className="absolute top-12 right-4 z-20 border-white/25 bg-black/45 text-white backdrop-blur-sm hover:border-white/40 hover:bg-white/15 hover:text-white"
         onClick={(e) => {
           e.stopPropagation();
           onClose();

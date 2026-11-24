@@ -36,6 +36,12 @@ describe('VideoPlayerView — кинозал видео (#787)', () => {
     const download = screen.getByRole('link', { name: ui.files.download });
     expect(download.getAttribute('href')).toBe('/files/roll.mp4');
     expect(download.getAttribute('download')).toBe('ролик.mp4');
+    // Закрытие — плашка нашего скругления с обводкой, а не голый ghost-крестик
+    // впритык к кнопкам окна (замечание владельца 24.11.2026).
+    const close = screen.getByRole('button', { name: ui.files.close });
+    expect(close.className).toContain('size-9');
+    expect(close.className).toContain('border-white/25');
+    expect(close.className).not.toContain('rounded-full');
   });
 
   it('закрывает по кнопке и по заднику, но не по клику на плеер', () => {
