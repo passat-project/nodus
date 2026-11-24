@@ -3,6 +3,51 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ui } from '@nodus/contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const USERS = [
+  {
+    id: 'me',
+    displayName: 'Я Сам',
+    status: 'active',
+    avatarUrl: null,
+    positionName: null,
+    departmentName: null,
+    email: 'me@test.local',
+    managerId: null,
+    departmentId: null,
+    legalDepartmentId: null,
+    positionId: null,
+    legalPositionId: null,
+  },
+  {
+    id: 'active-1',
+    displayName: 'Иван Петров',
+    status: 'active',
+    avatarUrl: null,
+    positionName: null,
+    departmentName: null,
+    email: 'ivan@test.local',
+    managerId: null,
+    departmentId: null,
+    legalDepartmentId: null,
+    positionId: null,
+    legalPositionId: null,
+  },
+  {
+    id: 'fired',
+    displayName: 'Анна Ночная',
+    status: 'deactivated',
+    avatarUrl: null,
+    positionName: null,
+    departmentName: null,
+    email: 'anna@test.local',
+    managerId: null,
+    departmentId: null,
+    legalDepartmentId: null,
+    positionId: null,
+    legalPositionId: null,
+  },
+] as const;
+
 vi.mock('../api/chat-api.js', () => ({
   useCreateConversation: () => ({ mutate: vi.fn(), isPending: false }),
 }));
@@ -14,54 +59,12 @@ vi.mock('../../../shared/auth-store.js', () => ({
     selector({ user: { id: 'me', displayName: 'Я Сам', avatarUrl: null } }),
 }));
 vi.mock('../../../shared/api/users-list.js', () => ({
-  useUsersList: () => ({
-    data: {
-      items: [
-        {
-          id: 'me',
-          displayName: 'Я Сам',
-          status: 'active',
-          avatarUrl: null,
-          positionName: null,
-          departmentName: null,
-          email: 'me@test.local',
-          managerId: null,
-          departmentId: null,
-          legalDepartmentId: null,
-          positionId: null,
-          legalPositionId: null,
-        },
-        {
-          id: 'active-1',
-          displayName: 'Иван Петров',
-          status: 'active',
-          avatarUrl: null,
-          positionName: null,
-          departmentName: null,
-          email: 'ivan@test.local',
-          managerId: null,
-          departmentId: null,
-          legalDepartmentId: null,
-          positionId: null,
-          legalPositionId: null,
-        },
-        {
-          id: 'fired',
-          displayName: 'Анна Ночная',
-          status: 'deactivated',
-          avatarUrl: null,
-          positionName: null,
-          departmentName: null,
-          email: 'anna@test.local',
-          managerId: null,
-          departmentId: null,
-          legalDepartmentId: null,
-          positionId: null,
-          legalPositionId: null,
-        },
-      ],
-    },
-  }),
+  // #1016: диалог берёт действующих сотрудников — useActiveUsersList.
+  // Незакрытый «fired» в списке — осознанно: кандидатов фильтрует
+  // chatParticipantCandidates (status === 'active'), тест это и проверяет.
+  // useUsersList остаётся: его тянет use-person-avatar-url.
+  useUsersList: () => ({ data: { items: USERS } }),
+  useActiveUsersList: () => ({ data: { items: USERS } }),
 }));
 
 import { ChatCreateDialog } from './chat-create-dialog.js';
