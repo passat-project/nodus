@@ -154,12 +154,9 @@ export async function buildVideoPoster(
     }
     const meta = parseVideoProbe(raw);
     if (!meta) return null;
-    // Бомба разрешения: не декодируем кадр гигантских габаритов (см. потолки).
-    if (
-      meta.width > VIDEO_MAX_EDGE ||
-      meta.height > VIDEO_MAX_EDGE ||
-      meta.width * meta.height > VIDEO_MAX_PIXELS
-    ) {
+    // Бомба разрешения: проверяем ПИКОВЫЕ габариты по всем видеопотокам —
+    // ffmpeg без -map декодировал бы самый крупный, а не проверенный первый.
+    if (meta.maxEdge > VIDEO_MAX_EDGE || meta.maxPixels > VIDEO_MAX_PIXELS) {
       return null;
     }
 
@@ -180,6 +177,10 @@ export async function buildVideoPoster(
         String(at),
         '-i',
         input,
+        // Декодируем ИМЕННО проверенный поток (автовыбор взял бы самый
+        // крупный и обошёл потолки габаритов — security #250).
+        '-map',
+        `0:${meta.streamIndex}`,
         '-frames:v',
         '1',
         '-an',

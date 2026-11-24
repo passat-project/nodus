@@ -194,9 +194,10 @@ describe('AttachmentsService (#57, синхронное превью #221)', () 
     expect(dto.width).toBe(1920);
     expect(dto.height).toBe(1080);
     expect(dto.thumbnailUrl).toBeNull();
-    // ffmpeg/ffprobe — тяжёлые внешние процессы: НИКОГДА в HTTP-пути.
+    // ffmpeg/ffprobe — тяжёлые внешние процессы: НИКОГДА в HTTP-пути и не
+    // на загрузке (до отправки постер не нужен) — job ставит прогрев ленты.
     expect(thumbnails.generateFor).not.toHaveBeenCalled();
-    expect(thumbnailQueue.enqueue).toHaveBeenCalledTimes(1);
+    expect(thumbnailQueue.enqueue).not.toHaveBeenCalled();
   });
 
   it('имя вложения санитизируется до хранения и DTO (security #250)', async () => {

@@ -150,6 +150,7 @@ export class ThumbnailService {
   private async generateVideoPoster(attachment: AttachmentRow): Promise<void> {
     const original = await this.storage.get(attachment.fileId);
     if (!original) return;
+    let savedThumbId: string | null = null;
     try {
       const result = await buildVideoPoster(original.stream);
       if (!result) {
@@ -169,6 +170,7 @@ export class ThumbnailService {
         },
         Readable.from(result.poster),
       );
+      savedThumbId = thumbFileId;
       const won = await this.repository.markThumbnail(attachment.id, {
         thumbFileId,
         width: result.width,
@@ -177,18 +179,22 @@ export class ThumbnailService {
       });
       if (!won) {
         await this.storage.remove([thumbFileId]).catch(() => undefined);
+        savedThumbId = null;
         this.logger.info(
           { attachmentId: attachment.id },
           'Постер видео: проиграл гонку фиксации, дериват удалён',
         );
         return;
       }
+      savedThumbId = null; // зафиксирован в строке — сиротой не считается
       await this.emitPreviewReady(attachment.id, thumbFileId, {
         width: result.width,
         height: result.height,
         durationMs: result.durationMs,
       });
     } catch (error) {
+      // Бросок после save (БД/событие) не должен оставлять дериват-сироту.
+      if (savedThumbId) await this.storage.remove([savedThumbId]).catch(() => undefined);
       this.logger.warn(
         { attachmentId: attachment.id, err: error },
         'Постер видео: генерация не удалась (превью опционально)',

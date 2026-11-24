@@ -230,6 +230,9 @@ describe('ThumbnailService — серверные превью (#150)', () => {
       width: 1080,
       height: 1920,
       durationMs: 12_345,
+      streamIndex: 0,
+      maxEdge: 1920,
+      maxPixels: 1920 * 1080,
       poster: Buffer.from([1, 2, 3]),
     });
     const h = makeHarness(
@@ -293,11 +296,31 @@ describe('ThumbnailService — серверные превью (#150)', () => {
       width: 640,
       height: 360,
       durationMs: 5_000,
+      streamIndex: 0,
+      maxEdge: 640,
+      maxPixels: 640 * 360,
       poster: Buffer.from([9]),
     });
     const h = makeHarness(Buffer.alloc(0), attachment({ kind: 'video', mime: 'video/mp4' }));
     vi.mocked(h.repo.markThumbnail).mockResolvedValueOnce(false);
     await h.service.generateFor('att-1');
+    expect(h.storage.remove).toHaveBeenCalledWith([THUMB_ID]);
+    expect(h.emitted).toHaveLength(0);
+  });
+
+  it('видео: бросок фиксации в БД — дериват не остаётся сиротой', async () => {
+    buildPoster.mockResolvedValueOnce({
+      width: 640,
+      height: 360,
+      durationMs: 5_000,
+      streamIndex: 0,
+      maxEdge: 640,
+      maxPixels: 640 * 360,
+      poster: Buffer.from([9]),
+    });
+    const h = makeHarness(Buffer.alloc(0), attachment({ kind: 'video', mime: 'video/mp4' }));
+    vi.mocked(h.repo.markThumbnail).mockRejectedValueOnce(new Error('db down'));
+    await expect(h.service.generateFor('att-1')).resolves.toBeUndefined();
     expect(h.storage.remove).toHaveBeenCalledWith([THUMB_ID]);
     expect(h.emitted).toHaveLength(0);
   });

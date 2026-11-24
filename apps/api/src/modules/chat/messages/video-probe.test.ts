@@ -9,7 +9,7 @@ describe('parseVideoProbe — метаданные видео из ffprobe JSON'
       streams: [{ codec_type: 'video', width: 1920, height: 1080 }],
       format: { duration: '12.345' },
     });
-    expect(probe).toEqual({ width: 1920, height: 1080, durationMs: 12345 });
+    expect(probe).toMatchObject({ width: 1920, height: 1080, durationMs: 12345 });
   });
 
   it('поворот 90° (displaymatrix -90) — стороны меняются', () => {
@@ -24,7 +24,7 @@ describe('parseVideoProbe — метаданные видео из ffprobe JSON'
       ],
       format: { duration: '5' },
     });
-    expect(probe).toEqual({ width: 1080, height: 1920, durationMs: 5000 });
+    expect(probe).toMatchObject({ width: 1080, height: 1920, durationMs: 5000 });
   });
 
   it('поворот 180° (тег rotate) — стороны не меняются', () => {
@@ -32,7 +32,7 @@ describe('parseVideoProbe — метаданные видео из ffprobe JSON'
       streams: [{ codec_type: 'video', width: 640, height: 480, tags: { rotate: '180' } }],
       format: { duration: '2' },
     });
-    expect(probe).toEqual({ width: 640, height: 480, durationMs: 2000 });
+    expect(probe).toMatchObject({ width: 640, height: 480, durationMs: 2000 });
   });
 
   it('обложка (attached_pic) не считается видеопотоком', () => {
@@ -43,7 +43,7 @@ describe('parseVideoProbe — метаданные видео из ffprobe JSON'
       ],
       format: { duration: '7.5' },
     });
-    expect(probe).toEqual({ width: 1280, height: 720, durationMs: 7500 });
+    expect(probe).toMatchObject({ width: 1280, height: 720, durationMs: 7500 });
   });
 
   it('длительность из потока, если формат не сообщил', () => {
@@ -69,6 +69,32 @@ describe('parseVideoProbe — метаданные видео из ffprobe JSON'
       streams: [{ codec_type: 'video', width: 640, height: 360 }],
       format: {},
     });
-    expect(probe).toEqual({ width: 640, height: 360, durationMs: null });
+    expect(probe).toMatchObject({ width: 640, height: 360, durationMs: null });
+  });
+
+  it('несколько потоков: выбран индекс первого, пики — по всем (обход потолка)', () => {
+    const probe = parseVideoProbe({
+      streams: [
+        { codec_type: 'audio' },
+        { codec_type: 'video', width: 320, height: 240 },
+        { codec_type: 'video', width: 12000, height: 12000 },
+      ],
+      format: { duration: '4' },
+    });
+    expect(probe).toMatchObject({
+      width: 320,
+      height: 240,
+      streamIndex: 1,
+      maxEdge: 12_000,
+      maxPixels: 144_000_000,
+    });
+  });
+
+  it('длительность клампится потолком DTO (int4 не переполняется)', () => {
+    const probe = parseVideoProbe({
+      streams: [{ codec_type: 'video', width: 640, height: 360 }],
+      format: { duration: '999999999' },
+    });
+    expect(probe?.durationMs).toBe(86_400_000);
   });
 });

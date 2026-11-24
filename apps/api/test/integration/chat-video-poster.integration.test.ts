@@ -115,6 +115,14 @@ describe.skipIf(!ffmpegReady || !process.env.DATABASE_URL || !process.env.STORAG
         key: `video-poster-msg-${fx.runId}`,
       });
       expect(sent.status).toBe(201);
+      // Прогрев ленты — точка запуска конвейера (видео не грузит ffmpeg при
+      // загрузке): GET ленты ставит job для вложения без постера.
+      const feed = await fx.api(
+        alice,
+        'GET',
+        `/chat/conversations/${conversationId}/messages?limit=50`,
+      );
+      expect(feed.status).toBe(200);
 
       const deadline = Date.now() + 45_000;
       while (Date.now() < deadline) {

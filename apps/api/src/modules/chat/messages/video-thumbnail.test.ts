@@ -88,33 +88,45 @@ describe('buildVideoPoster — постер из стрима (#250)', () => {
     const run = runWritingPoster(Buffer.from('RIFF0000WEBP'));
     const result = await buildVideoPoster(Readable.from([Buffer.from('video-bytes')]), tools(run));
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       width: 1280,
       height: 720,
       durationMs: 12_345,
+      streamIndex: 0,
+      maxEdge: 1280,
+      maxPixels: 1280 * 720,
       poster: Buffer.from('RIFF0000WEBP'),
     });
     const calls = vi.mocked(run).mock.calls;
     expect(calls[0]?.[0]).toBe('ffprobe');
     expect(calls[0]?.[1]).toContain('-show_format');
-    // SSRF-защита: вход — локальный файл, никаких URL из демуксера.
-    expect(calls[0]?.[1]).toContain('-protocol_whitelist');
-    expect(calls[0]?.[1]).toContain('file');
-    expect(calls[0]?.[1]?.at(-1)).toMatch(/input\.bin$/);
+    // SSRF-защита: опция ДО входа (после -i она не действует), вход — файл.
+    const probeArgs = calls[0]?.[1] ?? [];
+    expect(probeArgs.indexOf('-protocol_whitelist')).toBeGreaterThan(-1);
+    expect(probeArgs.indexOf('-protocol_whitelist')).toBeLessThan(probeArgs.length - 1);
+    expect(probeArgs[probeArgs.indexOf('-protocol_whitelist') + 1]).toBe('file');
+    expect(probeArgs?.at(-1)).toMatch(/input\.bin$/);
     expect(calls[1]?.[0]).toBe('ffmpeg');
     const ffmpeg = calls[1]?.[1] ?? [];
     expect(ffmpeg[ffmpeg.indexOf('-ss') + 1]).toBe(String(posterPositionSeconds(12_345)));
-    expect(ffmpeg).toContain('-protocol_whitelist');
+    const whitelistAt = ffmpeg.indexOf('-protocol_whitelist');
+    expect(whitelistAt).toBeGreaterThan(-1);
+    expect(whitelistAt).toBeLessThan(ffmpeg.indexOf('-i'));
     expect(ffmpeg).toContain('-max_alloc');
+    // Декодируется именно проверенный поток (не автовыбор «самого крупного»).
+    expect(ffmpeg[ffmpeg.indexOf('-map') + 1]).toBe('0:0');
     expect(ffmpeg).toContain('1'); // -threads 1
     expect(ffmpeg).toContain(
       'thumbnail=n=40,scale=w=800:h=-2:force_original_aspect_ratio=decrease',
     );
   });
 
-  it('бомба разрешения: гигантские габариты → null, кадр не декодируется', async () => {
+  it('бомба разрешения: маленький первый + гигантский второй → null, кадр не снимается', async () => {
     const bomb = JSON.stringify({
-      streams: [{ codec_type: 'video', width: 100_000, height: 100_000 }],
+      streams: [
+        { codec_type: 'video', width: 320, height: 240 },
+        { codec_type: 'video', width: 12_000, height: 12_000 },
+      ],
       format: { duration: '5' },
     });
     const run = runWritingPoster(Buffer.from('x'), bomb);
