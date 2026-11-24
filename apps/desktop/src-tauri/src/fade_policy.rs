@@ -26,6 +26,8 @@ pub(crate) struct FadePolicy {
     created_ms: u64,
     /// Когда начинать таяние (пауза от первого нажатия после появления).
     wait_due_ms: Option<u64>,
+    /// Момент, когда отсчёт паузы стартовал (для журнала фактической паузы).
+    wait_started_ms: Option<u64>,
     /// Начало таяния.
     fading_since_ms: Option<u64>,
 }
@@ -35,6 +37,7 @@ impl FadePolicy {
         Self {
             created_ms,
             wait_due_ms: None,
+            wait_started_ms: None,
             fading_since_ms: None,
         }
     }
@@ -43,7 +46,13 @@ impl FadePolicy {
     /// отсчёт: «навёл — прочитал», а не «пауза продолжается с прошлого раза».
     pub(crate) fn reset(&mut self) {
         self.wait_due_ms = None;
+        self.wait_started_ms = None;
         self.fading_since_ms = None;
+    }
+
+    /// Начало текущей паузы (для журнала фактического времени ожидания).
+    pub(crate) fn wait_started_ms(&self) -> Option<u64> {
+        self.wait_started_ms
     }
 
     /// Один тик. `paused` — курсор на попапе или открыто поле ответа.
@@ -60,7 +69,15 @@ impl FadePolicy {
         if paused || last_input < self.created_ms {
             return self.pause();
         }
-        let due = *self.wait_due_ms.get_or_insert(now.saturating_add(delay_ms));
+        let due = match self.wait_due_ms {
+            Some(due) => due,
+            None => {
+                let due = now.saturating_add(delay_ms);
+                self.wait_due_ms = Some(due);
+                self.wait_started_ms = Some(now);
+                due
+            }
+        };
         if now < due {
             if self.fading_since_ms.take().is_some() {
                 return FadeStep::Reset;
@@ -80,6 +97,7 @@ impl FadePolicy {
     fn pause(&mut self) -> FadeStep {
         let was_fading = self.fading_since_ms.take().is_some();
         self.wait_due_ms = None;
+        self.wait_started_ms = None;
         if was_fading {
             FadeStep::Reset
         } else {
