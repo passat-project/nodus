@@ -154,7 +154,11 @@ function VideoGalleryTile({
   const duration = video.durationMs ?? null;
   return (
     <div
-      className={cn(TILE_CLASS, single ? 'w-full shrink-0 rounded-none' : 'flex-1 rounded-none')}
+      className={cn(
+        TILE_CLASS,
+        'group/video',
+        single ? 'w-full shrink-0 rounded-none' : 'flex-1 rounded-none',
+      )}
       style={single ? { aspectRatio: `${box.width} / ${box.height}` } : { height: ROW_HEIGHT }}
     >
       {mode === 'playing' ? (
@@ -186,32 +190,45 @@ function VideoGalleryTile({
             ) : (
               <span className="block size-full bg-black/70" />
             )}
+            {/* Наведение — чёрная вуаль-скрим, а не прозрачность кадра:
+                opacity в светлой теме высветляла постер вместо затемнения. */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 bg-black/0 transition-colors duration-150 group-hover/video:bg-black/10"
+            />
           </button>
           {mode === 'error' ? (
-            <span className="absolute inset-x-2 bottom-2 z-10 rounded-md bg-black/75 px-2 py-1 text-center text-badge text-white">
-              {ui.chat.videoUnsupported}{' '}
-              <a
-                href={video.url ?? '#'}
-                download={video.name}
-                className="underline underline-offset-2"
-                onClick={(event) => event.stopPropagation()}
-              >
-                {ui.files.download}
-              </a>
+            /* Кодек не поддержан (#250): на месте ролика — спокойная плашка
+               по центру постера, не «сломанный плеер». Читаемый 13px текст,
+               ссылка скачивания — узнаваемая (подчёркивание). */
+            <span className="absolute inset-0 z-10 grid place-items-center bg-black/70 p-3">
+              <span className="max-w-[86%] rounded-lg border border-white/15 bg-black/85 px-3 py-2 text-center text-xs leading-snug text-white">
+                {ui.chat.videoUnsupported}{' '}
+                <a
+                  href={video.url ?? '#'}
+                  download={video.name}
+                  className="font-medium underline underline-offset-2 hover:no-underline"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {ui.files.download}
+                </a>
+              </span>
             </span>
           ) : (
             <>
+              {/* Play — литая чашка 40px: на тёмных постерах чёрный круг
+                  сливался с кадром (обе темы), hairline-обводка держит край. */}
               <button
                 type="button"
                 onClick={() => setMode('playing')}
                 aria-label={ui.chat.videoPlay}
                 title={ui.chat.videoPlay}
-                className="absolute top-2 left-2 z-10 grid size-9 place-items-center rounded-full bg-black/55 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+                className="absolute top-2 left-2 z-10 grid size-10 place-items-center rounded-full border border-white/20 bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
               >
                 <Play className="size-4 translate-x-[1px]" fill="currentColor" strokeWidth={0} />
               </button>
               {duration !== null ? (
-                <span className="pointer-events-none absolute right-2 bottom-2 z-10 rounded bg-black/60 px-1.5 py-0.5 font-mono text-badge text-white tabular-nums">
+                <span className="pointer-events-none absolute right-2 bottom-2 z-10 rounded-md border border-white/15 bg-black/55 px-1.5 py-0.5 font-mono text-label-xs text-white tabular-nums">
                   {formatVideoDuration(duration)}
                 </span>
               ) : null}

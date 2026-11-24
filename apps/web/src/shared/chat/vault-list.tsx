@@ -54,7 +54,7 @@ export function MediaTile({
       title={name}
       className="group relative flex flex-col gap-1 text-left"
     >
-      <span className="relative block aspect-square w-full overflow-hidden rounded-md bg-muted/60">
+      <span className="relative block aspect-square w-full overflow-hidden rounded-lg bg-muted/60">
         {src ? (
           <img
             src={src}
@@ -68,11 +68,13 @@ export function MediaTile({
         ) : null}
         {isVideo ? (
           <>
-            <span className="pointer-events-none absolute top-1.5 left-1.5 grid size-7 place-items-center rounded-full bg-black/55 text-white">
-              <Play className="size-3.5 translate-x-[1px]" fill="currentColor" strokeWidth={0} />
+            {/* Play-чашка 20px: на плитке витрины 100px капля 28px занимала
+                треть кадра; hairline-обводка держит её на тёмных постерах. */}
+            <span className="pointer-events-none absolute top-1 left-1 grid size-5 place-items-center rounded-full border border-white/20 bg-black/50 text-white">
+              <Play className="size-2.5 translate-x-[1px]" fill="currentColor" strokeWidth={0} />
             </span>
             {durationMs !== null ? (
-              <span className="pointer-events-none absolute right-1.5 bottom-1.5 rounded bg-black/60 px-1 py-0.5 font-mono text-[10px] text-white tabular-nums">
+              <span className="pointer-events-none absolute right-1 bottom-1 rounded border border-white/10 bg-black/60 px-1 py-px font-mono text-label-xs text-white tabular-nums">
                 {formatVideoDuration(durationMs)}
               </span>
             ) : null}
@@ -94,13 +96,13 @@ export function MediaTile({
               onJump();
             }
           }}
-          className="absolute right-1 top-1 rounded-md bg-background/80 p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+          className="absolute right-1 top-1 rounded-md bg-background/85 p-1 text-muted-foreground opacity-0 backdrop-blur-sm transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
         >
           <MessagesSquare className="size-3.5" strokeWidth={1.75} />
         </span>
       </span>
-      <span className="truncate text-xs text-muted-foreground">{name}</span>
-      <span className="truncate text-xs text-muted-foreground/80 tabular-nums">{meta}</span>
+      <span className="truncate text-xs text-foreground/90">{name}</span>
+      <span className="truncate text-label-xs text-muted-foreground tabular-nums">{meta}</span>
     </button>
   );
 }

@@ -106,8 +106,13 @@ export function AttachmentCard({
             ) : (
               <FileTypeIcon mime={attachment.mime} className="size-6" />
             )}
-            <span className="absolute inset-0 grid place-items-center bg-black/25">
-              <Play className="size-3 text-white" fill="currentColor" strokeWidth={0} />
+            {/* Play — маленькая чашка по центру постера: сплошная вуаль
+                съедала кадр миниатюры, а белый треугольник без подложки
+                пропадал на светлых кадрах. */}
+            <span className="absolute inset-0 grid place-items-center">
+              <span className="grid size-3.5 place-items-center rounded-full border border-white/25 bg-black/50 text-white">
+                <Play className="size-2 translate-x-px" fill="currentColor" strokeWidth={0} />
+              </span>
             </span>
           </span>
         ) : (
