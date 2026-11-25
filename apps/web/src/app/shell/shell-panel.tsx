@@ -3,7 +3,6 @@ import {
   ArrowRight,
   Check,
   Copy,
-  Download,
   Link,
   Minus,
   RefreshCw,
@@ -37,6 +36,7 @@ import {
   usePortalTabsStore,
 } from '../../features/portal-tabs/model/tabs-store.js';
 import { AppUpdateWindow } from './app-update-window.js';
+import { DownloadsPopoverButton } from './downloads-popover.js';
 import { LogoIcon } from './logo-icon.js';
 import { UpdateCallout } from './update-callout.js';
 
@@ -51,7 +51,7 @@ const PANEL_BUTTON_CLASS = 'relative text-muted-foreground hover:bg-accent hover
  * app-shell). Слева направо: назад/вперёд по ИСТОРИИ АКТИВНОЙ ВКЛАДКИ
  * (стор вкладок фазы C), ⟳ с зелёной точкой обновления портала, копирование
  * адреса · полоса вкладок + остаток ширины — drag-зона окна · «Приложение»
- * со знаком Nodus, «Загрузки» (заглушка до реестра фазы E), кнопки окна.
+ * со знаком Nodus, «Загрузки» (реестр загрузок оболочки, поповер), кнопки окна.
  */
 export function ShellPanel() {
   const [appMenuOpen, setAppMenuOpen] = useState(false);
@@ -91,9 +91,7 @@ export function ShellPanel() {
 
         <div className="flex items-center pr-1">
           <AppMenuButton onOpen={() => setAppMenuOpen(true)} />
-          <PanelIconButton title={ui.desktop.panelDownloads} disabled>
-            <Download className="size-4" strokeWidth={1.75} />
-          </PanelIconButton>
+          <DownloadsPopoverButton />
           <PanelIconButton title={ui.desktop.panelWindowMinimize} onClick={desktopWindowMinimize}>
             <Minus className="size-4" strokeWidth={1.75} />
           </PanelIconButton>

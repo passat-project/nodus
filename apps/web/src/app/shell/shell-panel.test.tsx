@@ -81,7 +81,7 @@ afterEach(() => {
 });
 
 describe('каркас панели', () => {
-  it('высота из контракта SHELL_PANEL_HEIGHT, заглушки назад/вперёд/загрузки disabled', () => {
+  it('высота из контракта SHELL_PANEL_HEIGHT, назад/вперёд disabled, «Загрузки» активна', () => {
     installShellBridge();
     vi.stubGlobal('fetch', stubManifest(null, 404));
     renderPanel();
@@ -96,7 +96,7 @@ describe('каркас панели', () => {
       true,
     );
     expect((screen.getByRole('button', { name: 'Загрузки' }) as HTMLButtonElement).disabled).toBe(
-      true,
+      false,
     );
     expect(
       (screen.getByRole('button', { name: 'Обновить страницу' }) as HTMLButtonElement).disabled,
@@ -104,6 +104,14 @@ describe('каркас панели', () => {
     expect(
       (screen.getByRole('button', { name: 'Копировать адрес' }) as HTMLButtonElement).disabled,
     ).toBe(false);
+  });
+
+  it('кнопка «Загрузки» открывает поповер реестра (пусто у старой оболочки)', async () => {
+    installShellBridge();
+    vi.stubGlobal('fetch', stubManifest(null, 404));
+    renderPanel();
+    fireEvent.click(screen.getByRole('button', { name: 'Загрузки' }));
+    expect(await screen.findByText('Пока ничего не скачивали')).toBeTruthy();
   });
 
   it('кнопка максимизации — фиксированный id для snap-плагина, без обработчика клика', () => {

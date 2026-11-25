@@ -1,6 +1,7 @@
 import {
   COPY_TEXT_MAX_CHARS,
   DESKTOP_BRIDGE_EVENTS,
+  downloadEntrySchema,
   openConversationEventSchema,
   openLetterEventSchema,
   popupDiagnosticSchema,
@@ -10,6 +11,7 @@ import {
   shellInfoSchema,
   shellUpdateStateSchema,
   shellVisibilityEventSchema,
+  type DownloadEntry,
   type OpenConversationEvent,
   type OpenLetterEvent,
   type PopupReplyEvent,
@@ -48,6 +50,10 @@ interface NodusDesktopGlobal {
   windowIsMaximized?(): Promise<boolean>;
   /** Записать текст в буфер обмена (только запись, ≤ 4096 символов). */
   copyText?(text: string): Promise<void>;
+  /** Реестр загрузок (эпик #1038): только новые оболочки — команда реестра;
+   *  старая установленная команд не знает, веб показывает пустой список. */
+  downloadsList?(): Promise<unknown>;
+  downloadReveal?(path: string): Promise<void>;
   dismissPopups(conversationId: string): Promise<void>;
   setUiTheme(theme: 'light' | 'dark'): Promise<void>;
   getShellInfo(): Promise<unknown>;
@@ -282,6 +288,54 @@ export async function desktopCopyText(text: string): Promise<boolean> {
 }
 
 /**
+ * Реестр загрузок оболочки (эпик #1038): список последних завершённых
+ * загрузок (новые первыми) — оболочка помнит его между запусками.
+ * null — браузер или старая оболочка без команды реестра; кривой payload
+ * (мимо контракта) тоже null — шум за границей приложения не показываем.
+ */
+export async function desktopDownloadsList(): Promise<DownloadEntry[] | null> {
+  const bridge = getDesktopBridge();
+  if (!bridge || typeof bridge.downloadsList !== 'function') return null;
+  try {
+    const parsed = downloadEntrySchema.array().safeParse(await bridge.downloadsList());
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * «Показать в папке» для записи реестра (#1038): оболочка сама прогоняет
+ * путь через гвард каталога «Загрузки». Ложь — браузер, старая оболочка или
+ * отказ Rust (путь чужой/файл пропал).
+ */
+export async function desktopDownloadReveal(path: string): Promise<boolean> {
+  const bridge = getDesktopBridge();
+  if (!bridge || typeof bridge.downloadReveal !== 'function') return false;
+  try {
+    await bridge.downloadReveal(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Живые записи реестра загрузок (эпик #1038): подписчики события
+ * `download-finished` — панель «Загрузки» монтируется независимо от хоста
+ * моста, поэтому фан-аут идёт через реестр слушателей (в отличие от
+ * фиксированных обработчиков `bindDesktopShellEvents`). Возврат — отписка.
+ */
+const downloadsListeners = new Set<(entry: DownloadEntry) => void>();
+
+export function registerDownloadsListener(fn: (entry: DownloadEntry) => void): () => void {
+  downloadsListeners.add(fn);
+  return () => {
+    downloadsListeners.delete(fn);
+  };
+}
+
+/**
  * Погасить попапы беседы: хост чата зовёт при открытии беседы (модель
  * Telegram unlinkHistory — открыл чат, его уведомления больше не висят).
  */
@@ -383,6 +437,11 @@ export function bindDesktopShellEvents(handlers: {
     onDesktopEvent(DESKTOP_BRIDGE_EVENTS.shellFocus, shellFocusEventSchema, (payload) =>
       setShellFocused(payload.focused),
     ),
+    // Завершение загрузки (эпик #1038): валидная запись — всем подписчикам
+    // реестра (registerDownloadsListener), панель «Загрузки» обновляется живьём.
+    onDesktopEvent(DESKTOP_BRIDGE_EVENTS.downloadFinished, downloadEntrySchema, (entry) => {
+      downloadsListeners.forEach((fn) => fn(entry));
+    }),
   ];
   // Оболочка доставляет отложенный deep link только после этого сигнала.
   void getDesktopBridge()?.shellReady();
