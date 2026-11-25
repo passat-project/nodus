@@ -31,7 +31,7 @@ import {
   type NavTabDef,
 } from './nav-registry.js';
 import { ProfileMenu } from './profile-menu.js';
-import { PortalUpdatePlate, usePortalUpdateOverlayActive } from './portal-update-plate.js';
+import { PortalUpdatePlate } from './portal-update-plate.js';
 import { useShellStore } from './shell-store.js';
 
 /**
@@ -68,10 +68,6 @@ export function TopBar() {
   const assistantOpen = useAssistantStore((s) => s.open);
   const setAssistantOpen = useAssistantStore((s) => s.setOpen);
   const assistantEnabled = useAssistantEnabled();
-  // TEMP #1038 taste-variant, удалить после вердикта владельца: overlay-плашка
-  // (?updatePlate=overlay) висит над шапкой — правая группа уступает место.
-  const plateOverlay = usePortalUpdateOverlayActive((s) => s.active);
-
   /** Счётчик вкладки (#409): только у мессенджера; «Настройка» — без числа. */
   const tabCount = (moduleId: string | undefined, tabId: string): number => {
     if (moduleId !== 'chat') return 0;
@@ -158,20 +154,11 @@ export function TopBar() {
         )}
       </nav>
 
-      <div
-        className={cn(
-          'flex min-w-0 flex-1 items-center justify-end gap-3',
-          // TEMP #1038 taste-variant, удалить после вердикта владельца:
-          // шапка уступает место overlay-плашке (13.5rem + зазор 0.5rem).
-          plateOverlay && 'pr-[14rem]',
-        )}
-      >
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-3">
         {/* Идущий таймер учёта времени (#311) — виден из любого раздела */}
         <RunningTimerChip />
         {/* Плашка «Портал обновился» (#1038, фаза F): только браузер, в потоке
-            группы — иконки отступают влево; в overlay-режиме (вкусовой
-            вариант) сама плашка рендерится фиксированным уровнем над шапкой,
-            а не здесь. */}
+            правой группы — иконки отступают влево. */}
         <PortalUpdatePlate />
         {/* Глобальный «Умный поиск» — лупа (та же палитра Ctrl+K); большого
             поля в центре нет — не путается с локальным поиском списков */}

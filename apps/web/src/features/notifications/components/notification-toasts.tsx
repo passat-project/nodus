@@ -2,13 +2,11 @@ import { CheckCheck, X, Zap } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { ui } from '@nodus/contracts';
-import { cn } from '@nodus/ui/lib/utils';
 
 import { useConversations } from '../../../shared/chat/chat-queries.js';
 import { MentionSnippet } from '../../../shared/chat/mention-chip.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
 import { isDesktopShell } from '../../../shared/desktop/desktop-bridge.js';
-import { usePortalUpdateOverlayActive } from '../../../app/shell/portal-update-plate.js';
 import { useNotificationsToastStore } from '../model/toast-store.js';
 import { PERSONAL_TOAST_TTL_MS } from '../model/toast-store.js';
 import {
@@ -54,24 +52,13 @@ function ToastColumn() {
   // висит бесконечно. Тот же ключ сводки, что у заголовка вкладки — один
   // запрос; WS notification.read/dispatch держит кэш свежим.
   useActionsFollowJournal();
-  // TEMP #1038 taste-variant, удалить после вердикта владельца: overlay-
-  // плашка обновления (?updatePlate=overlay) висит над шапкой — личный стек
-  // уходит ниже на высоту плашки (5.5rem = 3.5rem бара + 2rem плашки). Оба
-  // литерала top-* обязательны: Tailwind сканирует исходник, класс из
-  // шаблона не сгенерируется. Сигнал публикует сама плашка (app-слой) —
-  // фича уведомлений фичу обновления не импортирует (I3/I6).
-  const plateOverlay = usePortalUpdateOverlayActive((s) => s.active);
-  const columnTop = plateOverlay ? 'top-[calc(5.5rem+14px)]' : 'top-[calc(3.5rem+14px)]';
 
   return (
     <div
       aria-live="polite"
       aria-label={ui.notifications.bellLabel}
       data-notification-toasts
-      className={cn(
-        'pointer-events-none absolute right-4 z-[70] flex w-[360px] flex-col gap-[5px]',
-        columnTop,
-      )}
+      className="pointer-events-none absolute top-[calc(3.5rem+14px)] right-4 z-[70] flex w-[360px] flex-col gap-[5px]"
     >
       {actions.count > 0 && <ActionsToast />}
       {personal.map((toast) => (

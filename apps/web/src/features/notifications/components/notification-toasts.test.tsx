@@ -6,7 +6,6 @@ import type { ReactNode } from 'react';
 import { ui } from '@nodus/contracts';
 
 import { useNotificationsToastStore } from '../model/toast-store.js';
-import { usePortalUpdateOverlayActive } from '../../../app/shell/portal-update-plate.js';
 import { NotificationToasts } from './notification-toasts.js';
 
 // Реальный router.tsx (втянут через open-notification) строит дерево маршрутов
@@ -44,7 +43,6 @@ afterEach(() => {
   cleanup();
   delete window.nodusDesktop;
   window.history.replaceState(null, '', '/');
-  usePortalUpdateOverlayActive.getState().setActive(false);
 });
 
 /** #616: сводная «Требуют внимания» следует журналу — внимание угасло,
@@ -125,7 +123,7 @@ describe('NotificationToasts: клик ведёт к источнику', () => 
 
 /** #1038 (фаза F): личный стек — колонка ПОД топбаром СПРАВА, по геометрии
  *  десктопных попапов (360/зазор 5/предел 3); в оболочке не рендерится
- *  вовсе (нативные попапы), TEMP overlay-плашка сдвигает колонку ниже. */
+ *  вовсе (нативные попапы). */
 describe('NotificationToasts: колонка под топбаром справа (#1038)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -136,7 +134,6 @@ describe('NotificationToasts: колонка под топбаром справ�
       snoozedConversations: new Set<string>(),
       dnd: { enabled: false, start: '22:00', end: '08:00' },
     });
-    usePortalUpdateOverlayActive.getState().setActive(false);
   });
 
   it('в браузере — колонка справа под линией топбара (геометрия попапов)', () => {
@@ -166,15 +163,7 @@ describe('NotificationToasts: колонка под топбаром справ�
     mountToasts();
     expect(screen.queryByLabelText(ui.notifications.bellLabel)).toBeNull();
   });
-
-  it('TEMP overlay: overlay-плашка активна — стек ниже плашки', () => {
-    usePortalUpdateOverlayActive.getState().setActive(true);
-    mountToasts();
-    const column = screen.getByLabelText(ui.notifications.bellLabel);
-    expect(column.classList.contains('top-[calc(5.5rem+14px)]')).toBe(true);
-  });
-
-  it('TEMP overlay: плашки нет — стек на обычном месте', () => {
+  it('стек на обычном месте: top = низ шапки + зазор', () => {
     mountToasts();
     const column = screen.getByLabelText(ui.notifications.bellLabel);
     expect(column.classList.contains('top-[calc(3.5rem+14px)]')).toBe(true);
