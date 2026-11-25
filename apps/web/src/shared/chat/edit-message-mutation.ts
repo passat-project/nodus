@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 
 import { api } from '../api-client.js';
 import { chatKeys } from './chat-keys.js';
+import { invalidateConversationLists } from './conversation-list-invalidation.js';
 import { useChatDrafts } from './chat-drafts.js';
 import { mapMessage, restoreSnapshot, snapshotMessages } from './message-cache.js';
 import type { EditMessageVars } from './message-edit.js';
@@ -61,7 +62,7 @@ export function useEditMessage(conversationId: string, draftScope?: string) {
 
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: chatKeys.messages(conversationId) });
-      void qc.invalidateQueries({ queryKey: chatKeys.conversations() });
+      void invalidateConversationLists(qc);
       void qc.invalidateQueries({ queryKey: chatKeys.pins(conversationId) });
     },
   });

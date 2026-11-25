@@ -13,7 +13,13 @@ import { ui } from '@nodus/contracts';
 import { toast } from 'sonner';
 
 import { api } from '../../../shared/api-client.js';
-import { mapTaskInPages, taskDependentKeys, tasksKeys } from '../../../shared/api/tasks-keys.js';
+import {
+  applyServerTask,
+  publishOptimisticTask,
+  restoreTaskOverlay,
+} from '../../../shared/api/task-cache.js';
+import { invalidateAfterTaskMutation } from '../../../shared/api/task-invalidate.js';
+import { mapTaskInPages, tasksKeys } from '../../../shared/api/tasks-keys.js';
 import { fieldLockedText } from '../../../shared/forms/field-lock-ui.js';
 import { secretProjectMembersText } from '../../../shared/tasks/secret-project-members.js';
 
@@ -25,9 +31,11 @@ export type TaskFieldsPatch = Partial<
   lockReason?: string;
 };
 
-/** Правка полей задачи (I4): значение в карточке и журнале меняется сразу,
- *  откат по снапшоту; после ответа — переходы (гейты читают поля), доски и
- *  счётчики просрочки пересобираются инвалидацией.
+/** Правка полей задачи (I4): значение меняется сразу везде, где задача видна
+ *  — карточка, журналы и канбан-доски (оверлей досок, #1051), откат по
+ *  снапшоту. Ответ сервера пишется в те же витрины; перезапрос — только
+ *  того, что мутация не знает сама (кнопки-гейты, счётчики просрочки), доски
+ *  и журнал догоняет одно эхо собственного события (#1051).
  *  Канон patterns.md: cancel → снапшот ВСЕХ патчимых кэшей → патч → откат
  *  всех. Журналов несколько (префикс listPages: «мои», «все доступные»,
  *  задачи проекта) — строка задачи патчится в каждом подгруженном; без
@@ -46,27 +54,30 @@ export function useUpdateTask(taskId: string) {
       const previousPages = queryClient.getQueriesData<InfiniteData<Paginated<TaskListItem>>>({
         queryKey: tasksKeys.listPages(),
       });
+      const row = listPatch(patch);
+      const previousItem = publishOptimisticTask(queryClient, taskId, () => row);
       if (previous)
         queryClient.setQueryData<TaskDetail>(tasksKeys.detail(taskId), { ...previous, ...patch });
-      const row = listPatch(patch);
       queryClient.setQueriesData<InfiniteData<Paginated<TaskListItem>>>(
         { queryKey: tasksKeys.listPages() },
         (old) => mapTaskInPages(old, taskId, (t) => ({ ...t, ...row })),
       );
-      return { previous, previousPages };
+      return { previous, previousPages, previousItem };
     },
     onError: (error, _patch, context) => {
       if (context?.previous) queryClient.setQueryData(tasksKeys.detail(taskId), context.previous);
       for (const [key, data] of context?.previousPages ?? []) {
         queryClient.setQueryData(key, data);
       }
+      restoreTaskOverlay(context?.previousItem);
       toast.error(secretProjectMembersText(error) ?? fieldLockedText(error) ?? ui.common.saveError);
     },
-    onSettled: () => {
-      for (const key of taskDependentKeys(taskId)) {
-        void queryClient.invalidateQueries({ queryKey: key });
-      }
-    },
+    onSuccess: (server) => applyServerTask(queryClient, server),
+    onSettled: (_data, _error, patch) =>
+      invalidateAfterTaskMutation(queryClient, taskId, {
+        deadline: patch.deadline !== undefined,
+        plannedMinutes: patch.plannedMinutes !== undefined,
+      }),
   });
 }
 

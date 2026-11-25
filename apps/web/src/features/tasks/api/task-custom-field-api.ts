@@ -14,7 +14,13 @@ import {
   mergedRefs,
   patchedValues,
 } from '../../../shared/custom-fields/value-patch.js';
-import { mapTaskInPages, taskDependentKeys, tasksKeys } from '../../../shared/api/tasks-keys.js';
+import {
+  applyServerTask,
+  publishOptimisticTask,
+  restoreTaskOverlay,
+} from '../../../shared/api/task-cache.js';
+import { invalidateAfterTaskMutation } from '../../../shared/api/task-invalidate.js';
+import { mapTaskInPages, tasksKeys } from '../../../shared/api/tasks-keys.js';
 import { fieldLockedText } from '../../../shared/forms/field-lock-ui.js';
 
 /** Правка одного кастомного поля карточки (#431, I4): значение в детали и
@@ -48,6 +54,11 @@ export function useUpdateTaskCustomField(taskId: string) {
       const previousPages = queryClient.getQueriesData<InfiniteData<Paginated<TaskListItem>>>({
         queryKey: tasksKeys.listPages(),
       });
+      // Доски — оверлеем (#1051): атрибут на карточке меняется в тот же кадр.
+      const previousItem = publishOptimisticTask(queryClient, taskId, (row) => ({
+        customFields: patchedValues(row.customFields, vars.fieldId, vars.value),
+        customFieldRefs: mergedRefs(row.customFieldRefs, vars.refs),
+      }));
       if (previous) {
         queryClient.setQueryData<TaskDetail>(tasksKeys.detail(taskId), {
           ...previous,
@@ -63,17 +74,16 @@ export function useUpdateTaskCustomField(taskId: string) {
             customFields: patchedValues(row.customFields, vars.fieldId, vars.value),
           })),
       );
-      return { previous, previousPages };
+      return { previous, previousPages, previousItem };
     },
     onError: (error, _vars, context) => {
       if (context?.previous) queryClient.setQueryData(tasksKeys.detail(taskId), context.previous);
       for (const [key, data] of context?.previousPages ?? []) queryClient.setQueryData(key, data);
+      restoreTaskOverlay(context?.previousItem);
       toast.error(fieldLockedText(error) ?? fieldErrorText(error));
     },
-    onSettled: () => {
-      for (const key of taskDependentKeys(taskId)) {
-        void queryClient.invalidateQueries({ queryKey: key });
-      }
-    },
+    onSuccess: (server) => applyServerTask(queryClient, server),
+    // Атрибуты кормят агрегаты узлов структуры; доски и журнал догоняет эхо (#1051).
+    onSettled: () => invalidateAfterTaskMutation(queryClient, taskId, { structure: true }),
   });
 }

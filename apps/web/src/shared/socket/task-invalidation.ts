@@ -45,6 +45,10 @@ const STRUCTURE_EVENTS = new Set<string>([
 const stringsOf = (...values: unknown[]): string[] =>
   values.filter((v): v is string => typeof v === 'string');
 
+/** Поля `task.updated`, заведомо не влияющие на агрегаты узлов структуры
+ *  (счётчики, прогресс, часы, крайние сроки считаются из задач). */
+const HARMLESS_FOR_STRUCTURE = new Set(['title', 'description', 'priority']);
+
 interface ColumnInCache {
   key: readonly unknown[];
   stageId: string;
@@ -160,8 +164,15 @@ export function pushTaskKeys(
     }
   }
   pushKanbanKeys(batcher, queryClient, type, taskId, payload);
-  if (STRUCTURE_EVENTS.has(type)) batcher.push(projectsKeys.structures(), 'list');
   const fields = Array.isArray(payload.fields) ? payload.fields : [];
+  // Правка имени, описания или приоритета агрегаты узлов не меняет (#1051):
+  // прежде любое `task.updated` перезапрашивало дерево структуры целиком.
+  const touchesStructure =
+    type !== TASK_EVENTS.UPDATED ||
+    fields.length === 0 ||
+    fields.some((f) => !HARMLESS_FOR_STRUCTURE.has(f));
+  if (STRUCTURE_EVENTS.has(type) && touchesStructure)
+    batcher.push(projectsKeys.structures(), 'list');
   if (COUNT_EVENTS.has(type) || (type === TASK_EVENTS.UPDATED && fields.includes('deadline'))) {
     batcher.push(tasksKeys.personalStages(), 'list');
     batcher.push(tasksKeys.stages(), 'list');

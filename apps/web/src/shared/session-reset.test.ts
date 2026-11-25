@@ -1,7 +1,16 @@
 // @vitest-environment jsdom
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { TaskListItem } from '@nodus/contracts';
 
+import {
+  boardMoveSettledAt,
+  invalidateNow,
+  markBoardMoveSettled,
+  wasInvalidatedRecently,
+} from './api/task-invalidate.js';
+import { publishTaskItem, taskOverlayItem } from './api/task-overlay.js';
+import { tasksKeys } from './api/tasks-keys.js';
 import { useAuthStore } from './auth-store.js';
 import { startChatDraftsSession } from './chat/chat-drafts-session.js';
 import { useChatDrafts } from './chat/chat-drafts.js';
@@ -124,5 +133,26 @@ describe('AUD-005: сброс сессии', () => {
     expect(localStorage.getItem(listFiltersStorageKey(USER_A.id, 'tasks.list'))).toBeNull();
     // Ключ B не тронут.
     expect(localStorage.getItem(listFiltersStorageKey(USER_B.id, 'tasks.list'))).not.toBeNull();
+  });
+
+  it('выход стирает оверлей досок и метки недавних инвалидаций (#1051)', async () => {
+    useAuthStore.setState({ status: 'authenticated', accessToken: 't', user: USER_A });
+    publishTaskItem(
+      { id: 'task-a', number: 1, title: 'неподтверждённое имя A' } as TaskListItem,
+      true,
+    );
+    markBoardMoveSettled();
+    void invalidateNow(queryClient, tasksKeys.detail('task-a'));
+    expect(wasInvalidatedRecently(tasksKeys.detail('task-a'))).toBe(true);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 204 })),
+    );
+
+    await useAuthStore.getState().logout();
+
+    expect(taskOverlayItem('task-a')).toBeUndefined();
+    expect(boardMoveSettledAt()).toBe(0);
+    expect(wasInvalidatedRecently(tasksKeys.detail('task-a'))).toBe(false);
   });
 });

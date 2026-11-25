@@ -4,7 +4,9 @@ import { ui } from '@nodus/contracts';
 import { toast } from 'sonner';
 
 import { api } from '../../../shared/api-client.js';
-import { taskDependentKeys, tasksKeys } from '../../../shared/api/tasks-keys.js';
+import { publishOptimisticTask, restoreTaskOverlay } from '../../../shared/api/task-cache.js';
+import { invalidateAfterTaskMutation } from '../../../shared/api/task-invalidate.js';
+import { tasksKeys } from '../../../shared/api/tasks-keys.js';
 
 /** Пункты чек-листа карточки (I4): мгновенно в кэш детали, счётчики
  *  пересчитываются локально; сервер отвечает ПУНКТОМ (контракт #37), не
@@ -28,6 +30,22 @@ function patchChecklist(
   return previous;
 }
 
+/** Бейдж «n/m» на карточке доски — оверлеем (#1051): сервер отвечает пунктом,
+ *  а не строкой задачи, поэтому после ответа публикуется итоговое значение. */
+function publishChecklistCounts(queryClient: QueryClient, taskId: string, optimistic: boolean) {
+  const detail = queryClient.getQueryData<TaskDetail>(tasksKeys.detail(taskId));
+  if (!detail) return undefined;
+  return publishOptimisticTask(
+    queryClient,
+    taskId,
+    () => ({
+      checklistTotal: detail.checklist.length,
+      checklistDone: detail.checklist.filter((i) => i.done).length,
+    }),
+    optimistic,
+  );
+}
+
 function useChecklistMutation<V>(
   taskId: string,
   request: (vars: V) => Promise<ChecklistItem | void>,
@@ -39,21 +57,23 @@ function useChecklistMutation<V>(
     mutationFn: request,
     onMutate: async (vars: V) => {
       await queryClient.cancelQueries({ queryKey: tasksKeys.detail(taskId) });
-      return { previous: patchChecklist(queryClient, taskId, (items) => optimistic(vars, items)) };
+      const previous = patchChecklist(queryClient, taskId, (items) => optimistic(vars, items));
+      const previousItem = publishChecklistCounts(queryClient, taskId, true);
+      return { previous, previousItem };
     },
     onError: (_error, _vars, context) => {
       if (context?.previous) queryClient.setQueryData(tasksKeys.detail(taskId), context.previous);
+      restoreTaskOverlay(context?.previousItem);
       toast.error(ui.common.saveError);
     },
     onSuccess: (server, vars) => {
       if (server && reconcile)
         patchChecklist(queryClient, taskId, (items) => reconcile(vars, server, items));
+      publishChecklistCounts(queryClient, taskId, false);
     },
-    onSettled: () => {
-      for (const key of taskDependentKeys(taskId)) {
-        void queryClient.invalidateQueries({ queryKey: key });
-      }
-    },
+    // Гейт checklist_complete — в переходах; доски и журнал догоняет эхо (#1051):
+    // прежде каждый клик по пункту инвалидировал десять ключей.
+    onSettled: () => invalidateAfterTaskMutation(queryClient, taskId),
   });
 }
 

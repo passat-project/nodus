@@ -12,7 +12,7 @@
 
 - `src/app/` — роутер (TanStack Router, code-splitting по модулям, системные экраны 404/ошибки — `shell/system-screens.tsx`), каркас `shell/`: левая рейка-магистраль 240px (персональный порядок со «Скрытое», ui-prefs), топбар (фиксированные вкладки модулей из `nav-registry.ts`, Ctrl+K, профиль), служебная полоса справа 40⇄216px, стек карточек-слайдеров (ADR-0009, `?cards=`), контур-схема (circuit-*).
 - `src/features/<module>/` — фичи, зеркало backend-модулей (`api/`, `components/`, `pages/`, `lib/`, README; `model/` — по необходимости, patterns.md).
-- `src/shared/` — переиспользуемое: `api-client.ts` (единственный fetch, Idempotency-Key, refresh-контур), `auth-store.ts`, `views/` (машина представлений: DataTable + useViewFields + пресеты + сортировка + drag колонок), `ui/board/` (канбан-движок `use-kanban-board`), `chat/` (чат-машина, 4 потребителя), `lib/`, `ui/` (PersonCell, PersonAvatar, чипы), `mocks/data/`.
+- `src/shared/` — переиспользуемое: `api-client.ts` (единственный fetch, Idempotency-Key, refresh-контур), `auth-store.ts`, `api/` (витрины строки задачи `task-cache.ts`/`task-overlay.ts`, один раунд инвалидаций `task-invalidate.ts`), `views/` (машина представлений: DataTable + useViewFields + пресеты + сортировка + drag колонок), `ui/board/` (канбан-движок `use-kanban-board`), `chat/` (чат-машина, 4 потребителя), `lib/`, `ui/` (PersonCell, PersonAvatar, чипы), `mocks/data/`.
 
 ## Направление слоёв (eslint-boundaries, аудит #45)
 

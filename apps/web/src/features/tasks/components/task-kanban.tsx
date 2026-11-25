@@ -73,7 +73,7 @@ export function TaskKanban({
     onMove: (vars, opts) =>
       updatePersonalStage.mutate(
         { taskId: vars.taskId, personalStageId: vars.stageId, index: vars.index },
-        { onError: opts.onError },
+        { onError: opts.onError, onSettled: opts.onSettled },
       ),
     onMoveCommitted: (fromId, toId) => bump(fromId, toId, 1),
     onMoveRolledBack: (fromId, toId) => bump(fromId, toId, -1),

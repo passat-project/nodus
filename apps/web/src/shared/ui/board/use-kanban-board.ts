@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   KeyboardSensor,
   MeasuringStrategy,
@@ -15,6 +16,8 @@ import {
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import type { TaskListItem, TaskStage } from '@nodus/contracts';
 
+import { markBoardMoveSettled, refetchBoardColumns } from '../../api/task-invalidate.js';
+import { applyTaskOverlay, useTaskOverlayVersion } from '../../api/task-overlay.js';
 import {
   indexOfInStage,
   isSamePlacement,
@@ -30,6 +33,10 @@ import { useKanbanFeeds } from './use-kanban-feeds.js';
 /** Лимит страницы фида колонки (industry: колонки держат тысячи карточек —
  *  целиком не грузим; дальше sentinel-подгрузка в колонке, как в Битриксе). */
 export const KANBAN_FEED_LIMIT = 30;
+
+/** Страховка замка переносов: потребитель, не ответивший ни onError, ни
+ *  onSettled (зависший запрос), не должен оставить доску без обновлений. */
+const MOVE_LOCK_SAFETY_MS = 15_000;
 
 /** Автопрокрутка при переносе карточки (#366): листаются ТОЛЬКО доска
  *  (по X) и колонки (по Y) — дефолт dnd-kit цеплял всех прокручиваемых
@@ -58,9 +65,10 @@ interface UseKanbanBoardParams<S extends TaskStage> {
   queryKey: readonly unknown[];
   /** URL фида колонки (cursor=null — первая страница; limit — глубина, #330). */
   feedUrl: (stageId: string, cursor: string | null, limit: number) => string;
-  /** Персист переноса (мутация фичи); onError обязателен — хук откатывает
-   *  борд к снапшоту dragStart (I4). */
-  onMove: (vars: KanbanMoveVars, opts: { onError: () => void }) => void;
+  /** Персист переноса (мутация фичи). `onError` обязан откатить борд к снапшоту
+   *  dragStart (I4); `onSettled` обязан снять замок доски (#1051) — до него
+   *  свежие страницы колонок не применяются. Оба вызываются ровно один раз. */
+  onMove: (vars: KanbanMoveVars, opts: { onError: () => void; onSettled: () => void }) => void;
   /** Хуки счётчиков шапок «n из m» (задачи: countDelta при оптимистичном
    *  переносе и его откате; проектная доска не передаёт). */
   onMoveCommitted?: (fromStageId: string, toStageId: string) => void;
@@ -78,6 +86,11 @@ interface UseKanbanBoardParams<S extends TaskStage> {
  * Официальный паттерн dnd-kit + React Query: борд — локальное состояние,
  * синхронизированное с query ВНЕ переноса; структурная смена набора колонок
  * (подпись стадий в ключе) пересобирает борд из фидов.
+ *
+ * Замок доски (#1051): с взятия карточки до ответа мутации переноса доска
+ * локальная — свежие страницы колонок не применяются (`use-kanban-feeds`).
+ * Прежде страница, пришедшая между дропом и ответом сервера, возвращала
+ * карточку в прежнюю колонку, а ответ переноса ставил её на место.
  */
 export function useKanbanBoard<S extends TaskStage>({
   axis,
@@ -88,6 +101,7 @@ export function useKanbanBoard<S extends TaskStage>({
   onMoveCommitted,
   onMoveRolledBack,
 }: UseKanbanBoardParams<S>) {
+  const queryClient = useQueryClient();
   const [board, setBoard] = useState<TaskListItem[] | null>(null);
   // Свежий борд для фидов: по нему считается догруженный хвост колонки (#330).
   const boardRef = useRef<TaskListItem[] | null>(null);
@@ -97,10 +111,28 @@ export function useKanbanBoard<S extends TaskStage>({
   const snapshotRef = useRef<TaskListItem[] | null>(null);
   const lastOverId = useRef<UniqueIdentifier | null>(null);
   const recentlyMoved = useRef(false);
+  const draggingRef = useRef(false);
+
+  /** Замок фидов: drag или перенос в полёте (#1051). */
+  const lockRef = useRef(false);
+  const pendingMoves = useRef(0);
+  const [lockTick, setLockTick] = useState(0);
+  const lockSafety = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const syncLock = () => {
+    const next = draggingRef.current || pendingMoves.current > 0;
+    if (lockRef.current === next) return;
+    lockRef.current = next;
+    setLockTick((tick) => tick + 1);
+  };
+  useEffect(
+    () => () => {
+      if (lockSafety.current) clearTimeout(lockSafety.current);
+    },
+    [],
+  );
 
   const stageList = useMemo(() => [...(stages ?? [])].sort((a, b) => a.order - b.order), [stages]);
   const stageById = useMemo(() => new Map(stageList.map((s) => [s.id, s] as const)), [stageList]);
-  const draggingRef = useRef(false);
 
   // Фиды колонок (первые страницы, курсоры, sentinel-догрузка) — свой хук.
   const { cursors, loadingMore, loadMore } = useKanbanFeeds({
@@ -109,7 +141,8 @@ export function useKanbanBoard<S extends TaskStage>({
     queryKey,
     feedUrl,
     feedLimit: KANBAN_FEED_LIMIT,
-    draggingRef,
+    lockRef,
+    lockTick,
     boardRef,
     setBoard,
   });
@@ -121,7 +154,13 @@ export function useKanbanBoard<S extends TaskStage>({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const items = useMemo(() => board ?? [], [board]);
+  // Оверлей доски (#1051): оптимистичные правки и ответы сервера поверх борда —
+  // имя и приоритет карточки меняются в тот же кадр, без перезапроса колонок.
+  const overlayVersion = useTaskOverlayVersion();
+  const items = useMemo(() => {
+    void overlayVersion;
+    return applyTaskOverlay(board ?? []);
+  }, [board, overlayVersion]);
   const numberById = useMemo(() => new Map(items.map((t) => [t.id, t.number] as const)), [items]);
   const childrenOf = useMemo(
     () => (columnId: string) => items.filter((t) => axis.keyOf(t) === columnId).map((t) => t.id),
@@ -148,6 +187,7 @@ export function useKanbanBoard<S extends TaskStage>({
 
   const onDragStart = (event: DragStartEvent) => {
     draggingRef.current = true;
+    syncLock();
     snapshotRef.current = items;
     const task = items.find((t) => t.id === event.active.id) ?? null;
     setActiveTask(task);
@@ -217,7 +257,10 @@ export function useKanbanBoard<S extends TaskStage>({
     draggingRef.current = false;
     const snapshot = snapshotRef.current;
     snapshotRef.current = null;
-    if (!task || !event.over) return;
+    if (!task || !event.over) {
+      syncLock();
+      return;
+    }
     // Финал — ровно то, что показал фантом: живой перенос уже поставил
     // карточку в борд на каждом движении. Прежний пересчёт по over-карточке
     // (reorderWithinStage) игнорировал сторону указателя и расходился с
@@ -225,7 +268,10 @@ export function useKanbanBoard<S extends TaskStage>({
     const settled = boardRef.current ?? items;
     const placed = settled.find((t) => t.id === task.id) ?? task;
     const finalStage = stageById.get(axis.keyOf(placed) ?? '');
-    if (!finalStage) return;
+    if (!finalStage) {
+      syncLock();
+      return;
+    }
     const index = indexOfInStage(settled, task.id, axis);
     const before = snapshot?.find((t) => t.id === task.id);
     if (
@@ -233,17 +279,42 @@ export function useKanbanBoard<S extends TaskStage>({
       axis.keyOf(before) === finalStage.id &&
       indexOfInStage(snapshot ?? [], task.id, axis) === index
     ) {
+      syncLock();
       return;
     }
     const fromId = axis.keyOf(task) ?? '';
     onMoveCommitted?.(fromId, finalStage.id);
+    // Перенос в полёте: доска остаётся под замком до ответа мутации —
+    // страница колонки, пришедшая раньше ответа, застала бы задачу в прежнем
+    // месте и вернула бы карточку назад (#1051).
+    pendingMoves.current += 1;
+    syncLock();
+    if (lockSafety.current) clearTimeout(lockSafety.current);
+    lockSafety.current = setTimeout(() => {
+      pendingMoves.current = 0;
+      syncLock();
+    }, MOVE_LOCK_SAFETY_MS);
+    let settledOnce = false;
+    const settle = () => {
+      if (settledOnce) return;
+      settledOnce = true;
+      if (lockSafety.current) clearTimeout(lockSafety.current);
+      // Свежие страницы — только теперь, после ответа сервера: летящий
+      // перезапрос отменяется, новый идёт по состоянию сервера.
+      markBoardMoveSettled();
+      refetchBoardColumns(queryClient, queryKey);
+      pendingMoves.current = Math.max(0, pendingMoves.current - 1);
+      syncLock();
+    };
     onMove(
       { taskId: task.id, stageId: finalStage.id, index },
       {
         onError: () => {
+          settle();
           setBoard(snapshot ?? []);
           onMoveRolledBack?.(fromId, finalStage.id);
         },
+        onSettled: settle,
       },
     );
   };
@@ -253,6 +324,7 @@ export function useKanbanBoard<S extends TaskStage>({
     draggingRef.current = false;
     if (snapshotRef.current) setBoard(snapshotRef.current);
     snapshotRef.current = null;
+    syncLock();
   };
 
   /** Новая задача — в топ колонки борда сразу (без refetch). */

@@ -3,6 +3,10 @@ import type { RealtimeEnvelope } from '@nodus/contracts';
 
 import { chatKeys } from '../chat/chat-keys.js';
 import { cachedConversation } from '../chat/chat-queries.js';
+import {
+  invalidateConversationLists,
+  isConversationListsKey,
+} from '../chat/conversation-list-invalidation.js';
 import { favoriteKeys } from '../chat/favorites-api.js';
 import { stickerKeys } from '../chat/sticker-api.js';
 import { vaultKeys } from '../chat/vault-api.js';
@@ -15,6 +19,7 @@ import {
 } from '../chat/ws-apply.js';
 import { lettersKeys } from '../api/letters-keys.js';
 import { notificationsKeys } from '../notifications-keys.js';
+import { wasInvalidatedRecently } from '../api/task-invalidate.js';
 import { bumpCommentsOnce, useCommentsLive } from '../tasks/comments-live.js';
 import { createKeyBatcher, type KeyBatcher } from './invalidation-batcher.js';
 import { pushCustomFieldKeys } from './custom-fields-invalidation.js';
@@ -41,7 +46,13 @@ export interface RealtimeInvalidator {
 
 export function createRealtimeInvalidator(queryClient: QueryClient): RealtimeInvalidator {
   const batcher: KeyBatcher = createKeyBatcher((key) => {
-    void queryClient.invalidateQueries({ queryKey: key });
+    // Своё эхо (#1051): сервер шлёт событие и актёру, а мутация уже
+    // перезапросила этот ключ по ответу — второй раунд той же волны не нужен.
+    if (wasInvalidatedRecently(key)) return;
+    // Куст бесед — только списками: find-or-create соседи (беседы задач,
+    // писем, проектов) не должны перечитываться на событие любого чата (#1051).
+    if (isConversationListsKey(key)) invalidateConversationLists(queryClient);
+    else void queryClient.invalidateQueries({ queryKey: key });
   });
 
   function push(conversationId: string | null, key: 'messages' | 'states' | 'pins'): void {

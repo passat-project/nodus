@@ -9,6 +9,7 @@ import { useSurfaceVisible } from '../lib/surface-visibility.js';
 import { isDomainMocked } from '../api/api-mock-config.js';
 import { wsDebugLog } from '../socket/ws-debug.js';
 import { chatKeys } from './chat-keys.js';
+import { invalidateConversationLists } from './conversation-list-invalidation.js';
 import {
   createReadReceiptScheduler,
   type ReadReceiptScheduler,
@@ -142,7 +143,7 @@ function useReadReceiptScheduler(
             // инвалидация идемпотентна); myLastReadSeq двигается на тот же
             // upToSeq — граница плашки не откатывается отставшим снимком.
             applyReadToCache(queryClient, conversationId, upToSeq);
-            void queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
+            void invalidateConversationLists(queryClient);
             if (threadRootId) {
               // Точка «есть новые» на посте гасится квитанцией трэда.
               void queryClient.invalidateQueries({
