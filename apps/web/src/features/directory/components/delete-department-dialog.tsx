@@ -31,7 +31,8 @@ export function DeleteDepartmentDialog({
   const childCount = department.children.length;
   const directUsers = users.filter((user) => user.departmentId === department.id);
   const activeCount = directUsers.filter((user) => user.status === 'active').length;
-  const dismissedCount = directUsers.length - activeCount;
+  // Приглашённые — не уволенные: подсказка должна говорить правду.
+  const dismissedCount = directUsers.filter((user) => user.status === 'deactivated').length;
   const total = childCount + activeCount;
 
   const childText = `${childCount} ${plural(childCount, ui.employees.departmentForms)}`;

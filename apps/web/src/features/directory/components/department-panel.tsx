@@ -145,6 +145,7 @@ export function DepartmentPanel({
               <DepartmentActionsMenu
                 node={node}
                 mainCard={mainCard}
+                canDelete={node.parentId !== null}
                 side="bottom"
                 align="end"
                 onEdit={onEdit}

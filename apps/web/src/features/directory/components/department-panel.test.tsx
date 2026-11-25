@@ -55,7 +55,7 @@ const node: DepartmentNode = {
   id: DEPARTMENT_ID,
   name: 'BIM-отдел',
   kind: 'management',
-  parentId: null,
+  parentId: 'root',
   headId: HEAD_ID,
   deputyIds: [DEPUTY_ID],
   sortOrder: 0,

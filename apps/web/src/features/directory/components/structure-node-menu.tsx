@@ -30,6 +30,7 @@ export function StructureNodeMenu({
     <DepartmentActionsMenu
       node={node}
       mainCard={mainCard}
+      canDelete={node.parentId !== null}
       side="right"
       align="start"
       onEdit={onEdit}

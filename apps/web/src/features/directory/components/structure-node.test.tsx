@@ -23,7 +23,7 @@ const node = (
   id,
   name: id,
   kind: 'management',
-  parentId: null,
+  parentId: 'root',
   headId: null,
   deputyIds: [],
   sortOrder: 0,

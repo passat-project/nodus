@@ -20,6 +20,7 @@ import { cn } from '@nodus/ui/lib/utils';
 export function DepartmentActionsMenu({
   node,
   mainCard,
+  canDelete,
   trigger,
   side = 'right',
   align = 'start',
@@ -31,6 +32,8 @@ export function DepartmentActionsMenu({
   node: DepartmentNode;
   /** Главная карточка компании: пункт удаления скрыт. */
   mainCard: boolean;
+  /** У аномального корня (parentId=null) удаление недоступно — сервер откажет. */
+  canDelete: boolean;
   trigger: ReactNode;
   side?: 'top' | 'right' | 'bottom' | 'left';
   align?: 'start' | 'center' | 'end';
@@ -61,7 +64,7 @@ export function DepartmentActionsMenu({
           hint={ui.employees.inviteToDepartmentHint}
           onSelect={() => onInvite(node)}
         />
-        {mainCard ? null : (
+        {mainCard || !canDelete ? null : (
           <>
             <DropdownMenuSeparator />
             <ActionItem

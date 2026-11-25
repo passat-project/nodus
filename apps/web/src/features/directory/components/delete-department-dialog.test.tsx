@@ -72,6 +72,7 @@ describe('DeleteDepartmentDialog (#881)', () => {
           person('active-1'),
           person('active-2'),
           person('dismissed', { status: 'deactivated' }),
+          person('invited', { status: 'invited' }),
           person('other', { departmentId: PARENT }),
         ]}
         onDeleted={onDeleted}
@@ -83,6 +84,21 @@ describe('DeleteDepartmentDialog (#881)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: ui.employees.deleteDepartmentConfirm }));
     expect(onDeleted).toHaveBeenCalledWith(PARENT);
+  });
+
+  it('приглашённый не считается уволенным в подсказке', () => {
+    render(
+      <DeleteDepartmentDialog
+        open
+        onOpenChange={vi.fn()}
+        department={node()}
+        parentName="Компания"
+        users={[person('invited', { status: 'invited' })]}
+        onDeleted={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText(ui.employees.deleteDepartmentDismissedHint)).toBeNull();
   });
 
   it('пустое подразделение — без чисел переезда', () => {
