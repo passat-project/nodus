@@ -79,6 +79,7 @@ describe('обработчики outbox → проекция поиска (#952)
   it('удаление подразделения переиндексирует прямых сотрудников по userIds', async () => {
     const { index, runner } = runnerWith();
     await runner.run(event(DIRECTORY_EVENTS.DEPARTMENT_DELETED, { userIds: ['u1', 42, 'u2'] }));
+    await runner.run(event(DIRECTORY_EVENTS.DEPARTMENT_DELETED, {}));
     expect(index.indexIds.mock.calls).toEqual([['employee', ['u1', 'u2']]]);
   });
 

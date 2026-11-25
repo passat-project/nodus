@@ -25,18 +25,20 @@ export const employeesStrings = {
   editDepartmentHint: 'Название, руководитель и заместители',
   addSubdepartment: 'Добавить подразделение',
   inviteToDepartment: 'Пригласить в Nodus',
-  inviteToDepartmentHint: 'Приглашение с привязкой к подразделению',
+  inviteToDepartmentHint: 'Новичок сразу попадёт в это подразделение',
   /** #881: перевод сотрудника в текущее подразделение из меню «⋯». */
   transferFromDepartment: 'Перевести из другого подразделения',
   transferFromDepartmentHint: 'Сотрудник переедет в это подразделение',
   transferEmployeeTitle: 'Перевести сотрудника',
-  transferEmployeeLead:
-    'Выберите активного сотрудника из другого подразделения — он переедет в это.',
-  transferEmployeeSearch: 'Начните вводить имя',
-  transferEmployeeCurrent: 'Сейчас',
+  /** #881: строка «куда» в окне перевода — название целевого подразделения. */
+  transferEmployeeDestination: 'Перевести в',
+  /** #881: выбранный сотрудник в футере окна перевода (виден и при поиске). */
+  transferEmployeeSelected: 'Выбран',
+  transferEmployeeSearch: 'Поиск по имени или должности',
+  transferEmployeeNotFound: 'Сотрудник не найден — проверьте имя или должность',
   transferEmployeeNoDepartment: 'Без подразделения',
   transferEmployeeLeaderHint:
-    'Сотрудник руководит другим подразделением — там роль снимется, отдел останется без руководителя.',
+    'Сотрудник руководит другим подразделением — там роль снимется, подразделение останется без руководителя.',
   transferEmployeeSubmit: 'Перевести',
   transferEmployeeDone: 'Сотрудник переведён',
   transferEmployeeEmpty: 'Нет активных сотрудников из других подразделений',
@@ -229,7 +231,7 @@ export const employeesStrings = {
   deleteDepartmentLead: 'Подразделение будет удалено без возможности восстановления.',
   deleteDepartmentMovesOne: 'перейдёт в',
   deleteDepartmentMovesMany: 'перейдут в',
-  deleteDepartmentEmpty: 'Подразделение пустое — оно будет удалено.',
+  deleteDepartmentEmpty: 'В подразделении нет подразделов и активных сотрудников.',
   deleteDepartmentDismissedHint:
     'Уволенные сотрудники тоже будут перенесены — в структуре они не отображаются.',
   deleteDepartmentConfirm: 'Удалить подразделение',

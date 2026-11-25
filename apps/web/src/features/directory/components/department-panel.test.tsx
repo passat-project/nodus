@@ -120,6 +120,7 @@ describe('DepartmentPanel: группы и активные сотрудники
   });
 
   it('в меню панели нет «Добавить подразделение»: создание — плюсом на карточке', async () => {
+    const onInvite = vi.fn();
     render(
       <DepartmentPanel
         mainCard={false}
@@ -128,7 +129,7 @@ describe('DepartmentPanel: группы и активные сотрудники
         activeDepartmentIds={activeIds}
         highlightUserId={null}
         topShift={0}
-        onInvite={vi.fn()}
+        onInvite={onInvite}
         onEdit={vi.fn()}
         onTransfer={vi.fn()}
         onDelete={vi.fn()}
@@ -150,6 +151,11 @@ describe('DepartmentPanel: группы и активные сотрудники
       screen.getByRole('menuitem', { name: new RegExp(ui.employees.deleteDepartment) }),
     ).toBeTruthy();
     expect(screen.queryByRole('menuitem', { name: ui.employees.addSubdepartment })).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: new RegExp(ui.employees.inviteToDepartment) }),
+    );
+    expect(onInvite).toHaveBeenCalledWith(node.id);
   });
 
   it('секции «Подчинённые руководителя» по managerId больше нет', () => {

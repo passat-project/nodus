@@ -9,6 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@nodus/ui/components/dropdown-menu';
+import { cn } from '@nodus/ui/lib/utils';
 
 /**
  * Единое меню действий с подразделением (#881): одна реализация для «⋯» на
@@ -96,7 +97,11 @@ function ActionItem({
       onSelect={onSelect}
       className="items-start gap-2.5 py-2"
     >
-      <Icon className="mt-0.5 size-4 shrink-0" strokeWidth={1.75} aria-hidden />
+      <Icon
+        className={cn('mt-0.5 size-4 shrink-0', !destructive && 'text-muted-foreground')}
+        strokeWidth={1.75}
+        aria-hidden
+      />
       <span className="flex min-w-0 flex-col gap-0.5">
         <span className="truncate">{label}</span>
         <span className="text-xs font-normal text-muted-foreground">{hint}</span>

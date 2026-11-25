@@ -59,10 +59,29 @@ export function DeleteDepartmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full bg-card sm:max-w-md" showCloseButton={false}>
+      <DialogContent
+        className="w-full bg-card sm:max-w-md"
+        showCloseButton={false}
+        tabIndex={-1}
+        // Фокус — на само окно, а не на первую кнопку: «Отмена» при открытии
+        // мышью выглядела нажатой (индиго-кольцо спорило с красным действием).
+        // Tab по-прежнему ведёт в «Отмену» и дальше — с честным кольцом фокуса.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          (event.currentTarget as HTMLElement | null)?.focus();
+        }}
+      >
         <DialogTitle className="text-base font-semibold text-foreground">
           {ui.employees.deleteDepartmentTitle}
         </DialogTitle>
+        {/* Подтверждение адресное: название удаляемого подразделения — в окне,
+            а не только за ним (меню могло открыться с другой карточки). */}
+        <p
+          className="-mt-1 min-w-0 truncate text-sm font-medium text-foreground"
+          title={department.name}
+        >
+          {department.name}
+        </p>
         <div className="-mt-1 flex flex-col gap-2 text-sm text-muted-foreground">
           <p>{ui.employees.deleteDepartmentLead}</p>
           {moveText ? <p className="text-foreground">{moveText}.</p> : null}

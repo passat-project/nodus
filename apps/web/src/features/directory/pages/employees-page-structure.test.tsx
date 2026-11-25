@@ -67,6 +67,7 @@ const state = vi.hoisted(() => ({
   },
   dept: null as Record<string, unknown> | null,
   divisions: null as Record<string, unknown> | null,
+  dialogs: null as Record<string, unknown> | null,
 }));
 
 vi.mock('@tanstack/react-router', () => ({
@@ -134,6 +135,12 @@ vi.mock('../components/department-panel.js', () => ({
     return <div data-testid="dept-panel">{(props.node as DepartmentNode | null)?.name ?? ''}</div>;
   },
 }));
+vi.mock('../components/department-action-dialogs.js', () => ({
+  DepartmentActionDialogs: (props: Record<string, unknown>) => {
+    state.dialogs = props;
+    return <div data-testid="action-dialogs" />;
+  },
+}));
 vi.mock('../components/positions-panel.js', () => ({
   PositionsPanel: () => <div data-testid="positions-panel" />,
 }));
@@ -158,6 +165,7 @@ beforeEach(() => {
   };
   state.dept = null;
   state.divisions = null;
+  state.dialogs = null;
 });
 
 afterEach(() => {
@@ -232,6 +240,23 @@ describe('EmployeesPage: вкладки и структура (#768)', () => {
     await waitFor(() => expect(state.divisions).toBeTruthy());
     (state.divisions?.onEdit as (node: unknown) => void)({ id: 'bim', name: 'BIM-отдел' });
     await waitFor(() => expect(screen.getByTestId('department-dialog')).toBeTruthy());
+  });
+
+  it('успех перевода выбирает целевой узел, успех удаления — родителя (#881)', async () => {
+    state.view = 'structure';
+    render(<EmployeesPage />);
+    await waitFor(() => expect(state.dialogs).toBeTruthy());
+
+    (state.dialogs?.onMoved as (department: DepartmentNode, userId: string) => void)(
+      node('bim', 'BIM-отдел'),
+      'me',
+    );
+    await waitFor(() => expect(screen.getByTestId('dept-panel').textContent).toBe('BIM-отдел'));
+    expect(state.dept?.highlightUserId).toBe('me');
+
+    (state.dialogs?.onDeleted as (parentId: string) => void)('main');
+    await waitFor(() => expect(screen.getByTestId('dept-panel').textContent).toBe('Компания'));
+    expect(state.dept?.highlightUserId).toBeNull();
   });
 
   it('клик по карточке не закрывает постоянную панель', async () => {

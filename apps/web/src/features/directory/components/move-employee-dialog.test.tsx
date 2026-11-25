@@ -18,25 +18,6 @@ vi.mock('../api/department-actions-api.js', () => ({
   }),
 }));
 
-vi.mock('./employee-combobox.js', () => ({
-  EmployeeCombobox: ({
-    users,
-    onChange,
-  }: {
-    users: UserListItem[];
-    onChange: (id: string) => void;
-  }) => (
-    <select aria-label="employee" onChange={(event) => onChange(event.target.value)}>
-      <option value="">—</option>
-      {users.map((user) => (
-        <option key={user.id} value={user.id}>
-          {user.displayName}
-        </option>
-      ))}
-    </select>
-  ),
-}));
-
 const person = (id: string, overrides: Partial<UserListItem> = {}): UserListItem => ({
   id,
   displayName: id,
@@ -68,6 +49,18 @@ const node: DepartmentNode = {
   children: [],
 };
 
+const options = [
+  { id: TARGET, name: 'BIM-отдел', depth: 0, isActive: true, headId: null, deputyIds: [] },
+  {
+    id: OTHER,
+    name: 'Проектный отдел',
+    depth: 0,
+    isActive: true,
+    headId: null,
+    deputyIds: [],
+  },
+];
+
 afterEach(() => cleanup());
 
 describe('MoveEmployeeDialog (#881)', () => {
@@ -83,32 +76,43 @@ describe('MoveEmployeeDialog (#881)', () => {
           person('from-other', { departmentId: OTHER }),
           person('dismissed', { status: 'deactivated', departmentId: OTHER }),
         ]}
-        departmentOptions={[
-          { id: TARGET, name: 'BIM-отдел', depth: 0, isActive: true, headId: null, deputyIds: [] },
-          {
-            id: OTHER,
-            name: 'Проектный отдел',
-            depth: 0,
-            isActive: true,
-            headId: null,
-            deputyIds: [],
-          },
-        ]}
+        departmentOptions={options}
         onMoved={onMoved}
       />,
     );
 
-    const picker = screen.getByRole('combobox', { name: 'employee' });
-    expect(screen.getByRole('option', { name: 'from-other' })).toBeTruthy();
-    expect(screen.queryByRole('option', { name: 'in-target' })).toBeNull();
-    expect(screen.queryByRole('option', { name: 'dismissed' })).toBeNull();
+    expect(screen.getByText('BIM-отдел')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /in-target/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /dismissed/ })).toBeNull();
+    const row = screen.getByRole('button', { name: /from-other/ });
+    // В строке — текущее подразделение: куда переезжает человек, видно ДО выбора.
+    expect(row.textContent).toContain('Проектный отдел');
 
-    fireEvent.change(picker, { target: { value: 'from-other' } });
-    expect(screen.getByText(new RegExp(ui.employees.transferEmployeeCurrent))).toBeTruthy();
-    expect(screen.getByText(/Проектный отдел/)).toBeTruthy();
-
+    fireEvent.click(row);
+    expect(row.getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(screen.getByRole('button', { name: ui.employees.transferEmployeeSubmit }));
     expect(onMoved).toHaveBeenCalledWith('from-other');
+  });
+
+  it('поиск фильтрует список и показывает заглушку пустого результата', () => {
+    render(
+      <MoveEmployeeDialog
+        open
+        onOpenChange={vi.fn()}
+        department={node}
+        users={[person('from-other', { departmentId: OTHER })]}
+        departmentOptions={options}
+        onMoved={vi.fn()}
+      />,
+    );
+
+    const search = screen.getByRole('textbox', { name: ui.employees.transferEmployeeSearch });
+    fireEvent.change(search, { target: { value: 'zzz' } });
+    expect(screen.getByText(ui.employees.transferEmployeeNotFound)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /from-other/ })).toBeNull();
+
+    fireEvent.change(search, { target: { value: 'from' } });
+    expect(screen.getByRole('button', { name: /from-other/ })).toBeTruthy();
   });
 
   it('без кандидатов показывает пустое состояние и не даёт перевести', () => {
