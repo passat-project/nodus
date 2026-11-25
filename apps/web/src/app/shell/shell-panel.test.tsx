@@ -114,16 +114,17 @@ describe('каркас панели', () => {
     expect(await screen.findByText('Пока ничего не скачивали')).toBeTruthy();
   });
 
-  it('кнопка максимизации — фиксированный id для snap-плагина, без обработчика клика', () => {
-    installShellBridge();
+  it('кнопка максимизации — фиксированный id для snap-плагина; клик — фолбэк в мост', () => {
+    const { bridge } = installShellBridge();
     vi.stubGlobal('fetch', stubManifest(null, 404));
     const { container } = renderPanel();
     const maximize = container.querySelector('#portal-window-maximize');
     expect(maximize).not.toBeNull();
-    // Клик обрабатывает нативный оверлей snap-плагина: onClick на кнопке
-    // запрещён (ADR-0055) — React-обёртка не должна навешивать обработчик.
-    const props = maximize as unknown as { onclick: unknown };
-    expect(props.onclick).toBeNull();
+    // Пока жив нативный HTMAXBUTTON-оверлей, клик съедает он; если оверлей
+    // не прикрепился (страница портала) — работает onClick-фолбэк в мост
+    // (#1038, правка владельца): кнопка не мертва ни в одном раскладе.
+    fireEvent.click(maximize as HTMLElement);
+    expect(bridge.windowToggleMaximize).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -8,9 +8,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@nodus/ui/components/po
 import { useDownloadsRegistry } from '../../shared/desktop/use-downloads-registry.js';
 import { formatListTimestamp } from '../../shared/lib/format.js';
 
-/** Тот же калибр тихой иконки, что у PanelIconButton панели (там компонент
- *  локальный — свой триггер с тем же классом, без цикла импортов). */
-const PANEL_BUTTON_CLASS = 'relative text-muted-foreground hover:bg-accent hover:text-foreground';
+/** Ровно тот же калибр и ховер, что у PanelIconButton панели (там компонент
+ *  локальный — свой триггер с той же геометрией, без цикла импортов).
+ *  Нативная button вместо shadcn-Button: у ghost/icon-sm своя геометрия —
+ *  ховер выпадал из общего ритма правого кластера (вердикт владельца 25.11). */
+const PANEL_BUTTON_CLASS =
+  'relative flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground';
 
 /**
  * Кнопка «Загрузки» панели оболочки (эпик #1038): поповер с реестром
@@ -26,15 +29,16 @@ export function DownloadsPopoverButton() {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
+        <button
+          type="button"
           aria-label={ui.desktop.panelDownloads}
           title={ui.desktop.panelDownloads}
+          aria-haspopup="dialog"
+          aria-expanded={open}
           className={PANEL_BUTTON_CLASS}
         >
           <Download className="size-4" strokeWidth={1.75} />
-        </Button>
+        </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-3">
         <div className="flex flex-col gap-2">

@@ -1,5 +1,4 @@
 import {
-  COPY_TEXT_MAX_CHARS,
   DESKTOP_BRIDGE_EVENTS,
   downloadEntrySchema,
   openConversationEventSchema,
@@ -11,7 +10,6 @@ import {
   shellInfoSchema,
   shellUpdateStateSchema,
   shellVisibilityEventSchema,
-  type DownloadEntry,
   type OpenConversationEvent,
   type OpenLetterEvent,
   type PopupReplyEvent,
@@ -19,65 +17,23 @@ import {
 } from '@nodus/contracts';
 import { setShellFocused, setShellVisible } from '../attention/attention-store.js';
 
+import { notifyDownloadFinished } from './desktop-bridge-files.js';
+import { getDesktopBridge } from './desktop-bridge-global.js';
+
+export { getDesktopBridge, isDesktopShell } from './desktop-bridge-global.js';
+export * from './desktop-bridge-window.js';
+export * from './desktop-bridge-files.js';
+
 /**
  * Мост «портал ↔ десктоп-оболочка» (ADR-0019): веб-приложение при наличии
  * `window.nodusDesktop` (инъекция оболочки) командует дисплеем — попапы,
  * бейдж непрочитанных, мигание таскбара. Логика уведомлений (правила M8,
  * непрочитанные, фокус беседы) живёт ЗДЕСЬ, в веб-приложении; оболочка не
  * хранит токены — команды несут только данные для показа. Обратное
- * направление — события `__nodusDesktopInvoke` (eval из Rust).
+ * направление — события `__nodusDesktopInvoke` (eval из Rust). Секции по
+ * одной ответственности — ядро (global), окно (window), файлы/загрузки
+ * (files) — ре-экспортируются отсюда: поверхность импорта моста одна.
  */
-
-/** Сигнатура инъекции оболочки (инициализационный скрипт bridge.rs). */
-interface NodusDesktopGlobal {
-  readonly shellVersion: string;
-  readonly platform: string;
-  showPopup(payload: unknown): Promise<void>;
-  logPopupDecision(payload: unknown): Promise<void>;
-  setUnreadBadge(count: number | null): Promise<void>;
-  flashTaskbar(critical: boolean): Promise<void>;
-  openExternal(url: string): Promise<void>;
-  /** Путь на файловом сервере (#558): только новые оболочки — старая не
-   *  знает команд, веб показывает «Скопировать путь». */
-  openUncPath?(path: string, servers: readonly string[]): Promise<void>;
-  revealUncPath?(path: string, servers: readonly string[]): Promise<void>;
-  /** Кнопки окна безрамочной оболочки (ADR-0055): только новые оболочки —
-   *  установленная с системным заголовком команд не знает. */
-  windowMinimize?(): Promise<void>;
-  windowToggleMaximize?(): Promise<void>;
-  windowClose?(): Promise<void>;
-  windowStartDragging?(): Promise<void>;
-  windowIsMaximized?(): Promise<boolean>;
-  /** Записать текст в буфер обмена (только запись, ≤ 4096 символов). */
-  copyText?(text: string): Promise<void>;
-  /** Реестр загрузок (эпик #1038): только новые оболочки — команда реестра;
-   *  старая установленная команд не знает, веб показывает пустой список. */
-  downloadsList?(): Promise<unknown>;
-  downloadReveal?(path: string): Promise<void>;
-  dismissPopups(conversationId: string): Promise<void>;
-  setUiTheme(theme: 'light' | 'dark'): Promise<void>;
-  getShellInfo(): Promise<unknown>;
-  getUpdateState(): Promise<unknown>;
-  applyUpdate(): Promise<void>;
-  shellReady(): Promise<void>;
-  onEvent(type: string, fn: (payload: unknown) => void): () => void;
-}
-
-declare global {
-  interface Window {
-    nodusDesktop?: NodusDesktopGlobal;
-    __nodusDesktopInvoke?: (type: string, payload: unknown) => boolean;
-  }
-}
-
-export function getDesktopBridge(): NodusDesktopGlobal | null {
-  return typeof window !== 'undefined' && window.nodusDesktop ? window.nodusDesktop : null;
-}
-
-/** Портал открыт внутри десктоп-оболочки (не в браузере). */
-export function isDesktopShell(): boolean {
-  return getDesktopBridge() !== null;
-}
 
 /**
  * Видимость и фокус оболочки (#770, ADR-0038) живут в единой модели внимания
@@ -134,9 +90,8 @@ export function desktopLogPopupDecision(payload: unknown): void {
   }
 }
 
-/** Счётчик непрочитанных: бейдж трея и панели задач (0/null — снять). */ export async function desktopSetUnreadBadge(
-  count: number | null,
-): Promise<void> {
+/** Счётчик непрочитанных: бейдж трея и панели задач (0/null — снять). */
+export async function desktopSetUnreadBadge(count: number | null): Promise<void> {
   const bridge = getDesktopBridge();
   if (!bridge) return;
   await bridge.setUnreadBadge(count);
@@ -154,185 +109,6 @@ export async function desktopOpenExternal(url: string): Promise<void> {
   const bridge = getDesktopBridge();
   if (!bridge) return;
   await bridge.openExternal(url);
-}
-
-/**
- * Итог команды пути (#558): `done` — оболочка открыла/показала; `unavailable`
- * — браузер или старая оболочка без команды (веб оставляет «Скопировать
- * путь»); `error` — стабильный код отказа Rust (`not_found`,
- * `server_not_allowed`, `reveal_only`, …) для понятного сообщения.
- */
-export type DesktopUncPathResult =
-  { status: 'done' } | { status: 'unavailable' } | { status: 'error'; code: string };
-
-/** Есть ли в установленной оболочке команды пути (старая — нет). */
-export function desktopPathCommandsAvailable(): boolean {
-  const bridge = getDesktopBridge();
-  return (
-    bridge !== null &&
-    typeof bridge.openUncPath === 'function' &&
-    typeof bridge.revealUncPath === 'function'
-  );
-}
-
-function uncPathErrorCode(error: unknown): string {
-  if (typeof error === 'string') return error;
-  if (error instanceof Error) return error.message;
-  return 'unknown';
-}
-
-/**
- * Открыть файл с сетевого сервера системным приложением (#558). Список
- * разрешённых папок приходит из «Настроек портала»; Rust независимо
- * проверяет путь и принадлежность списку — мост не доверяет веб-контенту.
- */
-export async function desktopOpenUncPath(
-  path: string,
-  servers: readonly string[],
-): Promise<DesktopUncPathResult> {
-  const bridge = getDesktopBridge();
-  if (!bridge || typeof bridge.openUncPath !== 'function') return { status: 'unavailable' };
-  try {
-    await bridge.openUncPath(path, [...servers]);
-    return { status: 'done' };
-  } catch (error) {
-    return { status: 'error', code: uncPathErrorCode(error) };
-  }
-}
-
-/** Показать файл в проводнике с выделением (#558). */
-export async function desktopRevealUncPath(
-  path: string,
-  servers: readonly string[],
-): Promise<DesktopUncPathResult> {
-  const bridge = getDesktopBridge();
-  if (!bridge || typeof bridge.revealUncPath !== 'function') return { status: 'unavailable' };
-  try {
-    await bridge.revealUncPath(path, [...servers]);
-    return { status: 'done' };
-  } catch (error) {
-    return { status: 'error', code: uncPathErrorCode(error) };
-  }
-}
-
-/** Команды безрамочного окна (ADR-0055): опциональные методы моста. */
-type WindowCommand =
-  'windowMinimize' | 'windowToggleMaximize' | 'windowClose' | 'windowStartDragging';
-
-/**
- * Кнопки окна безрамочной оболочки: огонь-и-забыть — UI-отклика нет, окно
- * меняет состояние само (иконка □/❐ догоняется `desktopWindowIsMaximized`).
- * Установленная с системным заголовком оболочка команд не знает — вызов
- * молча пропускается (как `logPopupDecision`).
- */
-function invokeWindowCommand(command: WindowCommand): void {
-  const bridge = getDesktopBridge();
-  const fn = bridge?.[command];
-  if (typeof fn !== 'function') return;
-  try {
-    void fn.call(bridge).catch(() => undefined);
-  } catch {
-    // закрытый/старый мост — команда необязательна
-  }
-}
-
-/** Свернуть окно оболочки. */
-export function desktopWindowMinimize(): void {
-  invokeWindowCommand('windowMinimize');
-}
-
-/** Развернуть/восстановить окно (двойной клик по пустому месту панели). */
-export function desktopWindowToggleMaximize(): void {
-  invokeWindowCommand('windowToggleMaximize');
-}
-
-/** Закрыть окно оболочки. */
-export function desktopWindowClose(): void {
-  invokeWindowCommand('windowClose');
-}
-
-/** Перетащить окно за пустое место панели (pointerdown кнопкой 0). */
-export function desktopWindowStartDragging(): void {
-  invokeWindowCommand('windowStartDragging');
-}
-
-/**
- * Развёрнуто ли окно (иконка □/❐ панели): null — моста нет или оболочка
- * команду не знает (системный заголовок), состояние остаётся прежним.
- */
-export async function desktopWindowIsMaximized(): Promise<boolean | null> {
-  const bridge = getDesktopBridge();
-  if (!bridge || typeof bridge.windowIsMaximized !== 'function') return null;
-  try {
-    return await bridge.windowIsMaximized();
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Записать текст в буфер обмена оболочки (адрес страницы панели): лимит
- * `COPY_TEXT_MAX_CHARS` — зеркало Rust copy_text, длинный текст молча
- * не копируется. Ложь — моста/команды нет или текст сверх лимита.
- */
-export async function desktopCopyText(text: string): Promise<boolean> {
-  const bridge = getDesktopBridge();
-  if (!bridge || typeof bridge.copyText !== 'function') return false;
-  if (text.length > COPY_TEXT_MAX_CHARS) return false;
-  try {
-    await bridge.copyText(text);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Реестр загрузок оболочки (эпик #1038): список последних завершённых
- * загрузок (новые первыми) — оболочка помнит его между запусками.
- * null — браузер или старая оболочка без команды реестра; кривой payload
- * (мимо контракта) тоже null — шум за границей приложения не показываем.
- */
-export async function desktopDownloadsList(): Promise<DownloadEntry[] | null> {
-  const bridge = getDesktopBridge();
-  if (!bridge || typeof bridge.downloadsList !== 'function') return null;
-  try {
-    const parsed = downloadEntrySchema.array().safeParse(await bridge.downloadsList());
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * «Показать в папке» для записи реестра (#1038): оболочка сама прогоняет
- * путь через гвард каталога «Загрузки». Ложь — браузер, старая оболочка или
- * отказ Rust (путь чужой/файл пропал).
- */
-export async function desktopDownloadReveal(path: string): Promise<boolean> {
-  const bridge = getDesktopBridge();
-  if (!bridge || typeof bridge.downloadReveal !== 'function') return false;
-  try {
-    await bridge.downloadReveal(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Живые записи реестра загрузок (эпик #1038): подписчики события
- * `download-finished` — панель «Загрузки» монтируется независимо от хоста
- * моста, поэтому фан-аут идёт через реестр слушателей (в отличие от
- * фиксированных обработчиков `bindDesktopShellEvents`). Возврат — отписка.
- */
-const downloadsListeners = new Set<(entry: DownloadEntry) => void>();
-
-export function registerDownloadsListener(fn: (entry: DownloadEntry) => void): () => void {
-  downloadsListeners.add(fn);
-  return () => {
-    downloadsListeners.delete(fn);
-  };
 }
 
 /**
@@ -443,7 +219,7 @@ export function bindDesktopShellEvents(handlers: {
     // Завершение загрузки (эпик #1038): валидная запись — всем подписчикам
     // реестра (registerDownloadsListener), панель «Загрузки» обновляется живьём.
     onDesktopEvent(DESKTOP_BRIDGE_EVENTS.downloadFinished, downloadEntrySchema, (entry) => {
-      downloadsListeners.forEach((fn) => fn(entry));
+      notifyDownloadFinished(entry);
     }),
   ];
   // Оболочка доставляет отложенный deep link только после этого сигнала.
