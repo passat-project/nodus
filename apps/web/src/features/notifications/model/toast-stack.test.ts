@@ -3,8 +3,9 @@ import type { NotificationSnapshot } from '@nodus/contracts';
 
 import { useNotificationsToastStore } from './toast-store.js';
 
-/** B7/F2/F3 на самом сторе: «+1» при повторе того же чата ≤60 с, кап 4,
- *  сводная действий растёт одним контейнером. */
+/** B7/F2/F3 на самом сторе: «+1» при повторе того же чата ≤60 с, кап 3
+ *  (предел десктопных попапов, #1038), сводная действий растёт одним
+ *  контейнером. */
 const ME = '22222222-2222-2222-2222-222222222222';
 const CONV = '33333333-3333-3333-3333-333333333333';
 
@@ -52,14 +53,14 @@ describe('toast-store push', () => {
     expect(personal[0]!.count).toBe(2);
   });
 
-  it('F2: кап 4 видимых — старейшее вытесняется', () => {
+  it('F2: кап 3 видимых — старейшее вытесняется', () => {
     const s = useNotificationsToastStore.getState();
     for (let i = 0; i < 6; i += 1) {
       s.push(snap(i, { conversationId: `c${i}`, sourceId: `c${i}` }), 0);
     }
     const personal = useNotificationsToastStore.getState().personal;
-    expect(personal).toHaveLength(4);
-    expect(personal[0]!.snapshot.conversationId).toBe('c2');
+    expect(personal).toHaveLength(3);
+    expect(personal[0]!.snapshot.conversationId).toBe('c3');
   });
 
   it('F3: средний приоритет — сводная карточка одним счётчиком', () => {

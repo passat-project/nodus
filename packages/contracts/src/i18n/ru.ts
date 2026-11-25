@@ -1,4 +1,5 @@
 import { accessStrings } from './ru-access.js';
+import { desktopStrings } from './ru-desktop.js';
 import { assistantStrings } from './ru-assistant.js';
 import { automationStrings } from './ru-automation.js';
 import { chatStrings } from './ru-chat.js';
@@ -266,46 +267,7 @@ export const ui = {
       rejected: 'оболочка отклонила',
     },
   },
-  desktop: {
-    appTitle: 'Nodus',
-    connectTitle: 'Подключение к порталу',
-    connectHint: 'Введите адрес корпоративного портала Nodus — как в браузере.',
-    addressLabel: 'Адрес портала',
-    addressPlaceholder: 'например, portal.company.local',
-    connect: 'Подключиться',
-    connecting: 'Подключаемся…',
-    connectedTo: 'Подключено к серверу',
-    offlineTitle: 'Нет связи с сервером',
-    offlineHint: 'Проверьте подключение к сети и доступность портала.',
-    retry: 'Повторить',
-    changeServer: 'Сменить сервер',
-    invalidAddress: 'Введите адрес в формате portal.company.local или https://…',
-    insecureWarning:
-      'Адрес без шифрования (http): пароль и сообщения могут перехватить. Для работы используйте https-адрес сервера.',
-    updateRequiredTitle: 'Обновите приложение Nodus',
-    updateRequiredHint:
-      'Эта версия оболочки больше не поддерживается сервером. Обновите приложение, чтобы продолжить.',
-    updateNow: 'Обновить сейчас',
-    updateUnavailable: 'Обновление пока недоступно — обратитесь к администратору',
-    popupReply: 'Ответить',
-    popupOpen: 'Открыть',
-    popupSend: 'Отправить',
-    popupReplyPlaceholder: 'Сообщение…',
-    urgentLabel: 'Важное',
-    hideAll: 'Скрыть все',
-    downloadTitle: 'Файл скачан',
-    downloadErrorTitle: 'Не удалось скачать файл',
-    downloadShowInFolder: 'Показать в папке',
-    attachmentImage: 'Фотография',
-    attachmentImages: 'Фотографии',
-    attachmentVideo: 'Видеозапись',
-    attachmentAudio: 'Аудиозапись',
-    attachmentPdf: 'PDF-документ',
-    attachmentOffice: 'Документ',
-    attachmentFile: 'Файл',
-    attachmentSticker: 'Стикер',
-    themeToggle: 'Тёмная тема',
-  },
+  desktop: desktopStrings,
 } as const;
 
 export type UiStrings = typeof ui;
