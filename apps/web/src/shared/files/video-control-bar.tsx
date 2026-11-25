@@ -17,21 +17,40 @@ import type { VideoPlayer } from './use-video-player.js';
  * (WAI-ARIA: ползунок с `aria-valuetext`, имя у каждой кнопки).
  */
 
-// h-6 — зона захвата ползунка, а не его вид: сама дорожка 5px (h-1), цель
-// пальца/курсора шире втрое (Fitts), зал от этого не «толстеет».
+// Ползунок рисуем САМИ (#1054): линия, заливка и кружок — одной геометрией, кружок
+// ровно по центру линии и ровно в позиции значения. Нативный thumb/дорожка
+// прозрачные, но input остаётся сверху — клавиатура, скринридер и drag от
+// платформы. Почему не нативные дорожка+thumb: Chromium ставит UA-дорожку ниже
+// центра input (замер: кружок на 5px ниже линии; сама UA-дорожка — на 8px ниже
+// центра зоны захвата), плюс UA-thumb не даёт выровнять кружок по краям 1:1.
+// `--knob` — размер кружка: центр едет от 0,5·кружка до 100% − 0,5·кружка.
+
+/** Позиция кружка/заливки: процент значения с поправкой на радиус кружка на краях. */
+function knobPosition(percent: number): string {
+  const p = Math.min(100, Math.max(0, percent));
+  return `calc(${p}% + (var(--knob, 0.75rem) / 2) - ${p / 100} * var(--knob, 0.75rem))`;
+}
+
+/** Прозрачные UA-контролы: вид рисуют наши слои, поведение — input. */
 const RANGE_CLASS = cn(
-  'h-6 w-full -translate-y-1/2 appearance-none bg-transparent outline-none',
-  '[&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-transparent',
-  '[&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white',
-  '[&::-moz-range-track]:h-1 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-transparent',
-  '[&::-moz-range-thumb]:size-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-white',
+  'absolute top-1/2 left-0 h-6 w-full -translate-y-1/2 appearance-none bg-transparent outline-none',
+  '[&::-webkit-slider-runnable-track]:h-5 [&::-webkit-slider-runnable-track]:bg-transparent',
+  '[&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:bg-transparent',
+  '[&::-moz-range-track]:h-5 [&::-moz-range-track]:bg-transparent',
+  '[&::-moz-range-thumb]:size-3 [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-transparent',
 );
 
-/** Фокус ползунка рисуется по САМОЙ дорожке (h-1), а не по зоне захвата (h-6):
- *  рамка вокруг 30-пиксельного бокса в 60-пиксельной полосе читалась тяжёлой
- *  коробкой. Кольцо белое — фокус темы (`--ring` индиго) на чёрном не виден. */
-const TRACK_FOCUS_CLASS =
-  '[&:has(:focus-visible)]:outline-2 [&:has(:focus-visible)]:outline-offset-2 [&:has(:focus-visible)]:outline-white/70';
+/** Дорожка с фокус-кольцом: кольцо темы (`--ring` индиго) на чёрном не видно. */
+const TRACK_CLASS = cn(
+  'relative h-1 rounded-full bg-white/20',
+  '[--knob:0.75rem]',
+  '[&:has(:focus-visible)]:outline-2 [&:has(:focus-visible)]:outline-offset-2 [&:has(:focus-visible)]:outline-white/70',
+);
+
+/** Заливка и кружок — декоративные слои под input'ом, указатель не перехватывают. */
+const FILL_CLASS = 'pointer-events-none absolute inset-y-0 left-0 rounded-full bg-white/85';
+const KNOB_CLASS =
+  'pointer-events-none absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white';
 
 /**
  * Хром зала ВСЕГДА на чёрном (обе темы) — фокус-кольцо темы (`--ring` индиго)
@@ -47,7 +66,6 @@ const UTILITY_BUTTON_CLASS = cn(
   'text-white/60 hover:bg-white/10 hover:text-white',
   HALL_CONTROL_CLASS,
 );
-const FILL_CLASS = 'pointer-events-none absolute inset-y-0 left-0 rounded-full bg-white/80';
 
 export function VideoControlBar({
   player,
@@ -96,13 +114,9 @@ export function VideoControlBar({
         {current} / {total}
       </span>
 
-      <div
-        className={cn(
-          'relative mx-1 h-1 min-w-0 flex-1 rounded-full bg-white/20',
-          TRACK_FOCUS_CLASS,
-        )}
-      >
-        <span aria-hidden className={FILL_CLASS} style={{ width: `${played}%` }} />
+      <div className={cn('mx-1 min-w-0 flex-1', TRACK_CLASS)}>
+        <span aria-hidden className={FILL_CLASS} style={{ width: knobPosition(played) }} />
+        <span aria-hidden className={KNOB_CLASS} style={{ left: knobPosition(played) }} />
         <input
           type="range"
           min={0}
@@ -113,7 +127,7 @@ export function VideoControlBar({
           disabled={player.duration === 0}
           aria-label={ui.files.seek}
           aria-valuetext={`${current} ${ui.files.timeOf} ${total}`}
-          className={cn('absolute top-1/2 left-0', RANGE_CLASS)}
+          className={RANGE_CLASS}
         />
       </div>
 
@@ -132,13 +146,9 @@ export function VideoControlBar({
           {player.muted ? <VolumeX /> : <Volume2 />}
         </Button>
 
-        <div
-          className={cn(
-            'relative hidden h-1 w-16 rounded-full bg-white/20 sm:block',
-            TRACK_FOCUS_CLASS,
-          )}
-        >
-          <span aria-hidden className={FILL_CLASS} style={{ width: `${volume}%` }} />
+        <div className={cn('hidden w-16 sm:block', TRACK_CLASS)}>
+          <span aria-hidden className={FILL_CLASS} style={{ width: knobPosition(volume) }} />
+          <span aria-hidden className={KNOB_CLASS} style={{ left: knobPosition(volume) }} />
           <input
             type="range"
             min={0}
@@ -147,7 +157,7 @@ export function VideoControlBar({
             value={player.muted ? 0 : player.volume}
             onChange={(event) => player.changeVolume(Number(event.target.value))}
             aria-label={ui.files.volume}
-            className={cn('absolute top-1/2 left-0', RANGE_CLASS)}
+            className={RANGE_CLASS}
           />
         </div>
       </div>
