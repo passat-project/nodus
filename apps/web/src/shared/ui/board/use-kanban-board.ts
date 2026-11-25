@@ -28,11 +28,12 @@ import {
 import { computeInsertIndex, dropAnchorY } from '../../lib/board/kanban-drop-index.js';
 import { makeKanbanCollision } from '../../lib/board/kanban-collision.js';
 import { BOARD_SCROLLER_SELECTOR } from '../../lib/board/edge-scroll.js';
+import { KANBAN_FEED_LIMIT } from './kanban-feed-limit.js';
 import { useKanbanFeeds } from './use-kanban-feeds.js';
 
 /** Лимит страницы фида колонки (industry: колонки держат тысячи карточек —
  *  целиком не грузим; дальше sentinel-подгрузка в колонке, как в Битриксе). */
-export const KANBAN_FEED_LIMIT = 30;
+export { KANBAN_FEED_LIMIT };
 
 /** Страховка замка переносов: потребитель, не ответивший ни onError, ни
  *  onSettled (зависший запрос), не должен оставить доску без обновлений. */

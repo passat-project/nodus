@@ -40,9 +40,11 @@ describe('page-imports: адрес раздела → его чанк (#1051)', 
     // есть preload» пропускал бы страницу, собранную через lazy(), — то есть
     // исходный баг #1051. Корень — не страница (inline-компонент без раздела).
     expect(router.options.defaultPreload).toBe('intent');
-    const pages = Object.values(router.routesById).filter(
-      (route) => typeof route.options.path === 'string' && route.options.path !== '/',
-    );
+    const pages = Object.values(router.routesById).filter((route) => {
+      // Корневой маршрут (id без path) в перебор не входит: типы опций — объединение.
+      const path = (route.options as { path?: unknown }).path;
+      return typeof path === 'string' && path !== '/';
+    });
     // Страховка от пустого перебора: страниц в дереве больше пяти.
     expect(pages.length).toBeGreaterThan(5);
     for (const route of pages) {

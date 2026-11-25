@@ -132,9 +132,15 @@ export function useKanbanFeeds({
     if (current.some((c) => !c.data)) return;
     const applied = appliedRef.current;
     const full = applied.signature !== stageSignature;
+    // Первая сборка доски в этом монтировании: страницы из кэша — сразу, даже
+    // пока летит их перезапрос. Иначе возврат в раздел каждый раз показывал
+    // скелетон до ответа сервера, и предзагрузка данных (#1051) не помогала:
+    // свежая страница применится, когда придёт.
+    const firstPaint = applied.signature === '';
     const settledAt = boardMoveSettledAt();
     const fresh = new Map<string, TaskListItem[]>();
     const nextCursors: Record<string, string | null> = {};
+    const serverItems: TaskListItem[] = [];
     stages.forEach((s, i) => {
       const column = current[i];
       if (!column?.data) return;
@@ -142,7 +148,7 @@ export function useKanbanFeeds({
       const appliedAt = applied.at[s.id];
       if (!full && appliedAt === version) return;
       // Перезапрос колонки в полёте — применится его свежая страница.
-      if (column.isFetching) return;
+      if (column.isFetching && !firstPaint) return;
       // Страница пришла раньше ответа последнего переноса и ещё не
       // применялась: могла застать задачу в прежней колонке.
       if (appliedAt !== undefined && version < settledAt) return;
@@ -151,6 +157,9 @@ export function useKanbanFeeds({
       applied.at[s.id] = version;
       // Свежий фид — повод снова пробовать догрузку сбойной колонки.
       delete failedRef.current[s.id];
+      // Страница из кэша не новее ответа мутации: записи оверлея снимет
+      // только её свежая версия.
+      if (!column.isFetching) serverItems.push(...column.data.items);
     });
     if (fresh.size === 0) return;
     applied.signature = stageSignature;
@@ -159,7 +168,7 @@ export function useKanbanFeeds({
     setCursors(cur);
     cursorsRef.current = cur;
     // Строки из свежих страниц — серверные: записи оверлея доски больше не нужны.
-    for (const items of fresh.values()) consumeTaskItems(items.map((t) => t.id));
+    consumeTaskItems(serverItems.map((t) => t.id));
   }, [updatedSignature, stageSignature, lockRef, lockTick, setBoard]);
 
   /** Подгрузка следующей страницы колонки (sentinel в скролл-контейнере).

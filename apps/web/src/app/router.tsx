@@ -16,6 +16,9 @@ import { resolveHidden, resolveOrder } from './shell/ui-prefs.js';
 import { useUiPrefsStore } from '../shared/preferences/ui-prefs-store.js';
 import { useAuthStore } from '../shared/auth-store.js';
 import { useRemoveBootSplash } from './boot-splash.js';
+import { prefetchPersonalBoard } from '../features/tasks/api/tasks-board-prefetch.js';
+import { queryClient } from '../shared/lib/query-client.js';
+import { browserAllowsWarmup } from './shell/module-warmup.js';
 
 /**
  * Страница раздела отвечает на `preload()` (#1051): роутер зовёт его при
@@ -214,6 +217,12 @@ const indexRoute = createRoute({
 const tasksRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: '/tasks',
+  // Данные доски — в кэш заранее (#1051): роутер зовёт loader и при наведении
+  // на раздел (defaultPreload: 'intent'), и при входе. Переход не блокирует:
+  // страница монтируется сразу, её запросы примыкают к начатым.
+  loader: () => {
+    if (browserAllowsWarmup()) void prefetchPersonalBoard(queryClient).catch(() => undefined);
+  },
   component: TasksPage,
 });
 

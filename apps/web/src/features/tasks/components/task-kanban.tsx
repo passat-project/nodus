@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { DndContext, DragOverlay } from '@dnd-kit/core';
 
 import { personalAxis } from '../../../shared/lib/board/kanban-board.js';
-import { tasksKeys } from '../../../shared/api/tasks-keys.js';
+import { personalBoardFeedUrl, personalBoardKey } from '../api/tasks-board-prefetch.js';
 import { BoardScroller } from '../../../shared/ui/board/board-scroller.js';
 import { BoardSortableCard } from '../../../shared/ui/board/board-sortable-card.js';
 import { KanbanSkeleton } from '../../../shared/ui/board/kanban-skeleton.js';
@@ -65,11 +65,8 @@ export function TaskKanban({
   const board = useKanbanBoard({
     axis: personalAxis,
     stages,
-    queryKey: tasksKeys.kanban('personal', query || undefined),
-    feedUrl: (stageId, cursor, limit) =>
-      `/tasks?personalStageId=${stageId}&limit=${limit}${
-        query ? `&search=${encodeURIComponent(query)}` : ''
-      }${cursor ? `&cursor=${cursor}` : ''}`,
+    queryKey: personalBoardKey(query),
+    feedUrl: (stageId, cursor, limit) => personalBoardFeedUrl(stageId, cursor, limit, query),
     onMove: (vars, opts) =>
       updatePersonalStage.mutate(
         { taskId: vars.taskId, personalStageId: vars.stageId, index: vars.index },

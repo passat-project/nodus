@@ -1,3 +1,5 @@
+import { prefetchPersonalBoard } from '../../features/tasks/api/tasks-board-prefetch.js';
+import { queryClient } from '../../shared/lib/query-client.js';
 import { PAGE_IMPORTS, type PageImportKey } from '../page-imports.js';
 import { useUiPrefsStore } from '../../shared/preferences/ui-prefs-store.js';
 import { RAIL_MODULES, type NavModuleDef } from './nav-registry.js';
@@ -36,6 +38,8 @@ export interface WarmupEnv {
   allowed: () => boolean;
   /** Загрузить чанк; отказ — наружу (глотает прогрев). */
   load: (key: WarmupKey) => Promise<unknown>;
+  /** Данные раздела в кэш — после чанка; не заданы — ничего. */
+  data?: (key: WarmupKey) => Promise<unknown>;
 }
 
 /** Что грузить: страницы видимых модулей в личном порядке, последним — PDF. */
@@ -59,14 +63,29 @@ export async function runModuleWarmup(env: WarmupEnv): Promise<void> {
     } catch {
       /* чанк устарел — перезагрузит guard роутера при реальном входе */
     }
+    // Данные раздела грузятся и при устаревшем чанке: страница следующей
+    // сборки возьмёт их из кэша. Отказ глотается — страница спросит сама.
+    await env.data?.(key).catch(() => undefined);
   }
 }
+
+/** Данные разделов, которые стоит иметь в кэше до клика: раздел → запросы. */
+const DATA_WARMUP: Partial<Record<WarmupKey, () => Promise<unknown>>> = {
+  tasks: () => prefetchPersonalBoard(queryClient),
+};
 
 type NetworkInformation = { saveData?: boolean; effectiveType?: string };
 
 /** Экономия трафика (Data Saver) и сети 2G — чанки придут по клику. */
 export function networkAllowsWarmup(connection: NetworkInformation | undefined): boolean {
   return !(connection?.saveData || SLOW_NETWORKS.has(connection?.effectiveType ?? ''));
+}
+
+/** Трафик не экономят и сеть не медленная — в этом браузере сейчас. */
+export function browserAllowsWarmup(): boolean {
+  return networkAllowsWarmup(
+    (navigator as Navigator & { connection?: NetworkInformation }).connection,
+  );
 }
 
 /** Среда браузера: реальная пауза, реальный простой, реальные импорты. */
@@ -86,11 +105,9 @@ export function browserEnv(): WarmupEnv {
         }
       });
     },
-    allowed: () =>
-      networkAllowsWarmup(
-        (navigator as Navigator & { connection?: NetworkInformation }).connection,
-      ),
+    allowed: browserAllowsWarmup,
     load: (key) => (key === 'pdf' ? PDF_VIEWER_IMPORT() : PAGE_IMPORTS[key]()),
+    data: (key) => DATA_WARMUP[key]?.() ?? Promise.resolve(),
   };
 }
 

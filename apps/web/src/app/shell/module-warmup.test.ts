@@ -2,6 +2,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useUiPrefsStore } from '../../shared/preferences/ui-prefs-store.js';
+import { prefetchPersonalBoard } from '../../features/tasks/api/tasks-board-prefetch.js';
+import { queryClient } from '../../shared/lib/query-client.js';
 import { PAGE_IMPORTS } from '../page-imports.js';
 import {
   browserEnv,
@@ -15,6 +17,10 @@ import {
 
 // Движок PDF в тесте не нужен: импорт подменён, грузится сама ветка `load('pdf')`.
 vi.mock('../../shared/files/pdf-viewer.js', () => ({ PdfViewer: () => null }));
+// Данные «Задач» в кэш — импорт подменён: проверяем вызов, не сеть.
+vi.mock('../../features/tasks/api/tasks-board-prefetch.js', () => ({
+  prefetchPersonalBoard: vi.fn(async () => undefined),
+}));
 
 /** Свободные моменты браузера под ручным управлением: колбэк зовёт тест. */
 function idleSink() {
@@ -241,5 +247,60 @@ describe('module-warmup: план и ход прогрева (#1051)', () => {
       vi.useRealTimers();
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe('прогрев данных раздела (#1051)', () => {
+  afterEach(() => vi.clearAllMocks());
+
+  it('данные раздела грузятся после его чанка; следующий раздел ждёт их', async () => {
+    const order: string[] = [];
+    const release = deferred<void>();
+    const env: WarmupEnv = {
+      idle: async () => undefined,
+      allowed: () => true,
+      load: async (key) => {
+        order.push(`chunk:${key}`);
+      },
+      data: async (key) => {
+        order.push(`data:${key}`);
+        // Данные «Задач» не отвечают, пока тест не разрешит.
+        if (key === 'tasks') await release.promise;
+      },
+    };
+
+    const done = runModuleWarmup(env);
+    await vi.waitFor(() => expect(order).toContain('data:tasks'));
+    const plan = warmupPlan();
+    const afterTasks = plan[plan.indexOf('tasks') + 1];
+    expect(order).not.toContain(`chunk:${afterTasks}`);
+
+    release.resolve();
+    await done;
+    // Каждому чанку раздела — свой шаг данных, в том же порядке.
+    expect(order.filter((x) => x.startsWith('data:'))).toEqual(plan.map((key) => `data:${key}`));
+  });
+
+  it('отказ данных раздела не мешает остальным', async () => {
+    const loaded: string[] = [];
+    await runModuleWarmup({
+      idle: async () => undefined,
+      allowed: () => true,
+      load: async (key) => {
+        loaded.push(key);
+      },
+      data: async (key) => {
+        if (key === 'tasks') throw new Error('500');
+      },
+    });
+    expect(loaded).toEqual(warmupPlan());
+  });
+
+  it('в браузере данные «Задач» — это доска в кэш; у остальных разделов данных нет', async () => {
+    vi.mocked(prefetchPersonalBoard).mockClear();
+    await browserEnv().data?.('tasks');
+    await browserEnv().data?.('pdf');
+    expect(prefetchPersonalBoard).toHaveBeenCalledTimes(1);
+    expect(prefetchPersonalBoard).toHaveBeenCalledWith(queryClient);
   });
 });
