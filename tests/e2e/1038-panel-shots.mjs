@@ -58,6 +58,18 @@ console.log(
   ' reload.cx =',
   (await rect(reload)).centerX,
 );
+// Обводка стрелки обязана совпадать с рамкой плашки (вердикт владельца
+// 25.11: «уголок без границы» — дефект).
+const arrowBorder = await arrow.evaluate((el) => {
+  const s = getComputedStyle(el);
+  return `${s.borderTopWidth} ${s.borderTopColor} / ${s.borderLeftWidth} ${s.borderLeftColor}`;
+});
+console.log('arrow border (t/l) =', arrowBorder);
+const ring = await plate.evaluate((el) => {
+  const s = getComputedStyle(el);
+  return `${s.boxShadow || s.getPropertyValue('--tw-ring-shadow')}`;
+});
+console.log('plate ring =', ring.slice(0, 90));
 await page.screenshot({ path: `${out}/panel-02-callout-light.png` });
 await page.screenshot({
   path: `${out}/panel-02b-callout-zoom.png`,

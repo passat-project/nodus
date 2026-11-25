@@ -73,13 +73,20 @@ for (const { name, download } of cases) {
   await page.goto('http://mini.local/index.html');
   const card = page.locator('div.group');
   await card.waitFor({ timeout: 10_000 });
-  // Высота окна = факту контента (как popup_set_height в оболочке): карточка
-  // h-screen заполняет окно целиком — снимаем в реальном калибре.
-  const contentH = await page.evaluate(() => {
-    const el = document.querySelector('div.group > div');
-    return el ? el.getBoundingClientRect().height : 24;
+  // Высота окна = факту контента, формула ТО ЖЕ, что в popup-view
+  // (контент + паддинги + рамка карточки, +1 субпиксельная страховка):
+  // карточка h-screen заполняет окно целиком — снимаем в реальном калибре.
+  const { contentH, chrome } = await page.evaluate(() => {
+    const root = document.querySelector('div.group');
+    const content = document.querySelector('div.group > div');
+    const s = getComputedStyle(root);
+    const px = [s.paddingTop, s.paddingBottom, s.borderTopWidth, s.borderBottomWidth].reduce(
+      (sum, v) => sum + (Number.parseFloat(v) || 0),
+      0,
+    );
+    return { contentH: content.getBoundingClientRect().height, chrome: px };
   });
-  await page.setViewportSize({ width: 420, height: Math.ceil(contentH) + 18 });
+  await page.setViewportSize({ width: 420, height: Math.ceil(contentH + chrome) + 1 });
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${out}/${name}` });
 
@@ -97,6 +104,17 @@ for (const { name, download } of cases) {
       await page.getByRole('button', { name: 'Показать в папке' }).count(),
     );
   }
+  // Крестик обязан быть на одной высоте с иконкой папки (однострочная
+  // карточка — центр высоты, вердикт владельца 25.11).
+  const centerY = (loc) =>
+    loc.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return Math.round((r.top + r.height / 2) * 10) / 10;
+    });
+  const closeBtn = page.getByRole('button', { name: 'Закрыть' });
+  const folderBtn = page.getByRole('button', { name: 'Показать в папке' });
+  console.log(`${name} close.cy =`, await centerY(closeBtn));
+  if (download.success) console.log(`${name} folder.cy =`, await centerY(folderBtn));
   await ctx.close();
 }
 await browser.close();

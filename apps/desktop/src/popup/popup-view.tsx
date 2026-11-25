@@ -349,12 +349,17 @@ export function PopupView() {
 
       {/* Крестик: SVG-глиф заполняет кнопку (канон Telegram notifyClose —
        *  иконка ≈ 70% зоны), ховер ровно по видимой кнопке (фидбек 08.10).
-       *  Абсолютный — ВНЕ потока контента, доступен в любом режиме. */}
+       *  Абсолютный — ВНЕ потока контента, доступен в любом режиме.
+       *  Чатовой карточке — верхний правый угол (канон); компактной карточке
+       *  скачивания (#1038, волна 25.11) — центр высоты: одна строка, крестик
+       *  НА ОДНОЙ ВЫСОТЕ с иконкой папки (вердикт владельца). */}
       <button
         type="button"
         aria-label={ui.common.close}
         onClick={close}
-        className="text-muted-foreground hover:text-foreground hover:bg-accent absolute top-1 right-1 z-10 flex size-5 items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100"
+        className={`text-muted-foreground hover:text-foreground hover:bg-accent absolute right-1 z-10 flex size-5 items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100 ${
+          data.download ? 'top-1/2 -translate-y-1/2' : 'top-1'
+        }`}
       >
         <svg
           viewBox="0 0 24 24"

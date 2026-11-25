@@ -29,10 +29,12 @@ export function UpdateCallout({ onClose }: { onClose: () => void }) {
     >
       {/* Стрелка вверх — ромб над кромкой плашки: нижняя половина сливается с
           её фоном (шов кольца перекрыт), верхняя читается как наконечник.
-          БЕЗ обводки: у ромба на границе она дала бы артефакт-шеврон. */}
+          Обводка — только ДВЕ ВЕРХНИЕ кромки (border-t/l до rotate-45): после
+          поворота они образуют шеврон тем же цветом, что рамка плашки —
+          контур течёт по стрелке без разрыва (вердикт владельца 25.11). */}
       <span
         aria-hidden
-        className="absolute -top-1 left-[0.625rem] size-2 rotate-45 rounded-[1px] bg-popover"
+        className="absolute -top-1 left-[0.625rem] size-2 rotate-45 rounded-[1px] border-t border-l border-foreground/10 bg-popover"
       />
       <span className="min-w-0">{ui.desktop.updateCallout}</span>
       <button
