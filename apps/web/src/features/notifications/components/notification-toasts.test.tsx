@@ -139,18 +139,20 @@ describe('NotificationToasts: колонка под топбаром справ�
     usePortalUpdateOverlayActive.getState().setActive(false);
   });
 
-  it('в браузере — фиксированная колонка справа под топбаром (геометрия попапов)', () => {
+  it('в браузере — колонка справа под линией топбара (геометрия попапов)', () => {
     mountToasts();
     const column = screen.getByLabelText(ui.notifications.bellLabel);
-    // right-16 = щель 8 + полоса 40 + px-4 топбара (правая группа иконок);
-    // top = 4rem рамы+бара, +6px зазор; карточка 360, зазор 5, z тостов.
+    // absolute внутри мягкой рамы: right-4 = px-4 топбара (правый край по
+    // группе иконок при любом --ui-scale); top = низ h-14 шапки (3.5rem того
+    // же rem-пространства) + ясный зазор 14px — карточка не налезает на
+    // линию разделителя; карточка 360, зазор 5, z тостов.
     for (const cls of [
-      'right-16',
-      'top-[calc(4rem+6px)]',
+      'right-4',
+      'top-[calc(3.5rem+14px)]',
       'w-[360px]',
       'gap-[5px]',
       'z-[70]',
-      'fixed',
+      'absolute',
     ]) {
       expect(column.classList.contains(cls)).toBe(true);
     }
@@ -169,12 +171,12 @@ describe('NotificationToasts: колонка под топбаром справ�
     usePortalUpdateOverlayActive.getState().setActive(true);
     mountToasts();
     const column = screen.getByLabelText(ui.notifications.bellLabel);
-    expect(column.classList.contains('top-[calc(6rem+6px)]')).toBe(true);
+    expect(column.classList.contains('top-[calc(5.5rem+14px)]')).toBe(true);
   });
 
   it('TEMP overlay: плашки нет — стек на обычном месте', () => {
     mountToasts();
     const column = screen.getByLabelText(ui.notifications.bellLabel);
-    expect(column.classList.contains('top-[calc(4rem+6px)]')).toBe(true);
+    expect(column.classList.contains('top-[calc(3.5rem+14px)]')).toBe(true);
   });
 });

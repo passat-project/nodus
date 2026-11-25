@@ -219,6 +219,11 @@ export function AppShell() {
                 data-soft-frame
               >
                 <TopBar />
+                {/* Личные уведомления — колонка ПОД линией топбара (#1038):
+                    absolute внутри рамы, якорится к реальному низу шапки
+                    (3.5rem в том же rem-пространстве + ясный зазор), правый
+                    край — по кромке иконок шапки (right-4 = её px-4). */}
+                <NotificationToasts />
                 <div id="content" className="relative flex min-h-0 flex-1 flex-col">
                   {/* Непустой стек карточек НАКРЫВАЕТ страницу (ADR-0009):
                       поверхность раздела не видна — её чаты не читают и не
@@ -245,7 +250,6 @@ export function AppShell() {
       <WsDebugBadge />
       {/* Диагностика попапов (#811): только ?wsdebug=1, журнал решений гейта. */}
       <PopupDebugBadge />
-      <NotificationToasts />
       <SearchCommand />
       <WhatsNewPanel />
       <ChatDialogHosts />

@@ -21,11 +21,13 @@ import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import { usePauseEscalation } from '../model/use-pause-escalation.js';
 
 /**
- * Тост-контур (#100, вердикты 30.09; геометрия — #1038 фаза F): личный стак
- * колонкой ПОД топбаром СПРАВА — правый край по правой группе иконок
- * (right-16 = 8px щель периметра + 40px служебная полоса + 16px px-4 топбара),
- * верх сразу под баром (4rem = 8px отступ рамы + 56px бар, зазор 6px — rem,
- * чтобы --ui-scale следовал за баром). Карточки — вида десктопных попапов
+ * Тост-контур (#100, вердикты 30.09; геометрия — #1038): личный стак
+ * колонкой ПОД линией топбара СПРАВА. Якорь — сама мягкая рама (компонент
+ * смонтирован в app-shell сразу после TopBar): absolute right-4 = px-4
+ * топбара (правый край по правой группе иконок при любом --ui-scale),
+ * top = calc(3.5rem + 14px) — НИЗ h-14 шапки в том же rem-пространстве
+ * плюс ясный зазор, карточка не налезает на линию разделителя. Карточки —
+ * вида десктопных попапов
  * (ADR-0019): 360px, зазор 5, предел 3, автоскрытие ~8 с (hover — пауза),
  * клик — переход в источник (F1). ОДНА сводная карточка действий «Требуют
  * внимания: N» — персистентная до открытия (F3), той же колонкой. Низкий
@@ -54,12 +56,12 @@ function ToastColumn() {
   useActionsFollowJournal();
   // TEMP #1038 taste-variant, удалить после вердикта владельца: overlay-
   // плашка обновления (?updatePlate=overlay) висит над шапкой — личный стек
-  // уходит ниже на высоту плашки (6rem = 4rem бара + 2rem плашки). Оба
+  // уходит ниже на высоту плашки (5.5rem = 3.5rem бара + 2rem плашки). Оба
   // литерала top-* обязательны: Tailwind сканирует исходник, класс из
   // шаблона не сгенерируется. Сигнал публикует сама плашка (app-слой) —
   // фича уведомлений фичу обновления не импортирует (I3/I6).
   const plateOverlay = usePortalUpdateOverlayActive((s) => s.active);
-  const columnTop = plateOverlay ? 'top-[calc(6rem+6px)]' : 'top-[calc(4rem+6px)]';
+  const columnTop = plateOverlay ? 'top-[calc(5.5rem+14px)]' : 'top-[calc(3.5rem+14px)]';
 
   return (
     <div
@@ -67,7 +69,7 @@ function ToastColumn() {
       aria-label={ui.notifications.bellLabel}
       data-notification-toasts
       className={cn(
-        'pointer-events-none fixed right-16 z-[70] flex w-[360px] flex-col gap-[5px]',
+        'pointer-events-none absolute right-4 z-[70] flex w-[360px] flex-col gap-[5px]',
         columnTop,
       )}
     >
