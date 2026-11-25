@@ -22,6 +22,7 @@ import { NumberConfirmHost } from '../../shared/custom-fields/number-confirm.js'
 import { AttachmentViewer } from '../../shared/files/attachment-viewer.js';
 import { NotificationToasts } from '../../features/notifications/components/notification-toasts.js';
 import { useNotificationSink } from '../../features/notifications/model/use-notification-sink.js';
+import { usePortalUpdate } from '../../features/portal-update/model/use-portal-update.js';
 import { WhatsNewPanel } from '../../features/whats-new/components/whats-new-panel.js';
 import { useWhatsNewAutoOpen } from '../../features/whats-new/model/use-whats-new-auto-open.js';
 import { useUnreadTitle } from '../../shared/chat/unread-title.js';
@@ -77,6 +78,9 @@ export function AppShell() {
   useAssistantHotkey();
   // WS чата (#104): живёт с сессией, тихий статус; поллинг — fallback.
   useChatSocket();
+  // Детект обновления портала (#1038): сверка версии сборки с /version.json
+  // по фокусу/интервалу/реконнекту сокета; UI-индикация — следующая фаза.
+  usePortalUpdate();
   useNotificationSink();
   // «Что нового» (#386): после обновления прода панель выезжает сама один раз.
   useWhatsNewAutoOpen();
