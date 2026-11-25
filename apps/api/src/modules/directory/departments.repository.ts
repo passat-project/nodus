@@ -52,6 +52,12 @@ export class DepartmentsRepository {
     });
   }
 
+  /** Корней вида: для management — главная карточка компании (#982/#1028). */
+  async countRoots(kind: 'management' | 'legal', tx?: TransactionClient): Promise<number> {
+    const client = tx ?? this.prisma;
+    return client.department.count({ where: { kind, parentId: null } });
+  }
+
   async findById(id: string, tx?: TransactionClient): Promise<DepartmentRow | null> {
     const client = tx ?? this.prisma;
     return client.department.findUnique({ where: { id }, include: departmentInclude });

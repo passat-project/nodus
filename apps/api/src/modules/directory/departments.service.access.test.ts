@@ -110,7 +110,7 @@ describe('DepartmentsService: отзыв доступа при изменени�
   });
 
   it('архивация снимает действующие роли сотрудников — токены отзываются', async () => {
-    departments.findById.mockResolvedValue(row('dep', null));
+    departments.findById.mockResolvedValue(row('dep', 'root'));
     audience.roleIdsOfDepartments.mockResolvedValue(['role-dept']);
     audience.departmentUserIds.mockResolvedValue(['u-1', 'u-2']);
 
@@ -127,7 +127,7 @@ describe('DepartmentsService: отзыв доступа при изменени�
   });
 
   it('архивация узла без привязанных ролей — только department.archived', async () => {
-    departments.findById.mockResolvedValue(row('dep', null));
+    departments.findById.mockResolvedValue(row('dep', 'root'));
     audience.departmentUserIds.mockResolvedValue(['u-1']);
 
     await service.archive('dep', 'admin-1');

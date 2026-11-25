@@ -10,6 +10,7 @@ import { IdentityLoader } from '../../src/modules/auth/identity.loader.js';
 import { TokenService } from '../../src/modules/auth/token.service.js';
 import { dispatchOwnEvent, eventIdOf } from './outbox-test-utils.js';
 import { setupRolesFixture } from './roles-fixtures.js';
+import { managementParentId, type DirectoryApi } from './departments-fixtures.js';
 
 /**
  * Отзыв access-токенов при изменении оргструктуры (#866, замечание
@@ -22,8 +23,12 @@ describe('Отзыв токенов при изменении оргструкт
   const departmentIds: string[] = [];
 
   const createDepartment = async (body: Record<string, unknown>) => {
+    const parentId =
+      body.parentId == null && (body.kind ?? 'management') === 'management'
+        ? await managementParentId(f.api as unknown as DirectoryApi, f.users.directory)
+        : body.parentId;
     const response = await f.api(f.users.directory, 'POST', '/directory/departments', {
-      body,
+      body: { ...body, parentId },
       key: randomUUID(),
     });
     expect(response.status).toBe(201);
