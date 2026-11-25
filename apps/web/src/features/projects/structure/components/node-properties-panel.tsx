@@ -20,7 +20,7 @@ import {
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useFrameReady } from '../../../../shared/ui/use-frame-ready.js';
-import { hasOpenPopperLayer } from '../../../../shared/lib/overlay-layers.js';
+import { useNodePanelEscape } from '../lib/use-node-panel-escape.js';
 import { CommitInput } from '../../../../shared/ui/panel/commit-field.js';
 import { PanelField } from '../../../../shared/ui/panel/panel-kit.js';
 import { NodeKindTile } from '../lib/node-kind-icon.js';
@@ -61,18 +61,12 @@ export function NodePropertiesPanel({
   // Смена выбранной папки сбрасывает незавершённый шаг смены вида.
   useEffect(() => setPendingKindId(null), [node?.id]);
 
-  useEffect(() => {
-    if (!node) return;
-    const handler = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return;
-      if (hasOpenPopperLayer() || document.querySelector('[role="dialog"]')) return;
-      event.preventDefault();
-      if (pendingKindId) setPendingKindId(null);
-      else onClose();
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [node, pendingKindId, onClose]);
+  useNodePanelEscape({
+    enabled: node !== null,
+    pendingKind: pendingKindId !== null,
+    onClose,
+    resetKind: () => setPendingKindId(null),
+  });
 
   const kind = node ? kinds.find((entry) => entry.id === node.kindId) : undefined;
   const targetKind = pendingKindId ? kinds.find((entry) => entry.id === pendingKindId) : undefined;
