@@ -4,8 +4,9 @@ import { Download, X } from 'lucide-react';
 import { ui } from '@nodus/contracts';
 
 import { Button } from '@nodus/ui/components/button';
+import { cn } from '@nodus/ui/lib/utils';
 
-import { VideoControlBar } from './video-control-bar.js';
+import { VideoControlBar, HALL_CONTROL_CLASS } from './video-control-bar.js';
 import { handleVideoSeekKey } from './video-seek-keys.js';
 import { useVideoPlayer, type VideoPlayer } from './use-video-player.js';
 
@@ -94,14 +95,14 @@ export function VideoPlayerView({
         className="flex h-12 shrink-0 items-center gap-2 bg-black px-3"
         onClick={(event) => event.stopPropagation()}
       >
-        <p className="min-w-0 flex-1 truncate text-sm text-white/90" title={name}>
+        <p className="min-w-0 flex-1 truncate text-sm font-medium text-white/90" title={name}>
           {name}
         </p>
         <Button
           asChild
           variant="ghost"
           size="icon-sm"
-          className="text-white/70 hover:bg-white/10 hover:text-white"
+          className={cn('text-white/60 hover:bg-white/10 hover:text-white', HALL_CONTROL_CLASS)}
         >
           <a href={url} download={name} aria-label={ui.files.download} title={ui.files.download}>
             <Download />
@@ -110,7 +111,7 @@ export function VideoPlayerView({
         <Button
           variant="ghost"
           size="icon-sm"
-          className="text-white/70 hover:bg-white/10 hover:text-white"
+          className={cn('text-white/60 hover:bg-white/10 hover:text-white', HALL_CONTROL_CLASS)}
           onClick={close}
           aria-label={ui.files.close}
           title={ui.files.close}
@@ -128,7 +129,10 @@ export function VideoPlayerView({
           preload="auto"
           tabIndex={0}
           playsInline
-          className="max-h-full max-w-full object-contain"
+          // Кадр — единственное «большое» действие зала (клик = пуск/пауза):
+          // курсор говорит о нажимаемости, фокус-рамка рисуется ВНЕ кадра
+          // (offset), а не поверх изображения — контент не перекрывается.
+          className="max-h-full max-w-full cursor-pointer object-contain focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60"
           aria-label={name}
           onKeyDown={(event) => handlePlayerKey(event, player)}
           onClick={(event) => {
