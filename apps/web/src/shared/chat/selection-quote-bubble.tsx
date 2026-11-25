@@ -79,6 +79,12 @@ export function SelectionQuoteBubble() {
         setBubble(null);
         return;
       }
+      // Лента канала (#1027): ответ поста живёт в треде, цитата в ленте
+      // создала бы невидимый пост с replyToId — баббл не показываем.
+      if (container.getAttribute('data-chat-reply-mode') === 'thread') {
+        setBubble(null);
+        return;
+      }
       // Позиция — СПРАВА от конца выделения, по вертикали последней строки
       // (модель Bitrix24, вердикт 24.09: bubble компактный и не нависает).
       const rects = selection.getRangeAt(0).getClientRects();

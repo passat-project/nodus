@@ -11,7 +11,9 @@ import { ui } from '@nodus/contracts';
 
 import { FileTypeIcon } from '../files/file-type-icon.js';
 import { formatBytes, formatDateTimeShort } from '../lib/format.js';
+import { formatVideoDuration } from './attachment-gallery.js';
 import { useJumpStore } from './jump-store.js';
+import { VideoPlayGlyph } from './video-play-glyph.js';
 
 /**
  * Рендереры элементов витрины (#211, ревизия 05.10): плитка медиа-сетки
@@ -31,12 +33,17 @@ export function MediaTile({
   name,
   meta,
   src,
+  isVideo = false,
+  durationMs = null,
   onOpen,
   onJump,
 }: {
   name: string;
   meta: string;
   src: string | undefined;
+  /** Видео-плитка (#250): play-значок и бейдж длительности на постере. */
+  isVideo?: boolean;
+  durationMs?: number | null;
   onOpen: () => void;
   onJump: () => void;
 }) {
@@ -48,7 +55,7 @@ export function MediaTile({
       title={name}
       className="group relative flex flex-col gap-1 text-left"
     >
-      <span className="relative block aspect-square w-full overflow-hidden rounded-md bg-muted/60">
+      <span className="relative block aspect-square w-full overflow-hidden rounded-lg bg-muted/60">
         {src ? (
           <img
             src={src}
@@ -57,6 +64,23 @@ export function MediaTile({
             decoding="async"
             className="absolute inset-0 size-full object-cover transition-opacity duration-200 group-hover:opacity-90"
           />
+        ) : isVideo ? (
+          <span className="absolute inset-0 bg-black/60" />
+        ) : null}
+        {isVideo ? (
+          <>
+            {/* Play — по ЦЕНТРУ плитки (уточнение владельца 25.11.2026),
+                глиф с точным центрированием; hairline-обводка держит чашку
+                на тёмных постерах. */}
+            <span className="pointer-events-none absolute inset-0 m-auto grid size-8 place-items-center rounded-full border border-white/20 bg-black/50 text-white">
+              <VideoPlayGlyph className="size-4" />
+            </span>
+            {durationMs !== null ? (
+              <span className="pointer-events-none absolute right-1 bottom-1 rounded border border-white/10 bg-black/60 px-1 py-px font-mono text-label-xs text-white tabular-nums">
+                {formatVideoDuration(durationMs)}
+              </span>
+            ) : null}
+          </>
         ) : null}
         <span
           role="button"
@@ -74,13 +98,13 @@ export function MediaTile({
               onJump();
             }
           }}
-          className="absolute right-1 top-1 rounded-md bg-background/80 p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+          className="absolute right-1 top-1 rounded-md bg-background/85 p-1 text-muted-foreground opacity-0 backdrop-blur-sm transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
         >
           <MessagesSquare className="size-3.5" strokeWidth={1.75} />
         </span>
       </span>
-      <span className="truncate text-xs text-muted-foreground">{name}</span>
-      <span className="truncate text-xs text-muted-foreground/80 tabular-nums">{meta}</span>
+      <span className="truncate text-xs text-foreground/90">{name}</span>
+      <span className="truncate text-label-xs text-muted-foreground tabular-nums">{meta}</span>
     </button>
   );
 }

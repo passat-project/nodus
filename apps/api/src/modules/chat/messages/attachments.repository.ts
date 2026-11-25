@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../../generated/prisma/client.js';
 
 import { PrismaService } from '../../../core/database/prisma.service.js';
+import { safeFileName } from '../../../core/http/safe-file-name.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 
 /** Строка вложения (сырой ряд, camelCase). */
@@ -15,6 +16,8 @@ export interface AttachmentRow {
   kind: string;
   width: number | null;
   height: number | null;
+  /** Длительность видео, мс (#250); null — не видео/неизвестна. */
+  durationMs: number | null;
   thumbFileId: string | null;
 }
 
@@ -76,6 +79,7 @@ export class AttachmentsRepository {
       kind: string;
       width: number | null;
       height: number | null;
+      durationMs: number | null;
     },
     tx?: TransactionClient,
   ): Promise<AttachmentRow> {
@@ -119,7 +123,13 @@ export class AttachmentsRepository {
    *  не перезаписывается; проигравший дериват удаляет вызывающий. */
   async markThumbnail(
     id: string,
-    data: { thumbFileId: string; width: number; height: number },
+    data: {
+      thumbFileId: string;
+      width: number;
+      height: number;
+      /** Длительность видео (мс, #250); у изображений не передаётся. */
+      durationMs?: number | null;
+    },
   ): Promise<boolean> {
     const result = await this.prisma.messageAttachment.updateMany({
       where: { id, thumbFileId: null },
@@ -180,7 +190,7 @@ export class AttachmentsRepository {
   ): Promise<void> {
     if (renames.length === 0) return;
     const ids = renames.map((r) => r.id);
-    const names = renames.map((r) => r.name);
+    const names = renames.map((r) => safeFileName(r.name));
     await tx.$executeRaw(Prisma.sql`
       UPDATE message_attachments ma
       SET name = r.name

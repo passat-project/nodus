@@ -7,8 +7,8 @@ import { ImageLightbox } from './image-lightbox.js';
 import { uiPx } from '../ui/ui-scale.js';
 
 export type AttachmentLayout =
-  | { mode: 'single'; image: MessageAttachment }
-  | { mode: 'gallery'; images: MessageAttachment[] }
+  | { mode: 'single'; media: MessageAttachment }
+  | { mode: 'gallery'; media: MessageAttachment[] }
   | { mode: 'list'; items: MessageAttachment[] };
 
 /** Ширина карточного списка (#150, вердикт владельца: «пузырь узкий, как в
@@ -25,20 +25,18 @@ export const MEDIA_META_FLOOR = uiPx(160);
 
 /**
  * Режим показа вложений (#150, канон Telegram/Битрикс): галерея — ТОЛЬКО
- * когда вложения исключительно изображения (1 — крупная плитка, 2+ — сетка);
- * любой файл в наборе «разбивает» галерею — весь набор (и картинки, и файлы)
- * рендерится карточным списком друг под другом, картинка в нём — карточка с
+ * когда вложения исключительно медиа (изображения и видео, #250); любой
+ * файл в наборе «разбивает» галерею — весь набор (медиа и файлы) рендерится
+ * карточным списком друг под другом, картинка/видео в нём — карточка с
  * квадратной миниатюрой. Чистая функция — unit-тест.
  */
 export function attachmentsLayout(list: MessageAttachment[]): AttachmentLayout {
   // Стикер (#143) рендерится собственной веткой сообщения (без пузыря) —
   // из блока вложений исключён полностью.
   const items = list.filter((a) => a.kind !== 'sticker');
-  const images = items.filter((a) => a.kind === 'image');
-  if (items.length > 0 && images.length === items.length) {
-    return images.length === 1
-      ? { mode: 'single', image: images[0]! }
-      : { mode: 'gallery', images };
+  const media = items.filter((a) => a.kind === 'image' || a.kind === 'video');
+  if (items.length > 0 && media.length === items.length) {
+    return media.length === 1 ? { mode: 'single', media: media[0]! } : { mode: 'gallery', media };
   }
   return { mode: 'list', items };
 }
@@ -67,7 +65,7 @@ export function mediaBubbleWidth(
   if (visible.length === 0) return null;
   const layout = attachmentsLayout(visible);
   if (layout.mode === 'single') {
-    const w = fitSingleBox(layout.image.width, layout.image.height).width;
+    const w = fitSingleBox(layout.media.width, layout.media.height).width;
     if (opts.bare) return w;
     return Math.max(w, opts.hasTextColumn ? TEXT_COL_MIN : MEDIA_META_FLOOR);
   }
@@ -122,9 +120,9 @@ function AttachmentBlock({
           ))}
         </span>
       ) : layout.mode === 'single' ? (
-        <AttachmentGallery images={[layout.image]} />
+        <AttachmentGallery media={[layout.media]} />
       ) : (
-        <AttachmentGallery images={layout.images} />
+        <AttachmentGallery media={layout.media} />
       )}
       {openIndex >= 0 ? (
         <ImageLightbox

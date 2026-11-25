@@ -22,6 +22,7 @@ import { usePresenceStore } from './presence-store.js';
 import { notifyDesktopMessage } from '../desktop/desktop-notify.js';
 import { notificationDispatched, notificationRead } from './notification-bridge.js';
 import { createRealtimeInvalidator, type RealtimeInvalidator } from './socket-invalidation.js';
+import { notifySocketReconnect } from './socket-reconnect.js';
 import { useSocketStatusStore } from './socket-status-store.js';
 import { useTypingStore } from './typing-store.js';
 import { wsDebugLog } from './ws-debug.js';
@@ -165,6 +166,9 @@ export function connectChatSocket(queryClient: QueryClient): void {
       emitJoin(conversationId);
     }
     void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    // Реконнект = сервер жив и, возможно, уже обновлён: подписчики реестра
+    // (#1038, детект версии портала) сверяют /version.json со сборкой.
+    notifySocketReconnect();
   });
   client.on('disconnect', (reason) => {
     status.setConnected(false);

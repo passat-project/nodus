@@ -8,7 +8,9 @@ import { Skeleton } from '@nodus/ui/components/skeleton';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useAuthStore } from '../../../shared/auth-store.js';
+import { isDesktopShell } from '../../../shared/desktop/desktop-bridge.js';
 import { formatListTimestamp, withoutPatronymic } from '../../../shared/lib/format.js';
+import { openInNewTab } from '../../../shared/lib/tab-bridge.js';
 import { ConversationAvatar } from '../../../shared/chat/conversation-avatar.js';
 import { ReadTicks } from '../../../shared/chat/read-ticks.js';
 import { useTypingStore } from '../../../shared/socket/typing-store.js';
@@ -68,11 +70,13 @@ function RowPreview({ conversation }: { conversation: ConversationListItem }) {
         stripMentionTokens(last.text) ||
         (last.attachments[0]?.kind === 'image'
           ? ui.chat.quotePhoto
-          : last.attachments[0]?.kind === 'sticker'
-            ? ui.chat.stickerPreview
-            : last.attachments[0]
-              ? ui.chat.quoteFile
-              : '')
+          : last.attachments[0]?.kind === 'video'
+            ? ui.chat.quoteVideo
+            : last.attachments[0]?.kind === 'sticker'
+              ? ui.chat.stickerPreview
+              : last.attachments[0]
+                ? ui.chat.quoteFile
+                : '')
     : '';
   return <span className="truncate text-xs text-muted-foreground">{text}</span>;
 }
@@ -165,6 +169,16 @@ export function ConversationList({
           type="button"
           data-row
           onClick={() => onSelect(conversation)}
+          // Средний клик — беседа в НОВОЙ вкладке портала (#1038, фон; только
+          // в оболочке: в браузере у кнопки штатного middle-click нет).
+          onMouseDown={(event) => {
+            if (isDesktopShell() && event.button === 1) event.preventDefault();
+          }}
+          onAuxClick={(event) => {
+            if (!isDesktopShell() || event.button !== 1) return;
+            event.preventDefault();
+            openInNewTab(`/chat/${conversation.id}`, { focus: false });
+          }}
           aria-current={active}
           className={cn(
             // МЯГКИЙ ховер у ВСЕХ строк (вердикт владельца 24.09.2026: подсветка

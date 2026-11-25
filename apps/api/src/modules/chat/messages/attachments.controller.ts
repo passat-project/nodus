@@ -27,9 +27,16 @@ const uuidSchema = z.uuid();
  *  хранилище), width/height — габариты изображения от клиента (резерв бокса
  *  ленты без сдвига). previewUrl — мок-поле, живой контур игнорирует. */
 const uploadFieldsSchema = z.object({
+  // Верхняя граница размера — в сервисе (413 CHAT_ATTACHMENT_TOO_LARGE):
+  // zod-потолок здесь отдавал 400 и ломал контракт ошибки #57.
   size: z.coerce.number().int().min(0),
-  width: z.coerce.number().int().min(1).optional(),
-  height: z.coerce.number().int().min(1).optional(),
+  // Потолки — гигиена входа (security #250): без max клиентский мусор
+  // роняет int4-вставку в 500 вместо 400; авторитетные значения всё равно
+  // приходят от sharp/ffprobe.
+  width: z.coerce.number().int().min(1).max(16_384).optional(),
+  height: z.coerce.number().int().min(1).max(16_384).optional(),
+  /** Длительность видео от клиента (мс, #250): резерв до ffprobe. */
+  durationMs: z.coerce.number().int().min(0).max(86_400_000).optional(),
 });
 
 /**
@@ -47,7 +54,7 @@ export class AttachmentsController {
   @Post()
   @Audit({ action: 'chat.attachment_upload', entity: 'attachment' })
   @ApiOperation({
-    summary: 'Загрузка вложения (multipart: file + поля size/width/height)',
+    summary: 'Загрузка вложения (multipart: file + поля size/width/height/durationMs)',
   })
   @ApiCreatedResponse({ standardSchema: messageAttachmentSchema })
   @ApiErrors(400, 401, 403, 404, 413)
@@ -93,6 +100,7 @@ export class AttachmentsController {
           size: parsed.data.size,
           width: parsed.data.width,
           height: parsed.data.height,
+          durationMs: parsed.data.durationMs,
         },
         file.file,
       );

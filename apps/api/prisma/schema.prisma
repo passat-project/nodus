@@ -634,6 +634,8 @@ model MessageAttachment {
   kind        String
   width       Int?
   height      Int?
+  /// Длительность видео, мс (#250): клиент — по метаданным, ffprobe — авторитетно.
+  durationMs  Int?     @map("duration_ms")
   /// FileObject серверного превью (WebP-дериват, #150); null — не сгенерировано
   /// (воркер ещё не дошёл / формат не декодируется). Пересылка копирует ссылку.
   thumbFileId String?  @map("thumb_file_id") @db.Uuid

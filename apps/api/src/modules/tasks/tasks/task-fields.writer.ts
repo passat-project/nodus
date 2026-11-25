@@ -165,6 +165,9 @@ export class TaskFieldsWriter {
     const data: TaskFieldsPatch = {};
     // Накопитель замков после разрешённой ручной правки (lastChange, Р4).
     if (lockResult) data.fieldLocks = lockResult.locks;
+    /** Фактическая смена срока — считается до записи (нужна и флагу #1031,
+     *  и событию #996). */
+    let deadlineChanged = false;
     // Значения атрибутов читаются и пишутся под замком строки: параллельные
     // PATCH сливаются по ключам, а не перетирают карту целиком (#431).
     let fieldChanges: RegistryFieldChange[] = [];
@@ -177,8 +180,13 @@ export class TaskFieldsWriter {
     if (patch.nodeId !== undefined) data.nodeId = patch.nodeId;
     if (nodeReset) data.nodeId = null;
     if (patch.deadline !== undefined) {
-      data.deadline = patch.deadline ? new Date(patch.deadline) : null;
-      data.overdueNotifiedAt = null; // новый срок — новое однократное уведомление
+      const next = patch.deadline ? new Date(patch.deadline) : null;
+      // #1031: флаг однократного уведомления перевзводится только реальной
+      // сменой срока. PATCH присылает deadline и при «просто сохранил»;
+      // иначе сканер просрочки пришлёт то же уведомление повторно.
+      deadlineChanged = (before.deadline?.toISOString() ?? null) !== (next?.toISOString() ?? null);
+      data.deadline = next;
+      if (deadlineChanged) data.overdueNotifiedAt = null;
     }
     const newAssigneeId =
       patch.assigneeId !== undefined && patch.assigneeId !== row.assigneeId
@@ -232,13 +240,7 @@ export class TaskFieldsWriter {
     if (opts.formulaWrite && fieldChanges.length === 0) return { customFieldChanges: [] };
     await this.repo.updateFields(tx, row.id, data);
     const after = await this.repo.findWithParticipants(row.id, tx);
-    // Фактическая смена срока (#996): PATCH присылает `deadline` и при
-    // неизменном значении («просто сохранил») — уведомление адресуется только
-    // реальной правке. Сравниваем нормализованные ISO-строки: `+03:00` и `Z`
-    // одной и той же минуты — не изменение.
-    const deadlineChanged =
-      patch.deadline !== undefined &&
-      (before.deadline?.toISOString() ?? null) !== (after.deadline?.toISOString() ?? null);
+    // deadlineChanged посчитан ДО записи (флаг #1031, комментарий выше).
     const base = {
       taskId: row.id,
       number: row.number,

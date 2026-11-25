@@ -41,6 +41,8 @@ export interface StickerAttachmentRow {
   kind: string;
   width: number | null;
   height: number | null;
+  /** Длительность видео, мс (#250): у стикеров всегда null. */
+  durationMs: number | null;
   thumbFileId: string | null;
   /** Снапшот {packId, packTitle, packScope, emojis} (JSONB, #143). */
   stickerMeta: unknown;
@@ -268,6 +270,7 @@ export class StickersRepository {
         kind: true,
         width: true,
         height: true,
+        durationMs: true,
         thumbFileId: true,
         stickerMeta: true,
       },

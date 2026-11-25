@@ -79,7 +79,9 @@ export class FavoriteSourcesRepository {
     >(Prisma.sql`
       SELECT
         ${favoriteAttachments(Prisma.sql`a.kind = 'image'`)} AS image_count,
-        ${favoriteAttachments(Prisma.sql`a.kind = 'file' AND a.mime LIKE 'video/%'`)} AS video_count,
+        ${favoriteAttachments(
+          Prisma.sql`(a.kind = 'video' OR (a.kind = 'file' AND a.mime LIKE 'video/%'))`,
+        )} AS video_count,
         ${favoriteAttachments(Prisma.sql`a.kind = 'file' AND a.mime LIKE 'audio/%'`)} AS audio_count,
         ${favoriteAttachments(
           Prisma.sql`a.kind = 'file' AND a.mime NOT LIKE 'video/%' AND a.mime NOT LIKE 'audio/%'`,

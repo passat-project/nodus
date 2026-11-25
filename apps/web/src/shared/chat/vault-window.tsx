@@ -137,8 +137,9 @@ export function VaultWindow({
 
 /**
  * Тело окна: группы по дню отправки (DayChip, модель Битрикс24) — картинки
- * сеткой 3 колонки с лайтбоксом, файлы/видео/аудио строками, ссылки
- * карточками. Общий скролл окна, сентинел догрузки у дна.
+ * сеткой 3 колонки с лайтбоксом (видео — плитками с постером и play, #250),
+ * файлы/аудио строками, ссылки карточками. Общий скролл окна, сентинел
+ * догрузки у дна.
  */
 function VaultWindowBody({
   conversationId,
@@ -179,7 +180,7 @@ function VaultWindowBody({
           {groups.map((group) => (
             <section key={group.key} className="flex flex-col gap-2">
               <DayChip label={formatDayLabel(group.items[0]!.createdAt)} />
-              {type === 'image' ? (
+              {type === 'image' || type === 'video' ? (
                 <div className="grid grid-cols-3 gap-1.5">
                   {group.items.map((item) =>
                     item.type === 'image' ? (
@@ -189,6 +190,23 @@ function VaultWindowBody({
                         meta={`${item.author.displayName} · ${formatDay(item.createdAt)}`}
                         src={item.attachment.thumbnailUrl ?? undefined}
                         onOpen={() => setLightbox(images.indexOf(item.attachment))}
+                        onJump={() =>
+                          useJumpStore
+                            .getState()
+                            .request(conversationId, item.messageId, item.threadRootId)
+                        }
+                      />
+                    ) : item.type === 'video' ? (
+                      // Видео в витрине — плиткой с постером (#250): play и
+                      // длительность, клик открывает большой плеер.
+                      <MediaTile
+                        key={item.attachment.id}
+                        name={item.attachment.name}
+                        meta={`${item.author.displayName} · ${formatDay(item.createdAt)}`}
+                        src={item.attachment.thumbnailUrl ?? undefined}
+                        isVideo
+                        durationMs={item.attachment.durationMs ?? null}
+                        onOpen={() => onOpenFile(toViewerTarget(item.attachment))}
                         onJump={() =>
                           useJumpStore
                             .getState()

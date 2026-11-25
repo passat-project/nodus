@@ -343,6 +343,41 @@ describe.skipIf(!process.env.DATABASE_URL)('chat: сообщения (integratio
     }
   });
 
+  it('пересылка видео: duration_ms/kind копируются (не теряются в копии)', async () => {
+    const src = await makeGroup();
+    const dst = await makeGroup();
+    const original = await send(alice, src, { text: 'ролик' });
+    await fx.prisma.messageAttachment.create({
+      data: {
+        messageId: original.id,
+        fileId: '00000000-0000-4000-8000-0000000000f1',
+        ownerId: alice.id,
+        name: 'ролик.mp4',
+        size: 1000,
+        mime: 'video/mp4',
+        kind: 'video',
+        width: 1920,
+        height: 1080,
+        durationMs: 4321,
+        sortOrder: 0,
+      },
+    });
+
+    const res = await fx.api(alice, 'POST', `/chat/conversations/${dst}/forward`, {
+      body: { sourceConversationId: src, messageIds: [original.id] },
+    });
+    expect(res.status).toBe(201);
+    const copies = (await res.json()) as ChatMessage[];
+    expect(copies).toHaveLength(1);
+    expect(copies[0]!.attachments[0]).toMatchObject({
+      name: 'ролик.mp4',
+      kind: 'video',
+      durationMs: 4321,
+      width: 1920,
+      height: 1080,
+    });
+  });
+
   it('пересылка: не член исходной беседы → NOT_FOUND (не раскрываем чужое)', async () => {
     // src без carol; carol — член dst: пересылка из беседы, где её нет, = 404.
     const srcRes = await fx.api(alice, 'POST', '/chat/conversations', {

@@ -14,6 +14,7 @@ import { api } from '../api-client.js';
 import { useQuickCreate } from '../tasks/quick-create.js';
 import { tasksKeys } from '../api/tasks-keys.js';
 import { chatKeys } from './chat-keys.js';
+import { invalidateConversationLists } from './conversation-list-invalidation.js';
 
 /** Мутации беседы вне отправки: состояние беседы, «Следить» за тредом,
  *  сообщение → задача / результат задачи (#252). */
@@ -28,7 +29,7 @@ export function useUpdateConversation() {
     mutationFn: ({ id, body }: { id: string; body: ConversationUpdateBody }) =>
       api<ConversationListItem>(`/chat/conversations/${id}`, { method: 'PATCH', body }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
+      void invalidateConversationLists(queryClient);
     },
   });
 }
@@ -44,7 +45,7 @@ export function useWatchThread(conversationId: string) {
       ),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: chatKeys.threadStates(conversationId) });
-      void queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
+      void invalidateConversationLists(queryClient);
     },
   });
 }

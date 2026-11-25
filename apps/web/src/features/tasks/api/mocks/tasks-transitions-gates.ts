@@ -29,7 +29,10 @@ export function fileCount(messageIds: readonly string[]): number {
   return demoMessages
     .filter((m) => ids.has(m.id) && !m.deletedAt)
     .reduce(
-      (sum, m) => sum + m.attachments.filter((a) => a.kind === 'image' || a.kind === 'file').length,
+      (sum, m) =>
+        sum +
+        m.attachments.filter((a) => a.kind === 'image' || a.kind === 'video' || a.kind === 'file')
+          .length,
       0,
     );
 }

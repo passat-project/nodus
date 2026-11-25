@@ -20,6 +20,9 @@ describe('MediaViewer: медиа ужимается по обеим осям (#
     );
     const video = container.querySelector('video');
     expect(video).not.toBeNull();
+    // Владелец 25.11.2026: видео стартует сразу при открытии просмотра.
+    expect(video!.hasAttribute('autoplay')).toBe(true);
+    expect(video!.getAttribute('preload')).toBe('auto');
     const stage = video!.parentElement!;
     expect(stage.className).toContain('flex');
     expect(stage.className).toContain('items-center');
@@ -57,5 +60,23 @@ describe('MediaViewer: медиа ужимается по обеим осям (#
     const audio = container.querySelector('audio')!;
     expect(audio.className).toContain('w-full');
     expect(audio.parentElement!.className).toContain('max-w-md');
+  });
+
+  /** #1005: autoFocus у медиаэлемента — реальный фокус (React атрибут игнорит). */
+  it('autoFocus: фокус на видео и tabIndex=0', () => {
+    const { container } = render(
+      <MediaViewer url="/files/clip.mp4" mime="video/mp4" name="clip.mp4" autoFocus />,
+    );
+    const video = container.querySelector('video')!;
+    expect(video.tabIndex).toBe(0);
+    expect(document.activeElement).toBe(video);
+  });
+
+  it('autoFocus=false: фокус не забирается у вкладки-хоста', () => {
+    const { container } = render(
+      <MediaViewer url="/files/clip.mp4" mime="video/mp4" name="clip.mp4" autoFocus={false} />,
+    );
+    const video = container.querySelector('video')!;
+    expect(document.activeElement).not.toBe(video);
   });
 });

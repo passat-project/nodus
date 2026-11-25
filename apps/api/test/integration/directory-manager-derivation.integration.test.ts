@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { userCardSchema, departmentNodeSchema, ErrorCode } from '@nodus/contracts';
 
 import { setupRolesFixture } from './roles-fixtures.js';
+import { managementParentId, type DirectoryApi } from './departments-fixtures.js';
 
 /**
  * Производный руководитель (#923): `manager_id` больше не свободная ссылка —
@@ -17,8 +18,12 @@ describe('Производный руководитель и профиль (#92
   const departmentIds: string[] = [];
 
   const createDepartment = async (body: Record<string, unknown>) => {
+    const parentId =
+      body.parentId == null && (body.kind ?? 'management') === 'management'
+        ? await managementParentId(f.api as unknown as DirectoryApi, f.users.structureAdmin)
+        : body.parentId;
     const response = await f.api(f.users.structureAdmin, 'POST', '/directory/departments', {
-      body,
+      body: { ...body, parentId },
       key: randomUUID(),
     });
     expect(response.status).toBe(201);

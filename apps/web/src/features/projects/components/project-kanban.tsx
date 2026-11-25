@@ -64,7 +64,7 @@ export function ProjectKanban({
     onMove: (vars, opts) =>
       move.mutate(
         { taskId: vars.taskId, stageId: vars.stageId, index: vars.index },
-        { onError: opts.onError },
+        { onError: opts.onError, onSettled: opts.onSettled },
       ),
   });
 

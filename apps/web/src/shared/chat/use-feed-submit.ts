@@ -25,6 +25,21 @@ export function findLastMine(
  * вложений по scope и ↑-правка последнего своего. threadRootId — хост треда
  * (ответы уходят в тред).
  */
+export function feedSendVars(
+  submit: ComposerSubmit,
+  threadRootId: string | null,
+  scope: string,
+): SendChatVars {
+  const vars = toSendVars(submit);
+  // Лента канала (#1027): корневые посты не отвечают цитатами — ответ
+  // живёт в треде. Даже поднятый из черновика reply не должен дать
+  // невидимый пост (thread-feed рендерит только replyToId === null).
+  const base = scope.startsWith('feed:')
+    ? { ...vars, replyToId: null, quoteText: null, reply: null }
+    : vars;
+  return threadRootId ? { ...base, threadRootId } : base;
+}
+
 export function useFeedSubmit({
   conversationId,
   scope,
@@ -44,8 +59,7 @@ export function useFeedSubmit({
   const edit = useEditMessage(conversationId, scope);
 
   function sendVars(submit: ComposerSubmit): SendChatVars {
-    const vars = toSendVars(submit);
-    return threadRootId ? { ...vars, threadRootId } : vars;
+    return feedSendVars(submit, threadRootId, scope);
   }
 
   function handleSubmit(submit: ComposerSubmit) {

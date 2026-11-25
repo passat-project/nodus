@@ -1,6 +1,7 @@
 import { Controller, Get, Header, Param, Query, Req, Res } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { OutgoingHttpHeaders } from 'node:http';
 import { z } from 'zod';
 import {
   ErrorCode,
@@ -22,7 +23,10 @@ import { ZodValidationPipe } from '../../core/pipes/zod-validation.pipe.js';
 import { FilesRepository } from './files.repository.js';
 import { DerivativesRepository } from './derivatives/derivatives.repository.js';
 import { MinioStorageDriver } from './storage/minio-storage.driver.js';
+import { decideContentRange } from './content-range.js';
 import { needsTextNormalization, normalizeTextForOffice } from './office/text-normalizer.js';
+import { safeContentType } from './safe-content-type.js';
+import { safeFileName } from '../../core/http/safe-file-name.js';
 import { FileTextService } from './text/file-text.service.js';
 
 const contentQuerySchema = z.object({
@@ -39,6 +43,13 @@ const derivativeQuerySchema = z.object({
   exp: z.coerce.number().int().positive(),
   sig: z.string().regex(/^[0-9a-f]{64}$/),
 });
+
+/**
+ * CSP-песочница пользовательского контента (#1005, security-ревью): прямая
+ * навигация по подписной ссылке не исполняет активный контент на origin
+ * портала (там refresh-cookie), даже если sniffing когда-нибудь обойдут.
+ */
+const USER_CONTENT_CSP = "default-src 'none'; sandbox";
 
 /**
  * Отдача файлов (`/api/v1/files`): контент по HMAC-подписи (ADR-0013).
@@ -95,7 +106,11 @@ export class FilesController {
 
   @Public()
   @Get(':id/content')
-  @ApiOperation({ summary: 'Контент файла по подписанной ссылке (inline для изображений)' })
+  @ApiOperation({
+    summary:
+      'Контент файла по подписанной ссылке (inline для изображений/видео, Range/206 для перемотки медиа)',
+  })
+  @ApiErrors(401, 404, 410, 416, 429)
   async content(
     @Param('id', new ZodValidationPipe(z.uuid())) id: string,
     @Query({
@@ -132,7 +147,10 @@ export class FilesController {
     }
 
     const etag = `"${file.id}-v${version}"`;
-    if (request.headers['if-none-match'] === etag) {
+    // 304 — только для запросов БЕЗ Range (#1005): медиаэлемент приходит с
+    // диапазоном и ждёт 206 или полный файл; «возьми из кэша» на Range-запрос
+    // отдаёт клиенту решение по частичному кэшу.
+    if (!request.headers.range && request.headers['if-none-match'] === etag) {
       void reply.status(304).send();
       return;
     }
@@ -150,7 +168,7 @@ export class FilesController {
         .header('Content-Length', body.length)
         .header(
           'Content-Disposition',
-          `attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+          `attachment; filename*=UTF-8''${encodeURIComponent(safeFileName(file.name))}`,
         )
         .header('X-Content-Type-Options', 'nosniff')
         .header('ETag', etag)
@@ -158,13 +176,34 @@ export class FilesController {
       return;
     }
 
-    const stream = await this.driver.get(key);
-    // Inline — ТОЛЬКО whitelist растровых форматов: mime приходит от клиента
-    // и не валидируется, а SVG (и пр. активный контент) в «новой вкладке»
-    // исполняет скрипты на origin портала → refresh-cookie жертвы (валидация
-    // #57: stored XSS). video/webm — стикеры #143 (проигрывание <video> без
-    // скачивания; WebM-контейнер скрипты не исполняет). Остальное —
-    // attachment; на всё — nosniff.
+    // Перемотка видео (#1005): браузер запрашивает байтовый диапазон и
+    // считает поток seekable только после 206 + Content-Range. If-Range:
+    // срез применяем, только если клиент кэшировал ЭТУ версию, иначе отдаём
+    // файл целиком — склейка срезов разных версий даёт битый ролик.
+    const ifRange = request.headers['if-range'];
+    const rangeDecision = decideContentRange(
+      ifRange === undefined || ifRange === etag ? request.headers.range : undefined,
+      size,
+    );
+    if (rangeDecision.kind === 'unsatisfiable') {
+      // 416 обязан нести полный размер ресурса (RFC 9110 §15.5.17).
+      void reply.header('Content-Range', `bytes */${size}`);
+      throw new DomainException(
+        ErrorCode.FILE_RANGE_NOT_SATISFIABLE,
+        'Requested range is not satisfiable',
+        { size },
+      );
+    }
+    const range = rangeDecision.kind === 'partial' ? rangeDecision.range : undefined;
+    // Заголовки собираем ДО открытия потока: битое имя (одиночный суррогат)
+    // или mime, который Fastify отвергнет, не должны оставить соединение
+    // к хранилищу открытым (security-ревью #1005).
+    // Inline — ТОЛЬКО whitelist неисполняемых форматов: mime приходит от
+    // клиента и не валидируется, а SVG (и пр. активный контент) в «новой
+    // вкладке» исполняет скрипты на origin портала → refresh-cookie жертвы
+    // (валидация #57: stored XSS). Изображения и видео-контейнеры (стикеры
+    // #143, кинозал #787, перемотка #1005) — inline; остальное — attachment;
+    // на всё — nosniff + CSP-песочница пользовательского контента.
     const INLINE_MIME = new Set([
       'image/png',
       'image/jpeg',
@@ -173,19 +212,59 @@ export class FilesController {
       'image/avif',
       'image/bmp',
       'video/webm',
+      'video/mp4',
+      'video/quicktime',
+      'video/ogg',
+      'video/x-matroska',
+      'video/mpeg',
+      'video/x-msvideo',
+      'video/3gpp',
     ]);
     const disposition = INLINE_MIME.has(file.mime) ? 'inline' : 'attachment';
-    void reply
-      .header('Content-Type', file.mime)
-      .header('Content-Length', size)
-      .header(
-        'Content-Disposition',
-        `${disposition}; filename*=UTF-8''${encodeURIComponent(file.name)}`,
-      )
-      .header('X-Content-Type-Options', 'nosniff')
-      .header('Cache-Control', 'private, max-age=3600')
-      .header('ETag', etag)
-      .send(stream);
+    const headers: Record<string, string | number> = {
+      // mime клиентский: управляющие символы не должны уронить заголовок.
+      'Content-Type': safeContentType(file.mime),
+      // Длина — тела ответа: у 206 это срез, у 200 — весь файл.
+      'Content-Length': range ? range.end - range.start + 1 : size,
+      'Content-Disposition': `${disposition}; filename*=UTF-8''${encodeURIComponent(safeFileName(file.name))}`,
+      'Accept-Ranges': 'bytes',
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': USER_CONTENT_CSP,
+      'Cache-Control': 'private, max-age=3600',
+      ETag: etag,
+    };
+    if (range) headers['Content-Range'] = `bytes ${range.start}-${range.end}/${size}`;
+    // HEAD: тело не нужно — поток из хранилища не открываем вовсе. Заголовки
+    // пишем напрямую: `reply.send()` без тела обнулил бы Content-Length,
+    // а HEAD обязан повторять заголовки GET (RFC 9110 §9.3.2). `writeHead`
+    // ДО `hijack()`: негодный заголовок должен уйти конвертом ошибки, а не
+    // оставить запрос без ответа (security-ревью #1005). Заголовки глобальных
+    // хуков (CORS/HSTS в будущем) сохраняем через reply.getHeaders(); хуки
+    // обязаны ставить их через reply.header(), а НЕ reply.raw.setHeader —
+    // иначе HEAD файлов молча выпадет из политики.
+    if (request.method === 'HEAD') {
+      // Заголовки глобальных хуков (CORS/HSTS в будущем) сохраняем: getHeaders
+      // типизирован Record<HttpHeader> — для writeHead приводим к Node-типу.
+      const rawHeaders = { ...reply.getHeaders(), ...headers } as OutgoingHttpHeaders;
+      reply.raw.writeHead(range ? 206 : 200, rawHeaders);
+      reply.hijack();
+      reply.raw.end();
+      return;
+    }
+    // Поток открываем ПОСЛЕ сборки заголовков: сбой хранилища уходит в единый
+    // конверт ошибки без медиа-заголовков (`inline`, кеш, ETag) на ответе
+    // (security-ревью #1005). Бросок на выставлении заголовков (негодный
+    // mime/имя) не должен оставить соединение с хранилищем открытым.
+    const stream = await this.driver.get(key, range);
+    try {
+      void reply
+        .status(range ? 206 : 200)
+        .headers(headers)
+        .send(stream);
+    } catch (error) {
+      stream.destroy();
+      throw error;
+    }
   }
 
   /**
@@ -220,18 +299,31 @@ export class FilesController {
     if (derivative?.status !== 'ready' || !derivative.key) {
       throw DomainException.notFound('File derivative is not ready');
     }
-    const stream = await this.driver.get(derivative.key);
     const etag = `"${id}-v${file.version}-deriv-${kind}"`;
-    void reply
-      .header('Content-Type', derivative.mime)
-      .header('Content-Length', derivative.size)
-      .header(
-        'Content-Disposition',
-        `inline; filename*=UTF-8''${encodeURIComponent(`${file.name}.pdf`)}`,
-      )
-      .header('X-Content-Type-Options', 'nosniff')
-      .header('Cache-Control', 'private, max-age=3600')
-      .header('ETag', etag)
-      .send(stream);
+    // Заголовки (и кодирование имени) — до открытия потока, как в content:
+    // бросок не оставляет соединение с хранилищем открытым (security-ревью
+    // #1005). CSP-песочницу на производную НЕ ставим: PDF забирается pdf.js
+    // как подресурс (CSP к нему не применяется), а при прямой навигации
+    // `sandbox` может отключить встроенный просмотрщик Chrome; `nosniff` +
+    // `application/pdf` уже не дают исполнить содержимое как HTML.
+    const headers: Record<string, string | number> = {
+      // Производная — всегда PDF (`kind` — z.enum(['pdf'])): константа, а не
+      // mime из БД. При ручном/миграционном рассинхроне данных прямая
+      // навигация не отдаст содержимое как HTML на origin портала
+      // (security-ревью #1005).
+      'Content-Type': 'application/pdf',
+      'Content-Length': derivative.size,
+      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(safeFileName(`${file.name}.pdf`))}`,
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'private, max-age=3600',
+      ETag: etag,
+    };
+    const stream = await this.driver.get(derivative.key);
+    try {
+      void reply.headers(headers).send(stream);
+    } catch (error) {
+      stream.destroy();
+      throw error;
+    }
   }
 }

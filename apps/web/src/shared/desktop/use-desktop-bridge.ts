@@ -6,6 +6,7 @@ import type { OpenLetterEvent } from '@nodus/contracts';
 
 import { api } from '../api-client.js';
 import { enqueueSend } from '../chat/send-queue.js';
+import { openOrFocusTab } from '../lib/tab-bridge.js';
 import { bindDesktopShellEvents, isDesktopShell } from './desktop-bridge.js';
 
 /**
@@ -23,15 +24,15 @@ export function useDesktopBridge(handlers: {
   const navigate = useNavigate();
 
   const openConversation = useCallback(
-    // Трэд в событии (попап об ответе в трэде, #300) — открывается окном
-    // трэда через готовый deep-link `?thread=`; функциональная форма search
-    // сохраняет посторонние параметры (стек карточек ?cards=).
+    // Вкладки браузерного типа (#1038): своя /chat-вкладка активируется,
+    // нет — открывается новая (мост-порт openOrFocusTab). Роутер ведёт МОСТ:
+    // navigate по адресу — контроллер запишет переход в активную вкладку.
+    // Трэд в событии (попап об ответе в трэде, #300) — окном трэда через
+    // deep-link `?thread=`.
     (conversationId: string, threadRootId?: string | null) => {
-      void navigate({
-        to: '/chat/$conversationId',
-        params: { conversationId },
-        search: (prev) => ({ ...prev, thread: threadRootId ?? undefined }),
-      });
+      const url = `/chat/${conversationId}${threadRootId ? `?thread=${threadRootId}` : ''}`;
+      openOrFocusTab(url, '/chat');
+      void navigate({ href: url });
     },
     [navigate],
   );

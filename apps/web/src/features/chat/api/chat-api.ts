@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ConversationListItem, CreateConversationBody } from '@nodus/contracts';
 
 import { api } from '../../../shared/api-client.js';
-import { chatKeys } from '../../../shared/chat/chat-keys.js';
+import { invalidateConversationLists } from '../../../shared/chat/conversation-list-invalidation.js';
 
 /** Список бесед переехал в shared/chat/chat-queries.ts (#87: второй
  *  потребитель — диалог пересылки в shared-слое, I6); реэкспорт для импортов
@@ -20,7 +20,7 @@ export function useCreateConversation() {
     mutationFn: (body: CreateConversationBody) =>
       api<ConversationListItem>('/chat/conversations', { method: 'POST', body }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
+      void invalidateConversationLists(queryClient);
     },
   });
 }

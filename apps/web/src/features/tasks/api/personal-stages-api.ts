@@ -13,6 +13,8 @@ import { transitionErrorText } from './transitions-api.js';
 
 import { api } from '../../../shared/api-client.js';
 import { toastApiError } from '../../../shared/api/error-toast.js';
+import { applyServerTask } from '../../../shared/api/task-cache.js';
+import { invalidateNow, markStale } from '../../../shared/api/task-invalidate.js';
 import { mapTaskInPages, tasksKeys } from './tasks-api.js';
 
 // usePersonalStages/useCreateTask — canonical в shared/api/task-create
@@ -37,7 +39,10 @@ export function useUpdateTaskPersonalStage() {
       api<TaskListItem>(`/tasks/${taskId}`, { method: 'PATCH', body: { personalStageId, index } }),
 
     onMutate: async ({ taskId, personalStageId }) => {
-      await queryClient.cancelQueries({ queryKey: tasksKeys.listPages() });
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: tasksKeys.listPages() }),
+        queryClient.cancelQueries({ queryKey: tasksKeys.detail(taskId) }),
+      ]);
       const previous = queryClient.getQueryData<InfiniteData<Paginated<TaskListItem>>>(
         tasksKeys.listPages(),
       );
@@ -68,11 +73,19 @@ export function useUpdateTaskPersonalStage() {
       toast.error(transitionErrorText(error));
     },
 
+    onSuccess: (server) => applyServerTask(queryClient, server),
+
+    // Одна волна перезапросов (#1051): деталь, журнал и счётчики «n из m» —
+    // сразу; колонки открытой доски перезапрашивает сама доска в момент этого
+    // ответа (замок переносов), остальные витрины догоняет эхо собственного
+    // события. Прежде каждая сторона инвалидировала всё подряд, а страница
+    // колонки, пришедшая до ответа, возвращала карточку назад.
     onSettled: (_data, _error, vars) => {
-      void queryClient.invalidateQueries({ queryKey: tasksKeys.listPages() });
-      void queryClient.invalidateQueries({ queryKey: tasksKeys.kanbanAll() });
-      void queryClient.invalidateQueries({ queryKey: tasksKeys.personalStages() });
-      void queryClient.invalidateQueries({ queryKey: tasksKeys.detail(vars.taskId) });
+      void invalidateNow(queryClient, tasksKeys.detail(vars.taskId));
+      void invalidateNow(queryClient, tasksKeys.listPages());
+      void invalidateNow(queryClient, tasksKeys.personalStages());
+      void markStale(queryClient, tasksKeys.kanbanAll());
+      void markStale(queryClient, tasksKeys.branchAll());
     },
   });
 }

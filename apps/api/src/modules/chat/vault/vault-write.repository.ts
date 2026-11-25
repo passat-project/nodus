@@ -129,12 +129,12 @@ export class VaultWriteRepository {
     >(Prisma.sql`
       SELECT message_id,
         COUNT(*) FILTER (WHERE kind = 'image') AS image,
-        COUNT(*) FILTER (WHERE kind = 'file' AND mime LIKE 'video/%') AS video,
+        COUNT(*) FILTER (WHERE kind = 'video' OR (kind = 'file' AND mime LIKE 'video/%')) AS video,
         COUNT(*) FILTER (WHERE kind = 'file' AND mime LIKE 'audio/%') AS audio,
         COUNT(*) FILTER (WHERE kind = 'file'
           AND mime NOT LIKE 'video/%' AND mime NOT LIKE 'audio/%') AS document
       FROM message_attachments
-      WHERE message_id = ANY(${messageIds}::uuid[]) AND kind IN ('image', 'file')
+      WHERE message_id = ANY(${messageIds}::uuid[]) AND kind IN ('image', 'video', 'file')
       GROUP BY message_id
     `);
     for (const row of rows) {

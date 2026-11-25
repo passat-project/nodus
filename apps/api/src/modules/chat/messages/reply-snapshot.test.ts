@@ -7,7 +7,7 @@ function original(
     authorId: string;
     text: string;
     deleted: boolean;
-    attachmentKind: 'image' | 'file' | 'sticker' | null;
+    attachmentKind: 'image' | 'video' | 'file' | 'sticker' | null;
     stickerFileId: string | null;
     stickerEmoji: string | null;
     stickerMime: string | null;
@@ -106,6 +106,9 @@ describe('buildReplySnapshot', () => {
     );
     expect(buildReplySnapshot(original({ attachmentKind: 'file' }), null).attachmentKind).toBe(
       'file',
+    );
+    expect(buildReplySnapshot(original({ attachmentKind: 'video' }), null).attachmentKind).toBe(
+      'video',
     );
     expect(buildReplySnapshot(original({ attachmentKind: null }), null).attachmentKind).toBeNull();
   });

@@ -19,6 +19,8 @@ import { toast } from 'sonner';
 
 import { api } from '../../../shared/api-client.js';
 import { projectsKeys } from '../../../shared/api/projects-list.js';
+import { applyServerTask } from '../../../shared/api/task-cache.js';
+import { invalidateAfterTaskMutation } from '../../../shared/api/task-invalidate.js';
 import { tasksKeys } from '../../../shared/api/tasks-keys.js';
 import {
   projectJournalParams,
@@ -120,18 +122,29 @@ export function useProjectTaskPages(projectId: string, search?: string) {
 
 /** Перенос задачи проектной доски по глобальной оси (ADR-0008): борд —
  *  локальное состояние колонки (оптимистично, I4), сервер — PATCH /tasks/:id;
- *  откат снапшотом и тост — в обработчиках компонента доски. */
+ *  откат снапшотом и тост — в обработчиках компонента доски. Ответ сервера
+ *  пишется в журнал и оверлей досок; перезапрос — точечный (#1051): колонки
+ *  открытой доски перезапрашивает сама доска в момент ответа (замок
+ *  переносов), прежде инвалидировалось всё дерево ключей `tasks`. */
 export function useMoveProjectTask() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ taskId, stageId, index }: { taskId: string; stageId: string; index: number }) =>
       api<TaskListItem>(`/tasks/${taskId}`, { method: 'PATCH', body: { stageId, index } }),
+    // Летящий рефеч журнала или детали затёр бы оптимистичный перенос.
+    onMutate: async ({ taskId }) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: tasksKeys.listPages() }),
+        queryClient.cancelQueries({ queryKey: tasksKeys.detail(taskId) }),
+      ]);
+    },
+    onSuccess: (server) => applyServerTask(queryClient, server),
     onError: () => {
       toast.error(ui.tasks.stageMoveError);
     },
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: tasksKeys.all });
-    },
+    // Стадия задачи кормит агрегаты узлов структуры (прогресс, крайние сроки).
+    onSettled: (_data, _error, vars) =>
+      invalidateAfterTaskMutation(queryClient, vars.taskId, { structure: true }),
   });
 }
 

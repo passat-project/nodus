@@ -140,6 +140,9 @@ export const chatStrings = {
   vaultFilesEmpty: 'В беседе пока нет файлов',
   vaultLinksEmpty: 'В беседе пока нет ссылок',
   vaultOpenCategory: 'Открыть категорию',
+  /** Видео-плитка (#250): play на постере и вежливый отказ на неподдержанном коде. */
+  videoPlay: 'Смотреть видео',
+  videoUnsupported: 'Не удалось воспроизвести — скачайте файл',
   // Профиль чата (ревизия 05.10): большой аватар, действия, категории.
   profileSound: 'Звук',
   // Источники «Избранного» (Ф3, реф Telegram Saved).
@@ -300,6 +303,7 @@ export const chatStrings = {
   forwardedFrom: 'Переслано от',
   jumpNotFound: 'Сообщение недоступно',
   quotePhoto: 'Фото',
+  quoteVideo: 'Видео',
   quoteFile: 'Файл',
   menu: {
     reply: 'Ответить',
@@ -406,6 +410,7 @@ export const chatStrings = {
   searchLabelsEmpty: 'Меток пока нет — ставьте их звёздочкой на сообщения в «Избранном»',
   /** Вложения в строках поиска — словами, не рендером (реф Битрикс24). */
   searchAttachImage: 'Картинка',
+  searchAttachVideo: 'Видео',
   searchAttachFile: 'Документ',
   searchAttachSticker: 'Стикер',
   /** @упоминания (#176): автокомплит композера и правка чипа. */

@@ -22,6 +22,7 @@ export interface AttachmentDtoRow {
   kind: string;
   width: number | null;
   height: number | null;
+  durationMs: number | null;
   thumbFileId: string | null;
   stickerMeta?: unknown;
 }
@@ -39,7 +40,7 @@ export function toAttachmentDto(
     name: a.name,
     size: a.size,
     mime: a.mime,
-    kind: a.kind as 'image' | 'file' | 'sticker',
+    kind: a.kind as 'image' | 'video' | 'file' | 'sticker',
     url: signedUrls.fileContentUrl(a.fileId),
     // Серверное превью-дериват (#150); null — не сгенерировано.
     thumbnailUrl: a.thumbFileId ? signedUrls.fileContentUrl(a.thumbFileId) : null,
@@ -53,6 +54,7 @@ export function toAttachmentDto(
         : null,
     width: a.width,
     height: a.height,
+    durationMs: a.durationMs,
     ...(a.kind === 'sticker' && stickerMeta ? { sticker: stickerMeta } : {}),
   };
 }

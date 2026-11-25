@@ -69,9 +69,37 @@ fileAccessContext` (`chat`, `letter`), DiscoveryService находит его с
   HMAC-подпись (`SignedUrlService`, `STORAGE_URL_SECRET`, TTL 24 ч,
   константное сравнение); ресурс подписи включает версию (`{id}:v{N}`) —
   ссылкой на v2 не открыть v3. URL выпускает потребитель в DTO
-  (`fileContentUrl` / `fileVersionUrl`). ETag `{id}-v{N}` → 304;
-  Content-Disposition inline (image/*) / attachment; `scan_status=infected`
-  → 410 `FILE_QUARANTINED` (сканер — фаза 2/M14, до него pending отдаётся).
+  (`fileContentUrl` / `fileVersionUrl`). ETag `{id}-v{N}` → 304 (только для
+  запросов без `Range`); Content-Disposition inline (изображения и
+  видео-контейнеры) / attachment; `scan_status=infected` → 410
+  `FILE_QUARANTINED` (сканер — фаза 2/M14, до него pending отдаётся).
+  **Range/206 (#1005)**: браузер запрашивает байтовые диапазоны — срез
+  читается из хранилища (`getPartialObject`, без буферизации), ответ 206 +
+  `Content-Range` + `Accept-Ranges: bytes`; без этого Chrome/WebKit считают
+  поток не-seekable до полной загрузки (Safari не воспроизводит) и
+  перемотка видео недоступна. `If-Range` не даёт склеить срезы разных
+  версий; диапазон вне файла — 416 `FILE_RANGE_NOT_SATISFIABLE`
+  (`Content-Range` с полным размером); негодный/многодиапазонный `Range`
+  игнорируется (200 целиком). Порядок — «собрать заголовки → открыть поток →
+  выставить заголовки на ответ»: сбой хранилища уходит чистым конвертом ошибки
+  без медиа-заголовков, а бросок на сборке заголовков не оставляет поток
+  открытым. Ответ несёт
+  `Content-Security-Policy: default-src 'none'; sandbox`
+  (defense-in-depth для пользовательского контента, security-ревью #1005);
+  `Content-Type` санитизируется (`safeContentType`: управляющие символы,
+  не-формат или длиннее 128 символов → `application/octet-stream`), имя —
+  `safeFileName` (≤200 символов, обрезка по код-пойнтам без разрыва эмодзи,
+  пустое имя → «файл»; вырезаются управляющие символы, одиночные суррогаты и
+  невидимые bidi-переопределения — подмена расширения, CWE-451; применяется
+  при сохранении, чтении legacy-строк и в `Content-Disposition` обеих веток),
+  иначе заголовок роняет или раздувает ответ до нечитаемого клиентами. HEAD
+  отдаёт заголовки без тела и без
+  открытия потока (`reply.hijack`; глобальные хуки обязаны ставить заголовки
+  через `reply.header()`, `raw.setHeader` в HEAD не попадёт). На производной
+  (`derivative`, PDF) `Content-Type` — константа `application/pdf` (не mime
+  из БД), CSP-песочницы НЕТ: pdf.js забирает её как подресурс (CSP не
+  применяется), а прямой навигации `sandbox` может отключить встроенный
+  просмотрщик Chrome — `nosniff` + `application/pdf` достаточно.
 - **Текст для ассистента (#922, ADR-0050)**: `GET /api/v1/files/:id/text` —
   обычная авторизация (не `@Public`, не HMAC), фичефлаг `assistant` (I10) и право
   `assistant.use` (I8): права через `OfficeSessionService.resolveAccess`

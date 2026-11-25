@@ -5,8 +5,9 @@ import { SnippetText } from '../search/snippet-text.js';
 import { MentionSnippet } from './mention-chip.js';
 
 /** Вложение строки — словом, не рендером (реф Битрикс24, 04.10 р.5). */
-export function attachmentWord(kind: 'image' | 'file' | 'sticker'): string {
+export function attachmentWord(kind: 'image' | 'video' | 'file' | 'sticker'): string {
   if (kind === 'image') return ui.chat.searchAttachImage;
+  if (kind === 'video') return ui.chat.searchAttachVideo;
   if (kind === 'sticker') return ui.chat.searchAttachSticker;
   return ui.chat.searchAttachFile;
 }
@@ -29,7 +30,7 @@ export function FavoriteHitRow({
 }: {
   author: string;
   snippet: string;
-  attachments: ('image' | 'file' | 'sticker')[];
+  attachments: ('image' | 'video' | 'file' | 'sticker')[];
   /** Индикатор «в избранном» — только у закладок; записи витрины — без
    *  звезды (сообщения самому себе — ещё не избранное, 04.10 р.7). */
   favorited?: boolean;

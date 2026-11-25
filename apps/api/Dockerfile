@@ -22,6 +22,10 @@ RUN pnpm turbo build --filter=@nodus/api
 FROM node:24-alpine AS runner
 ENV NODE_ENV=production
 WORKDIR /app
+# ffmpeg/ffprobe (#250): постер и метаданные видео из пользовательских роликов.
+# Только рантайм (~100 МБ); пути переопределяются FFMPEG_PATH/FFPROBE_PATH
+# для хостовой разработки (Docker-образ находит бинари по PATH).
+RUN apk add --no-cache ffmpeg
 COPY --from=builder /app ./
 # Не root (#317): api пишет только в SILO/PostgreSQL, локальная ФС — read-only.
 USER node

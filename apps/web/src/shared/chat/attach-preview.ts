@@ -7,6 +7,7 @@ import type { PendingAttachment } from './chat-drafts.js';
  *  смотрит их же. */
 export function attachPreviewImages(items: readonly PendingAttachment[]): MessageAttachment[] {
   return items.flatMap((item): MessageAttachment[] => {
+    if (!item.mime.startsWith('image/')) return [];
     if (item.objectUrl) {
       return [
         {
@@ -30,7 +31,9 @@ export function attachPreviewImages(items: readonly PendingAttachment[]): Messag
   });
 }
 
-/** У строки есть что показать в лайтбоксе (локальный blob или серверное превью). */
+/** У строки есть что показать в лайтбоксе изображений (локальный blob или
+ *  серверное превью); видео в лайтбокс не попадает (#250). */
 export function hasAttachPreview(item: PendingAttachment): boolean {
+  if (!item.mime.startsWith('image/')) return false;
   return Boolean(item.objectUrl || item.attachment?.thumbnailUrl || item.attachment?.url);
 }
