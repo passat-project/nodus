@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement, type ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatMessage } from '@nodus/contracts';
 
 import { chatKeys } from './chat-keys.js';
@@ -44,6 +44,8 @@ beforeEach(() => {
   vi.stubEnv('VITE_API_MOCK', 'false');
 });
 
+afterEach(cleanup);
+
 describe('useSendChatMessage — идемпотентность отправки (#48)', () => {
   it('две отправки с одним temp id → одинаковый Idempotency-Key', async () => {
     const keys: string[] = [];
@@ -66,6 +68,9 @@ describe('useSendChatMessage — идемпотентность отправки
 
     expect(keys[0]).toBe('temp-one');
     expect(keys[1]).toBe('temp-one');
+    // Гасим мутацию до teardown: иначе её notify прилетает в уже убранный jsdom
+    // (ReferenceError: window is not defined) и красит весь прогон (#627).
+    await waitFor(() => expect(result.current.isPending).toBe(false));
   });
 
   it('mutate без явного temp id генерирует ключ сам: разные сообщения — разные ключи', async () => {
@@ -89,6 +94,7 @@ describe('useSendChatMessage — идемпотентность отправки
     expect(keys[0]).toBeTruthy();
     expect(keys[1]).toBeTruthy();
     expect(keys[0]).not.toBe(keys[1]);
+    await waitFor(() => expect(result.current.isPending).toBe(false));
   });
 });
 
@@ -152,6 +158,7 @@ describe('useSendChatMessage — аватар темпа из справочни
 
     const temp = await tempInCache(client, (m) => m.author.avatarUrl === '/avatars/me.png');
     expect(temp?.author.id).toBe(ME);
+    await waitFor(() => expect(result.current.isPending).toBe(false));
   });
 
   it('кэш справочника пуст (холодный вход) — avatarUrl null, как раньше', async () => {
@@ -173,5 +180,6 @@ describe('useSendChatMessage — аватар темпа из справочни
 
     const temp = await tempInCache(client, (m) => m.author.avatarUrl === null);
     expect(temp?.author.id).toBe(ME);
+    await waitFor(() => expect(result.current.isPending).toBe(false));
   });
 });
