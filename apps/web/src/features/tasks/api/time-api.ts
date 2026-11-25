@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   Paginated,
   RunningTimer,
@@ -37,9 +37,17 @@ function useSettleTime() {
 }
 
 export function useTimeEntries(taskId: string, enabled = true) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: tasksKeys.timeEntries(taskId),
-    queryFn: () => api<Paginated<TimeEntry>>(`/tasks/${taskId}/time-entries?limit=100`),
+    queryFn: ({ pageParam }) =>
+      api<Paginated<TimeEntry>>(
+        // #1032: страницы по курсору — «Затрачено» не обрезается на 100 записях.
+        `/tasks/${taskId}/time-entries?limit=100${
+          pageParam === null ? '' : `&cursor=${encodeURIComponent(pageParam)}`
+        }`,
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
     enabled,
   });
 }

@@ -23,6 +23,15 @@ const STACK_WINDOW_MS = 60_000;
 /** Автоскрытие личного тоста (~8 с; hover — пауза, реализует хост). */
 export const PERSONAL_TOAST_TTL_MS = 8_000;
 
+/** Виды «новое сообщение чата»: при схлопывании показывают ПЕРВЫЙ текст (B7);
+ *  все прочие виды обновляют превью на свежее событие (#1032). */
+const CHAT_NEW_MESSAGE_KINDS = new Set<string>([
+  'chat.direct_message',
+  'chat.mention',
+  'chat.thread_reply',
+  'chat.channel_post',
+]);
+
 export interface PersonalToast {
   key: string;
   snapshot: NotificationSnapshot;
@@ -147,9 +156,21 @@ export const useNotificationsToastStore = create<NotificationsToastState>((set, 
       (t) => stackKeyOf(t) === stackKey && now - t.addedAt < STACK_WINDOW_MS,
     );
     if (existing && snapshot.priority !== 'urgent') {
+      // #1032: «+1» сохраняет первый текст только для НОВЫХ сообщений чата
+      // (B7: «ещё одно от того же» — превью первого читается как контекст).
+      // События-состояния (срок задачи, статусы) и правки обязаны показать
+      // свежие данные: иначе две смены срока за 60 с дают «+1» со старым сроком.
+      const refreshSnapshot = !CHAT_NEW_MESSAGE_KINDS.has(snapshot.kind);
       set({
         personal: state.personal.map((t) =>
-          t === existing ? { ...t, count: t.count + 1, addedAt: now } : t,
+          t === existing
+            ? {
+                ...t,
+                snapshot: refreshSnapshot ? snapshot : t.snapshot,
+                count: t.count + 1,
+                addedAt: now,
+              }
+            : t,
         ),
       });
       return;

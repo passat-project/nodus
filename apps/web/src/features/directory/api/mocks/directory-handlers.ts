@@ -9,7 +9,11 @@ import {
   updateUserSchema,
 } from '@nodus/contracts';
 
-import { demoDepartments, departmentOfUser } from '../../../../shared/mocks/data/departments.js';
+import {
+  clearLeadershipSeats,
+  demoDepartments,
+  departmentOfUser,
+} from '../../../../shared/mocks/data/departments.js';
 import {
   demoPresence,
   demoUserCards,
@@ -213,8 +217,17 @@ export const directoryHandlers = [
     if (!card)
       return HttpResponse.json({ code: 'NOT_FOUND', message: 'User not found' }, { status: 404 });
     const { roleIds, ...fields } = parsed.data;
+    const previousDepartmentId = card.departmentId;
     Object.assign(card, fields);
     card.displayName = [card.lastName, card.firstName].filter(Boolean).join(' ');
+    // #946/#1032: перевод в другое подразделение снимает руководящие роли
+    // старого узла — как users-transfer.ts (глава/зам живут в своём отделе).
+    if (
+      card.departmentId !== previousDepartmentId &&
+      previousDepartmentId?.toLowerCase() !== card.departmentId?.toLowerCase()
+    ) {
+      departmentState = clearLeadershipSeats(departmentState, id, card.departmentId);
+    }
     userState = userState.map((user) =>
       user.id === id
         ? {

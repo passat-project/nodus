@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Department, UserListItem } from '@nodus/contracts';
 
-import { buildDepartmentTree } from './departments.js';
+import { buildDepartmentTree, clearLeadershipSeats } from './departments.js';
 
 /**
  * Дерево подразделений на моках (#723): `memberCount` — штат подразделения,
@@ -54,5 +54,52 @@ describe('buildDepartmentTree: memberCount (#723)', () => {
     const [root] = buildDepartmentTree('management', users, [department]);
 
     expect(root?.memberCount).toBe(0);
+  });
+});
+
+/** #1032: перевод сотрудника в другой узел снимает его руководящие места —
+ *  мок повторяет users-transfer.ts (#946), сервер держит «одно место». */
+const seat = (id: string, headId: string | null, deputyIds: string[]): Department =>
+  ({
+    id,
+    name: id,
+    kind: 'management',
+    parentId: null,
+    headId,
+    deputyIds,
+    sortOrder: 0,
+    isActive: true,
+  }) as never;
+
+describe('clearLeadershipSeats (#1032)', () => {
+  it('перевод снимает главу и зама старого узла и чужой зам-слот', () => {
+    const seats = [
+      seat('old', 'user-1', ['user-2']),
+      seat('new', null, []),
+      seat('far', null, ['user-1']),
+    ];
+    const next = clearLeadershipSeats(seats, 'user-1', 'new');
+    expect(next[0]!.headId).toBeNull();
+    expect(next[0]!.deputyIds).toEqual(['user-2']);
+    expect(next[2]!.deputyIds).toEqual([]);
+  });
+
+  it('целевой узел сохраняет место (сотрудник уже там глава)', () => {
+    const source = [seat('old', null, []), seat('new', 'user-1', [])];
+    const next = clearLeadershipSeats(source, 'user-1', 'new');
+    expect(next[1]!.headId).toBe('user-1');
+  });
+
+  it('нет руководящих мест — массив не меняется по ссылкам', () => {
+    const source = [seat('a', 'other', [])];
+    const next = clearLeadershipSeats(source, 'user-1', 'new');
+    expect(next[0]).toBe(source[0]);
+  });
+
+  it('регистр UUID не мешает сравнению', () => {
+    const source = [seat('OLD', 'USER-1', ['USER-1'])];
+    const next = clearLeadershipSeats(source, 'user-1', null);
+    expect(next[0]!.headId).toBeNull();
+    expect(next[0]!.deputyIds).toEqual([]);
   });
 });
