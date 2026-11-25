@@ -24,6 +24,9 @@ const GRAPH_LEFT = uiPx(16) + LEADING_COL_W + uiPx(12);
 const midY = (index: number) => index * ROW_H + MID;
 
 interface Edge {
+  /** Стабильный id ребра: ключ React не зависит от индекса строки, поэтому
+   *  при раскрытии другой ветки существующие рёбра не перемонтируются. */
+  id: string;
   d: string;
   delayIndex: number;
 }
@@ -97,6 +100,7 @@ export function TaskListTree({
     const lastCx = snapPx(graphX(lastRow.depth) - lastStop);
 
     edges.push({
+      id: `stem:${row.task.id}`,
       d: orthPath(
         [
           { x: px, y: top },
@@ -114,7 +118,11 @@ export function TaskListTree({
       const cy = snapPx(midY(childIndex));
       const stop = child.hasChildren ? PORT_GAP : LEAF_GAP;
       const cx = snapPx(graphX(child.depth) - stop);
-      edges.push({ d: `M${px},${cy} L${cx},${cy}`, delayIndex: childIndex });
+      edges.push({
+        id: `branch:${row.task.id}:${child.task.id}`,
+        d: `M${px},${cy} L${cx},${cy}`,
+        delayIndex: childIndex,
+      });
     }
   });
 
@@ -129,12 +137,15 @@ export function TaskListTree({
       className="pointer-events-none absolute top-0 text-edge"
       style={{ left: GRAPH_LEFT }}
     >
-      {edges.map((edge, i) => {
+      {edges.map((edge) => {
         const animated =
           reveal !== null && edge.delayIndex >= revealFrom && edge.delayIndex <= revealTo;
         return (
           <path
-            key={`${reveal?.key ?? 0}-${i}`}
+            // Анимируемое ребро перемонтируется ради перезапуска draw-on;
+            // остальные живут с прежним DOM-узлом (#1018) — иначе при
+            // раскрытии соседней ветки «дёргается» уже нарисованная связь.
+            key={animated ? `${reveal?.key ?? 0}:${edge.id}` : `static:${edge.id}`}
             d={edge.d}
             fill="none"
             stroke="currentColor"

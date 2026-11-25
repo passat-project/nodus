@@ -64,6 +64,24 @@ describe('TaskListTree — диапазон импульса раскрытия 
     expect(paths.map((path) => path.style.animationDelay)).toEqual(['0ms', '28ms', '84ms']);
   });
 
+  it('раскрытие нижней ветки не перемонтирует связь верхней (#1018)', () => {
+    const rows = buildTaskRows(TWO_BRANCHES);
+    const view = render(<TaskListTree rows={rows} width={200} reveal={null} />);
+    const [stemABefore, branchA1Before] = pathsOf(view.container);
+
+    view.rerender(<TaskListTree rows={rows} width={200} reveal={{ taskId: 'B', key: 1 }} />);
+    const [stemAAfter, branchA1After, stemBAfter] = pathsOf(view.container);
+
+    // Верхняя ветка не участвует в раскрытии — её DOM-узлы те же.
+    expect(stemAAfter).toBe(stemABefore);
+    expect(branchA1After).toBe(branchA1Before);
+    expect(drawn(stemAAfter!)).toBe(false);
+    expect(drawn(branchA1After!)).toBe(false);
+    // Анимируется только ствол раскрытой нижней ветки.
+    expect(drawn(stemBAfter!)).toBe(true);
+    expect(stemBAfter!.style.animationDelay).toBe('0ms');
+  });
+
   it('сворачивание — без анимации', () => {
     const view = renderTree(TWO_BRANCHES, null);
     expect(pathsOf(view.container).map(drawn)).toEqual([false, false, false]);
