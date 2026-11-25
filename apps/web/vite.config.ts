@@ -7,6 +7,28 @@ import { defineConfig, loadEnv } from 'vite';
 // и эмит в dist при build — без них pdfjs-dist 6.x молча не декодирует сканы.
 import { pdfjsWasmAssets } from './vite-pdfjs-wasm.js';
 
+/**
+ * Стартовый пакет — ОДИН файл (#1051). Автоматическое разбиение Vite 8
+ * (Rolldown) кладёт каждый модуль, общий для входа и отложенного чанка, в
+ * отдельный мелкий чанк: на вход шли 112 файлов. По обычному HTTP (без https)
+ * браузер тянет их по шесть за круг — вход с сессией занимал 19 кругов.
+ * Известное следствие модели Rolldown (RFC #10693 «Reduce small common chunks»;
+ * GitLab на тех же настройках мерил 143–305 стартовых запросов).
+ *
+ * Группа — по встроенному тегу `$initial`: «модуль статически импортирован
+ * точкой входа или лежит в цепочке её зависимостей». В группе ровно те модули,
+ * что и раньше грузились на вход; отложенные чанки берут общее из неё и по-прежнему
+ * качаются только по надобности. `includeDependenciesRecursively: false` обязателен:
+ * иначе группа присоединяет и ОТЛОЖЕННЫЕ зависимости входа — так в стартовый файл
+ * утекала библиотека моков (msw подключена из api-client отложенным импортом,
+ * а хендлерами — статическим), +300 КБ кода тестовой инфраструктуры.
+ */
+const START_CHUNK: { name: string; tags: '$initial'[]; includeDependenciesRecursively: boolean } = {
+  name: 'app',
+  tags: ['$initial'],
+  includeDependenciesRecursively: false,
+};
+
 // API и WebSocket проксируются на того же origin:
 // dev — прокси Vite, preview (e2e в CI) — тот же прокси, docker — прокси nginx (infra/nginx/web.conf).
 // Цель /api-прокси: NODUS_API_DEV_TARGET из корневого .env — живой api для
@@ -76,6 +98,9 @@ export default defineConfig(({ command, mode }) => {
     envDir: '../../',
     define,
     plugins: [tailwindcss(), react(), pdfjsWasmAssets()],
+    build: {
+      rolldownOptions: { output: { codeSplitting: { groups: [START_CHUNK] } } },
+    },
     // #533: компонентные jsdom-тесты под параллельным `turbo test` (api+web+
     // contracts одновременно) упирались в дефолтные 5 с — notification-reader
     // изолированно идёт ~3 с. 15 с — потолок на холодный старт под нагрузкой,
