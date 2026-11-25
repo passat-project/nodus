@@ -148,6 +148,30 @@ export function SliderPanel({
   // Окно ассистента — оверлей внутри рамы: геометрию карточек не двигает.
   const stripW = fullscreen || railHidden ? 0 : EDGE_W_COLLAPSED;
 
+  // Признак корня для CSS #948 (полосы таблиц за карточкой не выглядывают в
+  // щель рамки): `html[data-slider-open]` в globals.css. Раньше это делал
+  // селектор `html:has(section.slider-shadow)` — а `:has()` на корне при
+  // живых кандидатах переводит движок в режим полной инвалидации стилей:
+  // после раздела с карточкой-слайдером каждый символ, набранный в
+  // мессенджере, пересчитывал стили всего документа (замер: ~4300 элементов,
+  // 30–80 мс на букву; gotchas frontend.md, «:has() на корне»). Счётчик —
+  // карточки стека (ADR-0009) живут одновременно, флаг снимает последняя.
+  useEffect(() => {
+    const root = document.documentElement;
+    const open = Number(root.dataset.sliderCount ?? '0') + 1;
+    root.dataset.sliderCount = String(open);
+    root.dataset.sliderOpen = '';
+    return () => {
+      const left = Math.max(0, Number(root.dataset.sliderCount ?? '1') - 1);
+      if (left === 0) {
+        delete root.dataset.sliderOpen;
+        delete root.dataset.sliderCount;
+      } else {
+        root.dataset.sliderCount = String(left);
+      }
+    };
+  }, []);
+
   function requestClose() {
     if (closingRef.current) return;
     // Сигнал нижним карточкам и контуру шелла: верхняя пошла закрываться —
