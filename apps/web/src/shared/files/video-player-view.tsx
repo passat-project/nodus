@@ -1,33 +1,102 @@
-import { useEffect, useRef } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { Download, X } from 'lucide-react';
 import { ui } from '@nodus/contracts';
 
 import { Button } from '@nodus/ui/components/button';
+import { cn } from '@nodus/ui/lib/utils';
 
+import { VideoControlBar, HALL_CONTROL_CLASS } from './video-control-bar.js';
 import { handleVideoSeekKey } from './video-seek-keys.js';
+import { useVideoPlayer, type VideoPlayer } from './use-video-player.js';
 
 /**
  * «Кинозал» видео (#787, решение владельца 11.11.2026): видео открывается
  * не в карточке файла (её шапка — хром документов: версия, «Редактировать»),
  * а во весь экран. Плеер вписан по обеим осям с сохранением пропорций
- * (`object-contain`) — поля по краям читаются как кадр кинозала, а не
- * пустая карточка. Сверху тонкая строка: имя, «Скачать», закрыть.
- * Нативные `controls` остаются — это единственная полоса управления.
+ * (`object-contain`) — поля по краям читаются как кадр зала. Фон — сплошное
+ * затемнение всего экрана (включая верхнюю панель приложения); сверху тонкая
+ * строка: имя, «Скачать», закрыть. Закрытие — плашка со скруглением нашего
+ * контрола и обводкой, а не голый крестик (25.11.2026, как в лайтбоксе).
  *
- * Фон — полупрозрачное затемнение `black/75` (#790): портал под плеером
- * приглушён, но виден — канон лайтбокса Битрикса (`rgba(0,0,0,.7)`).
- * Портал z-80 — тот же слой, что у лайтбокса. Esc и возврат фокуса — у
- * хоста (`AttachmentViewer`), клик мимо плеера и по шапке гасится здесь.
+ * Фон — полупрозрачное затемнение `black/75` (#790): портал под роликом
+ * приглушён, но виден. Портал z-80 — тот же слой, что у лайтбокса.
  *
- * Клавиатура (#1005): фокус ставится на `<video>` при открытии явно —
- * React `autoFocus` для медиаэлементов не работает (`commitMount` фокусирует
+ * Кадр чистый (#1054, указание владельца 25.11.2026): браузерная полоса
+ * управления Chromium рисовала тёмный градиент ПОВЕРХ нижней части ролика
+ * и перекрывала содержимое записи. Теперь `<video>` без `controls`, а
+ * кнопки — своей полосой вплотную ПОД кадром (`VideoControlBar`): тёмный
+ * фон зала остаётся, кадр не притемняется никогда. Полоса равна кадру по
+ * ширине и приклеена к его нижней кромке без зазора — кадр и управление
+ * читаются одним блоком (уточнение владельца: «ровно под видео без отступов»).
+ *
+ * Клавиатура: фокус ставится на `<video>` при открытии явно — React
+ * `autoFocus` для медиаэлементов не работает (`commitMount` фокусирует
  * только button/input/select/textarea/img), без этого ←/→ уходили в
  * интерфейс под плеером. `tabIndex={0}` вдобавок не даёт «вечному курсору»
  * композера утащить фокус из оверлея: он не трогает элементы с tabIndex ≥ 0.
- * ←/→ — свои ±5 с (`handleVideoSeekKey`): нативный шаг Chromium — 1%
- * длительности, на коротком ролике это доли секунды.
+ * ←/→ — свои ±5 с (`handleVideoSeekKey`); пробел, M и F — пуск/пауза, звук
+ * и полный экран: однобуквенные сокращения работают только при фокусе в
+ * плеере (WCAG 2.1.4), модификаторы не перехватываем.
  */
+function handlePlayerKey(event: KeyboardEvent<HTMLVideoElement>, player: VideoPlayer) {
+  if (event.altKey || event.ctrlKey || event.metaKey) return;
+  handleVideoSeekKey(event);
+  if (event.defaultPrevented) return;
+  if (event.key === ' ') {
+    event.preventDefault();
+    player.togglePlay();
+    return;
+  }
+  if (event.code === 'KeyM') {
+    event.preventDefault();
+    player.toggleMute();
+    return;
+  }
+  if (event.code === 'KeyF') {
+    event.preventDefault();
+    player.toggleFullscreen();
+  }
+}
+
+/** Пробел на кнопке/ссылке — их собственное нажатие; на фоне и ползунках — пуск/пауза. */
+function spaceBelongsToTarget(target: EventTarget | null): boolean {
+  return !(target instanceof HTMLElement) || target.closest('button, a, [role="button"]') === null;
+}
+
+/**
+ * Клавиши зала на всём слое: после клика по ползунку/кнопке фокус уходит с
+ * кадра, а команды зала должны работать (нативная полоса такого ограничения
+ * не имела — её события всплывали на `<video>`). Кадр свои клавиши уже
+ * обработал (`defaultPrevented`) — здесь только остаток.
+ */
+function handleHallKey(event: KeyboardEvent<HTMLDivElement>, player: VideoPlayer) {
+  if (event.defaultPrevented) return;
+  if (event.altKey || event.ctrlKey || event.metaKey) return;
+  if (event.key === ' ') {
+    if (!spaceBelongsToTarget(event.target)) return;
+    event.preventDefault();
+    player.togglePlay();
+    return;
+  }
+  if (event.code === 'KeyM') {
+    event.preventDefault();
+    player.toggleMute();
+    return;
+  }
+  if (event.code === 'KeyF') {
+    event.preventDefault();
+    player.toggleFullscreen();
+  }
+}
+
 export function VideoPlayerView({
   url,
   name,
@@ -38,33 +107,60 @@ export function VideoPlayerView({
   onClose: () => void;
 }) {
   const playerRef = useRef<HTMLVideoElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const player = useVideoPlayer({ playerRef, containerRef: dialogRef, src: url });
 
   useEffect(() => {
     // preventScroll — канон программного фокуса (#132): не двигать предков.
     playerRef.current?.focus({ preventScroll: true });
   }, [url]);
 
+  // Ширина кадра — для полосы: она равна кадру и приклеена к его кромке.
+  // ResizeObserver: кадр меняет размер при смене окна и после метаданных.
+  const [frameWidth, setFrameWidth] = useState(0);
+  useLayoutEffect(() => {
+    const el = playerRef.current;
+    if (!el) return;
+    const sync = () => setFrameWidth(el.clientWidth);
+    sync();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(sync);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [url]);
+
+  const close = useCallback(() => {
+    // Закрытие из полноэкранного режима: сначала выходим из него, иначе
+    // браузер оставил бы полноэкранным уже размонтированный слой.
+    if (document.fullscreenElement === dialogRef.current) {
+      void document.exitFullscreen().catch(() => undefined);
+    }
+    onClose();
+  }, [onClose]);
+
   return createPortal(
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label={name}
-      className="fixed inset-0 z-[80] bg-black/75"
-      // Задник закрывает; клики по плееру и шапке — нет (stopPropagation).
-      onClick={onClose}
+      className="fixed inset-0 z-[80] flex flex-col bg-black/75"
+      // Задник закрывает; клики по кадру, шапке и полосе — нет (stopPropagation).
+      onClick={close}
+      onKeyDown={(event) => handleHallKey(event, player)}
     >
       <header
-        className="absolute inset-x-0 top-0 z-10 flex h-12 items-center gap-2 bg-gradient-to-b from-black/80 to-transparent px-3"
+        className="flex h-12 shrink-0 items-center gap-2 bg-black px-3"
         onClick={(event) => event.stopPropagation()}
       >
-        <p className="min-w-0 flex-1 truncate text-sm text-white/90" title={name}>
+        <p className="min-w-0 flex-1 truncate text-sm font-medium text-white/90" title={name}>
           {name}
         </p>
         <Button
           asChild
           variant="ghost"
           size="icon-sm"
-          className="text-white/70 hover:bg-white/10 hover:text-white"
+          className={cn('text-white/60 hover:bg-white/10 hover:text-white', HALL_CONTROL_CLASS)}
         >
           <a href={url} download={name} aria-label={ui.files.download} title={ui.files.download}>
             <Download />
@@ -72,30 +168,46 @@ export function VideoPlayerView({
         </Button>
         <Button
           variant="ghost"
-          size="icon-sm"
-          className="text-white/70 hover:bg-white/10 hover:text-white"
-          onClick={onClose}
+          size="icon-lg"
+          className="border-white/25 bg-black/45 text-white backdrop-blur-sm hover:border-white/40 hover:bg-white/15 hover:text-white"
+          onClick={close}
           aria-label={ui.files.close}
           title={ui.files.close}
         >
           <X />
         </Button>
       </header>
-      <div className="flex size-full items-center justify-center p-3 pt-14">
-        <video
-          ref={playerRef}
-          key={url}
-          src={url}
-          controls
-          autoPlay
-          preload="auto"
-          tabIndex={0}
-          playsInline
-          className="max-h-full max-w-full object-contain"
-          aria-label={name}
-          onKeyDown={handleVideoSeekKey}
-          onClick={(event) => event.stopPropagation()}
-        />
+
+      <div className="flex min-h-0 flex-1 items-center justify-center p-3">
+        {/* Кадр и полоса — ОДИН блок: полоса приклеена к нижней кромке кадра,
+            без зазора, и равна кадру по ширине (указание владельца 25.11.2026). */}
+        <div className="flex max-h-full min-h-0 max-w-full flex-col items-center">
+          <video
+            ref={playerRef}
+            key={url}
+            src={url}
+            autoPlay
+            preload="auto"
+            tabIndex={0}
+            playsInline
+            // Кадр — единственное «большое» действие зала (клик = пуск/пауза):
+            // курсор говорит о нажимаемости, фокус-рамка рисуется ВНЕ кадра
+            // (offset), а не поверх изображения — контент не перекрывается.
+            className="min-h-0 max-w-full cursor-pointer object-contain focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60"
+            aria-label={name}
+            onKeyDown={(event) => handlePlayerKey(event, player)}
+            onClick={(event) => {
+              // Клик по кадру — пуск/пауза, а не закрытие зала.
+              event.stopPropagation();
+              player.togglePlay();
+            }}
+          />
+          <VideoControlBar
+            player={player}
+            className="max-w-full"
+            style={frameWidth > 0 ? { width: frameWidth } : undefined}
+          />
+        </div>
       </div>
     </div>,
     document.body,

@@ -10,8 +10,7 @@ import type {
 import { ui } from '@nodus/contracts';
 
 import { FileTypeIcon } from '../files/file-type-icon.js';
-import { formatBytes, formatDateTimeShort } from '../lib/format.js';
-import { formatVideoDuration } from './attachment-gallery.js';
+import { formatBytes, formatDateTimeShort, formatVideoDuration } from '../lib/format.js';
 import { useJumpStore } from './jump-store.js';
 import { VideoPlayGlyph } from './video-play-glyph.js';
 
