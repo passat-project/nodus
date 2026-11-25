@@ -31,6 +31,15 @@ const MAXIMIZE_BUTTON_ID = 'portal-window-maximize';
  * командами моста. Высота — контракт `SHELL_PANEL_HEIGHT` (px, без rem:
  * строка панели не масштабируется --ui-scale).
  */
+/** База кнопок окна мини-UI = веб-панель портала (#1038): широкая зона 46px,
+ *  мягкие углы, тихий hover; закрытие — системный красный Win11 (#C42B1C,
+ *  SystemFillColorCritical) с белым глифом. У закрытия свой базовый класс:
+ *  два hover:bg-* в одном классе решает CSS-каскад, акцент побеждал бы. */
+const WIN_BTN =
+  'text-muted-foreground flex h-7 w-[46px] items-center justify-center rounded-md text-[12px] leading-none transition-colors hover:bg-accent hover:text-foreground';
+const WIN_BTN_CLOSE =
+  'text-muted-foreground flex h-7 w-[46px] items-center justify-center rounded-md text-[12px] leading-none transition-colors hover:bg-[#C42B1C] hover:text-white active:bg-[#B22B26]';
+
 export function ShellPanel() {
   const [maximized, setMaximized] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -76,7 +85,7 @@ export function ShellPanel() {
         className="bg-background border-b fixed inset-x-0 top-0 z-40 flex items-stretch justify-between"
         style={{ height: SHELL_PANEL_HEIGHT }}
       >
-        <div className="flex items-stretch" aria-hidden="true">
+        <div className="flex items-center pl-1" aria-hidden="true">
           {/* Кластер навигации: серые неактивные заглушки браузерного верха. */}
           <NavStub glyph="◀" label={t.panelBack} />
           <NavStub glyph="▶" label={t.panelForward} />
@@ -91,7 +100,7 @@ export function ShellPanel() {
           }}
           onDoubleClick={() => void shellApi.windowToggleMaximize()}
         />
-        <div className="flex items-stretch">
+        <div className="flex items-center pr-1">
           <button
             type="button"
             title={t.panelAppMenu}
@@ -99,10 +108,10 @@ export function ShellPanel() {
             aria-haspopup="dialog"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen(true)}
-            className="hover:bg-muted flex w-[42px] items-center justify-center"
+            className="text-muted-foreground flex size-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground"
           >
             {/* Значок-заглушка Nodus: тёмно-синяя плитка со знаком. */}
-            <span className="bg-primary text-primary-foreground flex h-[18px] w-[18px] items-center justify-center rounded-[5px] text-[10px] leading-none font-semibold">
+            <span className="bg-primary text-primary-foreground flex h-[16px] w-[16px] items-center justify-center rounded-[5px] text-[9px] leading-none font-semibold">
               N
             </span>
           </button>
@@ -116,7 +125,7 @@ export function ShellPanel() {
               aria-haspopup="dialog"
               aria-expanded={downloadsOpen}
               onClick={() => setDownloadsOpen(true)}
-              className="text-muted-foreground hover:bg-muted hover:text-foreground flex w-[42px] items-center justify-center text-[15px]"
+              className="text-muted-foreground flex size-7 items-center justify-center rounded-md text-[13px] leading-none transition-colors hover:bg-accent hover:text-foreground"
             >
               ⤓
             </button>
@@ -127,7 +136,7 @@ export function ShellPanel() {
             title={t.panelWindowMinimize}
             aria-label={t.panelWindowMinimize}
             onClick={() => void shellApi.windowMinimize()}
-            className="text-muted-foreground hover:bg-muted hover:text-foreground flex w-[46px] items-center justify-center text-[13px]"
+            className={WIN_BTN}
           >
             ─
           </button>
@@ -140,7 +149,7 @@ export function ShellPanel() {
             title={maximized ? t.panelWindowRestore : t.panelWindowMaximize}
             aria-label={maximized ? t.panelWindowRestore : t.panelWindowMaximize}
             onClick={() => void shellApi.windowToggleMaximize()}
-            className={`text-muted-foreground hover:bg-muted hover:text-foreground flex w-[46px] items-center justify-center text-[13px]${snapHover ? ' bg-muted text-foreground' : ''}`}
+            className={`${WIN_BTN}${snapHover ? ' bg-accent text-foreground' : ''}`}
           >
             {maximized ? '❐' : '□'}
           </button>
@@ -149,7 +158,7 @@ export function ShellPanel() {
             title={t.panelWindowClose}
             aria-label={t.panelWindowClose}
             onClick={() => void shellApi.windowClose()}
-            className="text-muted-foreground hover:bg-muted hover:text-foreground flex w-[46px] items-center justify-center text-[13px]"
+            className={WIN_BTN_CLOSE}
           >
             ✕
           </button>
@@ -168,7 +177,7 @@ function NavStub({ glyph, label }: { glyph: string; label: string }) {
       disabled
       title={label}
       aria-label={label}
-      className="text-muted-foreground/40 flex w-[34px] cursor-default items-center justify-center text-[13px]"
+      className="text-muted-foreground/40 flex size-7 items-center justify-center rounded-md text-[12px] leading-none"
     >
       {glyph}
     </button>

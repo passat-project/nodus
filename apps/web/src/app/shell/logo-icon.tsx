@@ -1,7 +1,9 @@
-/** Иконка продукта Nodus: гексагональный узел с тремя балками (мастер docs/design/logo/Nodus_иконка.svg). */
+/** Иконка продукта Nodus: гексагональный узел с тремя балками (мастер docs/design/logo/Nodus_иконка.svg).
+ *  viewBox сдвинут по Y на −4.875: контент занимает y=5…49.25 (центр 27.1), без
+ *  сдвига глиф «задран» выше геометрического центра кнопки (#1038, владелец). */
 export function LogoIcon({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 64 64" className={className} aria-hidden="true">
+    <svg viewBox="0 -4.875 64 64" className={className} aria-hidden="true">
       <g stroke="currentColor" strokeWidth={3} fill="none" strokeLinecap="round">
         <line x1="32" y1="22.5" x2="32" y2="13" />
         <line x1="22.91" y1="38.25" x2="14.68" y2="43" />

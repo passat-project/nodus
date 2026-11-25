@@ -16,7 +16,6 @@ import {
   shellFocusEventSchema,
   ui,
 } from '@nodus/contracts';
-import { Button } from '@nodus/ui/components/button';
 
 import {
   desktopCopyText,
@@ -43,7 +42,26 @@ import { UpdateCallout } from './update-callout.js';
 /** Тактильный отклик копирования адреса: галочка на полторы секунды. */
 const COPY_FEEDBACK_MS = 1500;
 
-const PANEL_BUTTON_CLASS = 'relative text-muted-foreground hover:bg-accent hover:text-foreground';
+/**
+ * Геометрия значков панели — отраслевые стандарты (Exa, 25.11): тулбарные
+ * иконки 16px → у нас 14px (Chrome: 16, Битрикс компактнее), глифы кнопок
+ * окна 12px/ход 1.5 (Win11: кнопки 46×32, глифы 10×10, ход 1). Нативная
+ * button вместо shadcn-обёртки: базовые классы Button переживают twMerge —
+ * точный контроль геометрии/ховеров только нативным элементом (урок gotcha #888).
+ */
+const PANEL_BUTTON_CLASS =
+  'relative flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-35';
+
+/** Кнопки окна: широкая зона 46px (3×46=138 — константа якоря слота загрузок
+ * в Rust), мягкие углы, тихий hover; закрытие — системный красный Win11
+ * (#C42B1C, SystemFillColorCritical) с белым глифом. */
+const WINDOW_BUTTON_CLASS =
+  'flex h-7 w-[46px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground';
+/** Закрытие: только свой красный hover, БЕЗ hover:bg-accent в строке класса —
+ *  два hover:bg-* разрешаются порядком в CSS-каскаде, не порядком в атрибуте,
+ *  и акцент побеждал произвольное значение (поймано computed-стилем). */
+const WINDOW_CLOSE_CLASS =
+  'flex h-7 w-[46px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-[#C42B1C] hover:text-white active:bg-[#B22B26]';
 
 /**
  * Панель безрамочного окна оболочки (ADR-0055, #1038): первая строка окна над
@@ -92,13 +110,25 @@ export function ShellPanel() {
         <div className="flex items-center pr-1">
           <AppMenuButton onOpen={() => setAppMenuOpen(true)} />
           <DownloadsPopoverButton />
-          <PanelIconButton title={ui.desktop.panelWindowMinimize} onClick={desktopWindowMinimize}>
-            <Minus className="size-4" strokeWidth={1.75} />
-          </PanelIconButton>
+          <button
+            type="button"
+            aria-label={ui.desktop.panelWindowMinimize}
+            title={ui.desktop.panelWindowMinimize}
+            className={WINDOW_BUTTON_CLASS}
+            onClick={() => void desktopWindowMinimize()}
+          >
+            <Minus className="size-3" strokeWidth={1.5} />
+          </button>
           <MaximizeButton />
-          <PanelIconButton title={ui.desktop.panelWindowClose} onClick={desktopWindowClose}>
-            <X className="size-4" strokeWidth={1.75} />
-          </PanelIconButton>
+          <button
+            type="button"
+            aria-label={ui.desktop.panelWindowClose}
+            title={ui.desktop.panelWindowClose}
+            className={WINDOW_CLOSE_CLASS}
+            onClick={() => void desktopWindowClose()}
+          >
+            <X className="size-3" strokeWidth={1.5} />
+          </button>
         </div>
       </div>
 
@@ -123,20 +153,20 @@ function BackForwardButtons() {
         disabled={!canGoBack}
         onClick={() => usePortalTabsStore.getState().back()}
       >
-        <ArrowLeft className="size-4" strokeWidth={1.75} />
+        <ArrowLeft className="size-3.5" strokeWidth={1.75} />
       </PanelIconButton>
       <PanelIconButton
         title={ui.desktop.panelForward}
         disabled={!canGoForward}
         onClick={() => usePortalTabsStore.getState().forward()}
       >
-        <ArrowRight className="size-4" strokeWidth={1.75} />
+        <ArrowRight className="size-3.5" strokeWidth={1.75} />
       </PanelIconButton>
     </>
   );
 }
 
-/** Кнопка панели: тихая ghost-иконка топбарного калибра с title-подсказкой. */
+/** Кнопка панели: компактная 28px иконка-кнопка с мягкой заливкой ховера. */
 function PanelIconButton({
   title,
   children,
@@ -146,16 +176,9 @@ function PanelIconButton({
   children: ReactNode;
 }) {
   return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      aria-label={title}
-      title={title}
-      className={PANEL_BUTTON_CLASS}
-      {...rest}
-    >
+    <button type="button" aria-label={title} title={title} className={PANEL_BUTTON_CLASS} {...rest}>
       {children}
-    </Button>
+    </button>
   );
 }
 
@@ -164,7 +187,7 @@ function ReloadButton() {
   const updateAvailable = usePortalUpdateStore((s) => s.updateAvailable);
   return (
     <PanelIconButton title={ui.desktop.panelReload} onClick={() => window.location.reload()}>
-      <RefreshCw className="size-4" strokeWidth={1.75} />
+      <RefreshCw className="size-3.5" strokeWidth={1.75} />
       {updateAvailable && (
         <span className="absolute top-0.5 right-0.5 size-2 rounded-full bg-success" />
       )}
@@ -192,9 +215,9 @@ function CopyAddressButton() {
   return (
     <PanelIconButton title={ui.desktop.panelCopyAddress} onClick={onCopy}>
       {copied ? (
-        <Check className="size-4 text-success" strokeWidth={1.75} />
+        <Check className="size-3.5 text-success" strokeWidth={1.75} />
       ) : (
-        <Link className="size-4" strokeWidth={1.75} />
+        <Link className="size-3.5" strokeWidth={1.75} />
       )}
     </PanelIconButton>
   );
@@ -202,11 +225,11 @@ function CopyAddressButton() {
 
 /**
  * □/❐: id зафиксирован контрактом — snap-плагин оболочки навешивает на него
- * нативный HTMAXBUTTON-оверлей (Win11 Snap Layouts), КЛИК обрабатывает он —
- * обработчика здесь НЕТ и hover-подсветку оверлея не перебиваем. Состояние
- * иконки читается на mount и на событие фокуса окна (shell-focus приходит и
- * после разворота/восстановления); оболочка без события — состояние остаётся
- * с монтирования.
+ * нативный HTMAXBUTTON-оверлей (Win11 Snap Layouts): пока оверлей жив, КЛИК
+ * съедает он (наш onClick молчит); если оверлей не прикрепился/умер (жизнь
+ * страницы портала) — работает onClick-фолбэк, кнопка не мертва (#1038,
+ * правка владельца). Состояние иконки: mount + shell-focus + resize
+ * (resize дергается при развороте/восстановлении окна).
  */
 function MaximizeButton() {
   const [maximized, setMaximized] = useState(false);
@@ -218,6 +241,7 @@ function MaximizeButton() {
       });
     };
     pull();
+    window.addEventListener('resize', pull);
     const unsubscribe = onDesktopEvent(
       DESKTOP_BRIDGE_EVENTS.shellFocus,
       shellFocusEventSchema,
@@ -225,18 +249,26 @@ function MaximizeButton() {
     );
     return () => {
       alive = false;
+      window.removeEventListener('resize', pull);
       unsubscribe();
     };
   }, []);
   const label = maximized ? ui.desktop.panelWindowRestore : ui.desktop.panelWindowMaximize;
   return (
-    <PanelIconButton title={label} id="portal-window-maximize">
+    <button
+      type="button"
+      id="portal-window-maximize"
+      aria-label={label}
+      title={label}
+      className={WINDOW_BUTTON_CLASS}
+      onClick={() => void desktopWindowToggleMaximize()}
+    >
       {maximized ? (
-        <Copy className="size-4" strokeWidth={1.75} />
+        <Copy className="size-3" strokeWidth={1.5} />
       ) : (
-        <Square className="size-4" strokeWidth={1.75} />
+        <Square className="size-3" strokeWidth={1.5} />
       )}
-    </PanelIconButton>
+    </button>
   );
 }
 
@@ -245,7 +277,7 @@ function AppMenuButton({ onOpen }: { onOpen: () => void }) {
   const updateReady = useDesktopApp().updateState.status === 'available';
   return (
     <PanelIconButton title={ui.desktop.panelAppMenu} onClick={onOpen}>
-      <LogoIcon className="size-4" />
+      <LogoIcon className="size-3.5" />
       {updateReady && (
         <span className="absolute top-0.5 right-0.5 size-2 rounded-full bg-success" />
       )}

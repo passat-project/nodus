@@ -400,11 +400,14 @@ export function onDesktopEvent<T>(
   fn: (payload: T) => void,
 ): () => void {
   const bridge = getDesktopBridge();
-  if (!bridge) return () => undefined;
-  return bridge.onEvent(type, (raw) => {
+  // Обёртка обязательна: старая оболочка/стаб без onEvent (или чей onEvent
+  // вернул не-функцию) не должен ронять cleanup эффектов — «unsubscribe is
+  // not a function» сносил каркас целиком (#1038).
+  const off = bridge?.onEvent?.(type, (raw) => {
     const parsed = schema.safeParse(raw);
     if (parsed.success) fn(parsed.data);
   });
+  return typeof off === 'function' ? off : () => undefined;
 }
 
 /**
