@@ -37,7 +37,7 @@ describe('AttachmentCard — видео в карточном списке (#250
     expect(container.querySelector('img')?.getAttribute('src')).toBe(
       '/api/v1/files/thumb-1/content',
     );
-    expect(container.querySelector('.lucide-play')).not.toBeNull();
+    expect(container.querySelector('.video-play-glyph')).not.toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'ролик.mp4' }));
     expect(useViewerStore.getState().target?.fileId).toBe('00000000-0000-4000-8000-0000000000a1');
@@ -46,6 +46,6 @@ describe('AttachmentCard — видео в карточном списке (#250
   it('без постера — иконка типа вместо миниатюры, play остаётся', () => {
     const { container } = render(<AttachmentCard attachment={video({ thumbnailUrl: null })} />);
     expect(container.querySelector('img')).toBeNull();
-    expect(container.querySelector('.lucide-play')).not.toBeNull();
+    expect(container.querySelector('.video-play-glyph')).not.toBeNull();
   });
 });

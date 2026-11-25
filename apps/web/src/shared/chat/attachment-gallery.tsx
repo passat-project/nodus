@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Play } from 'lucide-react';
 import type { MessageAttachment } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
@@ -7,6 +6,7 @@ import { cn } from '@nodus/ui/lib/utils';
 import { useViewerHost } from '../files/viewer-host.js';
 import { handleVideoSeekKey } from '../files/video-seek-keys.js';
 import { ImageLightbox } from './image-lightbox.js';
+import { VideoPlayGlyph } from './video-play-glyph.js';
 import { uiPx } from '../ui/ui-scale.js';
 
 /**
@@ -134,11 +134,12 @@ function GalleryTile({
 }
 
 /**
- * Видео-плитка (#250, решение владельца 07.10: модель Битрикс24): постер —
- * серверный кадр (WebP), play в левом верхнем углу играет ролик НА МЕСТЕ
- * (нативные контролы), клик по остальной плитке открывает большой плеер,
- * справа внизу — длительность. Кодек не поддержан — вежливая карточка
- * «Не удалось воспроизвести — Скачать» на месте ролика (без сломанного плеера).
+ * Видео-плитка (#250, модель Битрикс24/Telegram; уточнение владельца
+ * 25.11.2026): постер — серверный кадр (WebP), play ПО ЦЕНТРУ кадра играет
+ * ролик НА МЕСТЕ (нативные контролы), клик по остальной плитке открывает
+ * большой плеер, справа внизу — длительность. Кодек не поддержан — вежливая
+ * карточка «Не удалось воспроизвести — Скачать» на месте ролика (без
+ * сломанного плеера).
  */
 function VideoGalleryTile({
   video,
@@ -216,16 +217,18 @@ function VideoGalleryTile({
             </span>
           ) : (
             <>
-              {/* Play — литая чашка 40px: на тёмных постерах чёрный круг
-                  сливался с кадром (обе темы), hairline-обводка держит край. */}
+              {/* Play — по ЦЕНТРУ кадра, как в Битриксе/Telegram (уточнение
+                  владельца 25.11.2026): крупная литая чашка, hairline-обводка
+                  держит край на тёмных постерах; `m-auto` при inset-0 — точное
+                  центрирование без дробных transform-сдвигов. */}
               <button
                 type="button"
                 onClick={() => setMode('playing')}
                 aria-label={ui.chat.videoPlay}
                 title={ui.chat.videoPlay}
-                className="absolute top-2 left-2 z-10 grid size-10 place-items-center rounded-full border border-white/20 bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+                className="absolute inset-0 z-10 m-auto grid size-12 place-items-center rounded-full border border-white/20 bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
               >
-                <Play className="size-4 translate-x-[1px]" fill="currentColor" strokeWidth={0} />
+                <VideoPlayGlyph className="size-5" />
               </button>
               {duration !== null ? (
                 <span className="pointer-events-none absolute right-2 bottom-2 z-10 rounded-md border border-white/15 bg-black/55 px-1.5 py-0.5 font-mono text-label-xs text-white tabular-nums">

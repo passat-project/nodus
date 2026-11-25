@@ -1,4 +1,4 @@
-import { Download, Play } from 'lucide-react';
+import { Download } from 'lucide-react';
 import type { MessageAttachment } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import {
@@ -15,6 +15,7 @@ import { FileTypeIcon } from '../files/file-type-icon.js';
 import { useViewerHost } from '../files/viewer-host.js';
 import { formatBytes } from '../lib/format.js';
 import { messageSurface } from './message-surface.js';
+import { VideoPlayGlyph } from './video-play-glyph.js';
 
 /**
  * Карточка вложения НА поверхности сообщения (#144, вердикт «как в Битриксе»
@@ -106,12 +107,12 @@ export function AttachmentCard({
             ) : (
               <FileTypeIcon mime={attachment.mime} className="size-6" />
             )}
-            {/* Play — маленькая чашка по центру постера: сплошная вуаль
-                съедала кадр миниатюры, а белый треугольник без подложки
-                пропадал на светлых кадрах. */}
+            {/* Play — по центру миниатюры, глиф с точным центрированием
+                (#250, уточнение владельца 25.11.2026: на 14 px ручной сдвиг
+                читался кривым). */}
             <span className="absolute inset-0 grid place-items-center">
-              <span className="grid size-3.5 place-items-center rounded-full border border-white/25 bg-black/50 text-white">
-                <Play className="size-2 translate-x-px" fill="currentColor" strokeWidth={0} />
+              <span className="grid size-4 place-items-center rounded-full border border-white/25 bg-black/50 text-white">
+                <VideoPlayGlyph className="size-2.5" />
               </span>
             </span>
           </span>

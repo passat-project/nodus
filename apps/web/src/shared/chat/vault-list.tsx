@@ -1,4 +1,4 @@
-import { Download, Link2, MessagesSquare, Play } from 'lucide-react';
+import { Download, Link2, MessagesSquare } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type {
   FavoriteCard,
@@ -13,6 +13,7 @@ import { FileTypeIcon } from '../files/file-type-icon.js';
 import { formatBytes, formatDateTimeShort } from '../lib/format.js';
 import { formatVideoDuration } from './attachment-gallery.js';
 import { useJumpStore } from './jump-store.js';
+import { VideoPlayGlyph } from './video-play-glyph.js';
 
 /**
  * Рендереры элементов витрины (#211, ревизия 05.10): плитка медиа-сетки
@@ -68,10 +69,11 @@ export function MediaTile({
         ) : null}
         {isVideo ? (
           <>
-            {/* Play-чашка 20px: на плитке витрины 100px капля 28px занимала
-                треть кадра; hairline-обводка держит её на тёмных постерах. */}
-            <span className="pointer-events-none absolute top-1 left-1 grid size-5 place-items-center rounded-full border border-white/20 bg-black/50 text-white">
-              <Play className="size-2.5 translate-x-[1px]" fill="currentColor" strokeWidth={0} />
+            {/* Play — по ЦЕНТРУ плитки (уточнение владельца 25.11.2026),
+                глиф с точным центрированием; hairline-обводка держит чашку
+                на тёмных постерах. */}
+            <span className="pointer-events-none absolute inset-0 m-auto grid size-8 place-items-center rounded-full border border-white/20 bg-black/50 text-white">
+              <VideoPlayGlyph className="size-3.5" />
             </span>
             {durationMs !== null ? (
               <span className="pointer-events-none absolute right-1 bottom-1 rounded border border-white/10 bg-black/60 px-1 py-px font-mono text-label-xs text-white tabular-nums">
