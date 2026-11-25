@@ -7,15 +7,19 @@ import { ui, type AuthUser, type UserListItem } from '@nodus/contracts';
 import { usersListKey } from '../../shared/api/users-list.js';
 import { useAuthStore } from '../../shared/auth-store.js';
 import { stubLoadedImage } from '../../test/stub-loaded-image.js';
+import { LATEST_RELEASE } from '../../features/whats-new/model/releases.js';
+import { useWhatsNewStore } from '../../features/whats-new/model/whats-new-store.js';
 import { ProfileMenu } from './profile-menu.js';
 
 /**
- * Меню профиля в топбаре: два аспекта одной поверхности —
+ * Меню профиля в топбаре: три аспекта одной поверхности —
  * - аватар своего профиля (#726): источник — тот же кэш справочника, что у
  *   остальных поверхностей (`usersListKey`), фото появляется сразу после смены
  *   аватара (инвалидация `invalidateAvatarCaches`), без F5;
  * - пункт «Профиль» (#751): открывает СВОЮ карточку сотрудника тем же стеком,
- *   что из проекта/справочника.
+ *   что из проекта/справочника;
+ * - пункт «Что нового» (#1038): вход в историю обновлений после переезда из
+ *   строки топбара; точка — последний выпуск не просмотрен.
  * `useOpenCard` требует роутер-контекст — в тестах подменяется моком.
  */
 
@@ -69,7 +73,16 @@ afterEach(() => {
   cleanup();
   mocks.openCard.mockClear();
   useAuthStore.setState({ status: 'anonymous', accessToken: null, user: null });
+  useWhatsNewStore.setState({ seen: {}, open: false, openReason: 'manual' });
 });
+
+/** Открыть меню (Radix): фокус на триггер + Enter, дождаться портала. */
+async function openMenu() {
+  const trigger = screen.getByRole('button', { name: ui.topbar.profile });
+  trigger.focus();
+  fireEvent.keyDown(trigger, { key: 'Enter' });
+  await waitFor(() => expect(screen.getByRole('menu')).not.toBeNull());
+}
 
 describe('ProfileMenu — аватар профиля в топбаре (#726)', () => {
   it('фото из справочника: img с url, декоративный (имя несёт aria-label кнопки)', () => {
@@ -110,13 +123,14 @@ describe('ProfileMenu — аватар профиля в топбаре (#726)',
 describe('ProfileMenu — «Профиль» в меню аватара (#751)', () => {
   it('пункт «Профиль» первый, клик открывает свою карточку сотрудника', async () => {
     renderMenu();
-    const trigger = screen.getByRole('button', { name: ui.topbar.profile });
-    trigger.focus();
-    fireEvent.keyDown(trigger, { key: 'Enter' });
-    await waitFor(() => expect(screen.getByRole('menu')).not.toBeNull());
+    await openMenu();
 
     const items = screen.getAllByRole('menuitem');
-    expect(items.map((item) => item.textContent)).toEqual([ui.topbar.profile, ui.topbar.logout]);
+    expect(items.map((item) => item.textContent)).toEqual([
+      ui.topbar.profile,
+      ui.whatsNew.title,
+      ui.topbar.logout,
+    ]);
 
     fireEvent.click(screen.getByRole('menuitem', { name: ui.topbar.profile }));
     expect(mocks.openCard).toHaveBeenCalledWith({ kind: 'employee', id: ME_ID });
@@ -129,13 +143,45 @@ describe('ProfileMenu — «Профиль» в меню аватара (#751)',
       ...ME,
       permissions: ['project.setup.manage'] as AuthUser['permissions'],
     });
-    const trigger = screen.getByRole('button', { name: ui.topbar.profile });
-    trigger.focus();
-    fireEvent.keyDown(trigger, { key: 'Enter' });
-    await waitFor(() => expect(screen.getByRole('menu')).not.toBeNull());
+    await openMenu();
 
     const items = screen.getAllByRole('menuitem');
-    expect(items.map((item) => item.textContent)).toEqual([ui.topbar.profile, ui.topbar.logout]);
+    expect(items.map((item) => item.textContent)).toEqual([
+      ui.topbar.profile,
+      ui.whatsNew.title,
+      ui.topbar.logout,
+    ]);
     expect(screen.queryByRole('menuitem', { name: 'Настройки портала' })).toBeNull();
+  });
+});
+
+describe('ProfileMenu — «Что нового» в меню аватара (#1038)', () => {
+  it('между «Профиль» и «Выйти»: клик открывает панель и отмечает выпуск просмотренным', async () => {
+    useWhatsNewStore.setState({ seen: {} });
+    renderMenu();
+    await openMenu();
+
+    const whatsNew = screen.getByRole('menuitem', { name: ui.whatsNew.title });
+    // Пункт текстовый, без иконки-искорки (спарклы — только ИИ-ассистенту).
+    expect(whatsNew.querySelector('svg')).toBeNull();
+    fireEvent.click(whatsNew);
+
+    const state = useWhatsNewStore.getState();
+    expect(state.open).toBe(true);
+    expect(state.openReason).toBe('manual');
+    expect(state.seen[ME_ID]).toBe(LATEST_RELEASE?.version);
+  });
+
+  it('точка — свежий выпуск не просмотрен; просмотренный выпуск гасит её', async () => {
+    useWhatsNewStore.setState({ seen: {} });
+    const { unmount } = renderMenu();
+    await openMenu();
+    expect(screen.getByTestId('whats-new-unseen')).not.toBeNull();
+    unmount();
+
+    useWhatsNewStore.setState({ seen: { [ME_ID]: LATEST_RELEASE!.version } });
+    renderMenu();
+    await openMenu();
+    expect(screen.queryByTestId('whats-new-unseen')).toBeNull();
   });
 });

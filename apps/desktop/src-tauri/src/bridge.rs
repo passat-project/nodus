@@ -49,6 +49,12 @@ pub fn initialization_script(shell_version: &str) -> String {
     getUpdateState: function () {{ return invoke('get_update_state'); }},
     applyUpdate: function () {{ return invoke('apply_update'); }},
     shellReady: function () {{ return invoke('shell_ready'); }},
+    windowMinimize: function () {{ return invoke('window_minimize'); }},
+    windowToggleMaximize: function () {{ return invoke('window_toggle_maximize'); }},
+    windowClose: function () {{ return invoke('window_close'); }},
+    windowStartDragging: function () {{ return invoke('window_start_dragging'); }},
+    windowIsMaximized: function () {{ return invoke('window_is_maximized'); }},
+    copyText: function (text) {{ return invoke('copy_text', {{ text: text }}); }},
     onEvent: function (type, fn) {{
       (listeners[type] = listeners[type] || []).push(fn);
       return function () {{
@@ -83,7 +89,18 @@ pub fn grant_portal_capability(app: &AppHandle, root: &str) -> tauri::Result<()>
         .permission("allow-get-shell-info")
         .permission("allow-get-update-state")
         .permission("allow-apply-update")
-        .permission("allow-shell-ready");
+        .permission("allow-shell-ready")
+        .permission("allow-window-controls")
+        .permission("allow-copy-text")
+        // Реестр загрузок (эпик #1038, раздел 5): панель «Загрузки» портала.
+        .permission("allow-downloads-list")
+        .permission("allow-download-reveal")
+        // Snap-оверлей (ADR-0055): скрипт плагина инжектится и в портал;
+        // пока кнопки максимизации в DOM портала нет, он гасит оверлей
+        // командой detach (иначе над шапкой портала остаётся невидимая
+        // HTMAXBUTTON-зона от экрана подключения). Только detach —
+        // позиционирование (update) порталу даст фаза панели портала.
+        .permission("snap-layout:allow-detach-snap-bounds");
     app.add_capability(capability)
 }
 
@@ -114,10 +131,11 @@ pub fn is_valid_conversation(s: &str) -> bool {
         })
 }
 
-/// Скачивание файла (#647): карточка «Файл скачан» с кнопкой «Показать в
-/// папке». Зеркало contracts `popupDownloadSchema` — но абсолютный путь
-/// живёт ТОЛЬКО в Rust: в JSON мини-UI он не уходит (payload_to_json
-/// перечисляет поля явно), кнопка путь из JS не принимает.
+/// Скачивание файла (#647, #1038): карточка «Файл скачан» живёт в верхнем
+/// слоте у панели. Зеркало contracts `popupDownloadSchema` (вход портала:
+/// такие payload оболочка отвергает — карточку создаёт только она сама).
+/// Абсолютный путь файла в типе НЕТ вовсе: он живёт только в серии слота
+/// (`download_slot::DownloadSeries`), в JSON мини-UI не уходит никогда.
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PopupDownload {
@@ -125,10 +143,6 @@ pub struct PopupDownload {
     pub file_name: String,
     /// Успех скачивания: false — карточка ошибки без кнопки.
     pub success: bool,
-    /// Абсолютный путь скачанного файла (для reveal). `skip_serializing` —
-    /// инвариант «путь только в Rust» держится типом, а не местом вызова.
-    #[serde(default, skip_serializing)]
-    pub path: Option<String>,
 }
 
 /// Зеркало contracts `popupPayloadSchema` (desktop-bridge.schema.ts).
@@ -390,6 +404,86 @@ pub fn flash_taskbar(app: AppHandle, critical: bool) {
     }
 }
 
+/// Управление главным окном из панели оболочки (ADR-0055: окно безрамочное,
+/// строку панели рисует страница). Действуют только на `main` — попапами
+/// панель не управляет. Клик по кнопке максимизации на Win11 перехватывает
+/// нативный HTMAXBUTTON-оверлей snap-плагина, эти команды — путь Win10 и
+/// остальной логики страницы (перетаскивание, двойной клик по панели).
+#[tauri::command]
+pub fn window_minimize(app: AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.minimize();
+    }
+}
+
+/// tauri 2 не имеет toggle_maximize на Rust-стороне — явная пара
+/// maximize/unmaximize по текущему состоянию.
+#[tauri::command]
+pub fn window_toggle_maximize(app: AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let result = if win.is_maximized().unwrap_or(false) {
+            win.unmaximize()
+        } else {
+            win.maximize()
+        };
+        if let Err(e) = result {
+            log::warn!("переключение maximized не удалось: {e}");
+        }
+    }
+}
+
+/// Закрытие из панели = штатный CloseRequested: обработчик в lib.rs гасит
+/// закрытие и прячет окно в трей (соединение и состояние живут, #254).
+#[tauri::command]
+pub fn window_close(app: AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.close();
+    }
+}
+
+/// Перетаскивание окна за пустое место панели (pointerdown левой кнопкой).
+#[tauri::command]
+pub fn window_start_dragging(app: AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.start_dragging();
+    }
+}
+
+#[tauri::command]
+pub fn window_is_maximized(app: AppHandle) -> bool {
+    app.get_webview_window("main")
+        .map(|win| win.is_maximized().unwrap_or(false))
+        .unwrap_or(false)
+}
+
+/// Лимит копирования — зеркало contracts `COPY_TEXT_MAX_CHARS`.
+const COPY_TEXT_MAX_CHARS: usize = 4096;
+
+/// Причина отказа copy_text — стабильный код (для лога и вызывающей стороны).
+fn copy_text_invalid_reason(text: &str) -> Option<&'static str> {
+    if text.chars().count() > COPY_TEXT_MAX_CHARS {
+        return Some("text_too_long");
+    }
+    None
+}
+
+/// Записать текст в буфер обмена (ADR-0055): «Скопировать путь» и подобные
+/// действия портала. Только запись — чтения буфера в мосте нет; движок —
+/// rust-side write_text официального плагина (navigator.clipboard в WebView2
+/// ненадёжен, tauri#12007). Лимит — символами, не байтами: кириллица и
+/// эмодзи не режутся посередине UTF-8-последовательности.
+#[tauri::command]
+pub fn copy_text(app: AppHandle, text: String) -> Result<(), String> {
+    if let Some(reason) = copy_text_invalid_reason(&text) {
+        return Err(reason.into());
+    }
+    use tauri_plugin_clipboard_manager::ClipboardExt;
+    app.clipboard().write_text(text).map_err(|e| {
+        log::warn!("copy_text: буфер обмена недоступен: {e}");
+        "clipboard_unavailable".into()
+    })
+}
+
 /// Открыть ссылку системным приложением: http/https (браузер), mailto (почта),
 /// tel (телефон). Deep link'и портала остаются в приложении, произвольные
 /// схемы и file:// запрещены.
@@ -511,6 +605,24 @@ mod tests {
         for scheme in ["file", "javascript", "data", "nodus", "ftp"] {
             assert!(!external_scheme_allowed(scheme), "{scheme}");
         }
+    }
+
+    /// Лимит copy_text (ADR-0055): 4096 СИМВОЛОВ, не байт — кириллица
+    /// (2 байта/символ в UTF-8) не должна резаться вдвое относительно ASCII.
+    #[test]
+    fn copy_text_limit_counts_chars_not_bytes() {
+        assert_eq!(copy_text_invalid_reason(""), None);
+        assert_eq!(copy_text_invalid_reason(&"x".repeat(4096)), None);
+        assert_eq!(
+            copy_text_invalid_reason(&"x".repeat(4097)),
+            Some("text_too_long")
+        );
+        // 4096 символов кириллицы = 8192 байта: байтовый лимит отверг бы.
+        assert_eq!(copy_text_invalid_reason(&"а".repeat(4096)), None);
+        assert_eq!(
+            copy_text_invalid_reason(&"а".repeat(4097)),
+            Some("text_too_long")
+        );
     }
 
     #[test]

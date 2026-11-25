@@ -7,6 +7,7 @@ import {
   redirect,
 } from '@tanstack/react-router';
 
+import { markChunkLoaded, reloadOnceOnChunkError } from './chunk-reload.js';
 import { AppShell } from './shell/app-shell.js';
 import { RAIL_MODULES } from './shell/nav-registry.js';
 import { NotFoundScreen, RouterErrorScreen } from './shell/system-screens.js';
@@ -15,27 +16,23 @@ import { useUiPrefsStore } from '../shared/preferences/ui-prefs-store.js';
 import { useAuthStore } from '../shared/auth-store.js';
 
 /**
- * Гибель lazy-чанка после деплоя (вкладка оставлена открытой через пересборку
- * прода/рестарт dev): импорт чанка со старым именем даёт 404 и раздел «не
- * открывается» (репорт владельца 24.09, #88). Guard: ошибка импорта → ОДИН
- * reload страницы за сессионный флаг (против цикла), успешный импорт флаг
- * снимает; повторный неуспех после reload — честная ошибка в экран роутера.
+ * Guard гибели lazy-чанка после деплоя (репорт владельца 24.09, #88):
+ * ошибка импорта → ОДИН reload страницы за сессионный флаг (против цикла),
+ * успешный импорт флаг снимает; повторный неуспех после reload — честная
+ * ошибка в экран роутера. Семантика — общая в `chunk-reload.ts` (её же
+ * использует слушатель `vite:preloadError` в main.tsx, #1038).
  */
-const CHUNK_RELOAD_KEY = 'nodus-chunk-reload';
 function pageLoader(loader: () => Promise<{ default: ComponentType }>) {
   return lazy(() =>
     loader().then(
       (m) => {
-        sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+        markChunkLoaded();
         return m;
       },
       (error: unknown) => {
-        if (!sessionStorage.getItem(CHUNK_RELOAD_KEY)) {
-          sessionStorage.setItem(CHUNK_RELOAD_KEY, '1');
-          window.location.reload();
+        if (reloadOnceOnChunkError()) {
           return new Promise<never>(() => {});
         }
-        sessionStorage.removeItem(CHUNK_RELOAD_KEY);
         throw error;
       },
     ),
