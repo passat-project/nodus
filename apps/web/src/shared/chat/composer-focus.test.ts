@@ -41,7 +41,16 @@ describe('composer-focus — «вечный курсор» и оверлей-с�
     document.body.innerHTML = '';
   });
 
-  it('обычный клик по кнопке ВНЕ слоя — курсор возвращается в композер (канон)', async () => {
+  it('нативные контролы видео: фокус на <video> не крадётся (меню не закрывается, #250)', async () => {
+    const video = document.createElement('video');
+    video.tabIndex = 0;
+    document.body.append(video);
+    leftClick(video);
+    await frame();
+    expect(document.activeElement).toBe(video);
+  });
+
+  it('клик по кнопке ВНЕ слоя — курсор возвращается в композер (канон)', async () => {
     const btn = document.createElement('button');
     document.body.append(btn);
     leftClick(btn);
