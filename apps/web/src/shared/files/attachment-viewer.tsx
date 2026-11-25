@@ -103,17 +103,25 @@ export function AttachmentViewer({ stripW = 0 }: { stripW?: number }) {
   const canSwitchToEdit = route.kind === 'office' && mode === 'view' && session?.canEdit === true;
   const downloadUrl = target.url;
 
+  // Верхняя кромка окна = канон карточек: в оболочке — под строкой панели
+  // (клики по панели доезжают: обёртка pointer-events-none, ловят только
+  // фон от кромки и само окно), в браузере — от края окна.
+  const frameTop = uiPx(8) + shellPanelHeight();
   return createPortal(
     <div
-      className="fixed inset-0 z-[80]"
+      className="pointer-events-none fixed inset-0 z-[80]"
       role="dialog"
       aria-modal="true"
       aria-label={ui.files.viewerTitle}
     >
-      <div className="absolute inset-0 bg-background/80" onClick={closeWithInvalidate} />
       <div
-        className="absolute bottom-2 left-2 flex flex-col overflow-hidden rounded-2xl border bg-card shadow-xl transition-[right] duration-200"
-        style={{ top: uiPx(8) + shellPanelHeight(), right: stripW }}
+        className="pointer-events-auto absolute inset-x-0 bottom-0 bg-background/80"
+        style={{ top: frameTop }}
+        onClick={closeWithInvalidate}
+      />
+      <div
+        className="pointer-events-auto absolute bottom-2 left-2 flex flex-col overflow-hidden rounded-2xl border bg-card shadow-xl transition-[right] duration-200"
+        style={{ top: frameTop, right: stripW }}
       >
         <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
           <div className="min-w-0 flex-1">

@@ -309,7 +309,11 @@ export function SliderPanel({
 
   return (
     <div
-      className="fixed inset-y-0 left-0 z-50 transition-[right] duration-200 ease-out"
+      /* Хост НЕ ЛОВИТ клики (pointer-events-none): он выше панели оболочки
+         (z-50 > z-40) и во всю высоту окна — без этого съедал клики по
+         строке панели (вкладки/⟳/адрес) даже при опущенной карточке
+         (#1038, вердикт владельца 25.11). Ловят только дети ниже. */
+      className="pointer-events-none fixed inset-y-0 left-0 z-50 transition-[right] duration-200 ease-out"
       style={{ right: stripW, contentVisibility: dormant ? 'hidden' : 'visible' }}
     >
       {/* Накрытая карточка (#63) — не видимая поверхность (#770): её ленты,
@@ -321,7 +325,7 @@ export function SliderPanel({
           адрес) ЛОВУШКОЙ не накрыта — клики до неё доезжают при открытой
           карточке (#1038, вердикт владельца 25.11). */}
         <div
-          className="absolute inset-x-0 bottom-0"
+          className="pointer-events-auto absolute inset-x-0 bottom-0"
           style={{ top: cardTop }}
           onClick={requestClose}
           aria-hidden="true"
@@ -342,7 +346,7 @@ export function SliderPanel({
               willChange: flipPromoted ? 'transform' : undefined,
             }}
             className={cn(
-              'slider-shadow absolute right-2 bottom-2 left-2 z-20 flex flex-col overflow-hidden rounded-2xl border border-border bg-card text-card-foreground',
+              'slider-shadow pointer-events-auto absolute right-2 bottom-2 left-2 z-20 flex flex-col overflow-hidden rounded-2xl border border-border bg-card text-card-foreground',
               sourceRect ? 'slider-expand' : 'slider-pop',
             )}
           >
