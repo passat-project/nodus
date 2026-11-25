@@ -5,7 +5,8 @@ import { ui, type PopupDownload } from '@nodus/contracts';
 const t = ui.desktop;
 
 /** Карточка скачивания — информационная: уходит сама через 8 с, hover держит
- *  паузу (модель Telegram; чатовые попапы живут по активности пользователя). */
+ *  паузу (модель Telegram; чатовые попапы живут по активности пользователя).
+ *  Серия (#1038): каждый новый файл перезапускает отсчёт заново. */
 const AUTO_HIDE_MS = 8000;
 
 /** Иконка скачивания: стрелка в лоток, тот же тонкий штрих, что у остальных
@@ -30,23 +31,43 @@ function DownloadIcon({ className }: { className?: string }) {
 }
 
 /**
- * Карточка «Файл скачан» (#647): круг с иконкой, заголовок из i18n, имя файла
- * в две строки, «Показать в папке». Клик по карточке ничего не открывает —
+ * Карточка «Файл скачан» (#647, #1038): круг с иконкой, заголовок из i18n, имя
+ * последнего файла серии в две строки, «Показать в папке» (путь последнего).
+ * Серия схлопывается в счётчик: 5 файлов подряд — «Скачано: 5»; неуспех —
+ * короткая ошибка и начало новой серии. Клик по карточке ничего не открывает —
  * цели в портале нет. Путь файла в JS не приходит: команда reveal берёт его
- * из payload попапа в Rust и заново проверяет каталог «Загрузки».
+ * из серии в Rust и заново проверяет каталог «Загрузки».
  */
 export function DownloadCard({
   download,
   paused,
+  autoHideMs,
 }: {
   download: PopupDownload;
-  /** Курсор на карточке: автоскрытие на паузе (решает родитель). */
+  /** Курсор на карточке или окно Nodus неактивно: автоскрытие на паузе. */
   paused: boolean;
+  /** Автоскрытие из payload (единый источник с Rust, как fadeMs). */
+  autoHideMs: number;
 }) {
-  const autoHideLeft = useRef(AUTO_HIDE_MS);
+  // Старый payload без счётчика (до #1038) — считаем одиночной загрузкой.
+  const count = download.count ?? 1;
+  const title = !download.success
+    ? t.downloadFailedShort
+    : count > 1
+      ? t.downloadCount.replace('{count}', String(count))
+      : t.downloadTitle;
+  const seriesKey = `${download.success}|${count}|${download.fileName}`;
+  const fullMs = autoHideMs > 0 ? autoHideMs : AUTO_HIDE_MS;
+  const autoHideLeft = useRef(fullMs);
 
   // Считаем ОСТАТОК, а не заново весь интервал: ушли курсором — карточка
-  // доживает своё время.
+  // доживает своё время. Смена файла серии — единственный повод начать
+  // отсчёт заново (#1038); объявлен ДО таймера, чтобы на смене серии
+  // сброс успевал отработать раньше перезапуска.
+  useEffect(() => {
+    autoHideLeft.current = fullMs;
+  }, [seriesKey, fullMs]);
+
   useEffect(() => {
     if (paused) return;
     const started = Date.now();
@@ -55,7 +76,7 @@ export function DownloadCard({
       window.clearTimeout(timer);
       autoHideLeft.current = Math.max(0, autoHideLeft.current - (Date.now() - started));
     };
-  }, [paused]);
+  }, [paused, seriesKey]);
 
   function reveal() {
     void invoke('popup_reveal_download').catch(() => undefined);
@@ -71,9 +92,7 @@ export function DownloadCard({
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5 pr-6">
-          <span className="truncate text-[13px] leading-4 font-semibold">
-            {download.success ? t.downloadTitle : t.downloadErrorTitle}
-          </span>
+          <span className="truncate text-[13px] leading-4 font-semibold">{title}</span>
         </span>
         <span className="text-muted-foreground mt-1 line-clamp-2 max-h-8 overflow-hidden text-[12px] leading-4 [overflow-wrap:anywhere]">
           {download.fileName}

@@ -12,6 +12,7 @@ import { BellPopover } from '../../features/notifications/components/bell-popove
 import { RunningTimerChip } from '../../features/tasks/components/running-timer-chip.js';
 import { WhatsNewButton } from '../../features/whats-new/components/whats-new-button.js';
 import { useAuthStore } from '../../shared/auth-store.js';
+import { isDesktopShell } from '../../shared/desktop/desktop-bridge.js';
 import { useSearchStore } from '../../features/search/model/search-store.js';
 import { useChatUnreadSummary } from '../../shared/chat/chat-queries.js';
 import { TabUnreadBadge } from '../../shared/chat/tab-unread-badge.js';
@@ -120,9 +121,10 @@ export function TopBar() {
           <Search />
         </Button>
 
-        {/* Приложение для Windows: браузеру — загрузка установщика, оболочке —
-            точка обновления (#263); без раздачи /desktop/ кнопки нет */}
-        <DownloadAppButton />
+        {/* Приложение для Windows (#263): браузеру — загрузка установщика,
+            без раздачи /desktop/ кнопки нет; в оболочке кнопка переезжает
+            в панель окна (#1038, знак Nodus) — здесь не рендерится */}
+        {!isDesktopShell() ? <DownloadAppButton /> : null}
 
         {/* ИИ-ассистент — ЕДИНСТВЕННЫЙ видимый вход в топбаре (решение
             владельца 24.11.2026, #1021): вместо неработающей плашки «RU»;

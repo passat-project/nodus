@@ -27,7 +27,7 @@ import { WhatsNewPanel } from '../../features/whats-new/components/whats-new-pan
 import { useWhatsNewAutoOpen } from '../../features/whats-new/model/use-whats-new-auto-open.js';
 import { useUnreadTitle } from '../../shared/chat/unread-title.js';
 import { useDesktopBridge } from '../../shared/desktop/use-desktop-bridge.js';
-import { desktopSetUiTheme } from '../../shared/desktop/desktop-bridge.js';
+import { desktopSetUiTheme, isDesktopShell } from '../../shared/desktop/desktop-bridge.js';
 import { useChatSocket } from '../../shared/socket/use-chat-socket.js';
 import { WsDebugBadge } from '../../shared/socket/ws-debug-badge.js';
 import { PopupDebugBadge } from '../../shared/desktop/popup-diagnostics-badge.js';
@@ -40,6 +40,7 @@ import { startLayoutJitterLogger } from './layout-jitter-logger.js';
 import { NodeRail } from './node-rail.js';
 import { EDGE_W_COLLAPSED, RightRail } from './right-rail.js';
 import { useRailHidden } from './rail-visibility.js';
+import { ShellPanel } from './shell-panel.js';
 import { useShellStore } from './shell-store.js';
 import { TopBar } from './top-bar.js';
 import { useCardStack, useOpenCard, useOpenCards, useReplaceTopCard } from './use-card-stack.js';
@@ -123,6 +124,9 @@ export function AppShell() {
   const stressMode =
     typeof window !== 'undefined' &&
     Number(new URLSearchParams(window.location.search).get('stress') ?? 0) >= 1000;
+  // Панель безрамочного окна (ADR-0055, #1038): браузерный верх оболочки —
+  // первая строка окна над всей мягкой рамой; в браузере каркас без неё.
+  const inShell = isDesktopShell();
 
   // Мост shared→стек карточек (порт-адаптер, card-bridge.ts): shared-слой
   // открывает карточки, не импортируя каркас (направление слоёв, аудит #45).
@@ -184,46 +188,51 @@ export function AppShell() {
       >
         {ui.common.skipToContent}
       </a>
-      <div className="flex h-screen overflow-hidden bg-background">
-        {stressMode ? <LiveGraph /> : null}
-        <NodeRail />
-        <div className="relative flex min-w-0 flex-1">
-          {/* Мягкая рама: топбар + рабочая зона ОДНОЙ мягкой панелью (18px,
-              фон «лист»). Служебная полоса (профиль + коллеги) — ЗА пределами
-              рамы, в правом периметре (план владельца 14.09.2026, R4): у рамы
-              нет правого отступа, её правый край = левый край полосы; щель
-              периметра 8px — справа от полосы (mr-2 полосы). Полоса всегда
-              свёрнута (40px), только список бесед: вход в ассистента —
-              роботом в топбаре (#1021), окно — оверлей внутри рамы,
-              геометрию рамы/карточек не двигает; скроллбар страниц —
-              у правого шва рамы. */}
-          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-            <div
-              // relative — якорь и обрезка окна ассистента: absolute-потомок
-              // без позиционированного предка якорится к колонке и НЕ
-              // обрезается overflow-hidden рамы (торчал над шапкой и за края).
-              className="frame-shadow relative mt-2 mb-2 ml-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-card"
-              data-soft-frame
-            >
-              <TopBar />
-              <div id="content" className="relative flex min-h-0 flex-1 flex-col">
-                {/* Непустой стек карточек НАКРЫВАЕТ страницу (ADR-0009):
-                    поверхность раздела не видима — её чаты не читают и не
-                    глушат попапы (#770). Карточки живут снаружи провайдера. */}
-                <SurfaceVisibilityProvider visible={cardStack.length === 0}>
-                  <Suspense fallback={<ShellFallback />}>
-                    <Outlet />
-                  </Suspense>
-                </SurfaceVisibilityProvider>
+      <div className="flex h-screen flex-col overflow-hidden bg-background">
+        {/* Панель безрамочного окна (#1038): первая строка окна над всей
+            мягкой рамой — только в оболочке; каркас ниже не меняется. */}
+        {inShell ? <ShellPanel /> : null}
+        <div className="flex min-h-0 min-w-0 flex-1">
+          {stressMode ? <LiveGraph /> : null}
+          <NodeRail />
+          <div className="relative flex min-w-0 flex-1">
+            {/* Мягкая рама: топбар + рабочая зона ОДНОЙ мягкой панелью (18px,
+                фон «лист»). Служебная полоса (профиль + коллеги) — ЗА пределами
+                рамы, в правом периметре (план владельца 14.09.2026, R4): у рамы
+                нет правого отступа, её правый край = левый край полосы; щель
+                периметра 8px — справа от полосы (mr-2 полосы). Полоса всегда
+                свёрнута (40px), только список бесед: вход в ассистента —
+                роботом в топбаре (#1021), окно — оверлей внутри рамы,
+                геометрию рамы/карточек не двигает; скроллбар страниц —
+                у правого шва рамы. */}
+            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+              <div
+                // relative — якорь и обрезка окна ассистента: absolute-потомок
+                // без позиционированного предка якорится к колонке и НЕ
+                // обрезается overflow-hidden рамы (торчал над шапкой и за края).
+                className="frame-shadow relative mt-2 mb-2 ml-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-card"
+                data-soft-frame
+              >
+                <TopBar />
+                <div id="content" className="relative flex min-h-0 flex-1 flex-col">
+                  {/* Непустой стек карточек НАКРЫВАЕТ страницу (ADR-0009):
+                      поверхность раздела не видна — её чаты не читают и не
+                      глушат попапы (#770). Карточки живут снаружи провайдера. */}
+                  <SurfaceVisibilityProvider visible={cardStack.length === 0}>
+                    <Suspense fallback={<ShellFallback />}>
+                      <Outlet />
+                    </Suspense>
+                  </SurfaceVisibilityProvider>
+                </div>
+                {/* Окно ассистента: плавающий лист поверх правой части рамы
+                    (внутри рамы — обрезка её скруглением, структура не едет). */}
+                <AssistantPanel />
               </div>
-              {/* Окно ассистента: плавающий лист поверх правой части рамы
-                  (внутри рамы — обрезка её скруглением, структура не едет). */}
-              <AssistantPanel />
+              {/* Стек карточек сущностей поверх раздела (ADR-0009, ?cards=) */}
+              <CardStackHost />
             </div>
-            {/* Стек карточек сущностей поверх раздела (ADR-0009, ?cards=) */}
-            <CardStackHost />
+            <RightRail />
           </div>
-          <RightRail />
         </div>
       </div>
       <CircuitFrame />
