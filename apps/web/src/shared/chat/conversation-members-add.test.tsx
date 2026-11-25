@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -64,5 +64,10 @@ describe('AddMembersDialog: кандидаты (#1029)', () => {
     expect(await screen.findByText('Иван Петров')).toBeTruthy();
     expect(screen.queryByText('Анна Ночная')).toBeNull();
     expect(api).toHaveBeenCalledWith(expect.stringContaining('status=active'));
+
+    // Выбранный кандидат уходит из списка кандидатов — фильтр picked.
+    await fireEvent.click(screen.getByText('Иван Петров'));
+    expect(await screen.findByText('Иван Петров')).toBeTruthy(); // чип выбора
+    expect(screen.queryAllByText('Иван Петров')).toHaveLength(1);
   });
 });
