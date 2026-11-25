@@ -2,6 +2,8 @@ import { Link } from '@tanstack/react-router';
 import { Button } from '@nodus/ui/components/button';
 import { ui } from '@nodus/contracts';
 
+import { useRemoveBootSplash } from '../boot-splash.js';
+
 /**
  * Системные экраны роутера (аудит #45: голые «Not Found»/«Something went
  * wrong!» на английском, тупик без выхода): единый узел-стиль, русский текст
@@ -17,6 +19,8 @@ function SystemScreen({
   description: string;
   children?: React.ReactNode;
 }) {
+  // Экран заменяет корневую рамку — стартовую заставку снимать некому, кроме него.
+  useRemoveBootSplash();
   return (
     <div className="flex h-full min-h-[50vh] flex-col items-center justify-center gap-4 p-8 text-center">
       <h1 className="text-xl font-semibold text-balance text-foreground">{title}</h1>

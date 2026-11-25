@@ -9,6 +9,9 @@ import { useSurfaceVisible } from '../lib/surface-visibility.js';
 import { isDomainMocked } from '../api/api-mock-config.js';
 import { wsDebugLog } from '../socket/ws-debug.js';
 import { chatKeys } from './chat-keys.js';
+import { invalidateConversationLists } from './conversation-list-invalidation.js';
+import { wasInvalidatedRecently } from '../api/task-invalidate.js';
+import { patchConversationRowsRead } from './conversation-rows.js';
 import {
   createReadReceiptScheduler,
   type ReadReceiptScheduler,
@@ -62,6 +65,9 @@ export function maxSeenSeq(
  * сервере): иначе отставший знак в следующем снимке списка «воскрешал» плашку
  * «Непрочитанные сообщения» над уже прочитанным (#845). Параметр необязателен
  * для вызовов, которым нужен только счётчик.
+ *
+ * Одиночная строка той же беседы (вкладка чата карточки задачи, #1051) гасится
+ * вместе со списком: её значок непрочитанного читает та же строка.
  */
 export function applyReadToCache(
   queryClient: QueryClient,
@@ -94,6 +100,7 @@ export function applyReadToCache(
       : old,
   );
   const cleared = target?.snoozed ? 0 : (target?.unreadCount ?? 0);
+  patchConversationRowsRead(queryClient, conversationId, upToSeq);
   if (cleared > 0) {
     const entity = target?.type === 'task' || target?.type === 'letter';
     queryClient.setQueryData<ChatUnreadSummary>(chatKeys.unreadSummary(), (old) => {
@@ -102,6 +109,25 @@ export function applyReadToCache(
       const entities = Math.max(0, old.entities - (entity ? cleared : 0));
       return { chats, entities, total: chats + entities };
     });
+  }
+}
+
+/**
+ * Кэш после квитанции прочтения. Бейдж непрочитанного гаснет сразу и без WS
+ * (событие придёт — инвалидация идемпотентна); `myLastReadSeq` двигается на
+ * тот же upToSeq — граница плашки не откатывается отставшим снимком.
+ *
+ * Списки перезапрашиваются, только если их не обновили только что (#1051):
+ * квитанция по своему сообщению шла сразу за отправкой и повторяла её раунд.
+ */
+export function settleReadReceipt(
+  queryClient: QueryClient,
+  conversationId: string,
+  upToSeq?: number,
+): void {
+  applyReadToCache(queryClient, conversationId, upToSeq);
+  if (!wasInvalidatedRecently(chatKeys.conversations())) {
+    invalidateConversationLists(queryClient);
   }
 }
 
@@ -138,11 +164,7 @@ function useReadReceiptScheduler(
           body: { upToSeq, ...(threadRootId ? { threadRootId } : {}) },
         })
           .then(() => {
-            // Бейдж непрочитанных гаснет сразу и без WS (событие придёт —
-            // инвалидация идемпотентна); myLastReadSeq двигается на тот же
-            // upToSeq — граница плашки не откатывается отставшим снимком.
-            applyReadToCache(queryClient, conversationId, upToSeq);
-            void queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
+            settleReadReceipt(queryClient, conversationId, upToSeq);
             if (threadRootId) {
               // Точка «есть новые» на посте гасится квитанцией трэда.
               void queryClient.invalidateQueries({

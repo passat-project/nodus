@@ -2,26 +2,28 @@ import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 import type { Paginated, TaskListItem } from '@nodus/contracts';
 
-import { isFreshFromMutation, markFreshFromMutation } from '../api/fresh-from-mutation.js';
 import { projectsKeys } from '../api/projects-list.js';
 import { tasksKeys } from '../api/tasks-keys.js';
 import { kanbanColumnKey } from '../lib/board/kanban-column-key.js';
-import type { InvalidationTier, KeyBatcher } from './invalidation-batcher.js';
+import type { EchoAwareBatcher, PushOptions } from './echo-batcher.js';
+import type { InvalidationTier } from './invalidation-batcher.js';
 import { pushTaskKeys } from './task-invalidation.js';
 
-function recordingBatcher(): { batcher: KeyBatcher; keys: Array<[unknown[], InvalidationTier]> } {
-  const keys: Array<[unknown[], InvalidationTier]> = [];
+type Pushed = [unknown[], InvalidationTier, PushOptions | undefined];
+
+function recordingBatcher(): { batcher: EchoAwareBatcher; keys: Pushed[] } {
+  const keys: Pushed[] = [];
   return {
     keys,
     batcher: {
-      push: (key, tier) => keys.push([[...key], tier]),
+      push: (key, tier, options) => keys.push([[...key], tier, options]),
       flush: () => {},
       dispose: () => {},
     },
   };
 }
 
-const has = (keys: Array<[unknown[], InvalidationTier]>, key: readonly unknown[]): boolean =>
+const has = (keys: Pushed[], key: readonly unknown[]): boolean =>
   keys.some(([k]) => JSON.stringify(k) === JSON.stringify(key));
 
 const page = (...ids: string[]): Paginated<TaskListItem> => ({
@@ -51,35 +53,30 @@ function boardsInCache(): QueryClient {
   return client;
 }
 
-const kanbanKeys = (keys: Array<[unknown[], InvalidationTier]>) =>
+const kanbanKeys = (keys: Pushed[]) =>
   keys.filter(([k]) => k[1] === 'kanban').map(([k]) => JSON.stringify(k));
 
 describe('pushTaskKeys (#311, #317)', () => {
-  it('эхо своей кнопки: деталь и кнопки не перезапрашиваются (свежие из ответа), доски — да (#378)', () => {
-    markFreshFromMutation('t-fresh');
+  it('деталь и переходы уходят в очередь всегда: своё эхо гасит батчер по автору события, а не роутер (#1051)', () => {
+    // Прежде роутер держал свой гейт «свежая мутация» и глушил им и правку
+    // коллеги; гашение живёт в одном месте — echo-batcher + метка инвалидации.
     const { batcher, keys } = recordingBatcher();
     pushTaskKeys(
       batcher,
       new QueryClient({ defaultOptions: { queries: { retry: false } } }),
       'task.stage_changed',
-      {
-        taskId: 't-fresh',
-        fromStageId: 's1',
-        toStageId: 's2',
-      },
+      { taskId: 't-fresh', fromStageId: 's1', toStageId: 's2' },
     );
-    expect(has(keys, tasksKeys.detail('t-fresh'))).toBe(false);
-    expect(has(keys, tasksKeys.transitions('t-fresh'))).toBe(false);
+    expect(has(keys, tasksKeys.detail('t-fresh'))).toBe(true);
+    expect(has(keys, tasksKeys.transitions('t-fresh'))).toBe(true);
+    expect(has(keys, tasksKeys.actions('t-fresh'))).toBe(true);
     expect(has(keys, tasksKeys.listPages())).toBe(true);
-    // Окно свежести истекло — эхо снова обновляет деталь.
-    expect(isFreshFromMutation('t-fresh', Date.now() + 5_000)).toBe(false);
   });
 
   it('формульная запись перечитывает деталь даже у автора (пересчёт после ответа)', () => {
-    const { batcher } = recordingBatcher();
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const cancel = vi.spyOn(client, 'cancelQueries');
-    markFreshFromMutation('t-formula');
+    const { batcher, keys } = recordingBatcher();
     pushTaskKeys(batcher, client, 'task.updated', {
       taskId: 't-formula',
       formulaWrite: true,
@@ -87,6 +84,11 @@ describe('pushTaskKeys (#311, #317)', () => {
     // Обычная инвалидация дедупится об in-flight refetch и отдаёт прошлое
     // значение — формульная запись обязана отменить его и перечитать заново.
     expect(cancel).toHaveBeenCalledWith({ queryKey: tasksKeys.detail('t-formula') });
+    // Переходы — тоже без гашения как своё эхо: гейты читают пересчитанные поля.
+    const transitions = keys.find(
+      ([k]) => JSON.stringify(k) === JSON.stringify(tasksKeys.transitions('t-formula')),
+    );
+    expect(transitions?.[2]).toEqual({ force: true });
   });
 
   it('task.relation_changed обновляет список связей своей карточки', () => {

@@ -10,6 +10,11 @@ export function kanbanColumnKey(boardKey: readonly unknown[], stageId: string) {
   return [...boardKey, COLUMN_SEGMENT, stageId] as const;
 }
 
+/** Префикс всех колонок доски: перезапрос после переноса, пометка устаревшим. */
+export function kanbanColumnPrefix(boardKey: readonly unknown[]) {
+  return [...boardKey, COLUMN_SEGMENT] as const;
+}
+
 /** id колонки из ключа запроса колонки; не колонка — null. */
 export function stageIdOfColumnKey(key: readonly unknown[]): string | null {
   const at = key.lastIndexOf(COLUMN_SEGMENT);

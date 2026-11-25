@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { StrictMode } from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ui } from '@nodus/contracts';
@@ -130,6 +131,57 @@ describe('SliderPanel: закрытие схлопыванием в источн
 
     act(() => anims[0]?.onfinish?.());
     expect(section.style.willChange).toBe('');
+  });
+
+  it('корень помечается data-slider-open, пока жива хоть одна карточка (#948)', () => {
+    // Признак читает globals.css (полосы таблиц за карточкой). Раньше это был
+    // `html:has(section.slider-shadow)` — а `:has()` на корне ставил движок в
+    // режим полной инвалидации стилей: ввод в мессенджере после раздела с
+    // карточкой пересчитывал стили всего документа (gotchas frontend.md).
+    const root = document.documentElement;
+    expect(root.dataset.sliderOpen).toBeUndefined();
+
+    const first = render(
+      <SliderPanel title="Первая" onClose={vi.fn()}>
+        <div />
+      </SliderPanel>,
+    );
+    expect(root.dataset.sliderOpen).toBe('');
+
+    // Стек карточек (ADR-0009): вторая поверх первой — флаг не снимается.
+    const second = render(
+      <SliderPanel title="Вторая" onClose={vi.fn()}>
+        <div />
+      </SliderPanel>,
+    );
+    first.unmount();
+    expect(root.dataset.sliderOpen).toBe('');
+
+    second.unmount();
+    expect(root.dataset.sliderOpen).toBeUndefined();
+    expect(root.dataset.sliderCount).toBeUndefined();
+  });
+
+  it('в режиме строгой проверки React счётчик симметричен маунту и размонтированию (#1017)', () => {
+    // StrictMode дважды запускает эффект (маунт → очистка → маунт). Если
+    // очистка и установка несимметричны, после первого размонтирования
+    // признак #948 «залипнет» на корне навсегда.
+    const root = document.documentElement;
+    expect(root.dataset.sliderOpen).toBeUndefined();
+
+    const panel = render(
+      <StrictMode>
+        <SliderPanel title="Строгая" onClose={vi.fn()}>
+          <div />
+        </SliderPanel>
+      </StrictMode>,
+    );
+    expect(root.dataset.sliderOpen).toBe('');
+    expect(root.dataset.sliderCount).toBe('1');
+
+    panel.unmount();
+    expect(root.dataset.sliderOpen).toBeUndefined();
+    expect(root.dataset.sliderCount).toBeUndefined();
   });
 });
 

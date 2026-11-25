@@ -1,8 +1,17 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type { RealtimeEnvelope } from '@nodus/contracts';
 
+import { useAuthStore } from '../auth-store.js';
+import { lettersKeys } from '../api/letters-keys.js';
+import { notificationsKeys } from '../notifications-keys.js';
+import { wasInvalidatedRecently } from '../api/task-invalidate.js';
 import { chatKeys } from '../chat/chat-keys.js';
+import { conversationRowKeys } from '../chat/conversation-rows.js';
 import { cachedConversation } from '../chat/chat-queries.js';
+import {
+  invalidateConversationLists,
+  isConversationListsKey,
+} from '../chat/conversation-list-invalidation.js';
 import { favoriteKeys } from '../chat/favorites-api.js';
 import { stickerKeys } from '../chat/sticker-api.js';
 import { vaultKeys } from '../chat/vault-api.js';
@@ -13,11 +22,9 @@ import {
   applyReactionEvent,
   applySentMessage,
 } from '../chat/ws-apply.js';
-import { lettersKeys } from '../api/letters-keys.js';
-import { notificationsKeys } from '../notifications-keys.js';
 import { bumpCommentsOnce, useCommentsLive } from '../tasks/comments-live.js';
-import { createKeyBatcher, type KeyBatcher } from './invalidation-batcher.js';
 import { pushCustomFieldKeys } from './custom-fields-invalidation.js';
+import { createEchoBatcher, isOwnEvent, type EchoAwareBatcher } from './echo-batcher.js';
 import { pushNodeKindKeys } from './node-kinds-invalidation.js';
 import { pushProjectKeys } from './project-invalidation.js';
 import { pushTaskKeys } from './task-invalidation.js';
@@ -29,9 +36,19 @@ import { pushWorkflowKeys } from './workflow-invalidation.js';
  * ЛОКАЛЬНО по seq (ws-apply) — рефеча ленты нет вовсе; (2) остальные события
  * коалесцируются батчером (invalidation-batcher): каждый ключ инвалидируется
  * один раз за окно, список бесед — по медленному ярусу (гистерезис
- * пересортировки). Префикс messages(id) покрывает и тред-ключи.
+ * пересортировки). Префикс messages(id) покрывает и трэд-ключи.
  * notification.* (#100): журнал/сводка — быстрый ярус; тосты — через мост
  * notification-bridge (фича регистрирует синк, shared не знает features).
+ *
+ * Одна правка — один раунд (#1051): эхо собственной мутации не повторяет
+ * перезапрос ключей, уже обновлённых по ответу (батчер помнит автора события,
+ * `echo-batcher.ts`). Эхо, обгонившее ответ мутации, пройдёт обычным раундом:
+ * ответ обычно приходит раньше конвейера событий (опрос outbox — до 50 мс),
+ * но гарантией это не является — пропущенное изменение дороже лишнего запроса.
+ *
+ * Куст бесед — точечно: списки обновляются событием любой беседы, одиночные
+ * строки (беседа задачи/письма/проекта в карточке, личка) — только событием
+ * своей. Прежде каждое чужое сообщение перечитывало весь куст.
  */
 export interface RealtimeInvalidator {
   handle: (envelope: RealtimeEnvelope) => void;
@@ -40,15 +57,79 @@ export interface RealtimeInvalidator {
 }
 
 export function createRealtimeInvalidator(queryClient: QueryClient): RealtimeInvalidator {
-  const batcher: KeyBatcher = createKeyBatcher((key) => {
+  const echo = createEchoBatcher((key, mark) => {
+    // Своё эхо (#1051): мутация уже перезапросила ключ по ответу — второй
+    // раунд той же волны не нужен. Гасится ТОЛЬКО эхо текущего пользователя:
+    // правка коллеги по тому же ключу в эти же 2 секунды проходит. Событие без
+    // автора (старый gateway, системный таймер) не гасим.
+    if (mark?.ownOnly && wasInvalidatedRecently(key)) return;
+    // Куст бесед — списками; целиком — когда меняется сам куст (из меня
+    // исключили, у меня сменилась роль): устареть обязаны и одиночные строки.
+    if (isConversationListsKey(key)) {
+      if (mark?.wide) void queryClient.invalidateQueries({ queryKey: key });
+      else invalidateConversationLists(queryClient);
+      return;
+    }
     void queryClient.invalidateQueries({ queryKey: key });
   });
 
-  function push(conversationId: string | null, key: 'messages' | 'states' | 'pins'): void {
+  function push(
+    batcher: EchoAwareBatcher,
+    conversationId: string | null,
+    key: 'messages' | 'states' | 'pins',
+  ): void {
     if (!conversationId) return;
     if (key === 'messages') batcher.push(chatKeys.messages(conversationId), 'feed');
     else if (key === 'states') batcher.push(chatKeys.threadStates(conversationId), 'feed');
     else batcher.push(chatKeys.pins(conversationId), 'feed');
+  }
+
+  /** Одиночные строки этой беседы в кэше (вкладка чата карточки задачи,
+   *  письма, проекта; личка) — по событию своей беседы: значок непрочитанного
+   *  и состав участников живые (`conversation-rows.ts`). */
+  function pushRows(
+    batcher: EchoAwareBatcher,
+    conversationId: string | null,
+    tier: 'feed' | 'list' = 'list',
+  ): void {
+    if (!conversationId) return;
+    for (const key of conversationRowKeys(queryClient, conversationId)) batcher.push(key, tier);
+  }
+
+  /** Кэш самой беседы: лента (с трэдами), закрепы, состояния трэдов, участники. */
+  const conversationKeys = (conversationId: string) => [
+    chatKeys.messages(conversationId),
+    chatKeys.pins(conversationId),
+    chatKeys.threadStates(conversationId),
+    chatKeys.members(conversationId),
+  ];
+
+  /** Событие адресовано МНЕ (исключили, сменили мою роль): куст бесед —
+   *  целиком и без гашения, даже если это эхо моего же выхода, и кэш самой
+   *  беседы — тоже. Исключённому кэш к тому же СБРАСЫВАЕТСЯ до перезапроса:
+   *  не участнику сервер ответит отказом, а после неудачного перезапроса
+   *  библиотека держит прежние данные — переписка оставалась бы и на экране,
+   *  и в памяти, пока кэш жив. */
+  function aboutMe(
+    batcher: EchoAwareBatcher,
+    payload: Record<string, unknown>,
+    conversationId: string | null,
+    removed: boolean,
+  ): boolean {
+    const userId = typeof payload.userId === 'string' ? payload.userId : null;
+    if (userId === null || userId !== useAuthStore.getState().user?.id) return false;
+    batcher.push(chatKeys.conversations(), 'feed', { wide: true, force: true });
+    if (conversationId) {
+      if (removed) {
+        void queryClient.resetQueries({ queryKey: chatKeys.conversations() });
+        for (const key of conversationKeys(conversationId)) {
+          void queryClient.resetQueries({ queryKey: key });
+        }
+      }
+      for (const key of conversationKeys(conversationId))
+        batcher.push(key, 'feed', { force: true });
+    }
+    return true;
   }
 
   /** Сообщение беседы задачи → живой счётчик комментариев (#252): задача
@@ -65,15 +146,19 @@ export function createRealtimeInvalidator(queryClient: QueryClient): RealtimeInv
       const payload = (envelope.payload ?? {}) as Record<string, unknown>;
       const conversationId =
         typeof payload.conversationId === 'string' ? payload.conversationId : null;
+      const batcher = echo.forEvent(envelope.actorId ?? null);
 
       switch (envelope.type) {
         case 'chat.message_sent': {
           // Локальное применение по seq; дыра/нет DTO — коалесцированный рефеч.
           const applied = applySentMessage(queryClient, payload as never);
-          if (!applied) push(conversationId, 'messages');
+          if (!applied) push(batcher, conversationId, 'messages');
           bumpTaskComments(payload, 'sent', 1);
-          // Точка «есть новые»/счётчик трэда и превью списка — по окнам.
-          push(conversationId, 'states');
+          // Точка «есть новые»/счётчик трэда и превью списка — по окнам. Строку
+          // беседы в карточке перечитывает чужое сообщение (моё непрочитанным
+          // не считается).
+          push(batcher, conversationId, 'states');
+          if (!isOwnEvent(envelope.actorId ?? null)) pushRows(batcher, conversationId);
           // Витрина #211: новое сообщение могло принести вложения/ссылки.
           if (conversationId) batcher.push(vaultKeys.all, 'feed');
           if (conversationId) batcher.push(chatKeys.conversations(), 'list');
@@ -96,13 +181,15 @@ export function createRealtimeInvalidator(queryClient: QueryClient): RealtimeInv
         case 'chat.message_edited':
         case 'chat.message_deleted':
           if (envelope.type === 'chat.message_deleted') bumpTaskComments(payload, 'deleted', -1);
-          push(conversationId, 'messages');
+          push(batcher, conversationId, 'messages');
           // Витрина #211: правка меняет состав/ссылки, удаление гасит.
           if (conversationId) batcher.push(vaultKeys.all, 'feed');
           // Карточки избранного — живые ссылки на оригинал (#171): правка
           // отражается в карточке, удаление гасит её в надгробие.
           batcher.push(favoriteKeys.all, 'feed');
           if (conversationId) batcher.push(chatKeys.conversations(), 'list');
+          // Правка непрочитанного читается как новое, удаление — минус.
+          pushRows(batcher, conversationId);
           return;
         case 'task.comments_counted': {
           // Точное значение после серверного пересчёта (#252) — без рефеча досок.
@@ -118,8 +205,8 @@ export function createRealtimeInvalidator(queryClient: QueryClient): RealtimeInv
           // точки трэдов — тоже). Нет кэша для патча — прежние инвалидации.
           const applied = applyReadEvent(queryClient, payload as never);
           if (!applied) {
-            push(conversationId, 'messages');
-            push(conversationId, 'states');
+            push(batcher, conversationId, 'messages');
+            push(batcher, conversationId, 'states');
           }
           return;
         }
@@ -132,17 +219,19 @@ export function createRealtimeInvalidator(queryClient: QueryClient): RealtimeInv
             payload as never,
             envelope.type === 'chat.reaction_added',
           );
-          if (!applied) push(conversationId, 'messages');
+          if (!applied) push(batcher, conversationId, 'messages');
           return;
         }
         case 'chat.thread_created':
-          push(conversationId, 'messages');
-          push(conversationId, 'states');
+          push(batcher, conversationId, 'messages');
+          push(batcher, conversationId, 'states');
+          // Ответ в треде канала — непрочитанное для участника треда.
+          pushRows(batcher, conversationId);
           return;
         case 'chat.message_pinned':
         case 'chat.message_unpinned':
-          push(conversationId, 'messages');
-          push(conversationId, 'pins');
+          push(batcher, conversationId, 'messages');
+          push(batcher, conversationId, 'pins');
           return;
         case 'chat.conversation_created':
           batcher.push(chatKeys.conversations(), 'list');
@@ -151,21 +240,26 @@ export function createRealtimeInvalidator(queryClient: QueryClient): RealtimeInv
           // #186: название/аватар — у всех участников (список + топбар);
           // подписанный URL аватара нестабилен — только рефеч.
           batcher.push(chatKeys.conversations(), 'list');
+          pushRows(batcher, conversationId);
           return;
         case 'chat.member_added':
           batcher.push(chatKeys.conversations(), 'list');
           if (conversationId) batcher.push(chatKeys.members(conversationId), 'feed');
+          pushRows(batcher, conversationId, 'feed');
           return;
         case 'chat.member_removed':
         case 'chat.member_role_changed':
+          if (aboutMe(batcher, payload, conversationId, envelope.type === 'chat.member_removed'))
+            return;
           batcher.push(chatKeys.conversations(), 'list');
           if (conversationId) batcher.push(chatKeys.members(conversationId), 'feed');
+          pushRows(batcher, conversationId, 'feed');
           return;
         case 'chat.attachment_updated': {
           // Новая версия файла из сохранения ONLYOFFICE (#182): лента —
           // снапшотные DTO вложений рефечатся, а файловые ключи (сессия
           // просмотрщика) инвалидируются — версия подхватывается без F5.
-          push(conversationId, 'messages');
+          push(batcher, conversationId, 'messages');
           if (typeof payload.fileId === 'string') {
             batcher.push(['files', payload.fileId], 'feed');
           }
@@ -231,7 +325,8 @@ export function createRealtimeInvalidator(queryClient: QueryClient): RealtimeInv
           return;
       }
     },
-    flush: batcher.flush,
-    dispose: batcher.dispose,
+
+    flush: echo.flush,
+    dispose: echo.dispose,
   };
 }

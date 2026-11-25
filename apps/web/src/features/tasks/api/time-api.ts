@@ -10,7 +10,8 @@ import { errorMessages, ui, type ErrorCode } from '@nodus/contracts';
 import { toast } from 'sonner';
 
 import { api, ApiError } from '../../../shared/api-client.js';
-import { taskDependentKeys, tasksKeys } from '../../../shared/api/tasks-keys.js';
+import { invalidateAfterTaskMutation } from '../../../shared/api/task-invalidate.js';
+import { tasksKeys } from '../../../shared/api/tasks-keys.js';
 
 /** Учёт времени (I14): записи задачи, ручной ввод и таймер. Таймер у
  *  сотрудника один — запуск на другой задаче останавливает прежний. */
@@ -29,10 +30,9 @@ function useSettleTime() {
     void queryClient.invalidateQueries({ queryKey: tasksKeys.timer() });
     if (!taskId) return;
     void queryClient.invalidateQueries({ queryKey: tasksKeys.timeEntries(taskId) });
-    // spentMinutes — в детали/журнале/досках; гейт time_logged — в переходах.
-    for (const key of taskDependentKeys(taskId)) {
-      void queryClient.invalidateQueries({ queryKey: key });
-    }
+    // spentMinutes — в детали, гейт time_logged — в переходах, часы — в
+    // агрегатах узлов; доски и журнал догоняет эхо task.time_* (#1051).
+    invalidateAfterTaskMutation(queryClient, taskId, { structure: true });
   };
 }
 

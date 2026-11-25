@@ -47,7 +47,7 @@ function LetterChatTab({
   const joinLabel =
     letter.registeredAt === null ? ui.letters.card.startDiscussion : ui.letters.card.join;
 
-  if (letter.access.isParticipant && data) {
+  if (letter.access.isParticipant && data && !error) {
     return (
       <ConversationPane
         conversationId={data.id}
