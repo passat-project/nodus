@@ -307,6 +307,29 @@ describe('TaskFieldsWriter: фактическая смена срока (#996)'
     expect(payload).not.toHaveProperty('deadlineChanged');
     expect(payload).toMatchObject({ title: 'Переезд офиса' });
   });
+
+  it('то же значение срока — флаг overdueNotifiedAt не сбрасывается (#1031)', async () => {
+    const kit = kitWith(new Date(DEADLINE), new Date(DEADLINE));
+    await apply(kit.writer, { deadline: DEADLINE });
+    const call = kit.repo.updateFields.mock.calls.at(-1) as unknown as [
+      unknown,
+      string,
+      Record<string, unknown>,
+    ];
+    expect(call[2]).toMatchObject({ deadline: new Date(DEADLINE) });
+    expect(call[2]).not.toHaveProperty('overdueNotifiedAt');
+  });
+
+  it('срок изменён — флаг overdueNotifiedAt сбрасывается (#1031)', async () => {
+    const kit = kitWith(new Date(DEADLINE), new Date(DEADLINE));
+    await apply(kit.writer, { deadline: '2026-12-05T21:00:00.000Z' });
+    const call = kit.repo.updateFields.mock.calls.at(-1) as unknown as [
+      unknown,
+      string,
+      Record<string, unknown>,
+    ];
+    expect(call[2]).toMatchObject({ overdueNotifiedAt: null });
+  });
 });
 
 function writer0(kit: ReturnType<typeof setup>): TaskFieldsWriter {
