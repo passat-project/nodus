@@ -38,6 +38,15 @@ interface NodusDesktopGlobal {
    *  знает команд, веб показывает «Скопировать путь». */
   openUncPath?(path: string, servers: readonly string[]): Promise<void>;
   revealUncPath?(path: string, servers: readonly string[]): Promise<void>;
+  /** Кнопки окна безрамочной оболочки (ADR-0055): только новые оболочки —
+   *  установленная с системным заголовком команд не знает. */
+  windowMinimize?(): Promise<void>;
+  windowToggleMaximize?(): Promise<void>;
+  windowClose?(): Promise<void>;
+  windowStartDragging?(): Promise<void>;
+  windowIsMaximized?(): Promise<boolean>;
+  /** Записать текст в буфер обмена (только запись, ≤ 4096 символов). */
+  copyText?(text: string): Promise<void>;
   dismissPopups(conversationId: string): Promise<void>;
   setUiTheme(theme: 'light' | 'dark'): Promise<void>;
   getShellInfo(): Promise<unknown>;

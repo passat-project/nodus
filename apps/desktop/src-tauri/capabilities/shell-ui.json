@@ -13,6 +13,8 @@
     "allow-change-server",
     "allow-run-updater",
     "allow-popup-window",
-    "allow-popup-actions"
+    "allow-popup-actions",
+    "allow-window-controls",
+    "snap-layout:default"
   ]
 }

@@ -161,3 +161,16 @@ export const DESKTOP_BRIDGE_EVENTS = {
 } as const;
 export type DesktopBridgeEventType =
   (typeof DESKTOP_BRIDGE_EVENTS)[keyof typeof DESKTOP_BRIDGE_EVENTS];
+
+/**
+ * Безрамочное окно оболочки (ADR-0055): строку панели рисует страница —
+ * mini-UI на экране подключения и панель портала. Окно без системного
+ * заголовка, кнопки окна идут командами моста (`windowMinimize` /
+ * `windowToggleMaximize` / `windowClose`), DOM-id кнопки максимизации
+ * фиксирован (`portal-window-maximize`) — по нему snap-плагин оболочки
+ * навешивает нативный HTMAXBUTTON-оверлей (Win11 Snap Layouts).
+ */
+export const SHELL_PANEL_HEIGHT = 40;
+
+/** Лимит `copyText` моста (символов, не байт) — зеркало Rust copy_text. */
+export const COPY_TEXT_MAX_CHARS = 4096;

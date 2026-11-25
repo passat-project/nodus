@@ -25,6 +25,19 @@ tauri-plugin-opener = "2"
 # maximized/fullscreen. Официальный плагин Tauri 2; восстанавливает окно на
 # on_window_ready (до нашего show — без мигания) и сохраняет на выходе.
 tauri-plugin-window-state = "2"
+# Буфер обмена (ADR-0055): ТОЛЬКО rust-side write_text из команды моста
+# copy_text (лимит 4096); JS-guest-bindings не подключены, чтения нет.
+# 2.5.0 поднимает эффективный MSRV до 1.95 — локальный и CI toolchain
+# (stable 1.99) это покрывают.
+tauri-plugin-clipboard-manager = "2"
+# Win11 Snap Layouts для безрамочного окна (ADR-0055): невидимый Win32-оверлей
+# HTMAXBUTTON над кнопкой максимизации панели (DOM id `portal-window-maximize`,
+# задаётся при регистрации плагина в lib.rs). Страница рисует панель сама,
+# плагин только создаёт оверлей и прокидывает hover (класс .is-hovered) и
+# нативный клик maximize/restore; на Win10 — безопасный no-op. JS-пакет
+# не нужен: скрипт инъекции самонастраивается, команды update/detach идут
+# через capability.
+tauri-plugin-snap-layout = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 semver = "1"

@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 
-import type { PopupPayload } from '@nodus/contracts';
+import type { PopupPayload, ShellInfo, ShellUpdateState } from '@nodus/contracts';
 
 /**
  * Типизированные обёртки IPC мини-UI оболочки (локальный origin — команды
@@ -33,6 +33,20 @@ export const shellApi = {
 
   /** Смена сервера из меню трея: сбросить адрес, вернуться на экран подключения. */
   changeServer: () => invoke<void>('change_server'),
+
+  /** Версия и платформа оболочки (меню «Приложение» панели). */
+  getShellInfo: () => invoke<ShellInfo>('get_shell_info'),
+
+  /** Состояние автообновления (меню «Приложение» панели). */
+  getUpdateState: () => invoke<ShellUpdateState>('get_update_state'),
+
+  /** Кнопки окна безрамочной оболочки (ADR-0055): команды моста. */
+  windowMinimize: () => invoke<void>('window_minimize'),
+  windowToggleMaximize: () => invoke<void>('window_toggle_maximize'),
+  windowClose: () => invoke<void>('window_close'),
+  /** Перетаскивание за пустое место панели (pointerdown левой кнопкой). */
+  windowStartDragging: () => invoke<void>('window_start_dragging'),
+  windowIsMaximized: () => invoke<boolean>('window_is_maximized'),
 };
 
 /** Данные попапа (pull из Rust после загрузки окна; автозакрытия нет —

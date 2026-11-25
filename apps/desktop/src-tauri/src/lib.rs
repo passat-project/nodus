@@ -33,12 +33,18 @@ use state::ShellState;
 /// гасит каретку при наборе (#309; WebView2Feedback #5687/#5708).
 pub(crate) const WEBVIEW2_BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,HideCursorWhileTyping --autoplay-policy=no-user-gesture-required";
 
+/// DOM-id кнопки максимизации панели оболочки (ADR-0055): по нему snap-плагин
+/// навешивает HTMAXBUTTON-оверлей. Одно имя для mini-UI и портала — контрактом
+/// владеет web-сторона (панель рисует она), Rust только ссылается.
+pub(crate) const SNAP_MAXIMIZE_BUTTON_ID: &str = "portal-window-maximize";
+
 /// Что оболочка помнит между запусками (#722, ADR-0039): размер и позицию
 /// обычного окна, maximized и fullscreen. Видимость НЕ восстанавливаем —
 /// окно всегда показывается при старте (скрытость в трей не должна
-/// переживать выход), декорации не трогаем. Дефолт первого запуска задаёт
-/// билдер окна (1280×800 по центру, меню развёрнуто): без сохранённого
-/// состояния плагин ничего не двигает.
+/// пережить выход); декораций в состоянии нет — окно безрамочное
+/// безусловно (ADR-0055). Дефолт первого запуска задаёт билдер окна
+/// (1280×800 по центру, меню развёрнуто): без сохранённого состояния
+/// плагин ничего не двигает.
 const WINDOW_STATE_FLAGS: tauri_plugin_window_state::StateFlags =
     tauri_plugin_window_state::StateFlags::SIZE
         .union(tauri_plugin_window_state::StateFlags::POSITION)
@@ -95,6 +101,21 @@ pub fn run() {
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(WINDOW_STATE_FLAGS)
                 .with_filter(|label| label == "main")
+                .build(),
+        )
+        // Буфер обмена (ADR-0055): rust-side write_text для команды моста
+        // copy_text; JS-биндинги плагина не разрешены никакой capability —
+        // веб-контент буфер не читает и не пишет в обход моста.
+        .plugin(tauri_plugin_clipboard_manager::init())
+        // Win11 Snap Layouts (ADR-0055): оверлей HTMAXBUTTON над кнопкой
+        // максимизации панели. Кнопку рисует страница (mini-UI сейчас,
+        // портал в следующих фазах) — id фиксирован контрактом панели;
+        // правит `update_snap_bounds`/`detach_snap_bounds` скрипт инъекции
+        // плагина (права — shell-ui локально, detach — runtime-capability
+        // портала: навигация с экрана подключения гасит осиротевший оверлей).
+        .plugin(
+            tauri_plugin_snap_layout::init()
+                .button_id(SNAP_MAXIMIZE_BUTTON_ID)
                 .build(),
         )
         .manage(ShellState::default())
@@ -162,6 +183,12 @@ pub fn run() {
             bridge::set_ui_theme,
             bridge::get_shell_info,
             bridge::shell_ready,
+            bridge::window_minimize,
+            bridge::window_toggle_maximize,
+            bridge::window_close,
+            bridge::window_start_dragging,
+            bridge::window_is_maximized,
+            bridge::copy_text,
             popups::popup_get_data,
             popups::popup_ready,
             popups::popup_close,
@@ -188,7 +215,12 @@ fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
         tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
             .title(display_name(app))
             .inner_size(1280.0, 800.0)
-            .min_inner_size(1024.0, 660.0)
+            // Snap Layouts: окно обязано влезать в четверть зоны снапа на
+            // 1920-экранах (~960×540) — больше панели окна нет (безрамочность).
+            .min_inner_size(640.0, 520.0)
+            // Безрамочное окно (ADR-0055): строку панели рисует страница
+            // (mini-UI/портал), кнопки окна — через мост.
+            .decorations(false)
             .center()
             .visible(false)
             // HTML5 drag&drop файлов (#716): tauri по умолчанию подменяет
