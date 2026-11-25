@@ -9,6 +9,7 @@ import {
 } from '@nodus/contracts';
 
 import { setupRolesFixture } from './roles-fixtures.js';
+import { managementParentId, type DirectoryApi } from './departments-fixtures.js';
 
 /**
  * Оргструктура на живом API (#492): частичная правка подразделения и должности
@@ -26,8 +27,12 @@ describe('оргструктура: частичная правка (#492)', () 
     f.api(f.users.directory, 'PATCH', path, { body, key: randomUUID() });
 
   const createDepartment = async (body: Record<string, unknown>) => {
+    const parentId =
+      body.parentId == null && (body.kind ?? 'management') === 'management'
+        ? await managementParentId(f.api as unknown as DirectoryApi, f.users.directory)
+        : body.parentId;
     const response = await f.api(f.users.directory, 'POST', '/directory/departments', {
-      body,
+      body: { ...body, parentId },
       key: randomUUID(),
     });
     expect(response.status).toBe(201);
