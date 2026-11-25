@@ -30,7 +30,7 @@ describe('VideoPlayerView — кинозал видео (#787)', () => {
     expect(dialog.parentElement).toBe(document.body);
     expect(dialog.className).toContain('fixed');
     expect(dialog.className).toContain('inset-0');
-    // #790: полупрозрачное затемнение портала, не сплошной чёрный.
+    // Фон — сплошное затемнение всего экрана, без светлой полосы сверху.
     expect(dialog.className).toContain('bg-black/75');
 
     const video = document.querySelector('video');
@@ -54,6 +54,12 @@ describe('VideoPlayerView — кинозал видео (#787)', () => {
     const download = screen.getByRole('link', { name: ui.files.download });
     expect(download.getAttribute('href')).toBe('/files/roll.mp4');
     expect(download.getAttribute('download')).toBe('ролик.mp4');
+    // Закрытие — плашка нашего скругления с обводкой, а не голый ghost-крестик
+    // впритык к кнопкам окна (замечание владельца 24.11.2026).
+    const close = screen.getByRole('button', { name: ui.files.close });
+    expect(close.className).toContain('size-9');
+    expect(close.className).toContain('border-white/25');
+    expect(close.className).not.toContain('rounded-full');
   });
 
   it('полоса управления — ПОД кадром, вплотную: кадр не перекрыт даже при наведении', () => {

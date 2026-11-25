@@ -21,7 +21,10 @@ import { useVideoPlayer, type VideoPlayer } from './use-video-player.js';
  * «Кинозал» видео (#787, решение владельца 11.11.2026): видео открывается
  * не в карточке файла (её шапка — хром документов: версия, «Редактировать»),
  * а во весь экран. Плеер вписан по обеим осям с сохранением пропорций
- * (`object-contain`) — поля по краям читаются как кадр зала.
+ * (`object-contain`) — поля по краям читаются как кадр зала. Фон — сплошное
+ * затемнение всего экрана (включая верхнюю панель приложения); сверху тонкая
+ * строка: имя, «Скачать», закрыть. Закрытие — плашка со скруглением нашего
+ * контрола и обводкой, а не голый крестик (25.11.2026, как в лайтбоксе).
  *
  * Фон — полупрозрачное затемнение `black/75` (#790): портал под роликом
  * приглушён, но виден. Портал z-80 — тот же слой, что у лайтбокса.
@@ -165,8 +168,8 @@ export function VideoPlayerView({
         </Button>
         <Button
           variant="ghost"
-          size="icon-sm"
-          className={cn('text-white/60 hover:bg-white/10 hover:text-white', HALL_CONTROL_CLASS)}
+          size="icon-lg"
+          className="border-white/25 bg-black/45 text-white backdrop-blur-sm hover:border-white/40 hover:bg-white/15 hover:text-white"
           onClick={close}
           aria-label={ui.files.close}
           title={ui.files.close}

@@ -116,30 +116,39 @@ describe('ImageLightbox: масштаб', () => {
     expect(screen.getByText('1 / 2')).toBeTruthy();
   });
 
-  it('полоса и кнопки — отдельный слой над кадром при увеличении', () => {
+  it('хром и кнопки — отдельный слой над кадром при увеличении', () => {
     renderLightbox();
     fireEvent.click(button(ui.files.zoomIn));
     fireEvent.click(button(ui.files.zoomIn));
     expect(percent()).toBe('125%');
 
     const toolbar = screen.getByRole('toolbar', { name: ui.files.zoomPanel });
-    const layer = toolbar.parentElement as HTMLElement;
     const viewport = area();
-    // Полоса не внутри кадра: overflow и пан кадра её не режут и не сдвигают.
+    // Хром не внутри кадра: overflow и пан кадра его не режут и не сдвигают.
     expect(viewport.contains(toolbar)).toBe(false);
     // Слои сравнимы: хром z-20 против кадра z-0 в одном контейнере.
-    expect(layer.parentElement).toBe(viewport.parentElement);
-    expect(layer.className).toContain('z-20');
-    expect(layer.className).toContain('absolute');
+    expect(toolbar.parentElement).toBe(viewport.parentElement);
+    expect(toolbar.className).toContain('z-20');
+    expect(toolbar.className).toContain('absolute');
     expect(viewport.className).toContain('z-0');
-    // Подложка сплошная (не градиент) — полоса читается на светлом фото.
-    expect(toolbar.className).toContain('bg-black/60');
-    expect(toolbar.className).toContain('backdrop-blur-sm');
+    // Полосы-подложки нет: фон — сплошное затемнение, хром плавает строкой.
+    expect(toolbar.className).not.toContain('bg-black/60');
     expect(toolbar.className).not.toContain('bg-card');
-    expect(toolbar.className).toContain('text-white/90');
-    // Правая группа не наезжает на крестик: у полосы место под него.
-    expect(toolbar.className).toContain('pr-12');
-    expect(screen.getByRole('button', { name: ui.common.close }).className).toContain('z-20');
+    // Строка закреплена у верхней кромки (середина стандартного поля) — от
+    // размера кадра не зависит; у маленькой картинки не сползает в середину.
+    const top = Number.parseFloat(toolbar.style.top);
+    expect(top).toBeGreaterThan(0);
+    expect(top).toBeLessThan(60);
+    // Крестик — последним в правой группе (не отдельной кнопкой в углу окна):
+    // наша скруглённая плашка, не круг; фон на весь экран.
+    const close = screen.getByRole('button', { name: ui.common.close });
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.className).toContain('inset-0');
+    expect(dialog.className).not.toContain('top-16');
+    expect(toolbar.contains(close)).toBe(true);
+    expect(close.className).toContain('size-10');
+    expect(close.className).toContain('border-white/25');
+    expect(close.className).not.toContain('rounded-full');
   });
 
   it('смена кадра сбрасывает зум к вписыванию', () => {
