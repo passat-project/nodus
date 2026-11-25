@@ -9,6 +9,7 @@ import {
 } from '@nodus/contracts';
 
 import { setupRolesFixture } from './roles-fixtures.js';
+import { managementParentId, type DirectoryApi } from './departments-fixtures.js';
 
 /**
  * Оргструктура на живом API (#492): частичная правка подразделения и должности
@@ -26,8 +27,12 @@ describe('оргструктура: частичная правка (#492)', () 
     f.api(f.users.directory, 'PATCH', path, { body, key: randomUUID() });
 
   const createDepartment = async (body: Record<string, unknown>) => {
+    const parentId =
+      body.parentId == null && (body.kind ?? 'management') === 'management'
+        ? await managementParentId(f.api as unknown as DirectoryApi, f.users.directory)
+        : body.parentId;
     const response = await f.api(f.users.directory, 'POST', '/directory/departments', {
-      body,
+      body: { ...body, parentId },
       key: randomUUID(),
     });
     expect(response.status).toBe(201);
@@ -261,8 +266,10 @@ describe('оргструктура: частичная правка (#492)', () 
         f.prisma.department.findUniqueOrThrow({ where: { id: a.id } }),
         f.prisma.department.findUniqueOrThrow({ where: { id: b.id } }),
       ]);
-      const oneWay = storedA.parentId === b.id && storedB.parentId === null;
-      const otherWay = storedB.parentId === a.id && storedA.parentId === null;
+      // #1028: оба узла — дети компании; отклонённый перенос оставляет родителя.
+      const root = await managementParentId(f.api as unknown as DirectoryApi, f.users.directory);
+      const oneWay = storedA.parentId === b.id && storedB.parentId === root;
+      const otherWay = storedB.parentId === a.id && storedA.parentId === root;
       expect(oneWay || otherWay).toBe(true);
     });
   });

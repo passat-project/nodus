@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 
-import type { PopupPayload } from '@nodus/contracts';
+import type { DownloadEntry, PopupPayload, ShellInfo, ShellUpdateState } from '@nodus/contracts';
 
 /**
  * Типизированные обёртки IPC мини-UI оболочки (локальный origin — команды
@@ -33,11 +33,38 @@ export const shellApi = {
 
   /** Смена сервера из меню трея: сбросить адрес, вернуться на экран подключения. */
   changeServer: () => invoke<void>('change_server'),
+
+  /** Версия и платформа оболочки (меню «Приложение» панели). */
+  getShellInfo: () => invoke<ShellInfo>('get_shell_info'),
+
+  /** Состояние автообновления (меню «Приложение» панели). */
+  getUpdateState: () => invoke<ShellUpdateState>('get_update_state'),
+
+  /** Кнопки окна безрамочной оболочки (ADR-0055): команды моста. */
+  windowMinimize: () => invoke<void>('window_minimize'),
+  windowToggleMaximize: () => invoke<void>('window_toggle_maximize'),
+  windowClose: () => invoke<void>('window_close'),
+  /** Перетаскивание за пустое место панели (pointerdown левой кнопкой). */
+  windowStartDragging: () => invoke<void>('window_start_dragging'),
+  windowIsMaximized: () => invoke<boolean>('window_is_maximized'),
+
+  /** Реестр загрузок оболочки (#1038, раздел 5): панель «Загрузки» — список
+   *  последних завершённых (новые первыми) и «Показать в папке» (гвард
+   *  каталога «Загрузки» — в Rust). */
+  downloadsList: () => invoke<DownloadEntry[]>('downloads_list'),
+
+  /** Показать скачанный файл в проводнике (по записи реестра). */
+  downloadReveal: (path: string) => invoke<void>('download_reveal', { path }),
 };
 
 /** Данные попапа (pull из Rust после загрузки окна; автозакрытия нет —
  *  угасанием командует Rust-тикер по активности пользователя). Тема —
  *  прикладывается Rust-ом к payload (#305): мини-UI применяет её до рендера,
  *  в контракт web→shell она не входит. `fadeMs` — та же длительность таяния,
- *  что у Rust-таймера закрытия (#998): CSS не держит вторую константу. */
-export type PopupData = PopupPayload & { theme?: 'light' | 'dark'; fadeMs?: number };
+ *  что у Rust-таймера закрытия (#998): CSS не держит вторую константу.
+ *  `autoHideMs` — автоскрытие карточки скачивания из того же принципа (#1038). */
+export type PopupData = PopupPayload & {
+  theme?: 'light' | 'dark';
+  fadeMs?: number;
+  autoHideMs?: number;
+};

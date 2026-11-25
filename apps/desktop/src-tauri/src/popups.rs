@@ -74,9 +74,6 @@ pub(crate) struct ActivePopup {
     pub(crate) replying: bool,
     /// Окно показано (popup_ready или fallback): повторный show не нужен.
     pub(crate) shown: bool,
-    /// Абсолютный путь скачанного файла (#647) — ТОЛЬКО в Rust: мини-UI его
-    /// не получает, «Показать в папке» берёт путь отсюда по метке окна.
-    pub(crate) download_path: Option<String>,
     /// Кто был системным foreground перед активацией окна в режиме ответа
     /// (HWND, #709): после Esc/закрытия фокус возвращается туда — «забрали у
     /// Word, вернули Word», а не оставили клавиатуру в неактивируемом окне.
@@ -194,7 +191,6 @@ pub(crate) fn show(app: &AppHandle, payload: crate::bridge::PopupPayload) {
     // окон/слоты/очередь — без текста сообщения и имени автора.
     let payload_json = payload_to_json(&payload, bridge::ui_theme());
     let dismiss_key = payload.dismiss_key().to_string();
-    let download_path = payload.download.as_ref().and_then(|d| d.path.clone());
     let urgent = payload.urgent;
     let popup_id = payload.id.clone();
     log::info!(
@@ -249,7 +245,6 @@ pub(crate) fn show(app: &AppHandle, payload: crate::bridge::PopupPayload) {
             hover: false,
             replying: false,
             shown: false,
-            download_path,
             activated_from: None,
             hwnd: 0,
             payload: payload_json,
@@ -312,8 +307,14 @@ pub(crate) fn spawn_ready_fallback(app: &AppHandle, label: &str) {
 
 /// Сигнал готовности от мини-UI попапа/плашки: данные получены, тема
 /// применена, первый кадр отрисован — окно можно показывать (#305).
+/// Слот скачивания (#1038) живёт своей готовностью: показ решает его
+/// фокус-гейтинг (окно Nodus обязано быть активным).
 #[tauri::command]
 pub fn popup_ready(app: AppHandle, window: WebviewWindow) {
+    if crate::download_slot::is_slot(window.label()) {
+        crate::download_slot::ready(&app);
+        return;
+    }
     show_if_ready(&app, window.label());
 }
 
@@ -531,7 +532,9 @@ fn restore_focus(app: &AppHandle, win: &WebviewWindow, previous: Option<isize>) 
 }
 
 /// Живые попапы для гварда клавиатурного фокуса (#709): (HWND, режим ответа).
-/// Только чтение стека — вызывается и с фонового потока сторожа.
+/// Только чтение стека — вызывается и с фонового потока сторожа. Слот
+/// скачивания (#1038) — тоже своё окно с webview-ребёнком: гвард обязан
+/// узнавать его, иначе показ карточки оставлял бы клавиатуру в ней.
 pub(crate) fn focus_targets(app: &AppHandle) -> Vec<(isize, bool)> {
     let s = stack(app);
     let mut targets: Vec<(isize, bool)> = s
@@ -542,6 +545,10 @@ pub(crate) fn focus_targets(app: &AppHandle) -> Vec<(isize, bool)> {
         .collect();
     if s.hide_all_live && s.hide_all_hwnd != 0 {
         targets.push((s.hide_all_hwnd, false));
+    }
+    drop(s);
+    if let Some(hwnd) = crate::download_slot::slot_hwnd() {
+        targets.push((hwnd, false));
     }
     targets
 }
@@ -649,10 +656,14 @@ pub fn popup_set_hover(app: AppHandle, window: WebviewWindow, hover: bool) {
 }
 
 /// Payload попапа — pull-моделью после загрузки окна (без гонки со маунтом).
-/// Плашке «Скрыть все» данных не надо — отдаём только тему (#305).
+/// Плашке «Скрыть все» данных не надо — отдаём только тему (#305); слоту
+/// скачивания — его серию (#1038).
 #[tauri::command]
 pub fn popup_get_data(app: AppHandle, window: WebviewWindow) -> Option<serde_json::Value> {
     let label = window.label();
+    if crate::download_slot::is_slot(label) {
+        return crate::download_slot::payload();
+    }
     if label == HIDE_ALL_LABEL {
         return Some(serde_json::json!({ "theme": bridge::ui_theme() }));
     }
@@ -688,6 +699,11 @@ pub fn popup_set_height(app: AppHandle, window: WebviewWindow, height: f64) -> R
         return Err("invalid_payload".into());
     }
     let label = window.label().to_string();
+    // Слот скачивания (#1038) растёт вниз от панели — своя перестановка.
+    if crate::download_slot::is_slot(&label) {
+        crate::download_slot::set_height(&app, height);
+        return Ok(());
+    }
     let changed = {
         let mut s = stack(&app);
         match s.active.iter_mut().find(|p| p.label == label) {
@@ -872,7 +888,6 @@ mod tests {
                 hover: false,
                 replying: false,
                 shown: false,
-                download_path: None,
                 activated_from: None,
                 hwnd: 0,
                 payload: serde_json::Value::Null,
@@ -1001,8 +1016,9 @@ mod tests {
         assert_eq!(json["canReply"], false);
     }
 
-    /** Скачивание (#647): мини-UI получает имя и успех, но НЕ путь — инвариант
-     *  «путь только в Rust» держится и маппингом, и `skip_serializing`. */
+    /** Скачивание (#647, #1038): payload несёт имя и успех; пути в типе
+     *  НЕТ — он живёт только в серии слота скачивания (download_slot.rs),
+     *  инвариант «путь только в Rust» держится маппингом с явными полями. */
     fn download_payload() -> PopupPayload {
         PopupPayload {
             id: "download-1".into(),
@@ -1018,7 +1034,6 @@ mod tests {
             download: Some(crate::bridge::PopupDownload {
                 file_name: "Смета.xlsx".into(),
                 success: true,
-                path: Some(r"C:\Users\user\Downloads\Смета.xlsx".into()),
             }),
         }
     }
@@ -1033,11 +1048,8 @@ mod tests {
             json["download"].get("path").is_none(),
             "путь не уходит в мини-UI"
         );
-        // Полная serde-сериализация тоже не несёт путь (skip_serializing).
+        // Полная serde-сериализация тоже не несёт путь: поля в типе нет.
         let full = serde_json::to_value(&payload).expect("payload сериализуется");
-        assert!(
-            full["download"].get("path").is_none(),
-            "path помечен skip_serializing"
-        );
+        assert!(full["download"].get("path").is_none());
     }
 }

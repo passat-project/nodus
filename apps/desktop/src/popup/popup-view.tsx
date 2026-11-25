@@ -53,6 +53,9 @@ export function PopupView() {
   const [measured, setMeasured] = useState(false);
   /** Курсор на карточке скачивания: автоскрытие на паузе. */
   const [hovered, setHovered] = useState(false);
+  /** Окно Nodus активно (#1038): слот скачивания ставит автоскрытие на паузу,
+   *  пока Rust держит карточку скрытой («ждёт возврата фокуса»). */
+  const [awake, setAwake] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -72,14 +75,35 @@ export function PopupView() {
   // Pull-модель: окно забирает payload после загрузки (без гонки с маунтом).
   // Тема — из payload (#305): применяется ДО рендера карточки; окно вообще
   // невидимо до popup_ready, так что кадров в чужой теме не бывает.
+  // `__popupRefresh` — дёржка Rust при новом файле серии скачиваний (#1038):
+  // счётчик/имя/успех перечитываются в ЖИВОЙ карточке, личным попапам она
+  // не адресована (Rust eval'ит только в окно слота).
   useEffect(() => {
-    void invoke<PopupData | null>('popup_get_data').then((payload) => {
-      if (payload?.theme === 'dark') document.documentElement.dataset.theme = 'dark';
-      else delete document.documentElement.dataset.theme;
-      setData(payload);
-      setReplying(false);
-      setText('');
-    });
+    const pull = () =>
+      void invoke<PopupData | null>('popup_get_data').then((payload) => {
+        if (payload?.theme === 'dark') document.documentElement.dataset.theme = 'dark';
+        else delete document.documentElement.dataset.theme;
+        setData(payload);
+        setReplying(false);
+        setText('');
+      });
+    pull();
+    const host = window as { __popupRefresh?: () => void };
+    host.__popupRefresh = pull;
+    return () => {
+      delete host.__popupRefresh;
+    };
+  }, []);
+
+  // Активность окна Nodus от Rust (#1038): показ/скрытие слота скачивания
+  // сопровождается eval-сигналом — скрытая карточка не сгорает по таймеру,
+  // а ждёт возврата фокуса с остатком своих 8 с.
+  useEffect(() => {
+    const host = window as { __popupAwake?: (value: boolean) => void };
+    host.__popupAwake = (value: boolean) => setAwake(value);
+    return () => {
+      delete host.__popupAwake;
+    };
   }, []);
 
   // Фактическая высота карточки → оболочке (#406). Меряем контент (заголовок
@@ -211,8 +235,10 @@ export function PopupView() {
   }
 
   // Длительность таяния — из payload (единый источник с Rust-таймером
-  // закрытия, #998); старый payload без поля — прежние 3 с.
+  // закрытия, #998); старый payload без поля — прежние 3 с. Автоскрытие
+  // карточки скачивания — тот же приём (#1038).
   const fadeMs = data.fadeMs !== undefined && data.fadeMs > 0 ? data.fadeMs : 3000;
+  const autoHideMs = data.autoHideMs !== undefined && data.autoHideMs > 0 ? data.autoHideMs : 8000;
   const fadeClass =
     fade === 'fading'
       ? 'opacity-0 transition-opacity ease-linear'
@@ -247,7 +273,11 @@ export function PopupView() {
       {/* Контент — естественная высота: оболочка узнаёт её и растит окно. */}
       <div ref={contentRef} className="flex shrink-0 flex-col">
         {data.download ? (
-          <DownloadCard download={data.download} paused={hovered} />
+          <DownloadCard
+            download={data.download}
+            paused={hovered || !awake}
+            autoHideMs={autoHideMs}
+          />
         ) : (
           /* Клик по карточке — открыть источник (как клик по уведомлению в Telegram):
            *  беседу (#300) или карточку письма (#618). */
@@ -319,12 +349,17 @@ export function PopupView() {
 
       {/* Крестик: SVG-глиф заполняет кнопку (канон Telegram notifyClose —
        *  иконка ≈ 70% зоны), ховер ровно по видимой кнопке (фидбек 08.10).
-       *  Абсолютный — ВНЕ потока контента, доступен в любом режиме. */}
+       *  Абсолютный — ВНЕ потока контента, доступен в любом режиме.
+       *  Чатовой карточке — верхний правый угол (канон); компактной карточке
+       *  скачивания (#1038, волна 25.11) — центр высоты: одна строка, крестик
+       *  НА ОДНОЙ ВЫСОТЕ с иконкой папки (вердикт владельца). */}
       <button
         type="button"
         aria-label={ui.common.close}
         onClick={close}
-        className="text-muted-foreground hover:text-foreground hover:bg-accent absolute top-1 right-1 z-10 flex size-5 items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100"
+        className={`text-muted-foreground hover:text-foreground hover:bg-accent absolute right-1 z-10 flex size-5 items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100 ${
+          data.download ? 'top-1/2 -translate-y-1/2' : 'top-1'
+        }`}
       >
         <svg
           viewBox="0 0 24 24"

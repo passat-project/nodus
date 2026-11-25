@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { ui } from '@nodus/contracts';
 
 import { useNotificationsToastStore } from '../model/toast-store.js';
 import { NotificationToasts } from './notification-toasts.js';
@@ -37,6 +38,12 @@ function mountToasts(): void {
   );
   render(<NotificationToasts />, { wrapper });
 }
+
+afterEach(() => {
+  cleanup();
+  delete window.nodusDesktop;
+  window.history.replaceState(null, '', '/');
+});
 
 /** #616: сводная «Требуют внимания» следует журналу — внимание угасло,
  *  карточка гаснет сама (раньше локальный счётчик висел бесконечно). */
@@ -111,5 +118,54 @@ describe('NotificationToasts: клик ведёт к источнику', () => 
     const preview = screen.getAllByText('Письмо пришло').at(-1)!;
     fireEvent.click(preview);
     expect(openCard).toHaveBeenCalledWith({ kind: 'letter', id: LETTER }, undefined);
+  });
+});
+
+/** #1038 (фаза F): личный стек — колонка ПОД топбаром СПРАВА, по геометрии
+ *  десктопных попапов (360/зазор 5/предел 3); в оболочке не рендерится
+ *  вовсе (нативные попапы). */
+describe('NotificationToasts: колонка под топбаром справа (#1038)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useNotificationsToastStore.setState({
+      personal: [],
+      actions: { count: 0, latest: null },
+      mutedConversations: new Set<string>(),
+      snoozedConversations: new Set<string>(),
+      dnd: { enabled: false, start: '22:00', end: '08:00' },
+    });
+  });
+
+  it('в браузере — колонка справа под линией топбара (геометрия попапов)', () => {
+    mountToasts();
+    const column = screen.getByLabelText(ui.notifications.bellLabel);
+    // absolute внутри мягкой рамы: right-4 = px-4 топбара (правый край по
+    // группе иконок при любом --ui-scale); top = низ h-14 шапки (3.5rem того
+    // же rem-пространства) + ясный зазор 14px — карточка не налезает на
+    // линию разделителя; карточка 360, зазор 5, z тостов.
+    for (const cls of [
+      'right-4',
+      'top-[calc(3.5rem+14px)]',
+      'w-[360px]',
+      'gap-[5px]',
+      'z-[70]',
+      'absolute',
+    ]) {
+      expect(column.classList.contains(cls)).toBe(true);
+    }
+  });
+
+  it('в десктоп-оболочке — не рендерится вовсе (нативные попапы)', () => {
+    window.nodusDesktop = {
+      shellVersion: '1.0.0',
+      platform: 'windows',
+    } as unknown as typeof window.nodusDesktop;
+    mountToasts();
+    expect(screen.queryByLabelText(ui.notifications.bellLabel)).toBeNull();
+  });
+  it('стек на обычном месте: top = низ шапки + зазор', () => {
+    mountToasts();
+    const column = screen.getByLabelText(ui.notifications.bellLabel);
+    expect(column.classList.contains('top-[calc(3.5rem+14px)]')).toBe(true);
   });
 });
