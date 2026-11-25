@@ -162,7 +162,7 @@ describe('shouldToast (подавления B-кейсов)', () => {
     expect(shouldToast(snapshot({ userId: 'other' }), 0, NO_FLAGS)).toBeNull();
   });
 
-  it('F2: кап стака — 4', () => {
-    expect(PERSONAL_TOAST_CAP).toBe(4);
+  it('F2: кап стака — 3 (предел десктопных попапов, #1038)', () => {
+    expect(PERSONAL_TOAST_CAP).toBe(3);
   });
 });

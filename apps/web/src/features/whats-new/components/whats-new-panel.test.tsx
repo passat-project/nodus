@@ -7,20 +7,23 @@ import { useAuthStore } from '../../../shared/auth-store.js';
 import { AUTO_OPEN_DELAY_MS, useWhatsNewAutoOpen } from '../model/use-whats-new-auto-open.js';
 import { LATEST_RELEASE } from '../model/releases.js';
 import { useWhatsNewStore } from '../model/whats-new-store.js';
-import { WhatsNewButton } from './whats-new-button.js';
 import { WhatsNewPanel } from './whats-new-panel.js';
 
 /**
  * «Что нового» (#386): автопоказ один раз на пользователя после обновления,
- * кнопка топбара открывает историю, чипы фильтруют пункты по модулю.
+ * ручное открытие (вход — пункт меню аватара, покрытие там; здесь — кнопка
+ * харнесса зовёт тот же show() стора), чипы фильтруют пункты по модулю.
  */
 const USER = { id: 'user-a', email: 'a@nodus.by', displayName: 'Анна', permissions: [] };
 
 function Harness() {
   useWhatsNewAutoOpen();
+  const show = useWhatsNewStore((s) => s.show);
   return (
     <>
-      <WhatsNewButton />
+      <button type="button" onClick={() => show(USER.id, LATEST_RELEASE!.version, 'manual')}>
+        открыть
+      </button>
       <WhatsNewPanel />
     </>
   );
@@ -58,10 +61,10 @@ describe('панель «Что нового»', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('кнопка открывает панель; чип модуля оставляет только его пункты', () => {
+  it('ручное открытие показывает панель; чип модуля оставляет только его пункты', () => {
     useWhatsNewStore.setState({ seen: { [USER.id]: LATEST_RELEASE!.version } });
     render(<Harness />);
-    fireEvent.click(screen.getByRole('button', { name: ui.whatsNew.open }));
+    fireEvent.click(screen.getByRole('button', { name: 'открыть' }));
     const dialog = screen.getByRole('dialog', { name: ui.whatsNew.title });
     const totalItems = dialog.querySelectorAll('li').length;
     expect(totalItems).toBe(LATEST_RELEASE!.items.length);
@@ -77,7 +80,7 @@ describe('панель «Что нового»', () => {
   it('фильтр по модулю без изменений в свежем выпуске: первый показанный выпуск развёрнут', () => {
     useWhatsNewStore.setState({ seen: { [USER.id]: LATEST_RELEASE!.version } });
     render(<Harness />);
-    fireEvent.click(screen.getByRole('button', { name: ui.whatsNew.open }));
+    fireEvent.click(screen.getByRole('button', { name: 'открыть' }));
     const dialog = screen.getByRole('dialog', { name: ui.whatsNew.title });
 
     // «Корреспонденция» есть в 0.11.0, но не в свежем 0.12.0: первый
