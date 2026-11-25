@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement, type ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatMessage } from '@nodus/contracts';
 
 import { chatKeys } from './chat-keys.js';
@@ -15,9 +15,21 @@ import { useSendChatMessage } from './send-message.js';
  * ответа) шлёт ОДИНАКОВЫЙ Idempotency-Key — сервер сведёт повторы в одну
  * строку (client_message_id), а не задвоит. Гербетика: env-флаг выключен —
  * тесты живут в «живой» ветке (без мок-таймера read-receipt).
+ *
+ * #1048: мутации доводятся до settlement ДО конца теста. Иначе отложенный
+ * notifyManager TanStack срабатывает после сноса jsdom и падает с
+ * `ReferenceError: window is not defined`, роняя весь CI (uncaught, а не тест).
  */
 
 const CONV = '11111111-1111-4111-8111-111111111111';
+
+const clients: QueryClient[] = [];
+
+function makeClient(): QueryClient {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  clients.push(client);
+  return client;
+}
 
 function makeWrapper(client: QueryClient) {
   return function Wrapper({ children }: { children: ReactNode }) {
@@ -40,8 +52,13 @@ function stubPostFetch(keys: string[]) {
 }
 
 beforeEach(() => {
-  vi.unstubAllGlobals();
   vi.stubEnv('VITE_API_MOCK', 'false');
+});
+
+afterEach(() => {
+  cleanup();
+  for (const client of clients.splice(0)) client.clear();
+  vi.unstubAllGlobals();
 });
 
 describe('useSendChatMessage — идемпотентность отправки (#48)', () => {
@@ -49,7 +66,7 @@ describe('useSendChatMessage — идемпотентность отправки
     const keys: string[] = [];
     stubPostFetch(keys);
 
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = makeClient();
     const { result } = renderHook(() => useSendChatMessage(CONV), {
       wrapper: makeWrapper(client),
     });
@@ -66,13 +83,16 @@ describe('useSendChatMessage — идемпотентность отправки
 
     expect(keys[0]).toBe('temp-one');
     expect(keys[1]).toBe('temp-one');
+
+    // Обе мутации завершились до сноса окружения (#1048).
+    await waitFor(() => expect(result.current.isPending).toBe(false));
   });
 
   it('mutate без явного temp id генерирует ключ сам: разные сообщения — разные ключи', async () => {
     const keys: string[] = [];
     stubPostFetch(keys);
 
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = makeClient();
     const { result } = renderHook(() => useSendChatMessage(CONV), {
       wrapper: makeWrapper(client),
     });
@@ -89,6 +109,8 @@ describe('useSendChatMessage — идемпотентность отправки
     expect(keys[0]).toBeTruthy();
     expect(keys[1]).toBeTruthy();
     expect(keys[0]).not.toBe(keys[1]);
+
+    await waitFor(() => expect(result.current.isPending).toBe(false));
   });
 });
 
@@ -99,19 +121,32 @@ describe('useSendChatMessage — идемпотентность отправки
 describe('useSendChatMessage — аватар темпа из справочника (#1021)', () => {
   const ME = '11111111-1111-4111-8111-111111111111';
 
-  /** POST-заглушка с задержкой: темп живёт в кэше до ответа — успеваем
-   *  прочитать его из кэша waitFor'ом, не гоняясь за settlement. */
-  function stubDelayedPost(): void {
+  /** POST-заглушка с управляемым ответом: темп живёт в кэше до settlement —
+   *  успеваем прочитать его waitFor'ом, затем отпускаем запрос и ждём
+   *  завершения мутации до сноса jsdom (#1048). */
+  function stubDelayedPost(): () => Promise<void> {
+    const releases: (() => void)[] = [];
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 80));
-        return new Response(JSON.stringify({ items: [], nextCursor: null }), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        });
-      }),
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            releases.push(() =>
+              resolve(
+                new Response(JSON.stringify({ items: [], nextCursor: null }), {
+                  status: 200,
+                  headers: { 'content-type': 'application/json' },
+                }),
+              ),
+            );
+          }),
+      ),
     );
+    return async () => {
+      await act(async () => {
+        for (const release of releases.splice(0)) release();
+      });
+    };
   }
 
   async function tempInCache(
@@ -128,7 +163,7 @@ describe('useSendChatMessage — аватар темпа из справочни
   }
 
   it('аватар текущего пользователя попадает в автор темпа', async () => {
-    stubDelayedPost();
+    const settle = stubDelayedPost();
     const { useAuthStore } = await import('../auth-store.js');
     const { usersListKey } = await import('../api/users-list.js');
     useAuthStore.setState({
@@ -137,7 +172,7 @@ describe('useSendChatMessage — аватар темпа из справочни
       user: { id: ME, email: 'me@nodus.by', displayName: 'Я Сам', permissions: [] },
     });
 
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = makeClient();
     client.setQueryData(usersListKey, {
       items: [{ id: ME, avatarUrl: '/avatars/me.png' }],
       nextCursor: null,
@@ -152,10 +187,12 @@ describe('useSendChatMessage — аватар темпа из справочни
 
     const temp = await tempInCache(client, (m) => m.author.avatarUrl === '/avatars/me.png');
     expect(temp?.author.id).toBe(ME);
+
+    await settle();
   });
 
   it('кэш справочника пуст (холодный вход) — avatarUrl null, как раньше', async () => {
-    stubDelayedPost();
+    const settle = stubDelayedPost();
     const { useAuthStore } = await import('../auth-store.js');
     useAuthStore.setState({
       status: 'authenticated',
@@ -163,7 +200,7 @@ describe('useSendChatMessage — аватар темпа из справочни
       user: { id: ME, email: 'me@nodus.by', displayName: 'Я Сам', permissions: [] },
     });
 
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = makeClient();
     const { result } = renderHook(() => useSendChatMessage(CONV), {
       wrapper: makeWrapper(client),
     });
@@ -173,5 +210,7 @@ describe('useSendChatMessage — аватар темпа из справочни
 
     const temp = await tempInCache(client, (m) => m.author.avatarUrl === null);
     expect(temp?.author.id).toBe(ME);
+
+    await settle();
   });
 });
