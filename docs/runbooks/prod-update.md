@@ -89,6 +89,60 @@ docker compose -p nodus --project-directory D:/NodusProd --env-file D:/NodusProd
 Миграции БД применяет api при старте (`prisma migrate deploy` в CMD образа) —
 отдельной команды нет.
 
+### Перед выпуском v0.16: заместители в юридических/архивных узлах (#1025)
+
+`20261202090000_department_deputies` переносит одиночного зама в
+`department_deputies` и **падает**, если зам неактивен или состоит в другом
+подразделении. Предыдущая `20261201150000_department_leader_membership`
+нормализовала только активную управленческую структуру — юридические и
+архивные узлы она намеренно не трогала (юридическая структура формальная).
+Старый API/импорт мог записать там `deputy_id`; тогда `prisma migrate deploy`
+остановится с `RAISE EXCEPTION '#817: …'`, api не выйдет в healthy.
+
+Предполётная проверка (только чтение, до выкатки v0.16):
+
+```bash
+docker exec nodus_postgres psql -U <pguser> -d <db> -c "
+SELECT d.id, d.name, d.kind, d.is_active, d.deputy_id, u.status, u.department_id
+FROM departments d
+LEFT JOIN users u ON u.id = d.deputy_id
+WHERE d.deputy_id IS NOT NULL
+  AND (
+    d.kind <> 'management'
+    OR NOT d.is_active
+    OR u.status IS DISTINCT FROM 'active'
+    OR u.department_id IS DISTINCT FROM d.id
+  );"
+```
+
+Пусто — выкатка обычная. Строки есть — выбрать ДО выкатки:
+
+- **A. Не переносить** (рекомендуется: роль в юридической структуре формальна,
+  архивный узел не действует, колонка всё равно дропается миграцией):
+
+  ```sql
+  UPDATE departments d
+  SET deputy_id = NULL, updated_at = now()
+  WHERE d.deputy_id IS NOT NULL
+    AND (
+      d.kind <> 'management'
+      OR NOT d.is_active
+      OR NOT EXISTS (
+        SELECT 1 FROM users u
+        WHERE u.id = d.deputy_id
+          AND u.status = 'active'
+          AND u.department_id = d.id
+      )
+    );
+  ```
+
+- **B. Перенести вручную** — требует правки страховки миграции, что для
+  выпущенной миграции запрещено (правка задним числом). Не поддерживается:
+  такие роли назначаются заново в интерфейсе после выкатки.
+
+Повторить проверку после `UPDATE` — должно быть пусто; затем выкатывать.
+
+
 ## Смок (только чтение — создавать данные и гонять пробы на проде запрещено)
 
 `prod-deploy.mjs` запускает смок сам; вручную (например, после перезагрузки):
