@@ -33,9 +33,6 @@ vi.mock('../../features/notifications/components/bell-popover.js', () => ({
 vi.mock('../../features/tasks/components/running-timer-chip.js', () => ({
   RunningTimerChip: () => null,
 }));
-vi.mock('../../features/whats-new/components/whats-new-button.js', () => ({
-  WhatsNewButton: () => null,
-}));
 vi.mock('./profile-menu.js', () => ({ ProfileMenu: () => null }));
 vi.mock('../../shared/chat/chat-queries.js', () => ({
   useChatUnreadSummary: () => ({ data: undefined }),
@@ -66,6 +63,15 @@ describe('DownloadAppButton в топбаре (#1038)', () => {
     } as unknown as typeof window.nodusDesktop;
     render(<TopBar />);
     expect(screen.queryByTestId('download-app-button')).toBeNull();
+  });
+});
+
+/** #1038 (фаза G): «Что нового» ушло из строки топбара в меню аватара —
+ *  кнопки-искорки в топбаре больше нет (вход — ProfileMenu). */
+describe('«Что нового» в топбаре (#1038 фаза G)', () => {
+  it('кнопки WhatsNewButton в строке нет — вход через меню аватара', () => {
+    render(<TopBar />);
+    expect(screen.queryByRole('button', { name: ui.whatsNew.open })).toBeNull();
   });
 });
 

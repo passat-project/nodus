@@ -16,7 +16,6 @@ import { useAssistantStore } from '../../features/assistant/model/assistant-stor
 import { HomeGreeting } from '../../features/home/components/home-greeting.js';
 import { BellPopover } from '../../features/notifications/components/bell-popover.js';
 import { RunningTimerChip } from '../../features/tasks/components/running-timer-chip.js';
-import { WhatsNewButton } from '../../features/whats-new/components/whats-new-button.js';
 import { useAuthStore } from '../../shared/auth-store.js';
 import { isDesktopShell } from '../../shared/desktop/desktop-bridge.js';
 import { openInNewTab } from '../../shared/lib/tab-bridge.js';
@@ -225,14 +224,12 @@ export function TopBar() {
           </span>
         </Button>
 
-        {/* «Что нового» (#386): история обновлений портала; точка — последнее
-            обновление ещё не просмотрено */}
-        <WhatsNewButton />
-
         <BellPopover />
 
         {/* Профиль — правый верх мягкой рамы, справа от уведомлений (вердикт
-            владельца 15.09.2026: служебная полоса — только аватарки коллег). */}
+            владельца 15.09.2026: служебная полоса — только аватарки коллег);
+            в меню аватара — пункт «Что нового» (#1038: история обновлений
+            переехала из строки топбара, обе поверхности). */}
         <ProfileMenu />
       </div>
     </header>
