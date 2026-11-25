@@ -97,6 +97,29 @@ describe('useCardTabDrag: отмена, слушатели и авто-прок�
     expect(onResolve).not.toHaveBeenCalled();
   });
 
+  it('клик по вкладке не оставляет перехват Escape (#1030)', () => {
+    const onResolve = vi.fn();
+    render(<Harness onResolve={onResolve} />);
+    const tab = screen.getByTestId('tab-a');
+    fireEvent.pointerDown(tab, { pointerId: 7, button: 0, clientX: 50, clientY: 20 });
+    dispatchWindowPointer('pointerup', { pointerId: 7, clientX: 50, clientY: 20 });
+
+    const seen = vi.fn();
+    window.addEventListener('keydown', seen);
+    const escape = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => void window.dispatchEvent(escape));
+
+    // Перехват снят вместе с capture-флагом: Esc доходит до окна и не гасится.
+    expect(escape.defaultPrevented).toBe(false);
+    expect(seen).toHaveBeenCalledTimes(1);
+    expect(onResolve).not.toHaveBeenCalled();
+    window.removeEventListener('keydown', seen);
+  });
+
   it('авто-прокрутка полосы у края сдвигает scrollLeft', () => {
     const onResolve = vi.fn();
     const strip = document.createElement('div');

@@ -2,6 +2,13 @@
  * API-слой чата в shared (два потребителя — мессенджер и вкладка «Чат»
  * панели проекта; I6: фичи друг друга не импортируют). Ключи — единая
  * фабрика: инвалидации пересекают границы потребителей.
+ *
+ * Куст `conversations()` (#1051) — два класса ключей. СПИСКИ (сам список,
+ * вкладки `scoped`, пикеры `search`, сводка непрочитанных) обновляются
+ * событием любой беседы (`conversation-list-invalidation.ts`). ОДИНОЧНЫЕ
+ * СТРОКИ (`direct`, `byTask`, `byLetter`, `byProject`, `conversationLookup`)
+ * — только событием своей беседы (`conversation-rows.ts`): это find-or-create
+ * с транзакцией на чтение, и прежде каждое чужое сообщение перечитывало их все.
  */
 export const chatKeys = {
   all: ['chat'] as const,
@@ -17,13 +24,14 @@ export const chatKeys = {
   threadStates: (id: string) => [...chatKeys.all, 'threadStates', id] as const,
   /** Личка с пользователем (открыть/создать direct по сотруднику). */
   direct: (userId: string) => [...chatKeys.conversations(), 'direct', userId] as const,
-  /** Беседа задачи (#252): find-or-create по задаче для карточки. */
+  /** Беседа задачи (#252): find-or-create по задаче для карточки — значок
+   *  непрочитанного на вкладке чата. */
   byTask: (taskId: string) => [...chatKeys.conversations(), 'task', taskId] as const,
   byLetter: (letterId: string) => [...chatKeys.conversations(), 'letter', letterId] as const,
   /** Канал проекта (#52): find-or-create по проекту; не участнику — 404. */
   byProject: (projectId: string) => [...chatKeys.conversations(), 'project', projectId] as const,
-  /** Вкладка мессенджера (#252): серверный фильтр и своя пагинация; под
-   *  префиксом conversations() — общие инвалидации списка её достают.
+  /** Вкладка мессенджера (#252): серверный фильтр и своя пагинация; список —
+   *  обновляется событием любой беседы.
    *  `search` (#956) — серверный поиск: отдельная ветка той же вкладки. */
   scoped: (scope: ConversationScope, search?: string) =>
     search
@@ -32,18 +40,17 @@ export const chatKeys = {
   /** Поиск бесед для пикеров (пересылка, #956): один запрос, без пагинации. */
   search: (q: string) => [...chatKeys.conversations(), 'search', q] as const,
   /** Сводка непрочитанных по вкладкам (#409): точная сумма по всем беседам;
-   *  под префиксом conversations() — WS-инвалидации списка её достают. */
+   *  обновляется вместе со списком. */
   unreadSummary: () => [...chatKeys.conversations(), 'unread-summary'] as const,
   /** Участники беседы (#186): панель с ролями; search — часть ключа. */
   members: (id: string) => [...chatKeys.all, 'members', id] as const,
   /** Политика важных (#177): счётчик дневного лимита попапа молнии. */
   urgentPolicy: () => [...chatKeys.all, 'urgentPolicy'] as const,
   /** Deep-link на беседу за пределами первой страницы (#225): поиск по
-   *  страницам списка; под префиксом conversations() — WS-инвалидации списка
-   *  сбрасывают и его (найденная строка дописывается в первую страницу). */
+   *  страницам списка; найденная строка дописывается в первую страницу. */
   conversationLookup: (id: string) => [...chatKeys.conversations(), 'lookup', id] as const,
   /** Сообщения по id (окно перехода, #380): файлы/сообщения итога вне
-   *  загруженной ленты. Под chatKeys.all — WS-события сообщений её сбрасывают. */
+   *  загруженной ленты. Снимок по id — WS-события его не сбрасывают. */
   lookup: (id: string, ids: readonly string[]) =>
     [...chatKeys.all, 'lookup', id, [...ids].sort().join(',')] as const,
 };

@@ -144,7 +144,7 @@ export function AddMembersDialog({
   const { data } = useQuery({
     queryKey: usersKeys.search('add-members', debounced),
     queryFn: () => {
-      const params = new URLSearchParams({ limit: '50' });
+      const params = new URLSearchParams({ limit: '50', status: 'active' });
       if (debounced) params.set('search', debounced);
       return api<Paginated<UserListItem>>(`/directory/users?${params}`);
     },
@@ -159,7 +159,10 @@ export function AddMembersDialog({
     () =>
       (data?.items ?? []).filter(
         (u: UserListItem) =>
-          u.id !== meId && !existing.has(u.id) && !picked.some((p) => p.id === u.id),
+          u.status === 'active' &&
+          u.id !== meId &&
+          !existing.has(u.id) &&
+          !picked.some((p) => p.id === u.id),
       ),
     [data, existing, picked, meId],
   );

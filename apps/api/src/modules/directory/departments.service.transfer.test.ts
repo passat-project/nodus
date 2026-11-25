@@ -55,6 +55,8 @@ describe('DepartmentsService: назначение главы/зама пере�
     findSubtreeIds: vi.fn(),
     findRef: vi.fn(),
     countActiveChildren: vi.fn(),
+    // Корней нет: тесты создают первый узел структуры (#1028).
+    countRoots: vi.fn().mockResolvedValue(0),
     clearLeadershipIn: vi.fn(),
   };
   const users = {

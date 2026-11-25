@@ -3,29 +3,31 @@ import type { TaskListItem } from '@nodus/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { lettersKeys } from '../api/letters-keys.js';
-import { isFreshFromMutation, markFreshFromMutation } from '../api/fresh-from-mutation.js';
 import { nodeKindsKeys } from '../api/node-kinds.js';
 import { projectsKeys } from '../api/projects-list.js';
 import { tasksKeys } from '../api/tasks-keys.js';
 import { customFieldsKeys } from '../custom-fields/queries.js';
 import { dictionariesKeys } from '../dictionaries/keys.js';
 import { kanbanColumnKey } from '../lib/board/kanban-column-key.js';
-import type { InvalidationTier, KeyBatcher } from './invalidation-batcher.js';
+import type { EchoAwareBatcher, PushOptions } from './echo-batcher.js';
+import type { InvalidationTier } from './invalidation-batcher.js';
 import { pushCustomFieldKeys } from './custom-fields-invalidation.js';
 
-function recordingBatcher(): { batcher: KeyBatcher; keys: Array<[unknown[], InvalidationTier]> } {
-  const keys: Array<[unknown[], InvalidationTier]> = [];
+type Pushed = [unknown[], InvalidationTier, PushOptions | undefined];
+
+function recordingBatcher(): { batcher: EchoAwareBatcher; keys: Pushed[] } {
+  const keys: Pushed[] = [];
   return {
     keys,
     batcher: {
-      push: (key, tier) => keys.push([[...key], tier]),
+      push: (key, tier, options) => keys.push([[...key], tier, options]),
       flush: () => {},
       dispose: () => {},
     },
   };
 }
 
-const has = (keys: Array<[unknown[], InvalidationTier]>, key: readonly unknown[]): boolean =>
+const has = (keys: Pushed[], key: readonly unknown[]): boolean =>
   keys.some(([k]) => JSON.stringify(k) === JSON.stringify(key));
 
 describe('pushCustomFieldKeys (#431, ADR-0029)', () => {
@@ -156,14 +158,13 @@ describe('pushCustomFieldKeys: эхо своей мутации и доски (A
     return keys;
   };
 
-  it('своя свежая мутация: деталь всё равно перезапрашивается, колонка — да', () => {
+  it('своя мутация: деталь всё равно перезапрашивается — с пометкой force, эхо её не гасит', () => {
     const { client, holding, other } = boardClient(FRESH_TASK);
-    markFreshFromMutation(FRESH_TASK);
-    expect(isFreshFromMutation(FRESH_TASK)).toBe(true);
     const keys = push(client, { hostKind: 'task', hostId: FRESH_TASK, hasError: true });
     // Пересчёт зависимых формул идёт ПОСЛЕ ответа мутации: без перезапроса
     // детали карточка показывала старое значение до перезагрузки (регрессия).
     expect(has(keys, tasksKeys.detail(FRESH_TASK))).toBe(true);
+    expect(keys.every(([, , options]) => options?.force === true)).toBe(true);
     expect(has(keys, tasksKeys.listPages())).toBe(true);
     expect(has(keys, holding)).toBe(true);
     // Колонка без карточки не трогается: событие адресное, стадии не меняются.
@@ -180,7 +181,6 @@ describe('pushCustomFieldKeys: эхо своей мутации и доски (A
 
   it('письмо: свежесть мутации деталь не отменяет (эхо — единственный канал)', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    markFreshFromMutation(LETTER_ID);
     const keys = push(client, { hostKind: 'letter', hostId: LETTER_ID, hasError: true });
     expect(has(keys, lettersKeys.detail(LETTER_ID))).toBe(true);
     expect(has(keys, lettersKeys.lists())).toBe(true);

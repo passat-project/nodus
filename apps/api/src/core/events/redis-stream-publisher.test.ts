@@ -54,9 +54,25 @@ describe('RedisStreamPublisher', () => {
 
   it('публикует батч envelope-ами по seq и ставит метку fanout_at после XADD', async () => {
     const createdAt = new Date('2026-09-25T00:00:00.000Z');
+    const actorId = '00000000-0000-4000-8000-0000000000a1';
     queryRaw.mockResolvedValueOnce([
-      { id: 'e1', seq: 8n, type: 'chat.message_sent', payload: { messageId: 'm1' }, createdAt },
-      { id: 'e2', seq: 9n, type: 'chat.message_read', payload: { upToSeq: 3 }, createdAt },
+      {
+        id: 'e1',
+        seq: 8n,
+        type: 'chat.message_sent',
+        payload: { messageId: 'm1' },
+        createdAt,
+        actorId,
+      },
+      // Системное событие: автора нет — поля actorId в envelope нет.
+      {
+        id: 'e2',
+        seq: 9n,
+        type: 'task.overdue',
+        payload: { upToSeq: 3 },
+        createdAt,
+        actorId: null,
+      },
     ]);
     await publisher.publishPending();
 
@@ -74,8 +90,12 @@ describe('RedisStreamPublisher', () => {
         payload: { messageId: 'm1' },
         seq: 8,
         ts: createdAt.toISOString(),
+        actorId,
       } satisfies RealtimeEnvelope),
     );
+    // Автор действия доходит до клиента (#1051): своего эха от чужой правки
+    // клиент отличает по нему.
+    expect(JSON.parse(redis.xadd.mock.calls[1]![6] as string)).not.toHaveProperty('actorId');
     // Bootstrap + метка батча.
     expect(executeRaw).toHaveBeenCalledTimes(2);
   });

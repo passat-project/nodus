@@ -22,8 +22,10 @@ WebSocket-gateway портала (I1: отдельный процесс): Socket
   в Redis Stream `nodus:domain:events` (`DOMAIN_EVENTS_STREAM`; опрос хвоста `fanout_at IS NULL`, 50 мс — бюджет
   p95 доставки < 200 мс; метка ставится после XADD, поздно закоммиченное
   событие догоняет следующим тиком — аудит #123). Gateway — consumer group `nodus:gateway` (XREADGROUP
-  BLOCK), рассылает envelope **`{ type, payload, seq, ts }`** (канон
-  api-conventions.md; seq = events.seq, глобальный порядок) по комнатам из
+  BLOCK), рассылает envelope **`{ type, payload, seq, ts, actorId? }`** (канон
+  api-conventions.md; seq = events.seq, глобальный порядок; actorId — автор
+  действия из `events.actor_id`, у системных событий его нет — клиент гасит им
+  эхо собственной мутации, #1051) по комнатам из
   payload (`route-envelope.ts`). Группа создаётся на `$` — историю не ретранслируем: клиент,
   пропустивший события, ресинхронизируется рефечем (сервер — истина).
   **Потеря группы чтения лечится сама** (AUD-021): `NOGROUP` в цикле чтения
@@ -70,7 +72,7 @@ WebSocket-gateway портала (I1: отдельный процесс): Socket
 | клиент → сервер | `conv:join`                           | `{conversationId}` + ack `{ok, error?}` — подписка на комнату беседы (только член; `bad_request`/`forbidden`/`room_limit`/`unavailable`)                                                                 |
 | клиент → сервер | `conv:leave`                          | `{conversationId}`                                                                                                                                                                                       |
 | клиент → сервер | `chat.typing`                         | `{conversationId, threadRootId?}` — троттл ~3 с на пользователя-беседу(-тред); рассылка: conv-комната + user-комнаты участников без автора (threadRootId — печать в трэде: ТОЛЬКО conv-комната, раунд 3) |
-| сервер → клиент | `chat.*` (каталог api-conventions.md) | envelope `{type, payload, seq, ts}`                                                                                                                                                                      |
+| сервер → клиент | `chat.*` (каталог api-conventions.md) | envelope `{type, payload, seq, ts, actorId?}`                                                                                                                                                            |
 | сервер → клиент | `chat.typing`                         | `{conversationId, userId, threadRootId?}` — кроме сокетов автора; threadRootId показывает шапка окна треда, списки бесед его игнорируют                                                                  |
 | сервер → клиент | `presence.snapshot`                   | `{entries: PresenceEntry[]}` — подключившемуся                                                                                                                                                           |
 | сервер → клиент | `presence.updated`                    | `PresenceEntry` — всем (комната `presence`)                                                                                                                                                              |

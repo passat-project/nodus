@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RealtimeEnvelope } from '@nodus/contracts';
 
+import { resetRecentInvalidations } from '../api/task-invalidate.js';
 import { useAuthStore } from '../auth-store.js';
 import { useCommentsLive } from '../tasks/comments-live.js';
 import { createRealtimeInvalidator } from './socket-invalidation.js';
@@ -43,6 +44,13 @@ function flushWindows(): void {
   vi.advanceTimersByTime(700);
 }
 
+// Метки «перезапрошено своей мутацией» — модульное состояние: fake-таймеры
+// каждого теста стартуют с одной и той же секунды, без сброса окно TTL
+// предыдущего теста гасило бы инвалидацию следующего.
+afterEach(() => {
+  resetRecentInvalidations();
+});
+
 describe('createRealtimeInvalidator (коалесцинг, раунд 3)', () => {
   it('message_sent без DTO в кэше: лента + состояния трэдов + список (по окнам)', () => {
     vi.useFakeTimers();
@@ -52,7 +60,15 @@ describe('createRealtimeInvalidator (коалесцинг, раунд 3)', () =>
     flushWindows();
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['chat', 'messages', CONV] });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['chat', 'threadStates', CONV] });
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['chat', 'conversations'] });
+    // Куст бесед — только списками (#1051): без find-or-create соседей.
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['chat', 'conversations'],
+      exact: true,
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['chat', 'conversations', 'unread-summary'],
+    });
+    expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: ['chat', 'conversations'] });
     invalidator.dispose();
     vi.useRealTimers();
   });
@@ -66,7 +82,8 @@ describe('createRealtimeInvalidator (коалесцинг, раунд 3)', () =>
     }
     flushWindows();
     const calls = invalidateQueries.mock.calls.filter(
-      (c) => (c[0] as { queryKey: unknown[] }).queryKey[1] === 'conversations',
+      (c) =>
+        JSON.stringify((c[0] as { queryKey: unknown[] }).queryKey) === '["chat","conversations"]',
     );
     expect(calls.length).toBe(1);
     const feed = invalidateQueries.mock.calls.filter(
@@ -153,8 +170,12 @@ describe('createRealtimeInvalidator (коалесцинг, раунд 3)', () =>
     const invalidator = createRealtimeInvalidator(client as never);
     invalidator.handle(envelope('chat.conversation_created', { memberIds: [] }));
     flushWindows();
-    expect(invalidateQueries).toHaveBeenCalledTimes(1);
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['chat', 'conversations'] });
+    // Список, вкладки, пикеры поиска и сводка непрочитанных — без куста целиком (#1051).
+    const keys = invalidateQueries.mock.calls.map((c) =>
+      JSON.stringify((c[0] as { queryKey: unknown[] }).queryKey),
+    );
+    expect(keys).toContain('["chat","conversations"]');
+    expect(keys).toHaveLength(4);
     invalidator.dispose();
     vi.useRealTimers();
   });

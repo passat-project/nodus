@@ -151,7 +151,10 @@ describe('Ссылки оргструктуры (#441)', () => {
   });
 
   it('архивация непустого подразделения → 409 has_children; лист архивируется (#441)', async () => {
-    const parent = await department('management');
+    // #1028: корень управленческой структуры один — архивная проверка идёт
+    // на рабочем узле под компанией, иначе сработает защита корня.
+    const root = await department('management');
+    const parent = await department('management', root);
     const child = await department('management', parent);
 
     const blocked = await chat.api(manager, 'POST', `/directory/departments/${parent}/archive`, {

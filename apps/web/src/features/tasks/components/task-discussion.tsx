@@ -18,7 +18,9 @@ import { ConversationPane } from '../../../shared/chat/conversation-pane.js';
 export const TaskDiscussion = memo(function TaskDiscussion({ taskId }: { taskId: string }) {
   const { data, error } = useTaskConversation(taskId);
 
-  if (data) {
+  // Отказ раньше данных (#1051): после 404 библиотека держит прежнюю строку —
+  // доступ отозван, лента не показывается.
+  if (data && !error) {
     return (
       <ConversationPane
         conversationId={data.id}

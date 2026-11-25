@@ -9,6 +9,7 @@ import { usersListKey } from '../api/users-list.js';
 import { useAuthStore } from '../auth-store.js';
 import { useChatDrafts } from './chat-drafts.js';
 import { chatKeys } from './chat-keys.js';
+import { invalidateConversationLists } from './conversation-list-invalidation.js';
 import { composerSendErrorCode, useComposerErrors } from './composer-errors.js';
 import { enqueueSend } from './send-queue.js';
 
@@ -246,7 +247,7 @@ export function useSendChatMessage(conversationId: string, draftScope?: string) 
       // запись, WS-событие message_sent покрывает побочные ключи; рефеч на
       // каждую отправку шквала и был источником дрожи. Список бесед
       // (превью/активность) и заряды молнии (#177) — как раньше.
-      void queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
+      void invalidateConversationLists(queryClient);
       void queryClient.invalidateQueries({ queryKey: chatKeys.urgentPolicy() });
     },
   });

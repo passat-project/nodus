@@ -171,7 +171,7 @@ export function EmployeeCard({ userId, dormant = false }: { userId: string; dorm
   const chat = (
     <div className="flex h-full w-full bg-background">
       <div className="content-fade min-h-0 min-w-0 flex-1">
-        {directQuery.data ? (
+        {!directQuery.isError && directQuery.data ? (
           <ConversationPane
             conversationId={directQuery.data.id}
             showAuthor={false}

@@ -2,6 +2,14 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  boardMoveSettledAt,
+  invalidateNow,
+  markBoardMoveSettled,
+  wasInvalidatedRecently,
+} from './api/task-invalidate.js';
+import { hasTaskOverlay, publishTaskPatch } from './api/task-overlay.js';
+import { tasksKeys } from './api/tasks-keys.js';
 import { useAuthStore } from './auth-store.js';
 import { startChatDraftsSession } from './chat/chat-drafts-session.js';
 import { useChatDrafts } from './chat/chat-drafts.js';
@@ -124,5 +132,90 @@ describe('AUD-005: сброс сессии', () => {
     expect(localStorage.getItem(listFiltersStorageKey(USER_A.id, 'tasks.list'))).toBeNull();
     // Ключ B не тронут.
     expect(localStorage.getItem(listFiltersStorageKey(USER_B.id, 'tasks.list'))).not.toBeNull();
+  });
+
+  it('выход стирает оверлей досок и метки недавних инвалидаций (#1051)', async () => {
+    useAuthStore.setState({ status: 'authenticated', accessToken: 't', user: USER_A });
+    publishTaskPatch('task-a', { title: 'неподтверждённое имя A' });
+    markBoardMoveSettled();
+    void invalidateNow(queryClient, tasksKeys.detail('task-a'));
+    expect(wasInvalidatedRecently(tasksKeys.detail('task-a'))).toBe(true);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 204 })),
+    );
+
+    await useAuthStore.getState().logout();
+
+    expect(hasTaskOverlay('task-a')).toBe(false);
+    expect(boardMoveSettledAt()).toBe(0);
+    expect(wasInvalidatedRecently(tasksKeys.detail('task-a'))).toBe(false);
+  });
+
+  it('мутация в полёте переживает выход: ответ прежнего пользователя не пишется в чистый кэш', async () => {
+    useAuthStore.setState({ status: 'authenticated', accessToken: 't', user: USER_A });
+    let release!: (response: Response) => void;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise<Response>((resolve) => (release = resolve))),
+    );
+    const key = ['tasks', 'detail', 'task-a'];
+    const mutation = queryClient.getMutationCache().build(queryClient, {
+      mutationFn: async () => {
+        await fetch('/api/v1/tasks/task-a', { method: 'PATCH' });
+        return { id: 'task-a', title: 'ответ A' };
+      },
+      onMutate: async () => {
+        queryClient.setQueryData(key, { title: 'оптимистично A' });
+        return 'context';
+      },
+      onSuccess: () => {
+        queryClient.setQueryData(key, { title: 'ответ A' });
+        publishTaskPatch('task-a', { title: 'ответ A' });
+      },
+      onError: () => {
+        queryClient.setQueryData(key, { title: 'откат A' });
+      },
+      onSettled: () => {
+        queryClient.setQueryData(['tasks', 'list-pages'], { itemsOf: 'A' });
+      },
+    });
+
+    const pending = mutation.execute(undefined as never);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    expect(queryClient.getQueryData(key)).toEqual({ title: 'оптимистично A' });
+
+    resetSessionState(USER_A.id); // выход, пока запрос в полёте
+    release(new Response(JSON.stringify({ id: 'task-a' }), { status: 200 }));
+    await pending;
+
+    // `queryClient.clear()` мутацию не отменяет — колбэки привязаны к эпохе старта.
+    expect(queryClient.getQueryData(key)).toBeUndefined();
+    expect(queryClient.getQueryData(['tasks', 'list-pages'])).toBeUndefined();
+    expect(hasTaskOverlay('task-a')).toBe(false);
+  });
+
+  it('мутация, начатая ПОСЛЕ сброса сессии, работает как обычная', async () => {
+    useAuthStore.setState({ status: 'authenticated', accessToken: 't', user: USER_A });
+    resetSessionState(USER_A.id);
+    useAuthStore.setState({ status: 'authenticated', accessToken: 't2', user: USER_B });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse(200, { id: 'task-b' })),
+    );
+    const settled = vi.fn();
+    await queryClient
+      .getMutationCache()
+      .build(queryClient, {
+        mutationFn: async () => jsonResponse(200, { title: 'B' }).json(),
+        onSuccess: (data: { title: string }) => {
+          queryClient.setQueryData(['tasks', 'detail', 'task-b'], data);
+        },
+        onSettled: settled,
+      })
+      .execute(undefined as never);
+
+    expect(queryClient.getQueryData(['tasks', 'detail', 'task-b'])).toEqual({ title: 'B' });
+    expect(settled).toHaveBeenCalledTimes(1);
   });
 });
