@@ -10,6 +10,7 @@ import { applyReadEvent } from './ws-apply.js';
  *  «прочитано» у СВОЕГО последнего сообщения — без рефетча списка (#123). */
 
 const CONV = 'conv-1';
+const ROOT = 'root-1';
 const ME = '00000000-0000-4000-8000-000000000001';
 const READER = '00000000-0000-4000-8000-000000000002';
 const ME_REF: UserRef = { id: ME, displayName: 'Я', avatarUrl: null };
@@ -167,6 +168,23 @@ describe('applyReadEvent — галки в списке бесед (#799)', () =
       upToSeq: 5,
       readAt: READ_AT,
     });
+    expect(listLast(client)?.readAt).toBeNull();
+  });
+
+  it('квитанция треда не патчит список бесед: пост ленты не прочитан (#1026)', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const myLast = msg({ author: ME_REF, seq: 5 });
+    seedList(client, myLast);
+    client.setQueryData(chatKeys.messages(CONV), { items: [myLast], nextCursor: null });
+
+    applyReadEvent(client, {
+      conversationId: CONV,
+      userId: READER,
+      upToSeq: 9,
+      readAt: READ_AT,
+      threadRootId: ROOT,
+    });
+
     expect(listLast(client)?.readAt).toBeNull();
   });
 

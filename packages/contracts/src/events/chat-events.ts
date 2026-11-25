@@ -191,6 +191,8 @@ export const chatMessageReadPayloadSchema = z.object({
   userId: z.uuid(),
   upToSeq: z.number().int().min(0),
   readAt: z.iso.datetime(),
+  /** Область чтения (#1026): null/нет — лента беседы, uuid — ответы треда. */
+  threadRootId: z.uuid().nullable().optional(),
 });
 export type ChatMessageReadPayload = z.infer<typeof chatMessageReadPayloadSchema>;
 
