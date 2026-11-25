@@ -53,5 +53,10 @@ export const shellApi = {
  *  угасанием командует Rust-тикер по активности пользователя). Тема —
  *  прикладывается Rust-ом к payload (#305): мини-UI применяет её до рендера,
  *  в контракт web→shell она не входит. `fadeMs` — та же длительность таяния,
- *  что у Rust-таймера закрытия (#998): CSS не держит вторую константу. */
-export type PopupData = PopupPayload & { theme?: 'light' | 'dark'; fadeMs?: number };
+ *  что у Rust-таймера закрытия (#998): CSS не держит вторую константу.
+ *  `autoHideMs` — автоскрытие карточки скачивания из того же принципа (#1038). */
+export type PopupData = PopupPayload & {
+  theme?: 'light' | 'dark';
+  fadeMs?: number;
+  autoHideMs?: number;
+};

@@ -1,19 +1,21 @@
 //! Скачивания в оболочке (#647): WebView2 молча кладёт файл в «Загрузки» —
-//! на завершение загрузки показываем попап «Файл скачан» с кнопкой
-//! «Показать в папке». Абсолютный путь файла живёт только здесь: мини-UI его
-//! не получает, команда reveal берёт путь из payload попапа в Rust-стеке и
-//! повторно проверяет каталог «Загрузки» (симлинки наружу отвергаются).
+//! на завершение загрузки показываем карточку «Файл скачан» с кнопкой
+//! «Показать в папке». Карточка живёт в ВЕРХНЕМ слоте у панели (#1038),
+//! серия схлопывается в счётчик — состояние серии в `download_slot.rs`.
+//! Абсолютный путь файла живёт только в Rust: мини-UI его не получает,
+//! команда reveal берёт путь из серии слота и повторно проверяет каталог
+//! «Загрузки» (симлинки наружу отвергаются).
 
 use std::path::{Path, PathBuf};
 
 use tauri::{AppHandle, Manager, Url, WebviewWindow};
 use tauri_plugin_opener::OpenerExt;
 
-use crate::bridge::{PopupDownload, PopupPayload};
-use crate::popups;
+use crate::download_slot;
 
-/// Показать попап о завершённой загрузке. Вызывать ТОЛЬКО из async-контекста:
-/// билдер окна в синхронном обработчике дедлокит WebView2 (gotcha «Десктоп»).
+/// Сообщить о завершённой загрузке — верхний слот (#1038). Вызывать ТОЛЬКО
+/// из async-контекста: билдер окна в синхронном обработчике дедлокит
+/// WebView2 (gotcha «Десктоп»).
 pub(crate) fn notify_finished(app: &AppHandle, url: &Url, path: Option<PathBuf>, success: bool) {
     let file_name = path
         .as_ref()
@@ -21,25 +23,12 @@ pub(crate) fn notify_finished(app: &AppHandle, url: &Url, path: Option<PathBuf>,
         .map(|n| n.to_string_lossy().into_owned())
         .or_else(|| url_file_name(url))
         .unwrap_or_else(|| "Файл".into());
-    let payload = PopupPayload {
-        id: format!("download-{}", crate::activity::monotonic_ms()),
-        conversation_id: None,
-        letter_id: None,
-        thread_root_id: None,
-        // Заголовок карточки мини-UI берёт из i18n; имя файла — превью.
-        title: file_name.clone(),
-        avatar_url: None,
-        preview: String::new(),
-        preview_attachment: None,
-        urgent: false,
-        can_reply: false,
-        download: Some(PopupDownload {
-            file_name,
-            success,
-            path: path.map(|p| p.to_string_lossy().into_owned()),
-        }),
-    };
-    popups::show(app, payload);
+    download_slot::on_finished(
+        app,
+        &file_name,
+        path.map(|p| p.to_string_lossy().into_owned()),
+        success,
+    );
 }
 
 /// Имя файла из URL — запасной вариант, если WebView2 не отдал путь
@@ -51,17 +40,14 @@ fn url_file_name(url: &Url) -> Option<String> {
         .map(str::to_string)
 }
 
-/// Кнопка «Показать в папке»: путь берём из попапа по метке его окна —
-/// из JS не приходит ни одного аргумента.
+/// Кнопка «Показать в папке»: путь берём из серии слота скачивания (#1038) —
+/// из JS не приходит ни одного аргумента; это путь ПОСЛЕДНЕГО файла серии.
 #[tauri::command]
 pub fn popup_reveal_download(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
-    let label = window.label().to_string();
-    let raw = popups::stack(&app)
-        .active
-        .iter()
-        .find(|p| p.label == label)
-        .and_then(|p| p.download_path.clone())
-        .ok_or_else(|| "not_download_popup".to_string())?;
+    if !download_slot::is_slot(window.label()) {
+        return Err("not_download_popup".into());
+    }
+    let raw = download_slot::last_path().ok_or_else(|| "not_download_popup".to_string())?;
     let downloads = app
         .path()
         .download_dir()

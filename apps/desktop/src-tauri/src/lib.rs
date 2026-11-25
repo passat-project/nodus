@@ -3,6 +3,7 @@ mod anchor;
 mod badge;
 mod bridge;
 mod deep_link;
+mod download_slot;
 mod downloads;
 mod fade;
 mod fade_policy;
@@ -143,6 +144,15 @@ pub fn run() {
                     "shell-visibility",
                     &serde_json::json!({ "visible": false }),
                 );
+                // Слот скачивания (#1038) живёт только при активном окне —
+                // скрытие в трей гасит и его (карточка ждёт возврата).
+                download_slot::sync_visibility(window.app_handle(), "скрытие в трей");
+            }
+            // Слот скачивания (#1038): ДЛЯ его метки — раньше общей ветки
+            // попапов (метка тоже начинается с `popup-`), серия умирает вместе
+            // с окном, очередь личного стека не трогаем.
+            WindowEvent::Destroyed if window.label() == download_slot::SLOT_LABEL => {
+                download_slot::on_destroyed(window.app_handle());
             }
             WindowEvent::Destroyed if window.label().starts_with("popup-") => {
                 popups::on_popup_destroyed(window.app_handle(), window.label());
@@ -150,17 +160,28 @@ pub fn run() {
             // Фокус/свёрнутость главного окна (#770, ADR-0038): WebView2 может
             // считать вкладку видимой и сохранять hasFocus при minimize —
             // портал получает правду от оболочки. Свёрнутое окно = не фокус.
+            // Слот скачивания (#1038) пересчитывает видимость по тем же
+            // переходам (истина — Win32-запрос внутри sync_visibility).
             WindowEvent::Focused(focused) if window.label() == "main" => {
                 emit_shell_focus(
                     window.app_handle(),
                     *focused && !window.is_minimized().unwrap_or(false),
                 );
+                download_slot::sync_visibility(window.app_handle(), "фокус главного окна");
             }
             WindowEvent::Resized(_) if window.label() == "main" => {
                 emit_shell_focus(
                     window.app_handle(),
                     window.is_focused().unwrap_or(false) && !window.is_minimized().unwrap_or(false),
                 );
+                download_slot::reposition(window.app_handle());
+                download_slot::sync_visibility(window.app_handle(), "ресайз главного окна");
+            }
+            // Слот скачивания следует за окном (#1038): правый край карточки
+            // выровнен с группой кнопок панели — при перемещении пересчитываем
+            // якорь (дедуп по геометрии внутри).
+            WindowEvent::Moved(_) if window.label() == "main" => {
+                download_slot::reposition(window.app_handle());
             }
             _ => {}
         })
@@ -328,6 +349,9 @@ pub fn show_main(app: &AppHandle) {
         "shell-visibility",
         &serde_json::json!({ "visible": true }),
     );
+    // Ждавший слот скачивания (#1038) показывается вместе с окном; решение
+    // принимает живой Win32-запрос foreground — не покажется поверх чужого.
+    download_slot::sync_visibility(app, "показ главного окна");
 }
 
 /// Отправить модели внимания портала фокус главного окна (#770, ADR-0038):

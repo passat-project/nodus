@@ -128,10 +128,11 @@ pub fn is_valid_conversation(s: &str) -> bool {
         })
 }
 
-/// Скачивание файла (#647): карточка «Файл скачан» с кнопкой «Показать в
-/// папке». Зеркало contracts `popupDownloadSchema` — но абсолютный путь
-/// живёт ТОЛЬКО в Rust: в JSON мини-UI он не уходит (payload_to_json
-/// перечисляет поля явно), кнопка путь из JS не принимает.
+/// Скачивание файла (#647, #1038): карточка «Файл скачан» живёт в верхнем
+/// слоте у панели. Зеркало contracts `popupDownloadSchema` (вход портала:
+/// такие payload оболочка отвергает — карточку создаёт только она сама).
+/// Абсолютный путь файла в типе НЕТ вовсе: он живёт только в серии слота
+/// (`download_slot::DownloadSeries`), в JSON мини-UI не уходит никогда.
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PopupDownload {
@@ -139,10 +140,6 @@ pub struct PopupDownload {
     pub file_name: String,
     /// Успех скачивания: false — карточка ошибки без кнопки.
     pub success: bool,
-    /// Абсолютный путь скачанного файла (для reveal). `skip_serializing` —
-    /// инвариант «путь только в Rust» держится типом, а не местом вызова.
-    #[serde(default, skip_serializing)]
-    pub path: Option<String>,
 }
 
 /// Зеркало contracts `popupPayloadSchema` (desktop-bridge.schema.ts).
