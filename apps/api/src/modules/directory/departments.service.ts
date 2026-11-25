@@ -82,7 +82,13 @@ export class DepartmentsService {
       // #946: назначение главы/замов сериализуется advisory-локом дерева —
       // иначе встречные назначения одного сотрудника оставят роли в двух узлах.
       // Лок берём для обеих структур: уникальность главы общая (#817).
-      if (dto.headId || deputies.length > 0) {
+      // #1028: создание management-корня тоже под локом — иначе два
+      // параллельных POST создали бы два «главных» узла.
+      if (
+        (dto.kind === 'management' && dto.parentId === null) ||
+        dto.headId ||
+        deputies.length > 0
+      ) {
         await this.departments.lockTree(tx);
       }
       // Ссылки оргструктуры (#441): руководитель/замы — только активные
@@ -95,6 +101,19 @@ export class DepartmentsService {
       await this.references.ensureActiveUser(dto.headId, 'headId', tx);
       await this.references.ensureActiveUsers(deputies, 'deputyIds', tx);
       await this.references.ensureDepartment(dto.parentId, dto.kind, 'parentId', tx);
+      // #1028: корень управленческой структуры один — главная карточка
+      // компании (#982). Раньше правило держал только PATCH.
+      if (
+        dto.kind === 'management' &&
+        dto.parentId === null &&
+        (await this.departments.countRoots('management', tx)) > 0
+      ) {
+        throw new DomainException(
+          ErrorCode.DIRECTORY_DEPARTMENT_ROOT_FORBIDDEN,
+          'Management department root already exists',
+          { kind: dto.kind, reason: 'second_root' },
+        );
+      }
       const fields = { ...dto };
       delete (fields as { deputyIds?: unknown }).deputyIds;
       // #817: снимаем роль главы с других узлов ДО записи нового head_id —
@@ -301,6 +320,19 @@ export class DepartmentsService {
     await this.tx.run(async (tx) => {
       if (!(await this.departments.lockForUpdate(id, tx))) {
         throw DomainException.notFound('Department not found');
+      }
+      const node = await this.departments.findById(id, tx);
+      if (!node) {
+        throw DomainException.notFound('Department not found');
+      }
+      // #1028: главную карточку компании не архивируем (вердикт 12.11) —
+      // правило жило только в UI, сервер обязан отказать (I8).
+      if (node.kind === 'management' && node.parentId === null) {
+        throw new DomainException(
+          ErrorCode.DIRECTORY_DEPARTMENT_ROOT_FORBIDDEN,
+          'Management department root cannot be archived',
+          { id, reason: 'root' },
+        );
       }
       if ((await this.departments.countActiveChildren(id, tx)) > 0) {
         throw new DomainException(ErrorCode.CONFLICT, 'Department has active children', {

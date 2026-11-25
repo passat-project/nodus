@@ -120,4 +120,129 @@ describe('DepartmentsService: корень управленческой стру
     });
     expect(departments.update).not.toHaveBeenCalled();
   });
+
+  it('второй management-корень через POST отклоняется (#1028)', async () => {
+    const departments = {
+      countRoots: vi.fn().mockResolvedValue(1),
+      lockTree: stub(),
+      create: stub(),
+    };
+    const service = new DepartmentsService(
+      departments as never,
+      { findRef: stub() } as never,
+      new RoleAssignmentGuard(
+        { permissionsByIds: stub() } as never,
+        { effectiveRoleIds: stub() } as never,
+      ),
+      new ReferenceGuard(stub() as never, stub() as never, stub() as never),
+      { run: (cb: (t: string) => unknown) => cb('tx-handle') } as never,
+      { emit: stub() } as never,
+      { roleIdsOfDepartments: stub() } as never,
+      { recomputeUsers: stub(), recomputeDepartments: stub() } as never,
+    );
+
+    await expect(
+      service.create(
+        {
+          name: 'Второй корень',
+          kind: 'management',
+          parentId: null,
+          headId: null,
+          deputyIds: [],
+          sortOrder: 0,
+        },
+        actor,
+      ),
+    ).rejects.toMatchObject({
+      code: ErrorCode.DIRECTORY_DEPARTMENT_ROOT_FORBIDDEN,
+      details: { reason: 'second_root' },
+    });
+    expect(departments.create).not.toHaveBeenCalled();
+  });
+
+  it('первый management-корень создаётся (проверка не блокирует пустую структуру)', async () => {
+    const departments = {
+      countRoots: vi.fn().mockResolvedValue(0),
+      lockTree: stub(),
+      create: vi.fn().mockResolvedValue({
+        id: 'root',
+        name: 'Компания',
+        kind: 'management',
+        parentId: null,
+        headId: null,
+        sortOrder: 0,
+        isActive: true,
+        head: null,
+        deputies: [],
+        _count: { members: 0, legalMembers: 0 },
+      }),
+    };
+    const service = new DepartmentsService(
+      departments as never,
+      { findRef: stub() } as never,
+      new RoleAssignmentGuard(
+        { permissionsByIds: stub() } as never,
+        { effectiveRoleIds: stub() } as never,
+      ),
+      new ReferenceGuard(stub() as never, stub() as never, stub() as never),
+      { run: (cb: (t: string) => unknown) => cb('tx-handle') } as never,
+      { emit: stub() } as never,
+      { roleIdsOfDepartments: stub() } as never,
+      { recomputeUsers: stub(), recomputeDepartments: stub() } as never,
+    );
+
+    await expect(
+      service.create(
+        {
+          name: 'Компания',
+          kind: 'management',
+          parentId: null,
+          headId: null,
+          deputyIds: [],
+          sortOrder: 0,
+        },
+        actor,
+      ),
+    ).resolves.toMatchObject({ id: 'root' });
+  });
+
+  it('архивация management-корня отклоняется (#1028)', async () => {
+    const rootRow = {
+      id: 'root',
+      name: 'Компания',
+      kind: 'management',
+      parentId: null,
+      headId: null,
+      sortOrder: 0,
+      isActive: true,
+      head: null,
+      deputies: [],
+      _count: { members: 0, legalMembers: 0 },
+    };
+    const departments = {
+      findById: vi.fn().mockResolvedValue(rootRow),
+      lockForUpdate: vi.fn().mockResolvedValue(true),
+      countActiveChildren: stub(),
+      update: stub(),
+    };
+    const service = new DepartmentsService(
+      departments as never,
+      { findRef: stub() } as never,
+      new RoleAssignmentGuard(
+        { permissionsByIds: stub() } as never,
+        { effectiveRoleIds: stub() } as never,
+      ),
+      new ReferenceGuard(stub() as never, stub() as never, stub() as never),
+      { run: (cb: (t: string) => unknown) => cb('tx-handle') } as never,
+      { emit: stub() } as never,
+      { roleIdsOfDepartments: stub() } as never,
+      { recomputeUsers: stub(), recomputeDepartments: stub() } as never,
+    );
+
+    await expect(service.archive('root', actor.id)).rejects.toMatchObject({
+      code: ErrorCode.DIRECTORY_DEPARTMENT_ROOT_FORBIDDEN,
+      details: { reason: 'root' },
+    });
+    expect(departments.update).not.toHaveBeenCalled();
+  });
 });
