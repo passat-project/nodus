@@ -5,7 +5,6 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
-  type InfiniteData,
 } from '@tanstack/react-query';
 import type {
   Paginated,
@@ -18,12 +17,12 @@ import type {
 import { ui } from '@nodus/contracts';
 import { toast } from 'sonner';
 
-import { transitionErrorText } from './transitions-api.js';
 import { buildTempSubtask } from '../lib/temp-records.js';
 
 import { api } from '../../../shared/api-client.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
-import { mapTaskInPages, taskDependentKeys, tasksKeys } from '../../../shared/api/tasks-keys.js';
+import { invalidateAfterTaskMutation } from '../../../shared/api/task-invalidate.js';
+import { tasksKeys } from '../../../shared/api/tasks-keys.js';
 
 // Ключи кэша и помощник страниц — canonical в shared/api/tasks-keys (общие
 // компоненты создания в shared/tasks тоже ими пользуются); реэкспорт для
@@ -91,60 +90,6 @@ export function useTaskDetail(id: string) {
     // Смена задачи в навигаторе ветки: прежний контент остаётся, пока грузится
     // новый — карточка не мигает скелетоном (плавность, I4).
     placeholderData: keepPreviousData,
-  });
-}
-
-/** Оптимистичный перенос задачи между стадиями (канбан DnD, I4):
- * мутация в кэш до ответа сервера, откат по снапшоту при ошибке. */
-export function useUpdateTaskStage() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ taskId, stageId, index }: { taskId: string; stageId: string; index: number }) =>
-      api<TaskListItem>(`/tasks/${taskId}`, { method: 'PATCH', body: { stageId, index } }),
-
-    onMutate: async ({ taskId, stageId }) => {
-      await queryClient.cancelQueries({ queryKey: tasksKeys.listPages() });
-      const previous = queryClient.getQueryData<InfiniteData<Paginated<TaskListItem>>>(
-        tasksKeys.listPages(),
-      );
-      const previousDetail = queryClient.getQueryData<TaskDetail>(tasksKeys.detail(taskId));
-      const stage = queryClient
-        .getQueryData<TaskStage[]>(tasksKeys.stages())
-        ?.find((s) => s.id === stageId);
-      queryClient.setQueryData<InfiniteData<Paginated<TaskListItem>>>(
-        tasksKeys.listPages(),
-        (old) =>
-          stage
-            ? mapTaskInPages(old, taskId, (t) => ({
-                ...t,
-                stage,
-                updatedAt: new Date().toISOString(),
-              }))
-            : old,
-      );
-      queryClient.setQueryData<TaskDetail>(tasksKeys.detail(taskId), (old) =>
-        old && stage ? { ...old, stage, updatedAt: new Date().toISOString() } : old,
-      );
-      return { previous, previousDetail };
-    },
-
-    onError: (error, vars, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(tasksKeys.listPages(), context.previous);
-      }
-      if (context?.previousDetail) {
-        queryClient.setQueryData(tasksKeys.detail(vars.taskId), context.previousDetail);
-      }
-      // Отказ маршрута/гейта — с причиной (ADR-0020), не безликое «вернули».
-      toast.error(transitionErrorText(error));
-    },
-
-    onSettled: (_data, _error, vars) => {
-      void queryClient.invalidateQueries({ queryKey: tasksKeys.listPages() });
-      void queryClient.invalidateQueries({ queryKey: tasksKeys.kanbanAll() });
-      void queryClient.invalidateQueries({ queryKey: tasksKeys.detail(vars.taskId) });
-    },
   });
 }
 
@@ -226,11 +171,10 @@ export function useAddSubtask(taskId: string) {
     },
 
     onSettled: () => {
-      // Новая открытая подзадача меняет гейт «нет открытых подзадач», ветку,
-      // журнал и доски (подзадача — тоже задача «Моего плана»).
-      for (const key of taskDependentKeys(taskId)) {
-        void queryClient.invalidateQueries({ queryKey: key });
-      }
+      // Новая подзадача меняет гейт «нет открытых подзадач» и агрегаты узлов;
+      // ветку, журнал и доски (подзадача — тоже задача «Моего плана») догоняет
+      // эхо task.created (#1051).
+      invalidateAfterTaskMutation(queryClient, taskId, { structure: true });
     },
   });
 }

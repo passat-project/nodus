@@ -8,6 +8,7 @@ import { TooltipProvider } from '@nodus/ui/components/tooltip';
 
 import { useAssistantHotkey } from '../../features/assistant/components/assistant-entry.js';
 import { AssistantPanel } from '../../features/assistant/components/assistant-panel.js';
+import { useTabsController } from '../../features/portal-tabs/model/use-tabs-controller.js';
 import { SearchCommand } from '../../features/search/components/search-command.js';
 import { useSearchStore } from '../../features/search/model/search-store.js';
 import { registerCardBridge, registerReplaceTopMessenger } from '../../shared/lib/card-bridge.js';
@@ -22,11 +23,12 @@ import { NumberConfirmHost } from '../../shared/custom-fields/number-confirm.js'
 import { AttachmentViewer } from '../../shared/files/attachment-viewer.js';
 import { NotificationToasts } from '../../features/notifications/components/notification-toasts.js';
 import { useNotificationSink } from '../../features/notifications/model/use-notification-sink.js';
+import { usePortalUpdate } from '../../features/portal-update/model/use-portal-update.js';
 import { WhatsNewPanel } from '../../features/whats-new/components/whats-new-panel.js';
 import { useWhatsNewAutoOpen } from '../../features/whats-new/model/use-whats-new-auto-open.js';
 import { useUnreadTitle } from '../../shared/chat/unread-title.js';
 import { useDesktopBridge } from '../../shared/desktop/use-desktop-bridge.js';
-import { desktopSetUiTheme } from '../../shared/desktop/desktop-bridge.js';
+import { desktopSetUiTheme, isDesktopShell } from '../../shared/desktop/desktop-bridge.js';
 import { useChatSocket } from '../../shared/socket/use-chat-socket.js';
 import { WsDebugBadge } from '../../shared/socket/ws-debug-badge.js';
 import { PopupDebugBadge } from '../../shared/desktop/popup-diagnostics-badge.js';
@@ -37,8 +39,10 @@ import { EdgeScrollbar } from './edge-scrollbar.js';
 import { LiveGraph } from './live-graph.js';
 import { startLayoutJitterLogger } from './layout-jitter-logger.js';
 import { NodeRail } from './node-rail.js';
+import { startModuleWarmup } from './module-warmup.js';
 import { EDGE_W_COLLAPSED, RightRail } from './right-rail.js';
 import { useRailHidden } from './rail-visibility.js';
+import { ShellPanel } from './shell-panel.js';
 import { useShellStore } from './shell-store.js';
 import { TopBar } from './top-bar.js';
 import { useCardStack, useOpenCard, useOpenCards, useReplaceTopCard } from './use-card-stack.js';
@@ -77,6 +81,9 @@ export function AppShell() {
   useAssistantHotkey();
   // WS чата (#104): живёт с сессией, тихий статус; поллинг — fallback.
   useChatSocket();
+  // Детект обновления портала (#1038): сверка версии сборки с /version.json
+  // по фокусу/интервалу/реконнекту сокета; UI-индикация — следующая фаза.
+  usePortalUpdate();
   useNotificationSink();
   // «Что нового» (#386): после обновления прода панель выезжает сама один раз.
   useWhatsNewAutoOpen();
@@ -102,6 +109,9 @@ export function AppShell() {
     // Строка и фильтры поиска — на пользователя (#952, AUD-005): вышедший
     // сотрудник не оставляет свой запрос следующему в этой вкладке.
     startSearchSession();
+    // Чанки остальных разделов и движок PDF — в свободное время (#1051):
+    // следующий клик по разделу не ждёт загрузки.
+    void startModuleWarmup();
     // #1032: всё, что навешивает слушатели/циклы, снимается при размонтировании
     // (иначе rAF-логгер и подписки живут после сноса дерева).
     return () => {
@@ -126,6 +136,13 @@ export function AppShell() {
   const stressMode =
     typeof window !== 'undefined' &&
     Number(new URLSearchParams(window.location.search).get('stress') ?? 0) >= 1000;
+  // Панель безрамочного окна (ADR-0055, #1038): браузерный верх оболочки —
+  // первая строка окна над всей мягкой рамой; в браузере каркас без неё.
+  const inShell = isDesktopShell();
+  // Вкладки браузерного типа (#1038 фаза C): единственная точка монтажа
+  // контроллера (seeding/restore, применение намерений, запись навигаций).
+  // Внутри гард isDesktopShell(): в браузере подписок нет, стор не активен.
+  useTabsController();
 
   // Мост shared→стек карточек (порт-адаптер, card-bridge.ts): shared-слой
   // открывает карточки, не импортируя каркас (направление слоёв, аудит #45).
@@ -187,46 +204,56 @@ export function AppShell() {
       >
         {ui.common.skipToContent}
       </a>
-      <div className="flex h-screen overflow-hidden bg-background">
-        {stressMode ? <LiveGraph /> : null}
-        <NodeRail />
-        <div className="relative flex min-w-0 flex-1">
-          {/* Мягкая рама: топбар + рабочая зона ОДНОЙ мягкой панелью (18px,
-              фон «лист»). Служебная полоса (профиль + коллеги) — ЗА пределами
-              рамы, в правом периметре (план владельца 14.09.2026, R4): у рамы
-              нет правого отступа, её правый край = левый край полосы; щель
-              периметра 8px — справа от полосы (mr-2 полосы). Полоса всегда
-              свёрнута (40px), только список бесед: вход в ассистента —
-              роботом в топбаре (#1021), окно — оверлей внутри рамы,
-              геометрию рамы/карточек не двигает; скроллбар страниц —
-              у правого шва рамы. */}
-          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-            <div
-              // relative — якорь и обрезка окна ассистента: absolute-потомок
-              // без позиционированного предка якорится к колонке и НЕ
-              // обрезается overflow-hidden рамы (торчал над шапкой и за края).
-              className="frame-shadow relative mt-2 mb-2 ml-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-card"
-              data-soft-frame
-            >
-              <TopBar />
-              <div id="content" className="relative flex min-h-0 flex-1 flex-col">
-                {/* Непустой стек карточек НАКРЫВАЕТ страницу (ADR-0009):
-                    поверхность раздела не видима — её чаты не читают и не
-                    глушат попапы (#770). Карточки живут снаружи провайдера. */}
-                <SurfaceVisibilityProvider visible={cardStack.length === 0}>
-                  <Suspense fallback={<ShellFallback />}>
-                    <Outlet />
-                  </Suspense>
-                </SurfaceVisibilityProvider>
+      <div className="flex h-screen flex-col overflow-hidden bg-background">
+        {/* Панель безрамочного окна (#1038): первая строка окна над всей
+            мягкой рамой — только в оболочке; каркас ниже не меняется. */}
+        {inShell ? <ShellPanel /> : null}
+        <div className="flex min-h-0 min-w-0 flex-1">
+          {stressMode ? <LiveGraph /> : null}
+          <NodeRail />
+          <div className="relative flex min-w-0 flex-1">
+            {/* Мягкая рама: топбар + рабочая зона ОДНОЙ мягкой панелью (18px,
+                фон «лист»). Служебная полоса (профиль + коллеги) — ЗА пределами
+                рамы, в правом периметре (план владельца 14.09.2026, R4): у рамы
+                нет правого отступа, её правый край = левый край полосы; щель
+                периметра 8px — справа от полосы (mr-2 полосы). Полоса всегда
+                свёрнута (40px), только список бесед: вход в ассистента —
+                роботом в топбаре (#1021), окно — оверлей внутри рамы,
+                геометрию рамы/карточек не двигает; скроллбар страниц —
+                у правого шва рамы. */}
+            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+              <div
+                // relative — якорь и обрезка окна ассистента: absolute-потомок
+                // без позиционированного предка якорится к колонке и НЕ
+                // обрезается overflow-hidden рамы (торчал над шапкой и за края).
+                className="frame-shadow relative mt-2 mb-2 ml-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-card"
+                data-soft-frame
+              >
+                <TopBar />
+                {/* Личные уведомления — колонка ПОД линией топбара (#1038):
+                    absolute внутри рамы, якорится к реальному низу шапки
+                    (3.5rem в том же rem-пространстве + ясный зазор), правый
+                    край — по кромке иконок шапки (right-4 = её px-4). */}
+                <NotificationToasts />
+                <div id="content" className="relative flex min-h-0 flex-1 flex-col">
+                  {/* Непустой стек карточек НАКРЫВАЕТ страницу (ADR-0009):
+                      поверхность раздела не видна — её чаты не читают и не
+                      глушат попапы (#770). Карточки живут снаружи провайдера. */}
+                  <SurfaceVisibilityProvider visible={cardStack.length === 0}>
+                    <Suspense fallback={<ShellFallback />}>
+                      <Outlet />
+                    </Suspense>
+                  </SurfaceVisibilityProvider>
+                </div>
+                {/* Окно ассистента: плавающий лист поверх правой части рамы
+                    (внутри рамы — обрезка её скруглением, структура не едет). */}
+                <AssistantPanel />
               </div>
-              {/* Окно ассистента: плавающий лист поверх правой части рамы
-                  (внутри рамы — обрезка её скруглением, структура не едет). */}
-              <AssistantPanel />
+              {/* Стек карточек сущностей поверх раздела (ADR-0009, ?cards=) */}
+              <CardStackHost />
             </div>
-            {/* Стек карточек сущностей поверх раздела (ADR-0009, ?cards=) */}
-            <CardStackHost />
+            <RightRail />
           </div>
-          <RightRail />
         </div>
       </div>
       <CircuitFrame />
@@ -234,7 +261,6 @@ export function AppShell() {
       <WsDebugBadge />
       {/* Диагностика попапов (#811): только ?wsdebug=1, журнал решений гейта. */}
       <PopupDebugBadge />
-      <NotificationToasts />
       <SearchCommand />
       <WhatsNewPanel />
       <ChatDialogHosts />

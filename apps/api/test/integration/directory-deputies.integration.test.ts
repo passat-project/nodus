@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { departmentNodeSchema, ErrorCode, userCardSchema } from '@nodus/contracts';
 
 import { setupRolesFixture } from './roles-fixtures.js';
+import { managementParentId, type DirectoryApi } from './departments-fixtures.js';
 
 /**
  * #817 (аудит 23.11.2026): заместители подразделения на боевом пути.
@@ -19,8 +20,12 @@ describe('Заместители подразделения (#817)', () => {
   const userIds: string[] = [];
 
   const createDepartment = async (body: Record<string, unknown>) => {
+    const parentId =
+      body.parentId == null && (body.kind ?? 'management') === 'management'
+        ? await managementParentId(f.api as unknown as DirectoryApi, f.users.structureAdmin)
+        : body.parentId;
     const response = await f.api(f.users.structureAdmin, 'POST', '/directory/departments', {
-      body,
+      body: { ...body, parentId },
       key: randomUUID(),
     });
     expect(response.status).toBe(201);

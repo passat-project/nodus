@@ -13,6 +13,12 @@
     "allow-change-server",
     "allow-run-updater",
     "allow-popup-window",
-    "allow-popup-actions"
+    "allow-popup-actions",
+    "allow-window-controls",
+    "allow-get-shell-info",
+    "allow-get-update-state",
+    "allow-downloads-list",
+    "allow-download-reveal",
+    "snap-layout:default"
   ]
 }

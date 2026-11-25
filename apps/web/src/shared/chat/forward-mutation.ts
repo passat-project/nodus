@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 
 import { api } from '../api-client.js';
 import { chatKeys } from './chat-keys.js';
+import { invalidateConversationLists } from './conversation-list-invalidation.js';
 import { useScrollEndStore } from './scroll-end-store.js';
 
 /** Пересылка (линия A #87): без оптимистики — приёмник рефечится. */
@@ -19,7 +20,7 @@ export function useForwardMessages() {
 
     onSuccess: (_created, vars) => {
       void qc.invalidateQueries({ queryKey: chatKeys.messages(vars.targetId) });
-      void qc.invalidateQueries({ queryKey: chatKeys.conversations() });
+      void invalidateConversationLists(qc);
       // Догон ленты приёмника к низу для отправителя (раунд 4): батч из
       // мультиселекта идёт через эту мутацию МИМО композера (у одиночной
       // пересылки догон просит композер) — без запроса отправитель оставался

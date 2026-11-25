@@ -13,7 +13,7 @@ import { useAuthStore } from '../../../../shared/auth-store.js';
 import { projectsKeys, useProjectTypes } from '../../../../shared/api/projects-list.js';
 import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
 import { useCustomFieldFilterDefs } from '../../../../shared/custom-fields/filter-defs.js';
-import { tasksKeys } from '../../../../shared/api/tasks-keys.js';
+import { invalidateAllTasksNow } from '../../../../shared/api/task-invalidate.js';
 import { FormulaMovePreviewDialog } from '../../../../shared/custom-fields/formula/formula-move-preview-dialog.js';
 import {
   previewTaskMoveBatch,
@@ -220,7 +220,7 @@ export function StructureTab({
       onCreated: () => {
         void queryClient.invalidateQueries({ queryKey: structureKeys.of(projectId) });
         void queryClient.invalidateQueries({ queryKey: projectsKeys.detail(projectId) });
-        void queryClient.invalidateQueries({ queryKey: tasksKeys.all });
+        invalidateAllTasksNow(queryClient);
       },
     });
   }

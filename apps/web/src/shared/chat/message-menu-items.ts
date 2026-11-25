@@ -128,6 +128,8 @@ export interface MessageMenuInput {
   mine: boolean;
   /** Несвёрнутое выделение текста внутри сообщения («Цитировать фрагмент»). */
   fragment: string | null;
+  /** Канал (replyMode='thread'): ответ поста живёт в треде, цитата не нужна. */
+  replyMode?: 'quote' | 'thread';
   isFavorite: boolean;
   canModerate: boolean;
   hideFavorite: boolean;
@@ -157,7 +159,7 @@ export function buildMessageItems(input: MessageMenuInput): {
       run: actions.reply,
     },
   ];
-  if (fragment) {
+  if (fragment && input.replyMode !== 'thread') {
     items.push({
       id: 'quoteFragment',
       icon: Quote,

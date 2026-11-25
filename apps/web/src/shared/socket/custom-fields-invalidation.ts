@@ -13,7 +13,7 @@ import { nodeKindsKeys } from '../api/node-kinds.js';
 import { projectsKeys } from '../api/projects-list.js';
 import { tasksKeys } from '../api/tasks-keys.js';
 import { stageIdOfColumnKey } from '../lib/board/kanban-column-key.js';
-import type { KeyBatcher } from './invalidation-batcher.js';
+import type { EchoAwareBatcher } from './echo-batcher.js';
 
 /** Каталожные события «Полей» и справочников (#431, ADR-0029): рассылаются
  *  всем — инвалидируются определения полей, справочники и блок «Атрибуты»
@@ -33,7 +33,7 @@ const CATALOG_EVENTS = new Set<string>([
  * нет — только `hostKind`/`hostId`/`fieldId`/`hasError`.
  */
 export function pushCustomFieldKeys(
-  batcher: KeyBatcher,
+  batcher: EchoAwareBatcher,
   queryClient: QueryClient,
   type: string,
   payload: Record<string, unknown> = {},
@@ -64,7 +64,11 @@ export function pushCustomFieldKeys(
  * Не нашлась в первых страницах — карточка может быть в догруженной странице
  * колонки с продолжением: такие колонки тоже перезапрашиваются.
  */
-function pushKanbanColumnsOf(batcher: KeyBatcher, queryClient: QueryClient, taskId: string): void {
+function pushKanbanColumnsOf(
+  batcher: EchoAwareBatcher,
+  queryClient: QueryClient,
+  taskId: string,
+): void {
   const columns = queryClient
     .getQueryCache()
     .findAll({ queryKey: tasksKeys.kanbanAll() })
@@ -88,14 +92,22 @@ function pushKanbanColumnsOf(batcher: KeyBatcher, queryClient: QueryClient, task
  *
  * Папка живёт в дереве проекта, а `projectId` в событии нет (payload без
  * значений и адресов чужих записей) — перечитываем деревья префиксом.
+ *
+ * Всё — с пометкой `force`: событие приходит ПОСЛЕ ответа мутации, и его не
+ * должно гасить правило «одной правки — один раунд» для собственного эха
+ * (#1051).
  */
 function pushFormulaChangedKeys(
-  batcher: KeyBatcher,
+  batcher: EchoAwareBatcher,
   queryClient: QueryClient,
   payload: Record<string, unknown>,
 ): void {
   const hostId = typeof payload.hostId === 'string' ? payload.hostId : null;
   if (!hostId) return;
+  const forced: EchoAwareBatcher = {
+    ...batcher,
+    push: (key, tier) => batcher.push(key, tier, { force: true }),
+  };
   switch (payload.hostKind) {
     case 'task':
       // Деталь перечитываем ВСЕГДА, включая автора правки: пересчёт
@@ -103,20 +115,20 @@ function pushFormulaChangedKeys(
       // поэтому ответ мутации содержит старые значения. Гейт «свежая
       // мутация» здесь давал регрессию «формула обновляется только после
       // перезагрузки страницы» — лишний GET дешевле сломанного UX.
-      batcher.push(tasksKeys.detail(hostId), 'list');
-      batcher.push(tasksKeys.listPages(), 'list');
-      pushKanbanColumnsOf(batcher, queryClient, hostId);
+      forced.push(tasksKeys.detail(hostId), 'list');
+      forced.push(tasksKeys.listPages(), 'list');
+      pushKanbanColumnsOf(forced, queryClient, hostId);
       return;
     case 'letter':
-      batcher.push(lettersKeys.detail(hostId), 'list');
-      batcher.push(lettersKeys.lists(), 'list');
+      forced.push(lettersKeys.detail(hostId), 'list');
+      forced.push(lettersKeys.lists(), 'list');
       return;
     case 'project':
-      batcher.push(projectsKeys.detail(hostId), 'list');
-      batcher.push(projectsKeys.journals(), 'list');
+      forced.push(projectsKeys.detail(hostId), 'list');
+      forced.push(projectsKeys.journals(), 'list');
       return;
     case 'node':
-      batcher.push(projectsKeys.structures(), 'list');
+      forced.push(projectsKeys.structures(), 'list');
       return;
     default:
       // Неизвестный вид хоста — событие наше, но перечитывать нечего.

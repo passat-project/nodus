@@ -28,7 +28,7 @@ import { flushDraftSync } from './draft-sync.js';
 import { ForwardBanner } from './forward-banner.js';
 import { useForwardPending } from './forward-pending.js';
 import { useJumpStore } from './jump-store.js';
-import { chatKeys } from './chat-keys.js';
+import { invalidateConversationLists } from './conversation-list-invalidation.js';
 import { SelectionToolbar } from './selection-island.js';
 import { StickerSuggestPanel, useStickerSuggest } from './composer-sticker-suggest-panel.js';
 import { useComposerMentions } from './composer-mention-autocomplete.js';
@@ -230,7 +230,7 @@ export function ChatComposer({
   useEffect(() => {
     return () => {
       void flushDraftSync(focusId).then((sent) => {
-        if (sent) void queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
+        if (sent) void invalidateConversationLists(queryClient);
       });
     };
   }, [focusId, queryClient]);

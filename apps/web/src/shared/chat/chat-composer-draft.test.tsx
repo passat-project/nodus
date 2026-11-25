@@ -135,10 +135,18 @@ describe('ChatComposer — черновик при переключении бе
       ),
     );
     await waitFor(() => expect(invalidateSpy).toHaveBeenCalled());
-    expect(invalidateCalls.at(-1)?.[0]).toMatchObject({ queryKey: chatKeys.conversations() });
-    // PUT завершён ДО инвалидации: refetch не обгоняет фиксацию черновика.
-    expect(events.indexOf('put')).toBeGreaterThanOrEqual(0);
-    expect(events.indexOf('invalidate')).toBeGreaterThan(events.indexOf('put'));
+    // Список инвалидируется точечно (#1051), рядом — вкладки, поиск и сводка
+    // непрочитанных. PUT завершён ДО инвалидации: refetch не обгоняет фиксацию
+    // черновика, иначе список приходит без метки «Черновик».
+    const putAt = events.indexOf('put');
+    const invalidateAt = events.flatMap((event, at) => (event === 'invalidate' ? [at] : []));
+    const listKey = JSON.stringify(chatKeys.conversations());
+    const listCall = invalidateCalls.findIndex(
+      (args) => JSON.stringify((args[0] as { queryKey: unknown }).queryKey) === listKey,
+    );
+    expect(listCall).toBeGreaterThanOrEqual(0);
+    expect(putAt).toBeGreaterThanOrEqual(0);
+    expect(invalidateAt[listCall]).toBeGreaterThan(putAt);
   });
 
   it('размонтирование с текстом — флуш текущей беседы', async () => {
