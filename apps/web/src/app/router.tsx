@@ -7,6 +7,7 @@ import {
   redirect,
 } from '@tanstack/react-router';
 
+import { markChunkLoaded, reloadOnceOnChunkError } from './chunk-reload.js';
 import { AppShell } from './shell/app-shell.js';
 import { PAGE_IMPORTS, preloadPage } from './page-imports.js';
 import { RAIL_MODULES } from './shell/nav-registry.js';
@@ -17,17 +18,11 @@ import { useAuthStore } from '../shared/auth-store.js';
 import { useRemoveBootSplash } from './boot-splash.js';
 
 /**
- * Гибель lazy-чанка после деплоя (вкладка оставлена открытой через пересборку
- * прода/рестарт dev): импорт чанка со старым именем даёт 404 и раздел «не
- * открывается» (репорт владельца 24.09, #88). Guard: ошибка импорта при
- * РЕАЛЬНОМ входе в раздел → ОДИН reload страницы за сессионный флаг (против
- * цикла), успешный импорт флаг снимает; повторный неуспех после reload —
- * честная ошибка в экран роутера.
- *
- * Страница отвечает на `preload()` (#1051): роутер зовёт его при наведении и
- * фокусе на ссылку раздела (`defaultPreload: 'intent'`) — чанк грузится до
- * клика. Предзагрузка guard НЕ включает: после выкатки устаревший чанк
- * перезагружал бы страницу по одному наведению, с потерей несохранённого ввода.
+ * Страница раздела отвечает на `preload()` (#1051): роутер зовёт его при
+ * наведении и фокусе на ссылку раздела (`defaultPreload: 'intent'`) — чанк
+ * грузится до клика. Предзагрузка guard НЕ включает: после выкатки устаревший
+ * чанк перезагружал бы страницу по одному наведению, с потерей несохранённого
+ * ввода.
  *
  * Страница — НЕ `React.lazy`: тот при первом рендере всегда приостанавливается,
  * даже когда код давно загружен, а React после приостановки держит контент ещё
@@ -36,8 +31,10 @@ import { useRemoveBootSplash } from './boot-splash.js';
  * секунды прежде, чем начать грузить данные (#1051, замер: раздел монтировался
  * через 360 мс после клика). Здесь код, полученный предзагрузкой, рендерится
  * сразу; ждёт импорта только раздел, которого на руках нет.
+ *
+ * Guard гибели чанка после деплоя (репорт владельца 24.09, #88) включён только
+ * реальным входом; семантика — общая в `chunk-reload.ts`.
  */
-const CHUNK_RELOAD_KEY = 'nodus-chunk-reload';
 type PageModule = { default: ComponentType };
 export type PreloadablePage = FunctionComponent & { preload: () => Promise<void> };
 
@@ -51,7 +48,7 @@ export function pageLoader(loader: () => Promise<PageModule>): PreloadablePage {
     pending ??= loader().then(
       (module) => {
         loaded = module.default;
-        sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+        markChunkLoaded();
         return module;
       },
       (error: unknown) => {
@@ -66,13 +63,12 @@ export function pageLoader(loader: () => Promise<PageModule>): PreloadablePage {
     try {
       return await importPage();
     } catch (error) {
-      if (reloading || !sessionStorage.getItem(CHUNK_RELOAD_KEY)) {
+      // Запущенный reload не отменить: повторный рендер не должен «снимать»
+      // флаг и показывать ошибку поверх уходящей страницы.
+      if (reloading || reloadOnceOnChunkError()) {
         reloading = true;
-        sessionStorage.setItem(CHUNK_RELOAD_KEY, '1');
-        window.location.reload();
         return new Promise<never>(() => {});
       }
-      sessionStorage.removeItem(CHUNK_RELOAD_KEY);
       throw error;
     }
   };

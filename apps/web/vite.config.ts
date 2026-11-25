@@ -28,6 +28,9 @@ const START_CHUNK: { name: string; tags: '$initial'[]; includeDependenciesRecurs
   tags: ['$initial'],
   includeDependenciesRecursively: false,
 };
+// Версия портала (#1038): define __PORTAL_VERSION__ + /version.json в корне
+// dev и dist — по файлу открытая вкладка детектит редеплой (фича portal-update).
+import { portalVersionAssets } from './vite-portal-version.js';
 
 // API и WebSocket проксируются на того же origin:
 // dev — прокси Vite, preview (e2e в CI) — тот же прокси, docker — прокси nginx (infra/nginx/web.conf).
@@ -97,7 +100,7 @@ export default defineConfig(({ command, mode }) => {
     // VITE_*-флаги (VITE_API_MOCK) лежат в корневом .env рядом с docker-переменными.
     envDir: '../../',
     define,
-    plugins: [tailwindcss(), react(), pdfjsWasmAssets()],
+    plugins: [tailwindcss(), react(), pdfjsWasmAssets(), portalVersionAssets()],
     build: {
       rolldownOptions: { output: { codeSplitting: { groups: [START_CHUNK] } } },
     },
@@ -111,10 +114,10 @@ export default defineConfig(({ command, mode }) => {
       // Моки MSW — dev-инфраструктура, не продуктовый рантайм: из покрытия исключены.
       coverage: {
         provider: 'v8',
-        // vite-pdfjs-wasm.ts — плагин в корне пакета, вне src/**: без явного
-        // include не попадает в lcov, и CI diff-coverage считает его 0%
-        // при живом тесте (PR #624).
-        include: ['src/**/*.{ts,tsx}', 'vite-pdfjs-wasm.ts'],
+        // vite-pdfjs-wasm.ts / vite-portal-version.ts — плагины в корне
+        // пакета, вне src/**: без явного include не попадают в lcov, и CI
+        // diff-coverage считает их 0% при живом тесте (PR #624).
+        include: ['src/**/*.{ts,tsx}', 'vite-pdfjs-wasm.ts', 'vite-portal-version.ts'],
         exclude: [
           'src/**/*.test.{ts,tsx}',
           'src/**/*.d.ts',

@@ -1,5 +1,6 @@
 import {
   DESKTOP_BRIDGE_EVENTS,
+  downloadEntrySchema,
   openConversationEventSchema,
   openLetterEventSchema,
   popupDiagnosticSchema,
@@ -16,52 +17,23 @@ import {
 } from '@nodus/contracts';
 import { setShellFocused, setShellVisible } from '../attention/attention-store.js';
 
+import { notifyDownloadFinished } from './desktop-bridge-files.js';
+import { getDesktopBridge } from './desktop-bridge-global.js';
+
+export { getDesktopBridge, isDesktopShell, shellPanelHeight } from './desktop-bridge-global.js';
+export * from './desktop-bridge-window.js';
+export * from './desktop-bridge-files.js';
+
 /**
  * Мост «портал ↔ десктоп-оболочка» (ADR-0019): веб-приложение при наличии
  * `window.nodusDesktop` (инъекция оболочки) командует дисплеем — попапы,
  * бейдж непрочитанных, мигание таскбара. Логика уведомлений (правила M8,
  * непрочитанные, фокус беседы) живёт ЗДЕСЬ, в веб-приложении; оболочка не
  * хранит токены — команды несут только данные для показа. Обратное
- * направление — события `__nodusDesktopInvoke` (eval из Rust).
+ * направление — события `__nodusDesktopInvoke` (eval из Rust). Секции по
+ * одной ответственности — ядро (global), окно (window), файлы/загрузки
+ * (files) — ре-экспортируются отсюда: поверхность импорта моста одна.
  */
-
-/** Сигнатура инъекции оболочки (инициализационный скрипт bridge.rs). */
-interface NodusDesktopGlobal {
-  readonly shellVersion: string;
-  readonly platform: string;
-  showPopup(payload: unknown): Promise<void>;
-  logPopupDecision(payload: unknown): Promise<void>;
-  setUnreadBadge(count: number | null): Promise<void>;
-  flashTaskbar(critical: boolean): Promise<void>;
-  openExternal(url: string): Promise<void>;
-  /** Путь на файловом сервере (#558): только новые оболочки — старая не
-   *  знает команд, веб показывает «Скопировать путь». */
-  openUncPath?(path: string, servers: readonly string[]): Promise<void>;
-  revealUncPath?(path: string, servers: readonly string[]): Promise<void>;
-  dismissPopups(conversationId: string): Promise<void>;
-  setUiTheme(theme: 'light' | 'dark'): Promise<void>;
-  getShellInfo(): Promise<unknown>;
-  getUpdateState(): Promise<unknown>;
-  applyUpdate(): Promise<void>;
-  shellReady(): Promise<void>;
-  onEvent(type: string, fn: (payload: unknown) => void): () => void;
-}
-
-declare global {
-  interface Window {
-    nodusDesktop?: NodusDesktopGlobal;
-    __nodusDesktopInvoke?: (type: string, payload: unknown) => boolean;
-  }
-}
-
-export function getDesktopBridge(): NodusDesktopGlobal | null {
-  return typeof window !== 'undefined' && window.nodusDesktop ? window.nodusDesktop : null;
-}
-
-/** Портал открыт внутри десктоп-оболочки (не в браузере). */
-export function isDesktopShell(): boolean {
-  return getDesktopBridge() !== null;
-}
 
 /**
  * Видимость и фокус оболочки (#770, ADR-0038) живут в единой модели внимания
@@ -118,9 +90,8 @@ export function desktopLogPopupDecision(payload: unknown): void {
   }
 }
 
-/** Счётчик непрочитанных: бейдж трея и панели задач (0/null — снять). */ export async function desktopSetUnreadBadge(
-  count: number | null,
-): Promise<void> {
+/** Счётчик непрочитанных: бейдж трея и панели задач (0/null — снять). */
+export async function desktopSetUnreadBadge(count: number | null): Promise<void> {
   const bridge = getDesktopBridge();
   if (!bridge) return;
   await bridge.setUnreadBadge(count);
@@ -138,65 +109,6 @@ export async function desktopOpenExternal(url: string): Promise<void> {
   const bridge = getDesktopBridge();
   if (!bridge) return;
   await bridge.openExternal(url);
-}
-
-/**
- * Итог команды пути (#558): `done` — оболочка открыла/показала; `unavailable`
- * — браузер или старая оболочка без команды (веб оставляет «Скопировать
- * путь»); `error` — стабильный код отказа Rust (`not_found`,
- * `server_not_allowed`, `reveal_only`, …) для понятного сообщения.
- */
-export type DesktopUncPathResult =
-  { status: 'done' } | { status: 'unavailable' } | { status: 'error'; code: string };
-
-/** Есть ли в установленной оболочке команды пути (старая — нет). */
-export function desktopPathCommandsAvailable(): boolean {
-  const bridge = getDesktopBridge();
-  return (
-    bridge !== null &&
-    typeof bridge.openUncPath === 'function' &&
-    typeof bridge.revealUncPath === 'function'
-  );
-}
-
-function uncPathErrorCode(error: unknown): string {
-  if (typeof error === 'string') return error;
-  if (error instanceof Error) return error.message;
-  return 'unknown';
-}
-
-/**
- * Открыть файл с сетевого сервера системным приложением (#558). Список
- * разрешённых папок приходит из «Настроек портала»; Rust независимо
- * проверяет путь и принадлежность списку — мост не доверяет веб-контенту.
- */
-export async function desktopOpenUncPath(
-  path: string,
-  servers: readonly string[],
-): Promise<DesktopUncPathResult> {
-  const bridge = getDesktopBridge();
-  if (!bridge || typeof bridge.openUncPath !== 'function') return { status: 'unavailable' };
-  try {
-    await bridge.openUncPath(path, [...servers]);
-    return { status: 'done' };
-  } catch (error) {
-    return { status: 'error', code: uncPathErrorCode(error) };
-  }
-}
-
-/** Показать файл в проводнике с выделением (#558). */
-export async function desktopRevealUncPath(
-  path: string,
-  servers: readonly string[],
-): Promise<DesktopUncPathResult> {
-  const bridge = getDesktopBridge();
-  if (!bridge || typeof bridge.revealUncPath !== 'function') return { status: 'unavailable' };
-  try {
-    await bridge.revealUncPath(path, [...servers]);
-    return { status: 'done' };
-  } catch (error) {
-    return { status: 'error', code: uncPathErrorCode(error) };
-  }
 }
 
 /**
@@ -264,11 +176,14 @@ export function onDesktopEvent<T>(
   fn: (payload: T) => void,
 ): () => void {
   const bridge = getDesktopBridge();
-  if (!bridge) return () => undefined;
-  return bridge.onEvent(type, (raw) => {
+  // Обёртка обязательна: старая оболочка/стаб без onEvent (или чей onEvent
+  // вернул не-функцию) не должен ронять cleanup эффектов — «unsubscribe is
+  // not a function» сносил каркас целиком (#1038).
+  const off = bridge?.onEvent?.(type, (raw) => {
     const parsed = schema.safeParse(raw);
     if (parsed.success) fn(parsed.data);
   });
+  return typeof off === 'function' ? off : () => undefined;
 }
 
 /**
@@ -301,6 +216,11 @@ export function bindDesktopShellEvents(handlers: {
     onDesktopEvent(DESKTOP_BRIDGE_EVENTS.shellFocus, shellFocusEventSchema, (payload) =>
       setShellFocused(payload.focused),
     ),
+    // Завершение загрузки (эпик #1038): валидная запись — всем подписчикам
+    // реестра (registerDownloadsListener), панель «Загрузки» обновляется живьём.
+    onDesktopEvent(DESKTOP_BRIDGE_EVENTS.downloadFinished, downloadEntrySchema, (entry) => {
+      notifyDownloadFinished(entry);
+    }),
   ];
   // Оболочка доставляет отложенный deep link только после этого сигнала.
   void getDesktopBridge()?.shellReady();
