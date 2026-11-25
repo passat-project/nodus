@@ -170,7 +170,7 @@ export function ImageLightbox({
           <span className="rounded-full bg-black/35 px-2.5 py-1 font-mono text-xs tabular-nums text-white backdrop-blur-sm">
             {index + 1} / {images.length}
           </span>
-          <div className="flex items-center gap-1 rounded-full bg-black/35 p-1 text-white backdrop-blur-sm">
+          <div className="flex items-center gap-1 rounded-2xl bg-black/35 p-1 pr-2 text-white backdrop-blur-sm">
             <Button
               type="button"
               variant="ghost"
