@@ -312,7 +312,7 @@ describe('DepartmentsService', () => {
 
   describe('archive', () => {
     it('архивирует (isActive=false) + событие archived', async () => {
-      departments.findById.mockResolvedValue(row('dep', null));
+      departments.findById.mockResolvedValue(row('dep', 'root'));
 
       await service.archive('dep', 'admin-1');
 
@@ -326,7 +326,7 @@ describe('DepartmentsService', () => {
     });
 
     it('непустой узел → 409 CONFLICT has_children, без записи и события (#441)', async () => {
-      departments.findById.mockResolvedValue(row('dep', null));
+      departments.findById.mockResolvedValue(row('dep', 'root'));
       departments.countActiveChildren.mockResolvedValue(2);
 
       await expect(service.archive('dep', 'admin-1')).rejects.toMatchObject({
