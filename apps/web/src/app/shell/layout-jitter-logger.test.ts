@@ -36,6 +36,17 @@ describe('startLayoutJitterLogger (#1032)', () => {
     expect(raf).not.toHaveBeenCalled();
   });
 
+  it('тик продолжает цикл, пока логгер не остановлен', () => {
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(9);
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+
+    const stop = startLayoutJitterLogger();
+    const tick = raf.mock.calls[0]![0]!;
+    tick(0);
+    expect(raf).toHaveBeenCalledTimes(2);
+    stop();
+  });
+
   it('без ?wsdebug=1 возвращает no-op', () => {
     debug.enabled = false;
     const raf = vi.spyOn(window, 'requestAnimationFrame');
