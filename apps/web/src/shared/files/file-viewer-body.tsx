@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { OfficeSession } from '@nodus/contracts';
 
@@ -9,11 +9,16 @@ import { officeKeys, useOfficeConfig, useOfficeSession } from './api.js';
 import { DownloadCard } from './download-card.jsx';
 import { MediaViewer } from './media-viewer.jsx';
 import { OfficeViewer } from './office-viewer.jsx';
-import { PdfViewer } from './pdf-viewer.jsx';
 import { TextViewer } from './text-viewer.js';
 import { ViewerFullscreenButton } from './viewer-fullscreen-button.js';
 import { resolveViewerRoute, type ViewerRoute } from './viewer-registry.js';
 import type { ViewerTarget } from './viewer-store.js';
+
+/** Движок PDF (pdf.js, ~0,4 МБ кода) — отдельным чанком по первому
+ *  документу (#1051): просмотрщик вложений грузится вместе с каркасами
+ *  карточек, и движок уходил в стартовую загрузку каждой страницы. Чанк
+ *  прогревается в свободное время (`app/shell/module-warmup.ts`). */
+const PdfViewer = lazy(() => import('./pdf-viewer.js').then((m) => ({ default: m.PdfViewer })));
 
 /** Маршрут просмотрщика цели (офис-конфиг сервера + сбой движка) — общий
  *  для тела и шапки модалки: одна точка решения «чем открывать» (#138). */
@@ -114,13 +119,15 @@ export function FileViewerBody({
   }
   if (route.kind === 'pdf') {
     return url && !pdfFailed ? (
-      <PdfViewer
-        url={url}
-        fileName={target.name}
-        fit={fit}
-        onFailed={() => setPdfFailed(true)}
-        onFullscreen={onFullscreen}
-      />
+      <Suspense fallback={<PreparingIndicator />}>
+        <PdfViewer
+          url={url}
+          fileName={target.name}
+          fit={fit}
+          onFailed={() => setPdfFailed(true)}
+          onFullscreen={onFullscreen}
+        />
+      </Suspense>
     ) : (
       download('unsupported', url)
     );
@@ -154,7 +161,13 @@ export function FileViewerBody({
       download('unsupported', null)
     );
   }
-  if (pdfFallback) return <PdfViewer url={pdfFallback} fileName={`${target.name}.pdf`} fit={fit} />;
+  if (pdfFallback) {
+    return (
+      <Suspense fallback={<PreparingIndicator />}>
+        <PdfViewer url={pdfFallback} fileName={`${target.name}.pdf`} fit={fit} />
+      </Suspense>
+    );
+  }
   return download(route.reason ?? 'unsupported');
 }
 

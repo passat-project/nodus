@@ -8,11 +8,13 @@ import {
 } from '@tanstack/react-router';
 
 import { AppShell } from './shell/app-shell.js';
+import { PAGE_IMPORTS, preloadPage } from './page-imports.js';
 import { RAIL_MODULES } from './shell/nav-registry.js';
 import { NotFoundScreen, RouterErrorScreen } from './shell/system-screens.js';
 import { resolveHidden, resolveOrder } from './shell/ui-prefs.js';
 import { useUiPrefsStore } from '../shared/preferences/ui-prefs-store.js';
 import { useAuthStore } from '../shared/auth-store.js';
+import { useRemoveBootSplash } from './boot-splash.js';
 
 /**
  * Гибель lazy-чанка после деплоя (вкладка оставлена открытой через пересборку
@@ -42,54 +44,18 @@ function pageLoader(loader: () => Promise<{ default: ComponentType }>) {
   );
 }
 
-const LoginPage = pageLoader(() =>
-  import('../features/auth/pages/login-page.js').then((m) => ({ default: m.LoginPage })),
-);
-const InviteAcceptPage = pageLoader(() =>
-  import('../features/directory/pages/invite-accept-page.js').then((m) => ({
-    default: m.InviteAcceptPage,
-  })),
-);
-const PasswordResetPage = pageLoader(() =>
-  import('../features/directory/pages/password-reset-page.js').then((m) => ({
-    default: m.PasswordResetPage,
-  })),
-);
-const HomePage = pageLoader(() =>
-  import('./home-route.js').then((m) => ({ default: m.HomeRoute })),
-);
-const TasksPage = pageLoader(() =>
-  import('../features/tasks/pages/tasks-page.js').then((m) => ({ default: m.TasksPage })),
-);
-const LettersPage = pageLoader(() =>
-  import('../features/correspondence/pages/letters-page.js').then((m) => ({
-    default: m.LettersPage,
-  })),
-);
-const CounterpartiesPage = pageLoader(() =>
-  import('../features/crm/pages/counterparties-page.js').then((m) => ({
-    default: m.CounterpartiesPage,
-  })),
-);
-const ProjectsPage = pageLoader(() =>
-  import('../features/projects/pages/projects-page.js').then((m) => ({ default: m.ProjectsPage })),
-);
-const ChatPage = pageLoader(() =>
-  import('../features/chat/pages/chat-page.js').then((m) => ({ default: m.ChatPage })),
-);
-const EmployeesPage = pageLoader(() =>
-  import('../features/directory/pages/employees-page.js').then((m) => ({
-    default: m.EmployeesPage,
-  })),
-);
-const AutomationPage = pageLoader(() =>
-  import('./automation-route.js').then((m) => ({ default: m.AutomationRoute })),
-);
-const PortalSettingsPage = pageLoader(() =>
-  import('../features/settings/pages/portal-settings-page.js').then((m) => ({
-    default: m.PortalSettingsPage,
-  })),
-);
+const LoginPage = pageLoader(PAGE_IMPORTS.login);
+const InviteAcceptPage = pageLoader(PAGE_IMPORTS.inviteAccept);
+const PasswordResetPage = pageLoader(PAGE_IMPORTS.passwordReset);
+const HomePage = pageLoader(PAGE_IMPORTS.home);
+const TasksPage = pageLoader(PAGE_IMPORTS.tasks);
+const LettersPage = pageLoader(PAGE_IMPORTS.letters);
+const CounterpartiesPage = pageLoader(PAGE_IMPORTS.crm);
+const ProjectsPage = pageLoader(PAGE_IMPORTS.projects);
+const ChatPage = pageLoader(PAGE_IMPORTS.chat);
+const EmployeesPage = pageLoader(PAGE_IMPORTS.employees);
+const AutomationPage = pageLoader(PAGE_IMPORTS.automation);
+const PortalSettingsPage = pageLoader(PAGE_IMPORTS.settings);
 
 /**
  * Роутер SPA (TanStack Router, code-splitting по разделам).
@@ -100,8 +66,19 @@ const PortalSettingsPage = pageLoader(() =>
  * к прежней. Разделные search-параметры (папка писем, тред канала) живут
  * рядом и при открытии карточки сохраняются.
  */
+/**
+ * Корневая рамка: первый экран приложения (оболочка, страница входа) снимает
+ * стартовую заставку `index.html` — до него она держится на экране всё время
+ * загрузки скриптов и входа. Системные экраны снимают её сами: они заменяют
+ * эту рамку, а не рендерятся в ней.
+ */
+export function RootGate() {
+  useRemoveBootSplash();
+  return <Outlet />;
+}
+
 const rootRoute = createRootRoute({
-  component: Outlet,
+  component: RootGate,
   // Системные экраны — русские, с выходом на главную (аудит #45).
   errorComponent: RouterErrorScreen,
   notFoundComponent: NotFoundScreen,
@@ -301,7 +278,16 @@ const routeTree = rootRoute.addChildren([
   ]),
 ]);
 
-export const router = createRouter({ routeTree });
+export const router = createRouter({
+  routeTree,
+  // Наведение на раздел — за 50 мс до клика чанк страницы уже грузится:
+  // переход не ждёт сети (#1051).
+  defaultPreload: 'intent',
+});
+
+// Чанк открытого раздела — сразу, параллельно входу (refresh → me), а не после
+// него: после обновления страницы раздел открывается на шаг водопада раньше.
+void preloadPage(window.location.pathname);
 
 // Смена auth-статуса (logout, протухшая сессия) → повторный beforeLoad:
 // защищённый маршрут сам уйдёт на /login, /login — на главную.

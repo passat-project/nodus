@@ -37,6 +37,7 @@ import { EdgeScrollbar } from './edge-scrollbar.js';
 import { LiveGraph } from './live-graph.js';
 import { startLayoutJitterLogger } from './layout-jitter-logger.js';
 import { NodeRail } from './node-rail.js';
+import { startModuleWarmup } from './module-warmup.js';
 import { EDGE_W_COLLAPSED, RightRail } from './right-rail.js';
 import { useRailHidden } from './rail-visibility.js';
 import { useShellStore } from './shell-store.js';
@@ -102,6 +103,9 @@ export function AppShell() {
     // Строка и фильтры поиска — на пользователя (#952, AUD-005): вышедший
     // сотрудник не оставляет свой запрос следующему в этой вкладке.
     startSearchSession();
+    // Чанки остальных разделов и движок PDF — в свободное время (#1051):
+    // следующий клик по разделу не ждёт загрузки.
+    void startModuleWarmup();
     return stopModalLayers;
   }, []);
   // (N) Nodus в заголовке вкладки (#124): сигнал фоновой вкладке.
