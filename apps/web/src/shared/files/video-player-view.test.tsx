@@ -43,9 +43,11 @@ describe('VideoPlayerView — кинозал видео (#787)', () => {
     // #1005: фокус на плеере при открытии — иначе ←/→ уходят в интерфейс.
     expect(video?.tabIndex).toBe(0);
     expect(document.activeElement).toBe(video);
-    expect(video?.className).toContain('max-h-full');
+    expect(video?.className).toContain('min-h-0');
     expect(video?.className).toContain('max-w-full');
     expect(video?.className).toContain('object-contain');
+    // Высоту держит блок «кадр + полоса», кадр ужимается внутри (#1054).
+    expect(video?.parentElement?.className).toContain('max-h-full');
     expect(video?.getAttribute('aria-label')).toBe('ролик.mp4');
 
     expect(screen.getByText('ролик.mp4')).toBeTruthy();
@@ -54,14 +56,15 @@ describe('VideoPlayerView — кинозал видео (#787)', () => {
     expect(download.getAttribute('download')).toBe('ролик.mp4');
   });
 
-  it('полоса управления — ПОД кадром: кадр не перекрыт даже при наведении', () => {
+  it('полоса управления — ПОД кадром, вплотную: кадр не перекрыт даже при наведении', () => {
     render(<VideoPlayerView url="/files/roll.mp4" name="ролик.mp4" onClose={vi.fn()} />);
 
     const video = document.querySelector('video')!;
     const bar = screen.getByRole('toolbar', { name: ui.files.videoControls });
     // Управление живёт отдельной строкой зала, а не слоем поверх картинки.
     expect(bar.contains(video)).toBe(false);
-    expect(video.parentElement?.parentElement?.lastElementChild).toBe(bar);
+    // Приклеена к нижней кромке кадра: следующий элемент того же блока.
+    expect(video.nextElementSibling).toBe(bar);
   });
 
   it('закрывает по кнопке и по заднику, но не по клику на плеер', () => {

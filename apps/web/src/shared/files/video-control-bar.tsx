@@ -1,4 +1,5 @@
 import { Maximize2, Minimize2, Pause, Play, RotateCcw, Volume2, VolumeX } from 'lucide-react';
+import type { CSSProperties } from 'react';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { cn } from '@nodus/ui/lib/utils';
@@ -48,7 +49,15 @@ const UTILITY_BUTTON_CLASS = cn(
 );
 const FILL_CLASS = 'pointer-events-none absolute inset-y-0 left-0 rounded-full bg-white/80';
 
-export function VideoControlBar({ player }: { player: VideoPlayer }) {
+export function VideoControlBar({
+  player,
+  className,
+  style,
+}: {
+  player: VideoPlayer;
+  className?: string;
+  style?: CSSProperties;
+}) {
   const current = formatVideoDuration(player.time * 1000);
   const total = formatVideoDuration(player.duration * 1000);
   const played = player.duration > 0 ? Math.min(100, (player.time / player.duration) * 100) : 0;
@@ -66,7 +75,8 @@ export function VideoControlBar({ player }: { player: VideoPlayer }) {
       aria-label={ui.files.videoControls}
       // pl-1.5: иконка пуска встаёт на одну вертикаль с именем файла в шапке
       // (внутренний отступ icon-кнопки ровно pl-1.5) — левый край хрома один.
-      className="flex h-12 shrink-0 items-center gap-1.5 bg-black pr-3 pl-1.5"
+      className={cn('flex h-12 shrink-0 items-center gap-1.5 bg-black pr-3 pl-1.5', className)}
+      style={style}
       // Клик по полосе — не «мимо плеера»: кинозал не закрывается.
       onClick={(event) => event.stopPropagation()}
     >

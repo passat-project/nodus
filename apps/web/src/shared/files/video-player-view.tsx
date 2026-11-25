@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, type KeyboardEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { Download, X } from 'lucide-react';
 import { ui } from '@nodus/contracts';
@@ -22,8 +29,10 @@ import { useVideoPlayer, type VideoPlayer } from './use-video-player.js';
  * Кадр чистый (#1054, указание владельца 25.11.2026): браузерная полоса
  * управления Chromium рисовала тёмный градиент ПОВЕРХ нижней части ролика
  * и перекрывала содержимое записи. Теперь `<video>` без `controls`, а
- * кнопки — своей полосой ПОД кадром (`VideoControlBar`) на фоне зала:
- * тёмный фон остаётся, кадр не притемняется никогда.
+ * кнопки — своей полосой вплотную ПОД кадром (`VideoControlBar`): тёмный
+ * фон зала остаётся, кадр не притемняется никогда. Полоса равна кадру по
+ * ширине и приклеена к его нижней кромке без зазора — кадр и управление
+ * читаются одним блоком (уточнение владельца: «ровно под видео без отступов»).
  *
  * Клавиатура: фокус ставится на `<video>` при открытии явно — React
  * `autoFocus` для медиаэлементов не работает (`commitMount` фокусирует
@@ -103,6 +112,20 @@ export function VideoPlayerView({
     playerRef.current?.focus({ preventScroll: true });
   }, [url]);
 
+  // Ширина кадра — для полосы: она равна кадру и приклеена к его кромке.
+  // ResizeObserver: кадр меняет размер при смене окна и после метаданных.
+  const [frameWidth, setFrameWidth] = useState(0);
+  useLayoutEffect(() => {
+    const el = playerRef.current;
+    if (!el) return;
+    const sync = () => setFrameWidth(el.clientWidth);
+    sync();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(sync);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [url]);
+
   const close = useCallback(() => {
     // Закрытие из полноэкранного режима: сначала выходим из него, иначе
     // браузер оставил бы полноэкранным уже размонтированный слой.
@@ -153,29 +176,36 @@ export function VideoPlayerView({
       </header>
 
       <div className="flex min-h-0 flex-1 items-center justify-center p-3">
-        <video
-          ref={playerRef}
-          key={url}
-          src={url}
-          autoPlay
-          preload="auto"
-          tabIndex={0}
-          playsInline
-          // Кадр — единственное «большое» действие зала (клик = пуск/пауза):
-          // курсор говорит о нажимаемости, фокус-рамка рисуется ВНЕ кадра
-          // (offset), а не поверх изображения — контент не перекрывается.
-          className="max-h-full max-w-full cursor-pointer object-contain focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60"
-          aria-label={name}
-          onKeyDown={(event) => handlePlayerKey(event, player)}
-          onClick={(event) => {
-            // Клик по кадру — пуск/пауза, а не закрытие зала.
-            event.stopPropagation();
-            player.togglePlay();
-          }}
-        />
+        {/* Кадр и полоса — ОДИН блок: полоса приклеена к нижней кромке кадра,
+            без зазора, и равна кадру по ширине (указание владельца 25.11.2026). */}
+        <div className="flex max-h-full min-h-0 max-w-full flex-col items-center">
+          <video
+            ref={playerRef}
+            key={url}
+            src={url}
+            autoPlay
+            preload="auto"
+            tabIndex={0}
+            playsInline
+            // Кадр — единственное «большое» действие зала (клик = пуск/пауза):
+            // курсор говорит о нажимаемости, фокус-рамка рисуется ВНЕ кадра
+            // (offset), а не поверх изображения — контент не перекрывается.
+            className="min-h-0 max-w-full cursor-pointer object-contain focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60"
+            aria-label={name}
+            onKeyDown={(event) => handlePlayerKey(event, player)}
+            onClick={(event) => {
+              // Клик по кадру — пуск/пауза, а не закрытие зала.
+              event.stopPropagation();
+              player.togglePlay();
+            }}
+          />
+          <VideoControlBar
+            player={player}
+            className="max-w-full"
+            style={frameWidth > 0 ? { width: frameWidth } : undefined}
+          />
+        </div>
       </div>
-
-      <VideoControlBar player={player} />
     </div>,
     document.body,
   );
