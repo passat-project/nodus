@@ -49,6 +49,17 @@ describe('edgeHit', () => {
     expect(edgeHit(31, narrow, both)).toBeNull();
     expect(edgeHit(29, narrow, both)?.side).toBe('left');
   });
+  it('закреплённая колонка слева: зона начинается правее неё (insetLeft, #1006)', () => {
+    // Отступ 200: 100..300 — над неподвижной колонкой, зона — 300..348.
+    expect(edgeHit(150, bounds, both, EDGE_ZONE_PX, 200)).toBeNull();
+    expect(edgeHit(310, bounds, both, EDGE_ZONE_PX, 200)?.side).toBe('left');
+    expect(edgeHit(330, bounds, both, EDGE_ZONE_PX, 200)?.depth).toBeCloseTo(1 - 30 / EDGE_ZONE_PX);
+    // Правая кромка от левого отступа не зависит.
+    expect(edgeHit(1100, bounds, both, EDGE_ZONE_PX, 200)).toEqual({ side: 'right', depth: 1 });
+  });
+  it('отступ съел всю ширину — левой зоны нет', () => {
+    expect(edgeHit(150, bounds, both, EDGE_ZONE_PX, 1000)).toBeNull();
+  });
 });
 
 describe('edgeSpeed', () => {

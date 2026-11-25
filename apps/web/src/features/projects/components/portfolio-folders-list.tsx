@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { Fragment } from 'react';
 import { Check, Folder, FolderOpen, Inbox } from 'lucide-react';
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
@@ -27,15 +27,11 @@ export interface PortfolioFoldersListProps {
   allLabel: string;
   /** Права на переименование/удаление портфеля (`project.manage`). */
   canManage: boolean;
-  /** Проект, который сейчас тащат (null — перетаскивания нет). */
-  draggingProjectId: string | null;
   onSelect: (folder: string) => void;
   /** Настройка портфеля прямо в строке списка («⋯» у папки). */
   onRename: (folder: PortfolioFolder) => void;
   /** Удаление портфеля навсегда: проекты перейдут в «Без портфеля». */
   onDelete: (folder: PortfolioFolder) => void;
-  /** Бросок проекта на папку: `none` — убрать из портфеля. */
-  onDropProject: (folder: string) => void;
 }
 
 /**
@@ -46,40 +42,18 @@ export interface PortfolioFoldersListProps {
  * Строка — настоящая кнопка: Enter/Space и фокус-ринг — от браузера.
  * У каждой папки на месте — «⋯» с настройкой (переименовать/удалить), как в
  * Битрикс24: настройка живёт в самом списке, отдельного экрана не нужно.
- * Папки принимают бросок проекта, пока строку тащат (бросок обрабатывает журнал).
+ * Папки — только выбор фильтра и настройка; бросок строки проекта сюда убран
+ * (#1014, решение владельца 24.11.2026).
  */
 export function PortfolioFoldersList({
   tree,
   selection,
   allLabel,
   canManage,
-  draggingProjectId,
   onSelect,
   onRename,
   onDelete,
-  onDropProject,
 }: PortfolioFoldersListProps) {
-  const [dragOver, setDragOver] = useState<string | null>(null);
-
-  /** Папка принимает бросок: любая, кроме «Все проекты» (это не папка). */
-  const droppable = (folder: PortfolioFolder) => draggingProjectId !== null && folder.id !== 'all';
-
-  const dropProps = (folder: PortfolioFolder) => ({
-    onDragOver: (event: React.DragEvent) => {
-      if (!droppable(folder)) return;
-      event.preventDefault();
-      if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-      setDragOver(folder.id);
-    },
-    onDragLeave: () => setDragOver((current) => (current === folder.id ? null : current)),
-    onDrop: (event: React.DragEvent) => {
-      if (!droppable(folder)) return;
-      event.preventDefault();
-      setDragOver(null);
-      onDropProject(folder.id);
-    },
-  });
-
   const folderRow = (folder: PortfolioFolder, name: string) => {
     const active = selection === folder.id;
     const icon =
@@ -113,12 +87,9 @@ export function PortfolioFoldersList({
       <div
         key={folder.id}
         data-folder-row={folder.id}
-        {...dropProps(folder)}
         className={cn(
           'group flex h-8 w-full items-center rounded-md transition-colors',
           active ? 'bg-accent' : 'hover:bg-accent/50',
-          droppable(folder) && 'ring-1 ring-border/60',
-          dragOver === folder.id && 'bg-accent/60 ring-ring',
         )}
       >
         <button

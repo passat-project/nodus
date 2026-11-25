@@ -8,8 +8,9 @@ import { buildPortfolioFolders } from '../lib/portfolio-folders.js';
 import { PortfolioMenu } from './portfolio-menu.js';
 
 /** Кнопка «Портфели» журнала «Проекты» (#559): список папок в поповере сразу
- *  после «Создать» — счётчики, управление, DnD. Архива у папки нет
- *  (13.11.2026), имя выбранной папки носит сама кнопка. */
+ *  после «Создать» — выбор фильтра и настройка папок. Архива у папки нет
+ *  (13.11.2026), имя выбранной папки носит сама кнопка; бросок строки проекта
+ *  сюда убран (#1014). */
 const METRO: ProjectGroup = {
   id: '42000000-0000-4000-8000-000000000001',
   name: 'Нежин-Недра',
@@ -36,12 +37,10 @@ function renderMenu(overrides: Partial<ComponentProps<typeof PortfolioMenu>> = {
     selection: 'all',
     canCreate: true,
     canManage: true,
-    draggingProjectId: null,
     onCreate: noop(),
     onSelect: noop(),
     onRename: noop(),
     onDelete: noop(),
-    onDropProject: noop(),
     ...overrides,
   };
   render(<PortfolioMenu {...props} />);
@@ -155,26 +154,13 @@ describe('PortfolioMenu — кнопка «Портфели» (#559)', () => {
     expect(props.onSelect).toHaveBeenCalledWith('none');
   });
 
-  it('перетаскивание проекта открывает список само — папка цель броска', () => {
-    const props = renderMenu({ draggingProjectId: 'project-1' });
+  it('перетаскивание не открывает список само — он только для клика (#1014)', () => {
+    renderMenu();
 
-    // Поповер открыт без клика: цель броска должна быть видна.
-    expect(screen.getByText('Нежин-Недра')).toBeTruthy();
+    fireEvent.dragStart(document.body);
+    fireEvent.dragEnd(document.body);
 
-    const row = folder('Нежин-Недра');
-    fireEvent.dragOver(row, { dataTransfer: { dropEffect: '' } });
-    fireEvent.drop(row, { dataTransfer: { dropEffect: '' } });
-    expect(props.onDropProject).toHaveBeenCalledWith(METRO.id);
-  });
-
-  it('«Без портфеля» принимает бросок, «Все проекты» — нет', () => {
-    const props = renderMenu({ draggingProjectId: 'project-1' });
-
-    fireEvent.drop(folder('Без портфеля'));
-    expect(props.onDropProject).toHaveBeenCalledWith('none');
-
-    fireEvent.drop(folder('Все проекты'));
-    expect(props.onDropProject).toHaveBeenCalledOnce();
+    expect(screen.queryByText('Нежин-Недра')).toBeNull();
   });
 
   it('создание портфеля инлайн: пункт → поле → Enter создаёт и закрывает', () => {

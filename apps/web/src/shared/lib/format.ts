@@ -47,6 +47,15 @@ export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
 }
 
+/** Дата с годом для кадровых полей, где год несёт смысл (дата приёма —
+ *  стаж): «3 сентября 2021». Год берётся у того же локального дня, что и
+ *  день/месяц; «г.» не дописывается (#999). */
+export function formatDateWithYear(iso: string): string {
+  const date = new Date(iso);
+  const dayAndMonth = date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+  return `${dayAndMonth} ${date.getFullYear()}`;
+}
+
 export function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 }

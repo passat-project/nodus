@@ -24,6 +24,9 @@ const GRAPH_LEFT = uiPx(16) + LEADING_COL_W + uiPx(12);
 const midY = (index: number) => index * ROW_H + MID;
 
 interface Edge {
+  /** Стабильный id ребра: ключ React не зависит от индекса строки, поэтому
+   *  при раскрытии другой ветки существующие рёбра не перемонтируются. */
+  id: string;
   d: string;
   delayIndex: number;
 }
@@ -36,20 +39,46 @@ interface Edge {
  * горизонтали от ствола (Т-стык). Никаких накладывающихся штрихов: яркость и
  * толщина одинаковы по всей длине. Каскадное построение: ствол получает
  * draw-on по индексу родителя, отводы — по индексу ребёнка (граф прорастает
- * сверху вниз при раскрытии).
+ * сверху вниз при раскрытии). Анимируется ТОЛЬКО раскрытая ветка: от ствола
+ * раскрытой строки до конца её видимого поддерева; ветки ниже не переигрываются
+ * (#1018).
  */
 export function TaskListTree({
   rows,
   width,
-  revealBase,
-  revealKey,
+  reveal,
 }: {
   rows: TaskRow[];
   width: number;
-  revealBase: number;
-  revealKey: number;
+  /** Раскрытая задача: `taskId` — её id; null — стартовая загрузка (каскад
+   *  по всему списку); null целиком — анимации нет (сворачивание). */
+  reveal: { taskId: string | null; key: number } | null;
 }) {
   const edges: Edge[] = [];
+
+  const revealFrom =
+    reveal === null
+      ? -1
+      : reveal.taskId === null
+        ? 0
+        : rows.findIndex((row) => row.task.id === reveal.taskId);
+  let revealTo = -1;
+  if (revealFrom >= 0) {
+    if (reveal?.taskId === null) {
+      revealTo = rows.length - 1;
+    } else {
+      // Конец поддерева — последняя строка ниже по глубине: идём до первого
+      // узла не глубже родителя (верно и при вложенных свёрнутых ветках,
+      // в отличие от childCount).
+      const depth = rows[revealFrom]?.depth ?? 0;
+      revealTo = revealFrom;
+      for (let j = revealFrom + 1; j < rows.length; j += 1) {
+        const below = rows[j];
+        if (!below || below.depth <= depth) break;
+        revealTo = j;
+      }
+    }
+  }
 
   rows.forEach((row, index) => {
     if (!row.hasChildren) return;
@@ -71,6 +100,7 @@ export function TaskListTree({
     const lastCx = snapPx(graphX(lastRow.depth) - lastStop);
 
     edges.push({
+      id: `stem:${row.task.id}`,
       d: orthPath(
         [
           { x: px, y: top },
@@ -88,7 +118,11 @@ export function TaskListTree({
       const cy = snapPx(midY(childIndex));
       const stop = child.hasChildren ? PORT_GAP : LEAF_GAP;
       const cx = snapPx(graphX(child.depth) - stop);
-      edges.push({ d: `M${px},${cy} L${cx},${cy}`, delayIndex: childIndex });
+      edges.push({
+        id: `branch:${row.task.id}:${child.task.id}`,
+        d: `M${px},${cy} L${cx},${cy}`,
+        delayIndex: childIndex,
+      });
     }
   });
 
@@ -103,11 +137,15 @@ export function TaskListTree({
       className="pointer-events-none absolute top-0 text-edge"
       style={{ left: GRAPH_LEFT }}
     >
-      {edges.map((edge, i) => {
-        const animated = edge.delayIndex >= revealBase;
+      {edges.map((edge) => {
+        const animated =
+          reveal !== null && edge.delayIndex >= revealFrom && edge.delayIndex <= revealTo;
         return (
           <path
-            key={`${revealKey}-${i}`}
+            // Анимируемое ребро перемонтируется ради перезапуска draw-on;
+            // остальные живут с прежним DOM-узлом (#1018) — иначе при
+            // раскрытии соседней ветки «дёргается» уже нарисованная связь.
+            key={animated ? `${reveal?.key ?? 0}:${edge.id}` : `static:${edge.id}`}
             d={edge.d}
             fill="none"
             stroke="currentColor"
@@ -117,7 +155,7 @@ export function TaskListTree({
             style={
               animated
                 ? {
-                    animationDelay: `${Math.min((edge.delayIndex - revealBase) * 28, 700)}ms`,
+                    animationDelay: `${Math.min((edge.delayIndex - revealFrom) * 28, 700)}ms`,
                     animationDuration: '0.3s',
                   }
                 : undefined

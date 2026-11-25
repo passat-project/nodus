@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronDown, FolderTree, Plus } from 'lucide-react';
 import { ui } from '@nodus/contracts';
 import { NodeLabel } from '@nodus/ui/components/node-label';
@@ -24,15 +24,11 @@ export interface PortfolioMenuProps {
   canManage: boolean;
   /** Подпись «Все проекты»: в режиме «Мои» — «Мои проекты» (#559). */
   allLabel?: string;
-  /** Проект, который сейчас тащат (null — перетаскивания нет). */
-  draggingProjectId: string | null;
   onCreate: (name: string) => void;
   onSelect: (folder: FolderSelection) => void;
   onRename: (folder: PortfolioFolder) => void;
   /** Удаление портфеля навсегда: проекты перейдут в «Без портфеля». */
   onDelete: (folder: PortfolioFolder) => void;
-  /** Бросок проекта на папку: `none` — убрать из портфеля. */
-  onDropProject: (folder: FolderSelection) => void;
 }
 
 /**
@@ -48,10 +44,9 @@ export interface PortfolioMenuProps {
  * кнопку — «Портфели» по умолчанию, имя портфеля после выбора; в строке
  * фильтров выбранная папка НЕ дублируется чипом. Вид кнопки не меняется:
  * постоянный нейтральный стиль, без подсветки выбора (её видно галочкой в
- * списке).
- *
- * Перетаскивание проекта на папку сохранено: пока строку тащат, список
- * открывается сам и служит целью броска (закрывается на dragend).
+ * списке). Строки журнала не перетаскиваются на папки (#1014, решение
+ * владельца 24.11.2026): поповер — только выбор фильтра и настройка папок,
+ * портфель проекта меняется в окне его правки.
  */
 export function PortfolioMenu({
   tree,
@@ -59,28 +54,13 @@ export function PortfolioMenu({
   canCreate,
   canManage,
   allLabel = ui.projects.portfolioAllProjects,
-  draggingProjectId,
   onCreate,
   onSelect,
   onRename,
   onDelete,
-  onDropProject,
 }: PortfolioMenuProps) {
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-  const openedByDrag = useRef(false);
-
-  // Перетаскивание проекта: папки — цель броска, поэтому поповер открывается
-  // сам и закрывается, когда строку отпустили.
-  useEffect(() => {
-    if (draggingProjectId !== null) {
-      setOpen(true);
-      openedByDrag.current = true;
-    } else if (openedByDrag.current) {
-      openedByDrag.current = false;
-      setOpen(false);
-    }
-  }, [draggingProjectId]);
 
   // Список закрыли — незавершённое создание не должно «висеть» до следующего
   // открытия.
@@ -130,17 +110,13 @@ export function PortfolioMenu({
         sideOffset={6}
         className="w-80 p-0"
         onOpenAutoFocus={(event) => event.preventDefault()}
-        // Пока тащат строку, поповер — цель броска: фокус уходит на строку, и
-        // без этого «focus outside» закрыл бы список на первом кадре drag.
         // Меню «⋯» у папки — собственный поповер в портале: его клики и фокус
         // не должны закрывать список портфелей.
         onFocusOutside={(event) => {
-          if (draggingProjectId !== null) event.preventDefault();
           const target = event.target as HTMLElement | null;
           if (target?.closest('[data-radix-popper-content-wrapper]')) event.preventDefault();
         }}
         onInteractOutside={(event) => {
-          if (draggingProjectId !== null) event.preventDefault();
           const target = event.target as HTMLElement | null;
           if (target?.closest('[data-radix-popper-content-wrapper]')) event.preventDefault();
         }}
@@ -178,11 +154,9 @@ export function PortfolioMenu({
           selection={selection}
           allLabel={allLabel}
           canManage={canManage}
-          draggingProjectId={draggingProjectId}
           onSelect={selectFolder}
           onRename={setupFolder(onRename)}
           onDelete={setupFolder(onDelete)}
-          onDropProject={onDropProject}
         />
       </PopoverContent>
     </Popover>

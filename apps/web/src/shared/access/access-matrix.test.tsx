@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { TooltipProvider } from '@nodus/ui/components/tooltip';
 
+import { uiPx } from '../ui/ui-scale.js';
 import { AccessMatrix } from './access-matrix.js';
 
 // jsdom без ResizeObserver: подвод к краю (EdgeHints) его слушает.
@@ -12,6 +13,8 @@ class ResizeObserverStub {
   disconnect(): void {}
 }
 globalThis.ResizeObserver ??= ResizeObserverStub as never;
+
+afterEach(cleanup);
 
 /** #724: левая колонка прав — единый липкий блок без зазора и просвечивания. */
 describe('AccessMatrix: липкая колонка прав (#724)', () => {
@@ -50,5 +53,36 @@ describe('AccessMatrix: липкая колонка прав (#724)', () => {
     const groupCell = group.closest('[role="columnheader"]')!;
     expect(groupCell.className).toContain('sticky');
     expect(groupCell.className).toContain('left-0');
+  });
+
+  it('левая подсказка прокрутки — на правом краю закреплённой колонки (#1006)', () => {
+    render(
+      <TooltipProvider>
+        <AccessMatrix
+          label="Матрица"
+          rowHeader="Право"
+          rows={[{ id: 'r1', label: 'Право 1', description: 'Описание' }]}
+          columns={[
+            { id: 'c1', name: 'Роль 1' },
+            { id: 'c2', name: 'Роль 2' },
+            { id: 'c3', name: 'Роль 3' },
+          ]}
+          cell={() => ({ granted: false, disabled: false })}
+          onToggle={() => void 0}
+          cellLabel={() => 'переключатель'}
+        />
+      </TooltipProvider>,
+    );
+    const table = screen.getByRole('table');
+    // jsdom не считает layout: задаём прокрутку, при которой есть куда листать.
+    Object.defineProperties(table, {
+      clientWidth: { configurable: true, value: 800 },
+      scrollWidth: { configurable: true, value: 2000 },
+      scrollLeft: { configurable: true, value: 400 },
+    });
+    fireEvent.scroll(table);
+
+    const leftHint = document.querySelector<HTMLElement>('[data-edge-hint="left"]')!;
+    expect(leftHint.style.left).toBe(`${uiPx(360)}px`);
   });
 });

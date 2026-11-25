@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EDGE_DELAY_MS, EDGE_STEP_MS } from '../../lib/board/edge-scroll.js';
-import { BoardScroller } from './board-scroller.js';
+import { BoardScroller, EdgeHints } from './board-scroller.js';
 
 /**
  * Навигация широкой доски (#366) на синтетической геометрии: видимая
@@ -142,6 +142,25 @@ describe('BoardScroller — прокрутка у края', () => {
     });
     flushFrames(10);
     expect(el.scrollLeft).toBe(0);
+  });
+});
+
+describe('EdgeHints — закреплённая колонка (#1006)', () => {
+  it('левая стрелка стоит на правом краю закреплённой колонки, правая — у края', () => {
+    const view = render(
+      <EdgeHints room={{ left: true, right: true }} hot={null} insetLeft={450} />,
+    );
+    const left = view.container.querySelector<HTMLElement>('[data-edge-hint="left"]')!;
+    const right = view.container.querySelector<HTMLElement>('[data-edge-hint="right"]')!;
+    expect(left.style.left).toBe('450px');
+    expect(right.style.left).toBe('');
+  });
+
+  it('без отступа левая стрелка у левого края — прежнее поведение', () => {
+    const view = render(<EdgeHints room={{ left: true, right: true }} hot={null} />);
+    const left = view.container.querySelector<HTMLElement>('[data-edge-hint="left"]')!;
+    expect(left.style.left).toBe('');
+    expect(left.className).toContain('left-0');
   });
 });
 

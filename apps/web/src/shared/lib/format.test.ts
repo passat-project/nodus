@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   firstNameOf,
+  formatDateWithYear,
   formatDateTimeCompact,
   formatListTimestamp,
   formatVideoDuration,
@@ -37,6 +38,12 @@ describe('shortPersonName', () => {
 describe('formatDateTimeCompact (превью ссылки на задачу)', () => {
   it('день.месяц + время без года', () => {
     expect(formatDateTimeCompact(new Date(2026, 10, 12, 14, 5).toISOString())).toBe('12.11, 14:05');
+  });
+});
+
+describe('formatDateWithYear (#999: дата приёма)', () => {
+  it('день, месяц и год без сокращения «г.»', () => {
+    expect(formatDateWithYear(new Date(2021, 8, 3, 12).toISOString())).toBe('3 сентября 2021');
   });
 });
 

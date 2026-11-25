@@ -54,11 +54,15 @@ export function useBoardEdgeScroll(
   {
     pan: panEnabled = true,
     mounted = true,
+    insetLeft = 0,
   }: {
     pan?: boolean;
     /** Контейнер смонтирован (таблица без скелета/пустого состояния):
      *  смена флага переподписывает слежение за прокруткой. */
     mounted?: boolean;
+    /** Ширина закреплённой слева колонки, px: левая горячая зона начинается
+     *  правее неё (#1006). По умолчанию 0 — остальные доски и журналы. */
+    insetLeft?: number;
   } = {},
 ) {
   const [room, setRoom] = useState<ScrollRoom>({ left: false, right: false });
@@ -154,6 +158,8 @@ export function useBoardEdgeScroll(
       e.clientX,
       bounds,
       scrollRoom(el.scrollLeft, el.clientWidth, el.scrollWidth),
+      undefined,
+      insetLeft,
     );
     if (!hit) {
       if (hitRef.current) stop();

@@ -27,13 +27,12 @@ import {
   useRenameProjectGroup,
 } from '../api/project-catalog-mutations.js';
 import { useProjectStatus } from '../api/project-mutations.js';
-import { useMoveProjectPortfolio } from '../api/project-portfolio-mutation.js';
 import { useProjectGroups, useProjectsJournal } from '../api/projects-api.js';
 import { ProjectArchiveDialog } from '../components/project-archive-dialog.js';
 import { PortfolioDeleteDialog, PortfolioRenameDialog } from '../components/portfolio-dialogs.js';
 import { PortfolioMenu } from '../components/portfolio-menu.js';
 import type { ProjectJournalFilters, ProjectRoleFilter } from '../lib/project-journal.js';
-import { canDragProject, canEditProject } from '../lib/project-edit-rights.js';
+import { canEditProject } from '../lib/project-edit-rights.js';
 import {
   buildPortfolioFolders,
   portfolioFilterOf,
@@ -74,9 +73,9 @@ function statusOfFilter(value: unknown): NonNullable<ProjectJournalFilters['stat
  * у журнала (колонка/полоса отбирала ширину), а список раскрывается
  * поповером. В нём: «Все проекты», портфели со счётчиками, «Без портфеля»,
  * создание и переименование/удаление выбранной папки; имя выбранной папки
- * носит сама кнопка (13.11.2026). Перетаскивание проекта на папку меняет
- * портфель (права правки проекта — сервер; на время drag поповер открывается
- * сам как цель броска). Шапка — одна строка: заголовок, счётчик, «Создать» и
+ * носит сама кнопка (13.11.2026). Портфель меняется в окне правки проекта —
+ * перетаскивание строк в журнале убрано решением владельца 24.11.2026 (#1014).
+ * Шапка — одна строка: заголовок, счётчик, «Создать» и
  * «Портфели» слева от поиска, переключатель «Все/Мои», шестерёнка колонок.
  * Фильтры — СЕРВЕРНЫЕ (портфель/роль/видимость/статус, Р14 #52) с курсорной
  * пагинацией; чипы активных фильтров и пресеты — общая строка инструментов.
@@ -109,7 +108,6 @@ export function ProjectsPage() {
   const items = useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data]);
   const openCard = useOpenCard();
   const statusMutation = useProjectStatus();
-  const moveToPortfolio = useMoveProjectPortfolio();
   const permissions = useAuthStore((s) => s.user?.permissions);
   const canManageAny = (permissions ?? []).includes(Permission.PROJECT_MANAGE);
   const canCreate = (permissions ?? []).includes(Permission.PROJECT_CREATE);
@@ -127,7 +125,6 @@ export function ProjectsPage() {
   const [archiveTarget, setArchiveTarget] = useState<ProjectListItem | null>(null);
   const [renameFolderTarget, setRenameFolderTarget] = useState<PortfolioFolder | null>(null);
   const [deleteFolderTarget, setDeleteFolderTarget] = useState<PortfolioFolder | null>(null);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
 
   // Портфель-фильтр больше не живёт в реестре полей (имя показывает кнопка),
   // поэтому «фильтруем» его учитываем отдельно — иначе пустой журнал папки
@@ -146,19 +143,8 @@ export function ProjectsPage() {
     toolbar.setFilters(next);
   }
 
-  /** Смена портфеля перетаскиванием: права правки проекта (руководство или
-   *  project.manage) — сервер; строка, которая уже в папке, не дёргает сеть. */
-  function dropOnFolder(folderId: string) {
-    const project = items.find((row) => row.id === draggingId);
-    setDraggingId(null);
-    if (!project) return;
-    const nextPortfolioId = folderId === 'none' ? null : folderId;
-    if ((project.portfolio?.id ?? null) === nextPortfolioId) return;
-    moveToPortfolio.mutate({ id: project.id, portfolioId: nextPortfolioId });
-  }
-
-  /** Тащить строку может тот, кто правит проект (та же проверка, что у меню);
-   *  архивный проект — только `project.manage` (сервер: поля заморожены). */
+  /** Действия меню строки — тому, кто правит проект (та же проверка, что на
+   *  сервере; архивный проект правит `project.manage`). */
   function rowMenu(project: ProjectListItem): RowMenuItem[] {
     const base = makeCardRowMenuItems({ kind: 'project', id: project.id }, openCard);
     if (!canEditProject(project, canManageAny)) return base;
@@ -230,12 +216,10 @@ export function ProjectsPage() {
                 canCreate={canCreate}
                 canManage={canManageAny}
                 allLabel={scope === 'mine' ? ui.projects.portfolioMyProjects : undefined}
-                draggingProjectId={draggingId}
                 onCreate={(name) => createFolder.mutate(name)}
                 onSelect={selectFolder}
                 onRename={setRenameFolderTarget}
                 onDelete={setDeleteFolderTarget}
-                onDropProject={dropOnFolder}
               />
             </>
           }
@@ -273,19 +257,6 @@ export function ProjectsPage() {
             openCard({ kind: 'project', id: project.id }, rowEl.getBoundingClientRect())
           }
           rowMenu={rowMenu}
-          rowDrag={(project) =>
-            canDragProject(project, canManageAny)
-              ? {
-                  draggable: true,
-                  onDragStart: (event) => {
-                    event.dataTransfer?.setData('text/plain', project.id);
-                    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
-                    setDraggingId(project.id);
-                  },
-                  onDragEnd: () => setDraggingId(null),
-                }
-              : undefined
-          }
           label={ui.projects.title}
           emptyTitle={filtering ? ui.projects.journalEmptyFiltered : ui.projects.journalEmpty}
         />
