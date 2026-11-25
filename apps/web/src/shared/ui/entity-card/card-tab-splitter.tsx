@@ -2,6 +2,8 @@ import { useCallback, useRef, useState, type KeyboardEvent, type PointerEvent } 
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
+import { useWindowPointerDrag } from '../use-window-pointer-drag.js';
+
 /**
  * Перегородка между двумя областями вкладок (#746): тянется мышью/пальцем,
  * фокусируется с клавиатуры (стрелки 8 px, Shift 24, Home/End — к минимуму/
@@ -33,6 +35,7 @@ export function CardTabSplitter({
 }) {
   const [dragging, setDragging] = useState(false);
   const startRef = useRef({ x: 0, w: leftW });
+  const drag = useWindowPointerDrag();
   const maxLeft = Math.max(minLeft, totalW - minRight);
   const clamp = useCallback(
     (value: number) => Math.min(Math.max(value, minLeft), maxLeft),
@@ -45,19 +48,15 @@ export function CardTabSplitter({
     event.stopPropagation();
     startRef.current = { x: event.clientX, w: leftW };
     setDragging(true);
-    const onMove = (move: globalThis.PointerEvent) => {
-      onChange(clamp(startRef.current.w + (move.clientX - startRef.current.x)));
-    };
-    const onUp = (up: globalThis.PointerEvent) => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onUp);
-      setDragging(false);
-      onCommit(clamp(startRef.current.w + (up.clientX - startRef.current.x)));
-    };
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', onUp);
+    drag({
+      onMove: (move) => {
+        onChange(clamp(startRef.current.w + (move.clientX - startRef.current.x)));
+      },
+      onEnd: (up) => {
+        setDragging(false);
+        onCommit(clamp(startRef.current.w + (up.clientX - startRef.current.x)));
+      },
+    });
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {

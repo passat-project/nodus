@@ -1,6 +1,8 @@
 import { useCallback, type KeyboardEvent, type PointerEvent, type RefObject } from 'react';
 import { ui } from '@nodus/contracts';
 
+import { useWindowPointerDrag } from '../use-window-pointer-drag.js';
+
 /**
  * Перегородка «панель данных | области вкладок» (#746): тянется мышью с
  * императивным style.width (карточка не рендерится на каждый кадр), коммит
@@ -23,6 +25,7 @@ export function CardDataSplitter({
   onCommit: (width: number) => void;
   onReset: () => void;
 }) {
+  const drag = useWindowPointerDrag();
   const clamp = useCallback(
     (value: number) => Math.min(Math.max(value, min), Math.max(min, max)),
     [max, min],
@@ -37,20 +40,14 @@ export function CardDataSplitter({
     const startX = event.clientX;
     const startW = el.getBoundingClientRect().width;
     let latest = startW;
-    const onMove = (move: globalThis.PointerEvent) => {
-      latest = clamp(startW + (move.clientX - startX));
-      el.style.width = `${latest}px`;
-      el.style.minWidth = `${latest}px`;
-    };
-    const onUp = () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onUp);
-      onCommit(Math.round(latest));
-    };
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', onUp);
+    drag({
+      onMove: (move) => {
+        latest = clamp(startW + (move.clientX - startX));
+        el.style.width = `${latest}px`;
+        el.style.minWidth = `${latest}px`;
+      },
+      onEnd: () => onCommit(Math.round(latest)),
+    });
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {

@@ -180,6 +180,7 @@ export const tasksStrings = {
   timeMinutesPlaceholder: '1ч 30м',
   timeComment: 'Комментарий к трудозатратам',
   timeEmpty: 'Время по задаче ещё не вносили',
+  timeShowMore: 'Показать ещё записи',
   timeToday: 'Сегодня',
   timeYesterday: 'Вчера',
   timeDelete: 'Удалить запись',

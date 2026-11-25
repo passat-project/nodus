@@ -5,6 +5,7 @@ import {
   formatDateWithYear,
   formatDateTimeCompact,
   formatListTimestamp,
+  formatVideoDuration,
   shortPersonName,
   withoutPatronymic,
 } from './format.js';
@@ -43,6 +44,15 @@ describe('formatDateTimeCompact (превью ссылки на задачу)', 
 describe('formatDateWithYear (#999: дата приёма)', () => {
   it('день, месяц и год без сокращения «г.»', () => {
     expect(formatDateWithYear(new Date(2021, 8, 3, 12).toISOString())).toBe('3 сентября 2021');
+  });
+});
+
+describe('formatVideoDuration — бейдж длительности и время плеера (#250, #1054)', () => {
+  it('минуты и секунды, часы', () => {
+    expect(formatVideoDuration(0)).toBe('0:00');
+    expect(formatVideoDuration(65_000)).toBe('1:05');
+    expect(formatVideoDuration(9_920)).toBe('0:10');
+    expect(formatVideoDuration(3_725_000)).toBe('1:02:05');
   });
 });
 

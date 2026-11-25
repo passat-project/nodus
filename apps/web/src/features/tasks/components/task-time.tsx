@@ -148,11 +148,11 @@ export function TaskSpentField({ task }: { task: TaskDetail }) {
 
 function TimeLog({ task }: { task: TaskDetail }) {
   const meId = useAuthStore((s) => s.user?.id);
-  const { data } = useTimeEntries(task.id);
+  const query = useTimeEntries(task.id);
   const add = useAddTimeEntry(task.id);
   const remove = useDeleteTimeEntry(task.id);
   const [draft, setDraft] = useState<TimeEntryDraft>(EMPTY_TIME_ENTRY);
-  const entries = data?.items ?? [];
+  const entries = query.data?.pages.flatMap((page) => page.items) ?? [];
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -229,6 +229,17 @@ function TimeLog({ task }: { task: TaskDetail }) {
           ))
         )}
       </div>
+      {query.hasNextPage ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full text-muted-foreground"
+          onClick={() => void query.fetchNextPage()}
+          disabled={query.isFetchingNextPage}
+        >
+          {ui.tasks.timeShowMore}
+        </Button>
+      ) : null}
     </div>
   );
 }

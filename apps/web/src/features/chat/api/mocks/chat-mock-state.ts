@@ -197,13 +197,20 @@ export function nextMessageSeq(conversationId: string): number {
   );
 }
 
-export function applyReadReceipt(conversationId: string, upToSeq: number): number {
+export function applyReadReceipt(
+  conversationId: string,
+  upToSeq: number,
+  threadRootId: string | null = null,
+): number {
   const conversation = demoConversations.find((c) => c.id === conversationId);
   if (!conversation) return -1;
   conversation.unreadCount = 0;
   const now = new Date().toISOString();
   for (const m of demoMessages) {
     if (m.conversationId !== conversationId || m.deletedAt || m.seq > upToSeq) continue;
+    // #1026/#1032: квитанция имеет область — лента не ставит галку ответам
+    // треда, чтение треда не делает прочитанным пост ленты (как сервер/DTO).
+    if (threadRootId === null ? m.threadRootId !== null : m.threadRootId !== threadRootId) continue;
     const reader = conversation.membersPreview.find((u) => u.id !== m.author.id);
     if (!reader) continue; // «Заметки»: просмотров нет
     if (m.readAt === null) m.readAt = now;

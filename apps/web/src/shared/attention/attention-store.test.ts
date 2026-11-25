@@ -197,3 +197,21 @@ describe('presenceActive (статус присутствия, #772)', () => {
     expect(flags).toEqual({ windowAttentive: true, userActive: true, presenceActive: true });
   });
 });
+
+describe('startAttentionTracking: stop (#1032)', () => {
+  it('stop снимает слушатели и разрешает повторный старт', () => {
+    resetAttentionForTests();
+    const remove = vi.spyOn(window, 'removeEventListener');
+    const stop = startAttentionTracking();
+    stop();
+    expect(remove).toHaveBeenCalledWith('focus', expect.any(Function));
+    expect(remove).toHaveBeenCalledWith('pointermove', expect.any(Function));
+    remove.mockRestore();
+
+    const add = vi.spyOn(window, 'addEventListener');
+    const stopAgain = startAttentionTracking();
+    expect(add).toHaveBeenCalledWith('focus', expect.any(Function));
+    stopAgain();
+    add.mockRestore();
+  });
+});

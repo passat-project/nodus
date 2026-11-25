@@ -246,7 +246,10 @@ function nextReactions(
  *  false: вызывающий инвалидирует по-старому. */
 export function applyReadEvent(
   queryClient: QueryClient,
-  payload: Pick<ChatMessageReadPayload, 'conversationId' | 'userId' | 'upToSeq' | 'readAt'>,
+  payload: Pick<
+    ChatMessageReadPayload,
+    'conversationId' | 'userId' | 'upToSeq' | 'readAt' | 'threadRootId'
+  >,
 ): boolean {
   const meId = useAuthStore.getState().user?.id ?? null;
   if (payload.userId === meId) return true; // своё прочтение — патчить нечего
@@ -254,9 +257,11 @@ export function applyReadEvent(
   // обновляется локально, без рефетча (полная инвалидация списка на каждую
   // квитанцию — «шторм квитанций» #123). Патч живёт в обоих формах кэша
   // списка: обычный Paginated и infinite-вкладки scoped.
-  patchConversationReadAt(queryClient, payload, meId);
+  // #1026: квитанция треда не делает прочитанным пост ленты — список не трогаем.
+  if (payload.threadRootId == null) patchConversationReadAt(queryClient, payload, meId);
   const reader = readerRefFromCache(queryClient, payload.conversationId, payload.userId);
   if (!reader) return false;
+  const thread = payload.threadRootId ?? null;
   let touched = false;
   queryClient.setQueriesData<Paginated<ChatMessage>>(
     { queryKey: chatKeys.messages(payload.conversationId) },
@@ -264,7 +269,12 @@ export function applyReadEvent(
       if (!old) return old;
       let hit = false;
       const items = old.items.map((m) => {
-        if (m.author.id !== meId || m.deletedAt !== null || m.seq > payload.upToSeq) return m;
+        // #1026: область квитанции — лента (threadRootId=null) или ответы
+        // конкретного треда; чужая область не патчится вовсе.
+        const inScope = thread === null ? m.threadRootId === null : m.threadRootId === thread;
+        if (!inScope || m.author.id !== meId || m.deletedAt !== null || m.seq > payload.upToSeq) {
+          return m;
+        }
         if (m.readBy.some((ref) => ref.id === payload.userId)) return m;
         hit = true;
         // readAt — момент ПЕРВОГО прочитавшего (min, канон #102).

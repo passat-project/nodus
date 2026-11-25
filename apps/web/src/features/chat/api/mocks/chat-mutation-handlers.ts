@@ -57,6 +57,16 @@ function findMessage(conversationId: unknown, messageId: unknown): ChatMessage |
   );
 }
 
+/** #245/#1032: удалить ЧУЖОЕ сообщение может админ/владелец беседы — только
+ *  в группах и каналах. Глобальное право chat.moderate у демо-актёра не
+ *  моделируется (как и прочие портальные права), роль беседы — да. */
+function canDeleteForeign(conversationId: string): boolean {
+  const conversation = demoConversations.find((c) => c.id === conversationId);
+  if (!conversation) return false;
+  if (conversation.type !== 'group' && conversation.type !== 'project_channel') return false;
+  return conversation.myRole === 'admin' || conversation.myRole === 'owner';
+}
+
 export const chatMutationHandlers = [
   /** Загрузка вложения (multipart): сообщение хранит attachmentIds
    *  (задел POST /chat/attachments из плана бэкенда, трек 5). MOCK-СОГЛАШЕНИЕ:
@@ -177,8 +187,11 @@ export const chatMutationHandlers = [
   http.delete('/api/v1/chat/conversations/:id/messages/:messageId', ({ params }) => {
     const message = findMessage(params.id, params.messageId);
     if (!message || message.deletedAt) return notFound();
-    if (message.author.id !== getMockActor().id) return forbidden();
     const conversationId = String(params.id);
+    // #245/#1032: модератор группы/канала удаляет чужое — как сервер.
+    if (message.author.id !== getMockActor().id && !canDeleteForeign(conversationId)) {
+      return forbidden();
+    }
     // Якоря — до applyDeletion (та обнуляет reply).
     const anchors = [message.reply?.id, message.threadRootId];
     if (!isSelfConversation(conversationId) && hasLiveReplies(message)) {
@@ -204,7 +217,7 @@ export const chatMutationHandlers = [
     for (const id of parsed.data.messageIds) {
       const message = findMessage(params.id, id);
       if (!message || message.deletedAt) continue;
-      if (message.author.id !== getMockActor().id) continue;
+      if (message.author.id !== getMockActor().id && !canDeleteForeign(String(params.id))) continue;
       const anchors = [message.reply?.id, message.threadRootId];
       if (!isSelfConversation(String(params.id)) && hasLiveReplies(message)) {
         tombstones.push(applyDeletion(message));

@@ -90,16 +90,16 @@ export function AppShell() {
   // Диагностика «карточка дёргается» (#132 р.11): только ?wsdebug=1 — кадровые
   // логи [jitter] смещений ключевых контейнеров (см. layout-jitter-logger).
   useEffect(() => {
-    startLayoutJitterLogger();
+    const stopJitter = startLayoutJitterLogger();
     // Модель внимания (#770, ADR-0038): видимость/фокус окна и ввод —
     // единый источник для квитанций прочтения, попапов и догона ленты.
-    startAttentionTracking();
+    const stopAttention = startAttentionTracking();
     // Модальные слои (#809): просмотрщик/окна Radix перекрывают поверхность —
     // реестр даёт гейтам прочтения и попапов признак «накрыто».
     const stopModalLayers = startModalLayerTracking();
     // Личные настройки (#745): GET после входа + debounce PUT изменений;
     // при смене пользователя стор перечитывает свой localStorage-ключ.
-    startPreferencesSync();
+    const stopPreferences = startPreferencesSync();
     // Черновики чата — на пользователя (AUD-005): вход читает ключ вошедшего,
     // выход не оставляет текст предыдущего сотрудника в памяти вкладки.
     startChatDraftsSession();
@@ -112,7 +112,14 @@ export function AppShell() {
     // Чанки остальных разделов и движок PDF — в свободное время (#1051):
     // следующий клик по разделу не ждёт загрузки.
     void startModuleWarmup();
-    return stopModalLayers;
+    // #1032: всё, что навешивает слушатели/циклы, снимается при размонтировании
+    // (иначе rAF-логгер и подписки живут после сноса дерева).
+    return () => {
+      stopJitter();
+      stopAttention();
+      stopModalLayers();
+      stopPreferences();
+    };
   }, []);
   // (N) Nodus в заголовке вкладки (#124): сигнал фоновой вкладке.
   useUnreadTitle();
