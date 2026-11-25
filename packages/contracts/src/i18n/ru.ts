@@ -323,6 +323,23 @@ export const ui = {
     panelWindowMaximize: 'Развернуть',
     panelWindowRestore: 'Восстановить',
     panelWindowClose: 'Закрыть окно',
+    /** Эпик #1038 — сигнал обновления портала (коллаут у ⟳, веб-плашка). */
+    updateCallout: 'Вышло обновление портала — обновите страницу',
+    updatePlate: 'Портал обновился',
+    updatePlateButton: 'Обновить',
+    panelAppNotes: 'Изменения',
+    /** Эпик #1038 — счётчик серии и реестр загрузок. */
+    downloadCount: 'Скачано: {count}',
+    downloadFailedShort: 'Не удалось скачать',
+    downloadsTitle: 'Загрузки',
+    downloadsEmpty: 'Пока ничего не скачивали',
+    downloadsShowInFolder: 'Показать в папке',
+    /** Эпик #1038 — вкладки портала в панели оболочки. */
+    tabNew: 'Новая вкладка',
+    tabPin: 'Закрепить вкладку',
+    tabUnpin: 'Открепить вкладку',
+    tabOpenInNew: 'Открыть в новой вкладке',
+    tabMore: 'Ещё вкладки',
   },
 } as const;
 
