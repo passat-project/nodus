@@ -19,6 +19,12 @@ import { RoleAssignmentGuard } from './role-assignment-guard.service.js';
 import { ReferenceGuard } from './reference-guard.service.js';
 import { DepartmentsRepository, type DepartmentRow } from './departments.repository.js';
 import { deputyIdsOf, toNode, uniqueIds } from './departments.node.js';
+import {
+  assertNotDetachedToRoot,
+  assertRootNotArchivable,
+  assertSingleManagementRoot,
+  isManagementRoot,
+} from './departments-root-policy.js';
 import { ManagerDerivationService } from './manager-derivation.service.js';
 import { RoleAudienceRepository } from './role-audience.repository.js';
 import { UsersRepository } from './users.repository.js';
@@ -84,11 +90,7 @@ export class DepartmentsService {
       // Лок берём для обеих структур: уникальность главы общая (#817).
       // #1028: создание management-корня тоже под локом — иначе два
       // параллельных POST создали бы два «главных» узла.
-      if (
-        (dto.kind === 'management' && dto.parentId === null) ||
-        dto.headId ||
-        deputies.length > 0
-      ) {
+      if (isManagementRoot(dto.kind, dto.parentId) || dto.headId || deputies.length > 0) {
         await this.departments.lockTree(tx);
       }
       // Ссылки оргструктуры (#441): руководитель/замы — только активные
@@ -103,15 +105,9 @@ export class DepartmentsService {
       await this.references.ensureDepartment(dto.parentId, dto.kind, 'parentId', tx);
       // #1028: корень управленческой структуры один — главная карточка
       // компании (#982). Раньше правило держал только PATCH.
-      if (
-        dto.kind === 'management' &&
-        dto.parentId === null &&
-        (await this.departments.countRoots('management', tx)) > 0
-      ) {
-        throw new DomainException(
-          ErrorCode.DIRECTORY_DEPARTMENT_ROOT_FORBIDDEN,
-          'Management department root already exists',
-          { kind: dto.kind, reason: 'second_root' },
+      if (isManagementRoot(dto.kind, dto.parentId)) {
+        await assertSingleManagementRoot(dto.kind, () =>
+          this.departments.countRoots('management', tx),
         );
       }
       const fields = { ...dto };
@@ -160,13 +156,7 @@ export class DepartmentsService {
         if (!node) {
           throw DomainException.notFound('Department not found');
         }
-        if (node.kind === 'management' && node.parentId !== null) {
-          throw new DomainException(
-            ErrorCode.DIRECTORY_DEPARTMENT_ROOT_FORBIDDEN,
-            'Management department cannot be detached to root',
-            { id },
-          );
-        }
+        assertNotDetachedToRoot(node, id);
       }
       // #544: смена parentId сериализуется advisory-локом дерева — проверка
       // цикла и мутация видят зафиксированное состояние конкурента. Строчный
@@ -184,12 +174,8 @@ export class DepartmentsService {
       // Повтор правила корня (#982) на состоянии ПОСЛЕ лока: ранняя проверка —
       // быстрый путь без сериализации переносов, эта закрывает interleaving,
       // когда узел успели переставить между чтением и локом.
-      if (dto.parentId === null && current.kind === 'management' && current.parentId !== null) {
-        throw new DomainException(
-          ErrorCode.DIRECTORY_DEPARTMENT_ROOT_FORBIDDEN,
-          'Management department cannot be detached to root',
-          { id },
-        );
+      if (dto.parentId === null) {
+        assertNotDetachedToRoot(current, id);
       }
       // #441: ссылки оргструктуры — руководитель/замы только активные
       // сотрудники; родитель — подразделение того же вида структуры (иначе
@@ -327,13 +313,7 @@ export class DepartmentsService {
       }
       // #1028: главную карточку компании не архивируем (вердикт 12.11) —
       // правило жило только в UI, сервер обязан отказать (I8).
-      if (node.kind === 'management' && node.parentId === null) {
-        throw new DomainException(
-          ErrorCode.DIRECTORY_DEPARTMENT_ROOT_FORBIDDEN,
-          'Management department root cannot be archived',
-          { id, reason: 'root' },
-        );
-      }
+      assertRootNotArchivable(node, id);
       if ((await this.departments.countActiveChildren(id, tx)) > 0) {
         throw new DomainException(ErrorCode.CONFLICT, 'Department has active children', {
           departmentId: id,
