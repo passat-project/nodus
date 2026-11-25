@@ -13,6 +13,19 @@ export function formatBytes(bytes: number): string {
   return `${(kb / 1024).toFixed(1).replace('.', ',')} ${ui.common.sizeMb}`;
 }
 
+/** Длительность ролика человеком: M:SS (у роликов от часа — H:MM:SS).
+ *  Один формат на весь продукт: бейдж плитки чата и время в полосе
+ *  управления кинозала (#1054). */
+export function formatVideoDuration(durationMs: number): string {
+  const total = Math.max(0, Math.round(durationMs / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  const mm = hours > 0 ? String(minutes).padStart(2, '0') : String(minutes);
+  const ss = String(seconds).padStart(2, '0');
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
 /** Часы:минуты для трудозатрат (I14): 95 → «1:35». */
 export function formatMinutes(total: number): string {
   const h = Math.floor(total / 60);
