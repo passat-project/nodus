@@ -1,4 +1,4 @@
-import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
+import { createElement, type ComponentType, type FunctionComponent } from 'react';
 import {
   createRootRoute,
   createRoute,
@@ -26,44 +26,60 @@ import { useRemoveBootSplash } from './boot-splash.js';
  *
  * Страница отвечает на `preload()` (#1051): роутер зовёт его при наведении и
  * фокусе на ссылку раздела (`defaultPreload: 'intent'`) — чанк грузится до
- * клика. У `React.lazy` такого метода нет (роутер молча пропускает
- * `component.preload?.()`), поэтому наведение и первый рендер ждут один и тот
- * же импорт. Предзагрузка guard НЕ включает: после выкатки устаревший чанк
+ * клика. Предзагрузка guard НЕ включает: после выкатки устаревший чанк
  * перезагружал бы страницу по одному наведению, с потерей несохранённого ввода.
+ *
+ * Страница — НЕ `React.lazy`: тот при первом рендере всегда приостанавливается,
+ * даже когда код давно загружен, а React после приостановки держит контент ещё
+ * 300 мс (`FALLBACK_THROTTLE_MS`; react.dev, `<Suspense>`: «reveals suspended
+ * content at most once every 300ms»). Прогретый раздел простаивал треть
+ * секунды прежде, чем начать грузить данные (#1051, замер: раздел монтировался
+ * через 360 мс после клика). Здесь код, полученный предзагрузкой, рендерится
+ * сразу; ждёт импорта только раздел, которого на руках нет.
  */
 const CHUNK_RELOAD_KEY = 'nodus-chunk-reload';
 type PageModule = { default: ComponentType };
-export type PreloadablePage = LazyExoticComponent<ComponentType> & {
-  preload: () => Promise<void>;
-};
+export type PreloadablePage = FunctionComponent & { preload: () => Promise<void> };
 
 export function pageLoader(loader: () => Promise<PageModule>): PreloadablePage {
   let pending: Promise<PageModule> | undefined;
+  /** Код раздела на руках — признак ставится раньше, чем разрешится промис. */
+  let loaded: ComponentType | undefined;
+  let reloading = false;
   /** Один импорт на все пути; отказ не копится — следующая попытка пробует снова. */
   const importPage = (): Promise<PageModule> => {
-    pending ??= loader().catch((error: unknown) => {
-      pending = undefined;
-      throw error;
-    });
-    return pending;
-  };
-  const Page = lazy(() =>
-    importPage().then(
+    pending ??= loader().then(
       (module) => {
+        loaded = module.default;
         sessionStorage.removeItem(CHUNK_RELOAD_KEY);
         return module;
       },
       (error: unknown) => {
-        if (!sessionStorage.getItem(CHUNK_RELOAD_KEY)) {
-          sessionStorage.setItem(CHUNK_RELOAD_KEY, '1');
-          window.location.reload();
-          return new Promise<never>(() => {});
-        }
-        sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+        pending = undefined;
         throw error;
       },
-    ),
-  ) as PreloadablePage;
+    );
+    return pending;
+  };
+  /** Реальный вход кода на руках не принёс: отказ включает guard. */
+  const enter = async (): Promise<PageModule> => {
+    try {
+      return await importPage();
+    } catch (error) {
+      if (reloading || !sessionStorage.getItem(CHUNK_RELOAD_KEY)) {
+        reloading = true;
+        sessionStorage.setItem(CHUNK_RELOAD_KEY, '1');
+        window.location.reload();
+        return new Promise<never>(() => {});
+      }
+      sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+      throw error;
+    }
+  };
+  const Page: PreloadablePage = function Page() {
+    if (!loaded) throw enter();
+    return createElement(loaded);
+  };
   // Провал предзагрузки не рвёт страницу и не перезагружает её: вход повторит
   // импорт сам — и уже его guard решает, перезагружать ли.
   Page.preload = () =>

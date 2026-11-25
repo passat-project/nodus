@@ -34,21 +34,59 @@ describe('page-imports: адрес раздела → его чанк (#1051)', 
     expect(pageImportForPath('/tasks?view=list')).toBe(PAGE_IMPORTS.tasks);
   });
 
-  it('по наведению на раздел чанк грузится до клика', () => {
+  it('по наведению на раздел чанк грузится до клика; страница — не React.lazy', () => {
     // Роутер вызывает component.preload?.() и молча пропускает страницы без него
-    // (router-core, load-client.ts); у React.lazy такого метода нет — «intent»
-    // без preload ничего не грузил. Любая lazy-страница обязана его иметь.
+    // (router-core, load-client.ts). Каждая страница раздела обязана его иметь.
     expect(router.options.defaultPreload).toBe('intent');
-    const lazyPages = Object.values(router.routesById).filter(
-      (route) =>
-        (route.options.component as { $$typeof?: symbol } | undefined)?.$$typeof ===
-        Symbol.for('react.lazy'),
-    );
-    expect(lazyPages.length).toBeGreaterThan(5);
-    for (const route of lazyPages) {
-      const page = route.options.component as PreloadablePage;
-      expect(typeof page.preload, route.id).toBe('function');
+    const pages = Object.values(router.routesById)
+      .map((route) => route.options.component as PreloadablePage | undefined)
+      .filter((page): page is PreloadablePage => typeof page?.preload === 'function');
+    expect(pages.length).toBeGreaterThan(5);
+    for (const page of pages) {
+      // React.lazy при первом рендере всегда приостанавливается — даже с готовым
+      // кодом; React после приостановки держит контент ещё 300 мс.
+      expect((page as { $$typeof?: symbol }).$$typeof).not.toBe(Symbol.for('react.lazy'));
     }
+  });
+
+  it('предзагруженная страница рендерится сразу — без ожидания и без скелета', async () => {
+    const importer = vi.fn(async () => ({ default: () => 'содержимое раздела' }));
+    const Page = pageLoader(importer);
+    await Page.preload();
+
+    let skeletonShown = false;
+    const Skeleton = () => {
+      skeletonShown = true;
+      return 'скелет';
+    };
+    const view = render(
+      createElement(Suspense, { fallback: createElement(Skeleton) }, createElement(Page)),
+    );
+    // Синхронно, в том же рендере: Suspense не срабатывал, импорт не повторялся.
+    expect(view.getByText('содержимое раздела')).toBeTruthy();
+    expect(skeletonShown).toBe(false);
+    expect(importer).toHaveBeenCalledTimes(1);
+    view.unmount();
+  });
+
+  it('раздел без предзагрузки ждёт код и затем рендерится; импорт один на все пути', async () => {
+    let resolveModule: (module: { default: () => string }) => void = () => {};
+    const importer = vi.fn(
+      () =>
+        new Promise<{ default: () => string }>((resolve) => {
+          resolveModule = resolve;
+        }),
+    );
+    const Page = pageLoader(importer);
+    const view = render(createElement(Suspense, { fallback: 'скелет' }, createElement(Page)));
+    expect(view.getByText('скелет')).toBeTruthy();
+
+    const waiting = Page.preload();
+    resolveModule({ default: () => 'раздел' });
+    await waiting;
+    await waitFor(() => expect(view.getByText('раздел')).toBeTruthy());
+    expect(importer).toHaveBeenCalledTimes(1);
+    view.unmount();
   });
 
   it('pageLoader: наведение и рендер ждут один импорт; провал предзагрузки не копится и НЕ перезагружает страницу', async () => {
