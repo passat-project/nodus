@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { ui } from '@nodus/contracts';
+import { SHELL_PANEL_HEIGHT, ui } from '@nodus/contracts';
 
+import { ShellPanel } from '../shell/shell-panel.js';
 import { shellApi, type ConnectionState, type UpdateOutcome } from '../shell/shell-ipc.js';
 
 const t = ui.desktop;
@@ -9,7 +10,8 @@ const t = ui.desktop;
  * Экран «Адрес портала» (модель Битрикса) + производные состояния подключения:
  * офлайн-заглушка с повтором и экран «обновите приложение» (minShellVersion).
  * Живёт в главном окне до навигации на портал; после «Сменить сервер» из трея
- * оболочка возвращается сюда же.
+ * оболочка возвращается сюда же. Сверху — панель безрамочного окна (ADR-0055):
+ * кнопки окна и «Приложение» до подключения к порталу.
  */
 export function SetupScreen() {
   const [state, setState] = useState<ConnectionState>({ status: 'idle' });
@@ -53,7 +55,11 @@ export function SetupScreen() {
   }
 
   return (
-    <div className="bg-background text-foreground flex min-h-screen flex-col items-center justify-center gap-6 font-sans">
+    <div
+      className="bg-background text-foreground flex min-h-screen flex-col items-center justify-center gap-6 font-sans"
+      style={{ paddingTop: SHELL_PANEL_HEIGHT }}
+    >
+      <ShellPanel />
       <ThemeToggle />
       {state.status === 'needs-update' ? (
         <section className="bg-card w-full max-w-md rounded-[14px] border p-6 shadow-sm">
@@ -123,7 +129,8 @@ export function SetupScreen() {
   );
 }
 
-/** Переключатель тёмной темы экрана подключения (persist до первой отрисовки). */
+/** Переключатель тёмной темы экрана подключения (persist до первой отрисовки).
+ *  Под панелью окна (ADR-0055): верхнюю полосу строки занимает панель. */
 function ThemeToggle() {
   const [dark, setDark] = useState(() => document.documentElement.dataset.theme === 'dark');
   useEffect(() => {
@@ -139,7 +146,7 @@ function ThemeToggle() {
       type="button"
       aria-label={t.themeToggle}
       onClick={() => setDark((v) => !v)}
-      className="text-muted-foreground hover:text-foreground absolute right-4 top-4 h-9 w-9 rounded-[10px] text-sm"
+      className="text-muted-foreground hover:text-foreground absolute right-4 top-[56px] h-9 w-9 rounded-[10px] text-sm"
     >
       {dark ? '☀' : '☾'}
     </button>
