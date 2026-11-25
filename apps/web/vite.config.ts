@@ -7,6 +7,10 @@ import { defineConfig, loadEnv } from 'vite';
 // и эмит в dist при build — без них pdfjs-dist 6.x молча не декодирует сканы.
 import { pdfjsWasmAssets } from './vite-pdfjs-wasm.js';
 
+// Версия портала (#1038): define __PORTAL_VERSION__ + /version.json в корне
+// dev и dist — по файлу открытая вкладка детектит редеплой (фича portal-update).
+import { portalVersionAssets } from './vite-portal-version.js';
+
 // API и WebSocket проксируются на того же origin:
 // dev — прокси Vite, preview (e2e в CI) — тот же прокси, docker — прокси nginx (infra/nginx/web.conf).
 // Цель /api-прокси: NODUS_API_DEV_TARGET из корневого .env — живой api для
@@ -75,7 +79,7 @@ export default defineConfig(({ command, mode }) => {
     // VITE_*-флаги (VITE_API_MOCK) лежат в корневом .env рядом с docker-переменными.
     envDir: '../../',
     define,
-    plugins: [tailwindcss(), react(), pdfjsWasmAssets()],
+    plugins: [tailwindcss(), react(), pdfjsWasmAssets(), portalVersionAssets()],
     // #533: компонентные jsdom-тесты под параллельным `turbo test` (api+web+
     // contracts одновременно) упирались в дефолтные 5 с — notification-reader
     // изолированно идёт ~3 с. 15 с — потолок на холодный старт под нагрузкой,
@@ -86,10 +90,10 @@ export default defineConfig(({ command, mode }) => {
       // Моки MSW — dev-инфраструктура, не продуктовый рантайм: из покрытия исключены.
       coverage: {
         provider: 'v8',
-        // vite-pdfjs-wasm.ts — плагин в корне пакета, вне src/**: без явного
-        // include не попадает в lcov, и CI diff-coverage считает его 0%
-        // при живом тесте (PR #624).
-        include: ['src/**/*.{ts,tsx}', 'vite-pdfjs-wasm.ts'],
+        // vite-pdfjs-wasm.ts / vite-portal-version.ts — плагины в корне
+        // пакета, вне src/**: без явного include не попадают в lcov, и CI
+        // diff-coverage считает их 0% при живом тесте (PR #624).
+        include: ['src/**/*.{ts,tsx}', 'vite-pdfjs-wasm.ts', 'vite-portal-version.ts'],
         exclude: [
           'src/**/*.test.{ts,tsx}',
           'src/**/*.d.ts',

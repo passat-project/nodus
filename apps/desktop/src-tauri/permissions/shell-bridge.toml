@@ -68,3 +68,23 @@ commands.allow = ["apply_update"]
 identifier = "allow-shell-ready"
 description = "Сигнал «слушатели моста armed» — оболочка доставляет отложенный deep link."
 commands.allow = ["shell_ready"]
+
+[[permission]]
+identifier = "allow-window-controls"
+description = "Кнопки окна безрамочной оболочки: свернуть, развернуть/восстановить, закрыть (в трей), перетаскивание за панель, состояние maximized."
+commands.allow = ["window_minimize", "window_toggle_maximize", "window_close", "window_start_dragging", "window_is_maximized"]
+
+[[permission]]
+identifier = "allow-copy-text"
+description = "Записать текст в буфер обмена (только запись, до 4096 символов)."
+commands.allow = ["copy_text"]
+
+[[permission]]
+identifier = "allow-downloads-list"
+description = "Реестр загрузок оболочки (последние 100 завершённых, новые первыми)."
+commands.allow = ["downloads_list"]
+
+[[permission]]
+identifier = "allow-download-reveal"
+description = "Показать скачанный файл в проводнике (только каталог «Загрузки», симлинки наружу отвергаются)."
+commands.allow = ["download_reveal"]
