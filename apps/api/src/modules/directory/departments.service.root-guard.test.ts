@@ -245,4 +245,30 @@ describe('DepartmentsService: корень управленческой стру
     });
     expect(departments.update).not.toHaveBeenCalled();
   });
+
+  it('узел исчез между предпроверкой и локом — 404, без мутаций', async () => {
+    const departments = {
+      lockForUpdate: vi.fn().mockResolvedValue(true),
+      findById: vi.fn().mockResolvedValue(null),
+      update: stub(),
+    };
+    const service = new DepartmentsService(
+      departments as never,
+      { findRef: stub() } as never,
+      new RoleAssignmentGuard(
+        { permissionsByIds: stub() } as never,
+        { effectiveRoleIds: stub() } as never,
+      ),
+      new ReferenceGuard(stub() as never, stub() as never, stub() as never),
+      { run: (cb: (t: string) => unknown) => cb('tx-handle') } as never,
+      { emit: stub() } as never,
+      { roleIdsOfDepartments: stub() } as never,
+      { recomputeUsers: stub(), recomputeDepartments: stub() } as never,
+    );
+
+    await expect(service.archive('dep', actor.id)).rejects.toMatchObject({
+      code: ErrorCode.NOT_FOUND,
+    });
+    expect(departments.update).not.toHaveBeenCalled();
+  });
 });
