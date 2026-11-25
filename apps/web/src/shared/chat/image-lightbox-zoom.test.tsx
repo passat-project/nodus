@@ -134,8 +134,11 @@ describe('ImageLightbox: масштаб', () => {
     // Полосы-подложки нет: фон — сплошное затемнение, хром плавает строкой.
     expect(toolbar.className).not.toContain('bg-black/60');
     expect(toolbar.className).not.toContain('bg-card');
-    // Строка центрируется в свободном поле над кадром, а не льнёт к кромке.
-    expect(Number.parseFloat(toolbar.style.top)).toBeGreaterThan(0);
+    // Строка закреплена у верхней кромки (середина стандартного поля) — от
+    // размера кадра не зависит; у маленькой картинки не сползает в середину.
+    const top = Number.parseFloat(toolbar.style.top);
+    expect(top).toBeGreaterThan(0);
+    expect(top).toBeLessThan(60);
     // Крестик — последним в правой группе (не отдельной кнопкой в углу окна):
     // наша скруглённая плашка, не круг; фон на весь экран.
     const close = screen.getByRole('button', { name: ui.common.close });

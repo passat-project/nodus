@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, Minus, Plus, Scan, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { MessageAttachment } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -25,11 +25,11 @@ import { LightboxFrame } from './lightbox-frame.js';
  *
  * Хром (вердикт владельца 25.11.2026): фон — СПЛОШНОЕ затемнение всего экрана
  * (кадр остаётся ярким), а строка масштаба с крестиком плавает свободной
- * группой в тёмном поле НАД кадром — по центру свободного поля между верхним
- * краем кадра и верхней кромкой экрана. Так значки не стоят впритык к кнопкам
- * окна оболочки (у верхней кромки получались «два крестика») и не накрывают
- * фото; компактные плашки под счётчиком и группой держат контраст, когда
- * увеличенный кадр уходит под хром.
+ * группой в тёмном поле НАД кадром и закреплена у верхней кромки (середина
+ * стандартного поля 15%) — от размера кадра не зависит, у маленькой картинки
+ * не сползает в середину экрана. Так значки не читаются рядом с кнопками окна
+ * оболочки и не накрывают фото; компактные плашки под счётчиком и группой
+ * держат контраст, когда увеличенный кадр уходит под хром.
  */
 
 /** Кнопки масштаба в группе хрома: белые ghost-значки крупнее обычных. */
@@ -64,33 +64,20 @@ export function ImageLightbox({
   // Зум живёт на весь лайтбокс, но сбрасывается сменой кадра (resetKey).
   const zoom = useImageZoom({ fitFactor: FIT_FACTOR, resetKey: image?.id });
 
-  // Свободное поле над кадром (те же 85% окна без апскейла, что у кадра):
-  // строка хрома центрируется в нём, а не прижимается к верхней кромке.
-  const [viewport, setViewport] = useState(() => ({
-    width: typeof window === 'undefined' ? 0 : window.innerWidth,
-    height: typeof window === 'undefined' ? 0 : window.innerHeight,
-  }));
+  // Хром закреплён у верхней кромки — середина стандартного поля 15% (эталон
+  // владельца 25.11.2026): у большого кадра он у верха, как на скриншоте 1,
+  // а у маленького НЕ сползает в середину экрана, как на 2. От размера кадра
+  // позиция не зависит.
+  const [viewportHeight, setViewportHeight] = useState(() =>
+    typeof window === 'undefined' ? 0 : window.innerHeight,
+  );
   useEffect(() => {
-    const measure = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
+    const measure = () => setViewportHeight(window.innerHeight);
     measure();
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
   }, []);
-  const chromeTop = useMemo(() => {
-    const width = image?.width ?? 0;
-    const height = image?.height ?? 0;
-    if (width > 0 && height > 0 && viewport.height > 0) {
-      const ratio = width / height;
-      const fitWidth = Math.min(
-        FIT_FACTOR * viewport.width,
-        FIT_FACTOR * viewport.height * ratio,
-        width,
-      );
-      return Math.max(0, (viewport.height - fitWidth / ratio) / 2) / 2;
-    }
-    // Кадр без габаритов (старые строки) — потоковый фолбэк: поле 15% экрана.
-    return (viewport.height * 0.075) / 2;
-  }, [image?.width, image?.height, viewport]);
+  const chromeTop = (viewportHeight * 0.075) / 2;
 
   // Отложенное закрытие по заднику (см. BACKDROP_CLOSE_DELAY): второй клик
   // пары или `dblclick` его отменяют — двойной клик только меняет масштаб.
@@ -168,10 +155,10 @@ export function ImageLightbox({
       className="pointer-events-auto fixed inset-0 z-[80] flex items-center justify-center bg-black/85 outline-none"
     >
       {/* Хром — свободная строка в тёмном поле над кадром (вердикт 25.11.2026):
-          фон сплошной, кадр яркий и не накрыт; строка центрируется в свободном
-          поле над кадром — у верхней кромки значки читались рядом с кнопками
-          окна. Компактные плашки держат контраст, когда увеличенный кадр
-          уходит под хром. */}
+          фон сплошной, кадр яркий и не накрыт; строка закреплена у верхней
+          кромки (середина стандартного поля) и от размера кадра не зависит —
+          у маленькой картинки не сползает в середину экрана. Компактные
+          плашки держат контраст, когда увеличенный кадр уходит под хром. */}
       <div
         role="toolbar"
         aria-label={ui.files.zoomPanel}
