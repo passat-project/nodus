@@ -15,6 +15,7 @@ import { FileTypeIcon } from '../files/file-type-icon.js';
 import { useViewerHost } from '../files/viewer-host.js';
 import { formatBytes } from '../lib/format.js';
 import { messageSurface } from './message-surface.js';
+import { VideoPlayGlyph } from './video-play-glyph.js';
 
 /**
  * Карточка вложения НА поверхности сообщения (#144, вердикт «как в Битриксе»
@@ -45,6 +46,7 @@ export function AttachmentCard({
   const surface = messageSurface(mine);
   const viewer = useViewerHost();
   const isImage = attachment.kind === 'image';
+  const isVideo = attachment.kind === 'video';
   const open = () => {
     if (isImage) {
       onOpenImage?.();
@@ -91,6 +93,29 @@ export function AttachmentCard({
           ) : (
             <span className="aspect-square w-6 rounded-sm bg-muted" />
           )
+        ) : isVideo ? (
+          // Видео в смешанном наборе (рядом файл): квадратная миниатюра-постер
+          // с play-значком (#250); без постера — иконка типа.
+          <span className="relative block aspect-square w-6 overflow-hidden rounded-sm bg-muted">
+            {attachment.thumbnailUrl ? (
+              <img
+                src={attachment.thumbnailUrl}
+                alt=""
+                loading="lazy"
+                className="size-full object-cover"
+              />
+            ) : (
+              <FileTypeIcon mime={attachment.mime} className="size-6" />
+            )}
+            {/* Play — по центру миниатюры, глиф с точным центрированием
+                (#250, уточнение владельца 25.11.2026: на 14 px ручной сдвиг
+                читался кривым). */}
+            <span className="absolute inset-0 grid place-items-center">
+              <span className="grid size-4 place-items-center rounded-full border border-white/25 bg-black/50 text-white">
+                <VideoPlayGlyph className="size-3" />
+              </span>
+            </span>
+          </span>
         ) : (
           <FileTypeIcon mime={attachment.mime} className="size-6" />
         )}

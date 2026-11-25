@@ -165,7 +165,7 @@ export function ChatSearchPanel({
               kind: 'message' as const,
               author: hit.meta.authorName ?? ui.chat.searchUnknownAuthor,
               snippet: hit.snippet,
-              attachments: [] as ('image' | 'file' | 'sticker')[],
+              attachments: [] as ('image' | 'video' | 'file' | 'sticker')[],
               date: hit.meta.createdAt,
               threadRootId: hit.meta.threadRootId,
               favorited: favoriteIds.has(hit.meta.messageId),
@@ -417,7 +417,7 @@ interface SearchHit {
   kind: 'note' | 'message' | 'favorite';
   author: string;
   snippet: string;
-  attachments: ('image' | 'file' | 'sticker')[];
+  attachments: ('image' | 'video' | 'file' | 'sticker')[];
   date: string;
   threadRootId: string | null;
   /** Звезда-индикатор: у сообщений из поиска — реальная закладка (#956). */

@@ -66,7 +66,7 @@ export async function loadReplyQuote(
       authorId: replyOriginalRow.authorId,
       text: replyOriginalRow.text,
       deleted: replyOriginalRow.deletedAt !== null,
-      attachmentKind: (firstAttachment?.kind as 'image' | 'file' | 'sticker') ?? null,
+      attachmentKind: (firstAttachment?.kind as 'image' | 'video' | 'file' | 'sticker') ?? null,
       // #288: мини-глиф оригинального стикера в цитате — fileId
       // (url подписывается при чтении) + первый эмодзи пака.
       stickerFileId: sticker?.fileId ?? null,

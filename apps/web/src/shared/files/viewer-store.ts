@@ -25,12 +25,24 @@ export interface ViewerTarget {
 
 interface ViewerState {
   target: ViewerTarget | null;
+  /** Кому вернуть фокус после закрытия (#1005): снимок делается в `open()`,
+   *  пока активен триггер. К моменту закрытия activeElement — уже плеер или
+   *  кнопка внутри портала, и «снять фокус при открытии» не годится. */
+  returnFocus: HTMLElement | null;
   open: (target: ViewerTarget) => void;
   close: () => void;
 }
 
+/** Текущий фокус документа (в jsdom/без document — null). */
+function focusedElement(): HTMLElement | null {
+  return typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+    ? document.activeElement
+    : null;
+}
+
 export const useViewerStore = create<ViewerState>((set) => ({
   target: null,
-  open: (target) => set({ target }),
+  returnFocus: null,
+  open: (target) => set({ target, returnFocus: focusedElement() }),
   close: () => set({ target: null }),
 }));

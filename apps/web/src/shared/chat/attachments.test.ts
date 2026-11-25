@@ -40,16 +40,43 @@ const file = (n: number): MessageAttachment => ({
   height: null,
 });
 
-describe('attachmentsLayout — режим показа вложений (#150, канон Telegram)', () => {
+const video = (n: number): MessageAttachment => ({
+  id: `video-${n}`,
+  fileId: `20000000-0000-4000-8000-00000000000${n}`,
+  name: `ролик-${n}.mp4`,
+  size: 5_000_000,
+  mime: 'video/mp4',
+  kind: 'video',
+  url: '/api/v1/files/x/content',
+  thumbnailUrl: '/api/v1/files/x/content',
+  previewKind: 'video',
+  pdfUrl: null,
+  width: 1080,
+  height: 1920,
+  durationMs: 65_000,
+});
+
+describe('attachmentsLayout — режим показа вложений (#150, #250, канон Telegram)', () => {
   it('одно изображение — одиночная плитка', () => {
-    expect(attachmentsLayout([image(1)])).toEqual({ mode: 'single', image: image(1) });
+    expect(attachmentsLayout([image(1)])).toEqual({ mode: 'single', media: image(1) });
   });
 
-  it('только изображения 2+ — галерея, порядок сохранён', () => {
+  it('одно видео — одиночная медиа-плитка (#250: видео наравне с фото)', () => {
+    expect(attachmentsLayout([video(1)])).toEqual({ mode: 'single', media: video(1) });
+  });
+
+  it('только медиа 2+ — галерея, порядок сохранён', () => {
     const layout = attachmentsLayout([image(1), image(2), image(3)]);
     expect(layout.mode).toBe('gallery');
     if (layout.mode !== 'gallery') return;
-    expect(layout.images.map((a) => a.id)).toEqual(['img-1', 'img-2', 'img-3']);
+    expect(layout.media.map((a) => a.id)).toEqual(['img-1', 'img-2', 'img-3']);
+  });
+
+  it('фото+видео — та же галерея (смешанные медиа)', () => {
+    const layout = attachmentsLayout([image(1), video(2)]);
+    expect(layout.mode).toBe('gallery');
+    if (layout.mode !== 'gallery') return;
+    expect(layout.media.map((a) => a.id)).toEqual(['img-1', 'video-2']);
   });
 
   it('микс «фото+файл» — карточный список, галереи НЕТ, исходный порядок', () => {
@@ -57,6 +84,13 @@ describe('attachmentsLayout — режим показа вложений (#150, 
     expect(layout.mode).toBe('list');
     if (layout.mode !== 'list') return;
     expect(layout.items.map((a) => a.id)).toEqual(['img-1', 'file-2', 'img-3']);
+  });
+
+  it('видео+файл — карточный список (файл разбивает галерею)', () => {
+    const layout = attachmentsLayout([video(1), file(2)]);
+    expect(layout.mode).toBe('list');
+    if (layout.mode !== 'list') return;
+    expect(layout.items.map((a) => a.id)).toEqual(['video-1', 'file-2']);
   });
 
   it('только файлы — карточный список', () => {
@@ -85,6 +119,12 @@ describe('mediaBubbleWidth — вложение задаёт ширину пуз
 
   it('галерея — ширина сетки медиа', () => {
     expect(mediaBubbleWidth([image(1), image(2)])).toBe(MEDIA_MAX_W);
+    expect(mediaBubbleWidth([image(1), video(2)])).toBe(MEDIA_MAX_W);
+  });
+
+  it('одиночное видео — бокс по габаритам ролика (#250)', () => {
+    // 1080×1920 (портрет): высота до капа, ширина по ratio.
+    expect(mediaBubbleWidth([video(1)])).toBe(Math.round(uiPx(340) * (1080 / 1920)));
   });
 
   it('одиночная крупная картинка — её бокс: изображение = ширина пузыря (#187)', () => {

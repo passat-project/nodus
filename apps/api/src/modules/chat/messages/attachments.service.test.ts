@@ -50,6 +50,7 @@ function makeService(
       kind: 'image',
       width: 640,
       height: 480,
+      durationMs: null,
       thumbFileId: THUMB_FILE_ID,
     })),
     findUnclaimed: vi.fn(async () => null),
@@ -132,6 +133,7 @@ describe('AttachmentsService (#57, синхронное превью #221)', () 
           kind: 'image',
           width: 16383,
           height: 16383,
+          durationMs: null,
           thumbFileId: null,
         })),
       },
@@ -169,6 +171,49 @@ describe('AttachmentsService (#57, синхронное превью #221)', () 
     expect(dto.kind).toBe('file');
     expect(thumbnailQueue.enqueue).not.toHaveBeenCalled();
     expect(thumbnails.generateFor).not.toHaveBeenCalled();
+  });
+
+  it('видео: kind=video, постер всегда в очереди, клиентские метаданные — резерв (#250)', async () => {
+    const { service, thumbnails, thumbnailQueue } = makeService();
+    const dto = await service.upload(
+      OWNER,
+      {
+        name: 'clip.mp4',
+        mime: 'video/mp4',
+        size: 10,
+        width: 1920,
+        height: 1080,
+        durationMs: 1000,
+      },
+      content(),
+    );
+    expect(dto.kind).toBe('video');
+    // До ffprobe/постера DTO несёт клиентскую подсказку; авторитетные
+    // значения привезёт chat.attachment_preview_ready (см. thumbnail.service).
+    expect(dto.durationMs).toBe(1000);
+    expect(dto.width).toBe(1920);
+    expect(dto.height).toBe(1080);
+    expect(dto.thumbnailUrl).toBeNull();
+    // ffmpeg/ffprobe — тяжёлые внешние процессы: НИКОГДА в HTTP-пути и не
+    // на загрузке (до отправки постер не нужен) — job ставит прогрев ленты.
+    expect(thumbnails.generateFor).not.toHaveBeenCalled();
+    expect(thumbnailQueue.enqueue).not.toHaveBeenCalled();
+  });
+
+  it('имя вложения санитизируется до хранения и DTO (security #250)', async () => {
+    const { service, repo } = makeService();
+    const dto = await service.upload(
+      OWNER,
+      {
+        name: `${'очень длинное имя '.repeat(40)}.mp4`,
+        mime: 'video/mp4',
+        size: 10,
+      },
+      content(),
+    );
+    expect(dto.name.length).toBeLessThanOrEqual(200);
+    expect(dto.name.endsWith('.mp4')).toBe(true);
+    expect(vi.mocked(repo.insertAttachment).mock.calls[0]?.[0].name).toBe(dto.name);
   });
 
   it(`файл > ${MAX_ATTACHMENT_BYTES} байт — CHAT_ATTACHMENT_TOO_LARGE (413) до записи`, async () => {
@@ -248,6 +293,7 @@ describe('AttachmentsService (#57, синхронное превью #221)', () 
           kind: 'file',
           width: null,
           height: null,
+          durationMs: null,
           thumbFileId: null,
         })),
       },

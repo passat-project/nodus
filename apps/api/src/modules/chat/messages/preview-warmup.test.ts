@@ -34,6 +34,7 @@ const msg = (attId: string, thumbnailUrl: string | null): ChatMessage =>
         pdfUrl: null,
         width: 100,
         height: 50,
+        durationMs: null,
       },
     ],
     editedAt: null,

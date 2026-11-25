@@ -149,7 +149,7 @@ export class MessagesRepository {
     const client = this.client(tx);
     return client.$queryRaw<MessageAttachmentRow[]>(Prisma.sql`
       SELECT message_id AS "messageId", id, file_id AS "fileId", name, size, mime, kind,
-             width, height, thumb_file_id AS "thumbFileId", sticker_meta AS "stickerMeta",
+             width, height, duration_ms AS "durationMs", thumb_file_id AS "thumbFileId", sticker_meta AS "stickerMeta",
              sort_order AS "sortOrder"
       FROM message_attachments
       WHERE message_id = ANY(${messageIds}::uuid[])

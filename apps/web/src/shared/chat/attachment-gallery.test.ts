@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { MessageAttachment } from '@nodus/contracts';
 
-import { fitSingleBox, galleryRows, MEDIA_MAX_H, MEDIA_MAX_W } from './attachment-gallery.js';
+import {
+  fitSingleBox,
+  formatVideoDuration,
+  galleryRows,
+  MEDIA_MAX_H,
+  MEDIA_MAX_W,
+} from './attachment-gallery.js';
 import { uiPx } from '../ui/ui-scale.js';
 
 const img = (n: number): MessageAttachment => ({
@@ -87,5 +93,14 @@ describe('fitSingleBox — детерминированный бокс плит�
     const box = fitSingleBox(3841, 2160);
     expect(Number.isInteger(box.width)).toBe(true);
     expect(Number.isInteger(box.height)).toBe(true);
+  });
+});
+
+describe('formatVideoDuration — бейдж длительности (#250)', () => {
+  it('минуты и секунды, часы', () => {
+    expect(formatVideoDuration(0)).toBe('0:00');
+    expect(formatVideoDuration(65_000)).toBe('1:05');
+    expect(formatVideoDuration(9_920)).toBe('0:10');
+    expect(formatVideoDuration(3_725_000)).toBe('1:02:05');
   });
 });

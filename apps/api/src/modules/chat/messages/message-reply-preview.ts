@@ -19,7 +19,7 @@ export interface ReplySnapshotValue {
   authorId: string | null;
   text: string;
   quoteText: string | null;
-  attachmentKind: 'image' | 'file' | 'sticker' | null;
+  attachmentKind: 'image' | 'video' | 'file' | 'sticker' | null;
   /** #288: мини-глиф оригинального стикера в цитате — fileId (url строится
    *  подписью при чтении) + первый эмодзи пака. Старые снапшоты — без полей. */
   stickerFileId?: string | null;

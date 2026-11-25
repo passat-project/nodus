@@ -42,7 +42,7 @@ export function ResultFilesSection({
   const allIds = draftMessageIds(draft);
   const { data } = useMessagesLookup(conversationId, allIds, conversationId !== null);
   const attachments = (data?.items ?? []).flatMap((m) =>
-    m.attachments.filter((a) => a.kind === 'image' || a.kind === 'file'),
+    m.attachments.filter((a) => a.kind === 'image' || a.kind === 'video' || a.kind === 'file'),
   );
   const editable = !disabled && conversationId !== null;
 

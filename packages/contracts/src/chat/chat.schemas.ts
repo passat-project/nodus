@@ -5,9 +5,8 @@ import { userRefSchema } from '../directory/user-ref.schema.js';
 import { projectRefSchema } from '../projects/project.schemas.js';
 import { taskRefSchema } from '../tasks/task.schemas.js';
 import { cursorQuerySchema } from '../pagination/paginated.schema.js';
-import { stickerMetaSchema } from './sticker.schemas.js';
 import { chatMessageBlockSchema, chatMessageKindSchema } from './chat-block.schemas.js';
-import { attachmentRenameSchema } from './chat-attachment.schemas.js';
+import { attachmentRenameSchema, messageAttachmentSchema } from './chat-attachment.schemas.js';
 
 /** Контракты модуля чата (chat.Conversation/Message). */
 
@@ -19,36 +18,6 @@ export const conversationTypeSchema = z.enum([
   'letter',
 ]);
 export type ConversationType = z.infer<typeof conversationTypeSchema>;
-
-export const messageAttachmentSchema = z.object({
-  id: z.uuid(),
-  /** Файл модуля files (сессия просмотра/версии, #138); plain UUID (I3). */
-  fileId: z.uuid(),
-  name: z.string().min(1),
-  size: z.number().int().min(0),
-  mime: z.string().min(1),
-  /** Явный вид (НЕ выводить из mime: mime — для иконки и валидации):
-   *  image — галерея, file — чип, sticker — стикер-глиф без пузыря (#143). */
-  kind: z.enum(['image', 'file', 'sticker']),
-  /** Метаданные стикера (только kind='sticker'): пак для поповера «Добавить
-   *  пак» и рендер без доп-запроса; снапшот на момент отправки (#143). */
-  sticker: stickerMetaSchema.nullish(),
-  /** Адрес оригинала (в проде — MinIO через StorageDriver, I13). */
-  url: z.string().nullable(),
-  /** Превью для галереи (null у файлов). */
-  thumbnailUrl: z.string().nullable(),
-  /** Маршрут просмотрщика (#139): office | pdf | image | video | file —
-   * серверная классификация (mime/расширению клиента не доверяем). */
-  previewKind: z.enum(['office', 'pdf', 'image', 'video', 'file']),
-  /** PDF-копия офисного документа (конвейер производных #139): fallback-
-   * просмотр при выключенном/лежащем ONLYOFFICE; null — не готова/не офис. */
-  pdfUrl: z.string().nullable(),
-  /** Габариты изображения: резерв бокса до загрузки (лента без сдвига). */
-  width: z.number().int().min(0).nullable(),
-  height: z.number().int().min(0).nullable(),
-});
-
-export type MessageAttachment = z.infer<typeof messageAttachmentSchema>;
 
 export const messageReactionSchema = z.object({
   emoji: z.string().min(1),
@@ -86,7 +55,7 @@ export const replyPreviewSchema = z.object({
    *  фрагмент вместо начала текста; null — цитата всего сообщения. */
   quoteText: z.string().nullable(),
   /** Вид вложения оригинала — подписи «Фото»/«Файл»/«Стикер» в цитате без текста. */
-  attachmentKind: z.enum(['image', 'file', 'sticker']).nullable(),
+  attachmentKind: z.enum(['image', 'video', 'file', 'sticker']).nullable(),
   /** #288: мини-глиф оригинального СТИКЕРА в цитате (референс Telegram) —
    *  подписанный url содержимого файла + первый эмодзи пака. Опционально:
    *  толерантность к старым снапшотам и записям events-лога. */

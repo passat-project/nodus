@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ui } from '@nodus/contracts';
 import { TooltipProvider } from '@nodus/ui/components/tooltip';
 
 import { AttachmentViewer } from './attachment-viewer.js';
@@ -41,7 +42,7 @@ function renderViewer() {
 
 afterEach(() => {
   cleanup();
-  useViewerStore.setState({ target: null });
+  useViewerStore.setState({ target: null, returnFocus: null });
 });
 
 /** #787: видео — кинозал, остальные файлы — прежняя карточка. */
@@ -68,6 +69,33 @@ describe('AttachmentViewer — выбор оболочки по типу фай�
     expect(dialog.className).not.toContain('bg-black');
     expect(dialog.querySelector('header.h-14')).not.toBeNull();
     expect(dialog.querySelector('img')).not.toBeNull();
+  });
+
+  it('после закрытия возвращает фокус триггеру (#1005)', () => {
+    function Host() {
+      const open = useViewerStore((s) => s.open);
+      return (
+        <button type="button" onClick={() => open(target({ name: 'ролик.mp4' }))}>
+          открыть
+        </button>
+      );
+    }
+    render(
+      <QueryClientProvider client={client}>
+        <TooltipProvider>
+          <Host />
+          <AttachmentViewer />
+        </TooltipProvider>
+      </QueryClientProvider>,
+    );
+
+    const trigger = screen.getByRole('button', { name: 'открыть' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    expect(document.querySelector('video')).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: ui.files.close }));
+    expect(document.activeElement).toBe(trigger);
   });
 });
 

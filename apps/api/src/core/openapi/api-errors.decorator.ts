@@ -9,7 +9,7 @@ import { apiErrorResponseSchema } from '@nodus/contracts';
  */
 
 type ErrorStatus =
-  400 | 401 | 403 | 404 | 409 | 410 | 413 | 415 | 422 | 429 | 500 | 502 | 503 | 504;
+  400 | 401 | 403 | 404 | 409 | 410 | 413 | 415 | 416 | 422 | 429 | 500 | 502 | 503 | 504;
 
 const ERROR_DESCRIPTIONS: Record<ErrorStatus, string> = {
   400: 'Ошибка валидации (VALIDATION_FAILED) или доменного правила',
@@ -20,6 +20,7 @@ const ERROR_DESCRIPTIONS: Record<ErrorStatus, string> = {
   410: 'Ресурс больше недоступен (файл в карантине, FILE_QUARANTINED)',
   413: 'Файл больше лимита вложений (CHAT_ATTACHMENT_TOO_LARGE)',
   415: 'Неподдерживаемый формат (FILE_TEXT_UNSUPPORTED, #922)',
+  416: 'Запрошенный диапазон файла недоступен (FILE_RANGE_NOT_SATISFIABLE, #1005)',
   422: 'Документ семантически неверен или требуется выбор (WORKFLOW_*, #378)',
   429: 'Превышен лимит запросов (RATE_LIMITED)',
   500: 'Непредвиденная ошибка сервера (INTERNAL_ERROR)',

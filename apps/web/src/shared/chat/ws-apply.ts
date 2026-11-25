@@ -340,7 +340,7 @@ export function applyAttachmentPreviewEvent(
   queryClient: QueryClient,
   payload: Pick<
     ChatAttachmentPreviewReadyPayload,
-    'conversationId' | 'attachmentId' | 'thumbnailUrl'
+    'conversationId' | 'attachmentId' | 'thumbnailUrl' | 'width' | 'height' | 'durationMs'
   >,
 ): void {
   queryClient.setQueriesData<Paginated<ChatMessage>>(
@@ -353,7 +353,15 @@ export function applyAttachmentPreviewEvent(
         const attachments = m.attachments.map((a) => {
           if (a.id !== payload.attachmentId) return a;
           touched = true;
-          return { ...a, thumbnailUrl: payload.thumbnailUrl };
+          // Видео (#250): вместе с постером приезжают авторитетные
+          // габариты/длительность — бейдж и бокс правятся без рефетча.
+          return {
+            ...a,
+            thumbnailUrl: payload.thumbnailUrl,
+            ...(payload.width !== undefined ? { width: payload.width } : {}),
+            ...(payload.height !== undefined ? { height: payload.height } : {}),
+            ...(payload.durationMs !== undefined ? { durationMs: payload.durationMs } : {}),
+          };
         });
         if (!touched) return m;
         hit = true;

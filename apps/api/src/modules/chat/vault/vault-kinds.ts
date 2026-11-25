@@ -27,9 +27,10 @@ export function emptyAttachmentDelta(): VaultAttachmentDelta {
 
 /**
  * Витринная категория вложения (ревизия 05.10 — модель Telegram):
- * kind='image' → image, файлы — по mime (video/*, audio/*), остальное —
- * document. Это классификация ВИТРИНЫ: storage-kind в БД не меняется
- * (image|file|sticker); стикеры — не пользовательские файлы, null.
+ * kind='image' → image, видео — по mime video/* (storage-kind video|file),
+ * аудио — по mime audio/*, остальное — document. Это классификация ВИТРИНЫ:
+ * storage-kind в БД — image|video|file|sticker; стикеры — не пользовательские
+ * файлы, null.
  */
 export type VaultKind = 'image' | 'video' | 'audio' | 'document';
 export function vaultKindOf(mime: string, kind: string): VaultKind | null {

@@ -76,10 +76,14 @@ export function AttachmentViewer({ stripW = 0 }: { stripW?: number }) {
   useEffect(() => {
     if (!target) return;
     document.addEventListener('keydown', closeOnEsc);
-    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     return () => {
       document.removeEventListener('keydown', closeOnEsc);
-      previous?.focus?.();
+      // Фокус возвращается только при ЗАКРЫТИИ (не при смене файла внутри
+      // вьюера): снимок триггера сделан в viewer-store.open() (#1005) — в
+      // момент закрытия activeElement уже внутри портала (плеер/кнопка).
+      if (useViewerStore.getState().target === null) {
+        useViewerStore.getState().returnFocus?.focus?.();
+      }
     };
   }, [target, closeOnEsc]);
 

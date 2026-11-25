@@ -2,11 +2,8 @@ import { z } from 'zod';
 
 import { userRefSchema } from '../directory/user-ref.schema.js';
 import { cursorQuerySchema } from '../pagination/paginated.schema.js';
-import {
-  conversationTypeSchema,
-  messageAttachmentSchema,
-  linkPreviewSchema,
-} from './chat.schemas.js';
+import { conversationTypeSchema, linkPreviewSchema } from './chat.schemas.js';
+import { messageAttachmentSchema } from './chat-attachment.schemas.js';
 
 /** Витрина беседы (#211): серверные списки вложений и ссылок панели «О чате»
  *  + источники «Избранного». Списки читают БД (не загруженное окно ленты):
