@@ -7,6 +7,7 @@ import { conversationTitle } from '../../../shared/chat/conversations.js';
 import { useConversations } from '../api/chat-api.js';
 import { MessengerBody, type ChatTab } from '../components/messenger-body.js';
 import { setPortalTabTitle } from '../../../shared/lib/tab-bridge.js';
+import { ui } from '@nodus/contracts';
 
 /**
  * Мессенджер — маршрутная обёртка над ЕДИНЫМ телом `MessengerBody` (то же
@@ -35,7 +36,9 @@ export function ChatPage() {
   const conversation = conversationId
     ? conversations?.items.find((c) => c.id === conversationId)
     : undefined;
-  const tabTitle = conversation ? `Чат·${conversationTitle(conversation, meId)}` : undefined;
+  const tabTitle = conversation
+    ? ui.desktop.chatTabTitle.replace('{name}', conversationTitle(conversation, meId))
+    : undefined;
   useEffect(() => {
     if (!isDesktopShell()) return;
     setPortalTabTitle(tabTitle);

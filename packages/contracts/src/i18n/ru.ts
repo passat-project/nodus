@@ -340,6 +340,7 @@ export const ui = {
     tabUnpin: 'Открепить вкладку',
     tabOpenInNew: 'Открыть в новой вкладке',
     tabMore: 'Ещё вкладки',
+    chatTabTitle: 'Чат·{name}',
   },
 } as const;
 
