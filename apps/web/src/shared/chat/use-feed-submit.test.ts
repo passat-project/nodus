@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatMessage } from '@nodus/contracts';
 
-import { findLastMine } from './use-feed-submit.js';
+import { replyDraftFrom } from './reply-snapshot.js';
+import { feedSendVars, findLastMine } from './use-feed-submit.js';
 
 /** ↑-правка последнего своего: живое, не пересланное, подтверждённое. */
 
@@ -11,8 +12,10 @@ const msg = (id: string, over: Partial<ChatMessage> = {}): ChatMessage =>
     id,
     seq: 1,
     author: { id: ME, displayName: 'Я', avatarUrl: null },
+    text: 'текст',
     deletedAt: null,
     forwardedFrom: null,
+    attachments: [],
     ...over,
   }) as ChatMessage;
 
@@ -38,5 +41,34 @@ describe('findLastMine', () => {
 
   it('без пользователя — ничего', () => {
     expect(findLastMine([msg('a')], undefined)).toBeUndefined();
+  });
+});
+
+describe('feedSendVars: лента канала не отвечает цитатами (#1027)', () => {
+  const submit = (reply = true) => ({
+    text: 'текст',
+    attachments: [],
+    reply: reply ? replyDraftFrom(msg('orig'), 'кусок') : null,
+    edit: null,
+  });
+
+  it('feed:* — reply снимается, threadRootId не появляется', () => {
+    const vars = feedSendVars(submit(), null, 'feed:conv-1');
+    expect(vars.replyToId).toBeNull();
+    expect(vars.quoteText).toBeNull();
+    expect(vars.reply).toBeNull();
+    expect(vars.threadRootId).toBeUndefined();
+  });
+
+  it('обычная беседа — reply остаётся', () => {
+    const vars = feedSendVars(submit(), null, 'conversation:conv-1');
+    expect(vars.replyToId).toBe('orig');
+    expect(vars.quoteText).toBe('кусок');
+  });
+
+  it('тред — reply остаётся и уходит с threadRootId', () => {
+    const vars = feedSendVars(submit(), 'root-1', 'thread:root-1');
+    expect(vars.replyToId).toBe('orig');
+    expect(vars.threadRootId).toBe('root-1');
   });
 });

@@ -11,6 +11,8 @@ import { useOfficeSession } from './api.js';
 import { FileViewerBody, useViewerRoute } from './file-viewer-body.jsx';
 import { useViewerStore } from './viewer-store.js';
 import { VideoPlayerView } from './video-player-view.js';
+import { shellPanelHeight } from '../desktop/desktop-bridge.js';
+import { uiPx } from '../ui/ui-scale.js';
 
 /**
  * Модалка-обёртка просмотрщика вложений (#138): шапка (имя, версия,
@@ -21,10 +23,12 @@ import { VideoPlayerView } from './video-player-view.js';
  * фокус возвращается источнику. Спека: «как в Битриксе» — просмотр
  * встроенным редактором, правка отдельным режимом.
  *
- * Геометрия окна = канон карточек сущностей (ADR-0009): рама inset-2,
- * правый край у левого края служебной полосы (app-shell передаёт ширину
- * полосы вместе с её правым отступом — общие константы слою shared
- * недоступны), скругление карточки, transition-[right] синхронно с полосой.
+ * Геометрия окна = канон карточек сущностей (ADR-0009): рама с зазорами
+ * периметра 8css, верх — под строкой панели оболочки (в браузере — от края
+ * окна; shellPanelHeight), правый край у левого края служебной полосы
+ * (app-shell передаёт ширину полосы вместе с её правым отступом — общие
+ * константы слою shared недоступны), скругление карточки, transition-[right]
+ * синхронно с полосой.
  *
  * Видео исключение (#787, решение владельца 11.11.2026): открывается в
  * «кинозале» `VideoPlayerView` — тёмный экран с плеером и тонкой строкой
@@ -99,17 +103,25 @@ export function AttachmentViewer({ stripW = 0 }: { stripW?: number }) {
   const canSwitchToEdit = route.kind === 'office' && mode === 'view' && session?.canEdit === true;
   const downloadUrl = target.url;
 
+  // Верхняя кромка окна = канон карточек: в оболочке — под строкой панели
+  // (клики по панели доезжают: обёртка pointer-events-none, ловят только
+  // фон от кромки и само окно), в браузере — от края окна.
+  const frameTop = uiPx(8) + shellPanelHeight();
   return createPortal(
     <div
-      className="fixed inset-0 z-[80]"
+      className="pointer-events-none fixed inset-0 z-[80]"
       role="dialog"
       aria-modal="true"
       aria-label={ui.files.viewerTitle}
     >
-      <div className="absolute inset-0 bg-background/80" onClick={closeWithInvalidate} />
       <div
-        className="absolute inset-y-2 left-2 flex flex-col overflow-hidden rounded-2xl border bg-card shadow-xl transition-[right] duration-200"
-        style={{ right: stripW }}
+        className="pointer-events-auto absolute inset-x-0 bottom-0 bg-background/80"
+        style={{ top: frameTop }}
+        onClick={closeWithInvalidate}
+      />
+      <div
+        className="pointer-events-auto absolute bottom-2 left-2 flex flex-col overflow-hidden rounded-2xl border bg-card shadow-xl transition-[right] duration-200"
+        style={{ top: frameTop, right: stripW }}
       >
         <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
           <div className="min-w-0 flex-1">

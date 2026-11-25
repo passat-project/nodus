@@ -3,6 +3,8 @@ mod anchor;
 mod badge;
 mod bridge;
 mod deep_link;
+mod download_registry;
+mod download_slot;
 mod downloads;
 mod fade;
 mod fade_policy;
@@ -33,12 +35,18 @@ use state::ShellState;
 /// гасит каретку при наборе (#309; WebView2Feedback #5687/#5708).
 pub(crate) const WEBVIEW2_BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,HideCursorWhileTyping --autoplay-policy=no-user-gesture-required";
 
+/// DOM-id кнопки максимизации панели оболочки (ADR-0055): по нему snap-плагин
+/// навешивает HTMAXBUTTON-оверлей. Одно имя для mini-UI и портала — контрактом
+/// владеет web-сторона (панель рисует она), Rust только ссылается.
+pub(crate) const SNAP_MAXIMIZE_BUTTON_ID: &str = "portal-window-maximize";
+
 /// Что оболочка помнит между запусками (#722, ADR-0039): размер и позицию
 /// обычного окна, maximized и fullscreen. Видимость НЕ восстанавливаем —
 /// окно всегда показывается при старте (скрытость в трей не должна
-/// переживать выход), декорации не трогаем. Дефолт первого запуска задаёт
-/// билдер окна (1280×800 по центру, меню развёрнуто): без сохранённого
-/// состояния плагин ничего не двигает.
+/// пережить выход); декораций в состоянии нет — окно безрамочное
+/// безусловно (ADR-0055). Дефолт первого запуска задаёт билдер окна
+/// (1280×800 по центру, меню развёрнуто): без сохранённого состояния
+/// плагин ничего не двигает.
 const WINDOW_STATE_FLAGS: tauri_plugin_window_state::StateFlags =
     tauri_plugin_window_state::StateFlags::SIZE
         .union(tauri_plugin_window_state::StateFlags::POSITION)
@@ -97,11 +105,29 @@ pub fn run() {
                 .with_filter(|label| label == "main")
                 .build(),
         )
+        // Буфер обмена (ADR-0055): rust-side write_text для команды моста
+        // copy_text; JS-биндинги плагина не разрешены никакой capability —
+        // веб-контент буфер не читает и не пишет в обход моста.
+        .plugin(tauri_plugin_clipboard_manager::init())
+        // Win11 Snap Layouts (ADR-0055): оверлей HTMAXBUTTON над кнопкой
+        // максимизации панели. Кнопку рисует страница (mini-UI сейчас,
+        // портал в следующих фазах) — id фиксирован контрактом панели;
+        // правит `update_snap_bounds`/`detach_snap_bounds` скрипт инъекции
+        // плагина (права — shell-ui локально, detach — runtime-capability
+        // портала: навигация с экрана подключения гасит осиротевший оверлей).
+        .plugin(
+            tauri_plugin_snap_layout::init()
+                .button_id(SNAP_MAXIMIZE_BUTTON_ID)
+                .build(),
+        )
         .manage(ShellState::default())
         .manage(Mutex::new(popups::PopupStack::default()))
         .setup(|app| {
             let handle = app.handle().clone();
             create_main_window(&handle)?;
+            // Реестр загрузок (#1038, раздел 5): помнит последние 100 между
+            // запусками; битый файл = пустой реестр (лог, не паника).
+            download_registry::load_registry(&handle);
             tray_menu::setup(&handle)?;
             deep_link::setup(&handle)?;
             // Активность пользователя (клик/клавиша, без движения мыши) —
@@ -122,6 +148,15 @@ pub fn run() {
                     "shell-visibility",
                     &serde_json::json!({ "visible": false }),
                 );
+                // Слот скачивания (#1038) живёт только при активном окне —
+                // скрытие в трей гасит и его (карточка ждёт возврата).
+                download_slot::sync_visibility(window.app_handle(), "скрытие в трей");
+            }
+            // Слот скачивания (#1038): ДЛЯ его метки — раньше общей ветки
+            // попапов (метка тоже начинается с `popup-`), серия умирает вместе
+            // с окном, очередь личного стека не трогаем.
+            WindowEvent::Destroyed if window.label() == download_slot::SLOT_LABEL => {
+                download_slot::on_destroyed(window.app_handle());
             }
             WindowEvent::Destroyed if window.label().starts_with("popup-") => {
                 popups::on_popup_destroyed(window.app_handle(), window.label());
@@ -129,17 +164,28 @@ pub fn run() {
             // Фокус/свёрнутость главного окна (#770, ADR-0038): WebView2 может
             // считать вкладку видимой и сохранять hasFocus при minimize —
             // портал получает правду от оболочки. Свёрнутое окно = не фокус.
+            // Слот скачивания (#1038) пересчитывает видимость по тем же
+            // переходам (истина — Win32-запрос внутри sync_visibility).
             WindowEvent::Focused(focused) if window.label() == "main" => {
                 emit_shell_focus(
                     window.app_handle(),
                     *focused && !window.is_minimized().unwrap_or(false),
                 );
+                download_slot::sync_visibility(window.app_handle(), "фокус главного окна");
             }
             WindowEvent::Resized(_) if window.label() == "main" => {
                 emit_shell_focus(
                     window.app_handle(),
                     window.is_focused().unwrap_or(false) && !window.is_minimized().unwrap_or(false),
                 );
+                download_slot::reposition(window.app_handle());
+                download_slot::sync_visibility(window.app_handle(), "ресайз главного окна");
+            }
+            // Слот скачивания следует за окном (#1038): правый край карточки
+            // выровнен с группой кнопок панели — при перемещении пересчитываем
+            // якорь (дедуп по геометрии внутри).
+            WindowEvent::Moved(_) if window.label() == "main" => {
+                download_slot::reposition(window.app_handle());
             }
             _ => {}
         })
@@ -162,6 +208,12 @@ pub fn run() {
             bridge::set_ui_theme,
             bridge::get_shell_info,
             bridge::shell_ready,
+            bridge::window_minimize,
+            bridge::window_toggle_maximize,
+            bridge::window_close,
+            bridge::window_start_dragging,
+            bridge::window_is_maximized,
+            bridge::copy_text,
             popups::popup_get_data,
             popups::popup_ready,
             popups::popup_close,
@@ -172,6 +224,8 @@ pub fn run() {
             popups::popup_submit_reply,
             popups::popup_open,
             downloads::popup_reveal_download,
+            download_registry::downloads_list,
+            download_registry::download_reveal,
         ])
         .run(tauri::generate_context!())
         .expect("оболочка Nodus упала");
@@ -188,7 +242,12 @@ fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
         tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
             .title(display_name(app))
             .inner_size(1280.0, 800.0)
-            .min_inner_size(1024.0, 660.0)
+            // Snap Layouts: окно обязано влезать в четверть зоны снапа на
+            // 1920-экранах (~960×540) — больше панели окна нет (безрамочность).
+            .min_inner_size(640.0, 520.0)
+            // Безрамочное окно (ADR-0055): строку панели рисует страница
+            // (mini-UI/портал), кнопки окна — через мост.
+            .decorations(false)
             .center()
             .visible(false)
             // HTML5 drag&drop файлов (#716): tauri по умолчанию подменяет
@@ -296,6 +355,9 @@ pub fn show_main(app: &AppHandle) {
         "shell-visibility",
         &serde_json::json!({ "visible": true }),
     );
+    // Ждавший слот скачивания (#1038) показывается вместе с окном; решение
+    // принимает живой Win32-запрос foreground — не покажется поверх чужого.
+    download_slot::sync_visibility(app, "показ главного окна");
 }
 
 /// Отправить модели внимания портала фокус главного окна (#770, ADR-0038):
