@@ -8,6 +8,7 @@ import { TooltipProvider } from '@nodus/ui/components/tooltip';
 
 import { useAssistantHotkey } from '../../features/assistant/components/assistant-entry.js';
 import { AssistantPanel } from '../../features/assistant/components/assistant-panel.js';
+import { useTabsController } from '../../features/portal-tabs/model/use-tabs-controller.js';
 import { SearchCommand } from '../../features/search/components/search-command.js';
 import { useSearchStore } from '../../features/search/model/search-store.js';
 import { registerCardBridge, registerReplaceTopMessenger } from '../../shared/lib/card-bridge.js';
@@ -127,6 +128,10 @@ export function AppShell() {
   // Панель безрамочного окна (ADR-0055, #1038): браузерный верх оболочки —
   // первая строка окна над всей мягкой рамой; в браузере каркас без неё.
   const inShell = isDesktopShell();
+  // Вкладки браузерного типа (#1038 фаза C): единственная точка монтажа
+  // контроллера (seeding/restore, применение намерений, запись навигаций).
+  // Внутри гард isDesktopShell(): в браузере подписок нет, стор не активен.
+  useTabsController();
 
   // Мост shared→стек карточек (порт-адаптер, card-bridge.ts): shared-слой
   // открывает карточки, не импортируя каркас (направление слоёв, аудит #45).

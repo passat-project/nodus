@@ -1,8 +1,14 @@
-import { Bot, Moon, Search, Sun } from 'lucide-react';
+import { Bot, Moon, Plus, Search, Sun } from 'lucide-react';
 import { useLayoutEffect } from 'react';
 import { Link, useRouterState } from '@tanstack/react-router';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from '@nodus/ui/components/context-menu';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useAssistantEnabled } from '../../features/assistant/model/use-assistant-enabled.js';
@@ -13,12 +19,18 @@ import { RunningTimerChip } from '../../features/tasks/components/running-timer-
 import { WhatsNewButton } from '../../features/whats-new/components/whats-new-button.js';
 import { useAuthStore } from '../../shared/auth-store.js';
 import { isDesktopShell } from '../../shared/desktop/desktop-bridge.js';
+import { openInNewTab } from '../../shared/lib/tab-bridge.js';
 import { useSearchStore } from '../../features/search/model/search-store.js';
 import { useChatUnreadSummary } from '../../shared/chat/chat-queries.js';
 import { TabUnreadBadge } from '../../shared/chat/tab-unread-badge.js';
 import { CIRCUIT_REMEASURE } from './circuit-geometry.js';
 import { DownloadAppButton } from './download-app-button.js';
-import { navModuleForPath, visibleNavTabs } from './nav-registry.js';
+import {
+  navModuleForPath,
+  visibleNavTabs,
+  type NavModuleDef,
+  type NavTabDef,
+} from './nav-registry.js';
 import { ProfileMenu } from './profile-menu.js';
 import { useShellStore } from './shell-store.js';
 
@@ -34,9 +46,18 @@ import { useShellStore } from './shell-store.js';
  */
 const NO_PERMISSIONS: readonly string[] = [];
 
+/** Адрес моно-вкладки для новой вкладки (pathname+search, как Link строит). */
+function tabUrl(module: NavModuleDef, tab: NavTabDef): string {
+  const params = new URLSearchParams(tab.search).toString();
+  return params ? `${module.to}?${params}` : module.to;
+}
+
 export function TopBar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const searchStr = useRouterState({ select: (s) => s.location.searchStr });
+  // Оболочка (#1038): моно-вкладки получают «Открыть в новой вкладке»
+  // (средний клик + ПКМ) — браузер живёт штатными вкладками браузера.
+  const inShell = isDesktopShell();
 
   const theme = useShellStore((s) => s.theme);
   const toggleTheme = useShellStore((s) => s.toggleTheme);
@@ -82,26 +103,55 @@ export function TopBar() {
         {!module || tabs.length === 0 ? (
           <HomeGreeting />
         ) : (
-          tabs.map((tab) => (
-            <Link
-              key={tab.id}
-              to={module.to}
-              search={tab.search}
-              data-tab-port
-              data-active={tab.isActive(search, permissions) ? 'true' : undefined}
-              className={cn(
-                'relative flex h-full items-center px-4 text-sm font-medium transition-colors',
-                tab.isActive(search, permissions)
-                  ? 'text-foreground'
-                  : 'text-muted-foreground hover:text-foreground/80',
-              )}
-            >
-              <span data-tab-label className="whitespace-nowrap">
-                {tab.label}
-              </span>
-              <TabUnreadBadge count={tabCount(module?.id, tab.id)} />
-            </Link>
-          ))
+          tabs.map((tab) => {
+            const link = (
+              <Link
+                to={module.to}
+                search={tab.search}
+                data-tab-port
+                data-active={tab.isActive(search, permissions) ? 'true' : undefined}
+                className={cn(
+                  'relative flex h-full items-center px-4 text-sm font-medium transition-colors',
+                  tab.isActive(search, permissions)
+                    ? 'text-foreground'
+                    : 'text-muted-foreground hover:text-foreground/80',
+                )}
+                // Средний клик — «Открыть в новой вкладке» (только в оболочке:
+                // в браузере штатный middle-click ссылки; preventDefault
+                // гасит автоскролл и перехват target=_blank оболочки).
+                onMouseDown={(event) => {
+                  if (inShell && event.button === 1) event.preventDefault();
+                }}
+                onAuxClick={(event) => {
+                  if (!inShell || event.button !== 1) return;
+                  event.preventDefault();
+                  openInNewTab(tabUrl(module, tab), { focus: false });
+                }}
+              >
+                <span data-tab-label className="whitespace-nowrap">
+                  {tab.label}
+                </span>
+                <TabUnreadBadge count={tabCount(module?.id, tab.id)} />
+              </Link>
+            );
+            // ПКМ по моно-вкладке — пункт «Открыть в новой вкладке»; в
+            // браузере родное меню ссылки (обёртки нет).
+            return inShell ? (
+              <ContextMenu key={tab.id}>
+                <ContextMenuTrigger asChild>{link}</ContextMenuTrigger>
+                <ContextMenuContent className="w-56">
+                  <ContextMenuItem
+                    onClick={() => openInNewTab(tabUrl(module, tab), { focus: false })}
+                  >
+                    <Plus className="size-4" strokeWidth={1.75} />
+                    {ui.desktop.tabOpenInNew}
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
+            ) : (
+              link
+            );
+          })
         )}
       </nav>
 
@@ -124,7 +174,7 @@ export function TopBar() {
         {/* Приложение для Windows (#263): браузеру — загрузка установщика,
             без раздачи /desktop/ кнопки нет; в оболочке кнопка переезжает
             в панель окна (#1038, знак Nodus) — здесь не рендерится */}
-        {!isDesktopShell() ? <DownloadAppButton /> : null}
+        {!inShell ? <DownloadAppButton /> : null}
 
         {/* ИИ-ассистент — ЕДИНСТВЕННЫЙ видимый вход в топбаре (решение
             владельца 24.11.2026, #1021): вместо неработающей плашки «RU»;

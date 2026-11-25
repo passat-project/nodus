@@ -30,6 +30,12 @@ import {
 } from '../../shared/desktop/desktop-bridge.js';
 import { useDesktopApp } from '../../shared/desktop/use-desktop-app.js';
 import { usePortalUpdateStore } from '../../features/portal-update/model/portal-update-store.js';
+import { TabsStrip } from '../../features/portal-tabs/components/tabs-strip.js';
+import {
+  canBack,
+  canForward,
+  usePortalTabsStore,
+} from '../../features/portal-tabs/model/tabs-store.js';
 import { AppUpdateWindow } from './app-update-window.js';
 import { LogoIcon } from './logo-icon.js';
 import { UpdateCallout } from './update-callout.js';
@@ -40,12 +46,12 @@ const COPY_FEEDBACK_MS = 1500;
 const PANEL_BUTTON_CLASS = 'relative text-muted-foreground hover:bg-accent hover:text-foreground';
 
 /**
- * Панель безрамочного окна оболочки (ADR-0055, #1038 фаза B2): первая строка
- * окна над мягкой рамой, рисуется страницей ТОЛЬКО внутри оболочки (монтаж и
- * гвард — app-shell). Слева направо: назад/вперёд (заглушки до истории
- * вкладок), ⟳ с зелёной точкой обновления портала, копирование адреса ·
- * зона вкладок (пока drag-зона, полосу вставит фаза C) · «Приложение» со
- * знаком Nodus, «Загрузки» (заглушка до реестра фазы E), кнопки окна.
+ * Панель безрамочного окна оболочки (ADR-0055, #1038): первая строка окна над
+ * мягкой рамой, рисуется страницей ТОЛЬКО внутри оболочки (монтаж и гвард —
+ * app-shell). Слева направо: назад/вперёд по ИСТОРИИ АКТИВНОЙ ВКЛАДКИ
+ * (стор вкладок фазы C), ⟳ с зелёной точкой обновления портала, копирование
+ * адреса · полоса вкладок + остаток ширины — drag-зона окна · «Приложение»
+ * со знаком Nodus, «Загрузки» (заглушка до реестра фазы E), кнопки окна.
  */
 export function ShellPanel() {
   const [appMenuOpen, setAppMenuOpen] = useState(false);
@@ -61,28 +67,27 @@ export function ShellPanel() {
     >
       <div className="flex h-full items-center">
         <div className="flex items-center pl-1">
-          <PanelIconButton title={ui.desktop.panelBack} disabled>
-            <ArrowLeft className="size-4" strokeWidth={1.75} />
-          </PanelIconButton>
-          <PanelIconButton title={ui.desktop.panelForward} disabled>
-            <ArrowRight className="size-4" strokeWidth={1.75} />
-          </PanelIconButton>
+          <BackForwardButtons />
           <ReloadButton />
           <CopyAddressButton />
         </div>
 
-        {/* Зона вкладок (фаза C вставит сюда полосу): до неё — drag-зона
-            окна; pointerdown кнопкой 0 тащит окно, двойной клик разворачивает.
-            На кнопках панели перехвата нет — обработчики живут только здесь. */}
+        {/* Зона вкладок: полоса (TabsStrip гасит pointerdown/dblclick —
+            клики по вкладкам окно не тащат), остаток ширины — drag-зона
+            окна; pointerdown кнопкой 0 тащит окно, двойной клик
+            разворачивает. На кнопках панели перехвата нет — обработчики
+            живут только здесь. */}
         <div
-          className="h-full min-w-0 flex-1"
+          className="flex h-full min-w-0 flex-1"
           data-shell-drag-zone
           onPointerDown={(event) => {
             if (event.button !== 0) return;
             desktopWindowStartDragging();
           }}
           onDoubleClick={() => desktopWindowToggleMaximize()}
-        />
+        >
+          <TabsStrip />
+        </div>
 
         <div className="flex items-center pr-1">
           <AppMenuButton onOpen={() => setAppMenuOpen(true)} />
@@ -102,6 +107,34 @@ export function ShellPanel() {
       {!calloutDismissed ? <UpdateCallout onClose={() => setCalloutDismissed(true)} /> : null}
       <AppUpdateWindow open={appMenuOpen} onOpenChange={setAppMenuOpen} />
     </div>
+  );
+}
+
+/**
+ * ◀▶ истории АКТИВНОЙ вкладки (#1038 фаза C): стор вкладок ведёт свою
+ * историю, контроллер применяет намерение навигацией роутера. Селекторы —
+ * выведенные boolean: перерисовка только на смене края (rerender-канон).
+ */
+function BackForwardButtons() {
+  const canGoBack = usePortalTabsStore((s) => canBack(s, s.activeId));
+  const canGoForward = usePortalTabsStore((s) => canForward(s, s.activeId));
+  return (
+    <>
+      <PanelIconButton
+        title={ui.desktop.panelBack}
+        disabled={!canGoBack}
+        onClick={() => usePortalTabsStore.getState().back()}
+      >
+        <ArrowLeft className="size-4" strokeWidth={1.75} />
+      </PanelIconButton>
+      <PanelIconButton
+        title={ui.desktop.panelForward}
+        disabled={!canGoForward}
+        onClick={() => usePortalTabsStore.getState().forward()}
+      >
+        <ArrowRight className="size-4" strokeWidth={1.75} />
+      </PanelIconButton>
+    </>
   );
 }
 

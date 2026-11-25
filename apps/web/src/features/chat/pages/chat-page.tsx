@@ -1,6 +1,12 @@
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router';
+import { useEffect } from 'react';
 
+import { isDesktopShell } from '../../../shared/desktop/desktop-bridge.js';
+import { useAuthStore } from '../../../shared/auth-store.js';
+import { conversationTitle } from '../../../shared/chat/conversations.js';
+import { useConversations } from '../api/chat-api.js';
 import { MessengerBody, type ChatTab } from '../components/messenger-body.js';
+import { setPortalTabTitle } from '../../../shared/lib/tab-bridge.js';
 
 /**
  * Мессенджер — маршрутная обёртка над ЕДИНЫМ телом `MessengerBody` (то же
@@ -16,6 +22,25 @@ export function ChatPage() {
   const tab: ChatTab =
     search.tab === 'tasks' ? 'tasks' : search.tab === 'settings' ? 'settings' : 'chats';
   const navigate = useNavigate();
+
+  // Заголовок вкладки портала (#1038 фаза C): «Чат·Имя» — сессионный
+  // кастом АКТИВНОЙ вкладки; deep-link беседа не в первой странице списка
+  // находится лукапом MessengerBody и дописывается в тот же кэш — заголовок
+  // догонит. Уход со страницы чата (cleanup) снимает заголовок: unmount
+  // случается только при уходе с маршрута беседы, а активной тогда остаётся
+  // вкладка этой беседы или вкладка БЕЗ заголовка (свой ставит лишь чат,
+  // а его вкладка осталась бы смонтированной — unmount не случился бы).
+  const { data: conversations } = useConversations();
+  const meId = useAuthStore((s) => s.user?.id);
+  const conversation = conversationId
+    ? conversations?.items.find((c) => c.id === conversationId)
+    : undefined;
+  const tabTitle = conversation ? `Чат·${conversationTitle(conversation, meId)}` : undefined;
+  useEffect(() => {
+    if (!isDesktopShell()) return;
+    setPortalTabTitle(tabTitle);
+    return () => setPortalTabTitle(undefined);
+  }, [tabTitle]);
 
   return (
     <MessengerBody

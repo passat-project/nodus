@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DESKTOP_BRIDGE_EVENTS,
+  downloadEntrySchema,
   openLetterEventSchema,
   popupDiagnosticSchema,
   popupPayloadSchema,
@@ -112,6 +113,41 @@ describe('shellFocusEventSchema (#770)', () => {
     expect(shellFocusEventSchema.safeParse({ focused: 'да' }).success).toBe(false);
     expect(shellFocusEventSchema.safeParse({}).success).toBe(false);
     expect(DESKTOP_BRIDGE_EVENTS.shellFocus).toBe('shell-focus');
+  });
+});
+
+describe('downloadEntrySchema (#1038)', () => {
+  const entry = {
+    id: '33333333-3333-4333-8333-333333333333',
+    fileName: 'Смета.xlsx',
+    path: 'C:\\Users\\u\\Downloads\\Смета.xlsx',
+    success: true,
+    finishedAtMs: 1_764_000_000_000,
+  };
+
+  it('валидная запись реестра проходит', () => {
+    expect(downloadEntrySchema.safeParse(entry).success).toBe(true);
+  });
+
+  it('пустой путь допустим — неуспех без пути от WebView2', () => {
+    expect(downloadEntrySchema.safeParse({ ...entry, path: '', success: false }).success).toBe(
+      true,
+    );
+  });
+
+  it('мусорный id/имя/время/успех — невалидны', () => {
+    expect(downloadEntrySchema.safeParse({ ...entry, id: 'not-a-uuid' }).success).toBe(false);
+    expect(downloadEntrySchema.safeParse({ ...entry, fileName: '' }).success).toBe(false);
+    expect(downloadEntrySchema.safeParse({ ...entry, fileName: 'x'.repeat(256) }).success).toBe(
+      false,
+    );
+    expect(downloadEntrySchema.safeParse({ ...entry, finishedAtMs: -1 }).success).toBe(false);
+    expect(downloadEntrySchema.safeParse({ ...entry, finishedAtMs: 1.5 }).success).toBe(false);
+    expect(downloadEntrySchema.safeParse({ ...entry, success: 'да' }).success).toBe(false);
+  });
+
+  it('событие завершения загрузки — в каталоге', () => {
+    expect(DESKTOP_BRIDGE_EVENTS.downloadFinished).toBe('download-finished');
   });
 });
 
