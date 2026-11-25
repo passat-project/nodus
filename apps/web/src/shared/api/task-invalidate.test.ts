@@ -4,7 +4,9 @@ import { QueryClient } from '@tanstack/react-query';
 import { projectsKeys } from './projects-list.js';
 import {
   invalidateAfterTaskMutation,
+  invalidateAllTasksNow,
   invalidateNow,
+  resetRecentInvalidations,
   wasInvalidatedRecently,
 } from './task-invalidate.js';
 import { tasksKeys } from './tasks-keys.js';
@@ -13,7 +15,31 @@ type Invalidate = QueryClient['invalidateQueries'];
 type Filters = NonNullable<Parameters<Invalidate>[0]>;
 
 afterEach(() => {
+  resetRecentInvalidations(); // метки — память модуля, не кэш
   vi.useRealTimers();
+});
+
+describe('invalidateAllTasksNow (#1051): массовая правка — один раунд', () => {
+  it('перезапрашивает всё и ставит метку на каждый ключ задач в кэше; чужие модули не задевает', () => {
+    const client = new QueryClient();
+    const pages = tasksKeys.listPages();
+    const board = tasksKeys.kanban('personal');
+    client.setQueryData(pages, {});
+    client.setQueryData(tasksKeys.detail('t1'), {});
+    client.setQueryData(board, {});
+    client.setQueryData(projectsKeys.detail('p1'), {});
+    const spy = vi.spyOn(client, 'invalidateQueries');
+
+    invalidateAllTasksNow(client);
+
+    // Один вызов префиксом — эхо собственных событий найдёт метку на каждом ключе.
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith({ queryKey: tasksKeys.all });
+    expect(wasInvalidatedRecently(pages)).toBe(true);
+    expect(wasInvalidatedRecently(tasksKeys.detail('t1'))).toBe(true);
+    expect(wasInvalidatedRecently(board)).toBe(true);
+    expect(wasInvalidatedRecently(projectsKeys.detail('p1'))).toBe(false);
+  });
 });
 
 describe('invalidateAfterTaskMutation (#1051): одна правка — один раунд', () => {

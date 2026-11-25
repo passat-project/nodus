@@ -114,6 +114,18 @@ export function invalidateAfterTaskMutation(
   void markStale(queryClient, tasksKeys.branchAll());
 }
 
+/** Массовая правка задач (удаление, каскад срока, bulk, перенос в узле
+ *  структуры): раскладка меняется целиком, и видимые витрины задач
+ *  перезапрашиваются сразу — все. С меткой на каждом ключе кэша: эхо
+ *  собственных событий ту же волну не повторяет, один раунд и здесь. */
+export function invalidateAllTasksNow(queryClient: QueryClient): void {
+  const at = Date.now();
+  for (const query of queryClient.getQueryCache().findAll({ queryKey: tasksKeys.all })) {
+    recently.set(stampOf(query.queryKey), at);
+  }
+  void queryClient.invalidateQueries({ queryKey: tasksKeys.all });
+}
+
 /** Тесты; сессия — через `registerSessionReset` ниже. */
 export function resetRecentInvalidations(): void {
   recently.clear();

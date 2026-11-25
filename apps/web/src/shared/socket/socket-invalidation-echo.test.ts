@@ -25,6 +25,8 @@ const OTHER_CONVERSATION = '00000000-0000-4000-8000-0000000000c2';
 const LIST = JSON.stringify(['chat', 'conversations']);
 const TASK_DETAIL = JSON.stringify(['tasks', 'detail', 't1']);
 
+const key = (k: readonly unknown[]) => JSON.stringify(k);
+
 const event = (
   type: string,
   payload: Record<string, unknown>,
@@ -256,20 +258,41 @@ describe('эхо собственной мутации не повторяет �
     });
     const { client, invalidateQueries } = rowsClient();
     const invalidator = createRealtimeInvalidator(client);
+    // Куст — одним префиксом (без точечного набора списков), за ним — сама беседа:
+    // доступ отозван или роль сменилась, сервер своим ответом заменяет кэш.
+    const aboutMe = [
+      LIST,
+      ...[
+        chatKeys.messages(CONV),
+        chatKeys.pins(CONV),
+        chatKeys.threadStates(CONV),
+        chatKeys.members(CONV),
+      ].map(key),
+    ];
 
     invalidator.handle(
       event('chat.member_removed', { conversationId: CONV, userId: ME }, COLLEAGUE),
     );
     vi.advanceTimersByTime(200);
-    // Целиком: одним префиксом, без точечного набора списков — устареть обязаны и строки.
-    expect(invalidated(invalidateQueries)).toEqual([LIST]);
+    expect(invalidated(invalidateQueries)).toEqual(aboutMe);
     expect(invalidateQueries.mock.calls[0]![0]).toEqual({ queryKey: chatKeys.conversations() });
 
     // Мой же выход (эхо моей мутации) — то же: гашение здесь недопустимо.
     invalidateQueries.mockClear();
     invalidator.handle(event('chat.member_role_changed', { conversationId: CONV, userId: ME }, ME));
     vi.advanceTimersByTime(200);
-    expect(invalidated(invalidateQueries)).toEqual([LIST]);
+    expect(invalidated(invalidateQueries)).toEqual(aboutMe);
+
+    // Исключили ДРУГОГО: моя беседа и мой доступ не тронуты.
+    invalidateQueries.mockClear();
+    invalidator.handle(
+      event('chat.member_removed', { conversationId: CONV, userId: COLLEAGUE }, ME),
+    );
+    vi.advanceTimersByTime(700);
+    expect(invalidated(invalidateQueries)).not.toContain(key(chatKeys.messages(CONV)));
+    expect(invalidateQueries.mock.calls.some((c) => JSON.stringify(c[0]?.queryKey) === LIST)).toBe(
+      true,
+    );
     invalidator.dispose();
   });
 

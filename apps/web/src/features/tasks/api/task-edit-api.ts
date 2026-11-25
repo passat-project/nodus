@@ -18,7 +18,10 @@ import {
   publishTaskFace,
   restoreTaskOverlay,
 } from '../../../shared/api/task-cache.js';
-import { invalidateAfterTaskMutation } from '../../../shared/api/task-invalidate.js';
+import {
+  invalidateAfterTaskMutation,
+  invalidateAllTasksNow,
+} from '../../../shared/api/task-invalidate.js';
 import { mapTaskInPages, tasksKeys } from '../../../shared/api/tasks-keys.js';
 import { fieldLockedText } from '../../../shared/forms/field-lock-ui.js';
 import { secretProjectMembersText } from '../../../shared/tasks/secret-project-members.js';
@@ -108,7 +111,7 @@ export function useShiftSubtaskDeadlines() {
       if (ok === items.length) toast.success(ui.tasks.cascadeDone);
       else toast.error(`${ui.tasks.bulkSkipped} ${items.length - ok}`);
     },
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: tasksKeys.all }),
+    onSettled: () => invalidateAllTasksNow(queryClient),
   });
 }
 
@@ -147,9 +150,7 @@ export function useBulkTasks() {
       if (failed > 0) toast.error(`${ui.tasks.bulkSkipped} ${failed}`);
     },
     onError: () => toast.error(ui.common.saveError),
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: tasksKeys.all });
-    },
+    onSettled: () => invalidateAllTasksNow(queryClient),
   });
 }
 
@@ -164,8 +165,6 @@ export function useDeleteTask(taskId: string) {
       toast.success(ui.tasks.deleted);
     },
     onError: () => toast.error(ui.common.saveError),
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: tasksKeys.all });
-    },
+    onSettled: () => invalidateAllTasksNow(queryClient),
   });
 }

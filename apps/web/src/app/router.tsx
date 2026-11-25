@@ -19,14 +19,17 @@ import { useRemoveBootSplash } from './boot-splash.js';
 /**
  * Гибель lazy-чанка после деплоя (вкладка оставлена открытой через пересборку
  * прода/рестарт dev): импорт чанка со старым именем даёт 404 и раздел «не
- * открывается» (репорт владельца 24.09, #88). Guard: ошибка импорта → ОДИН
- * reload страницы за сессионный флаг (против цикла), успешный импорт флаг
- * снимает; повторный неуспех после reload — честная ошибка в экран роутера.
+ * открывается» (репорт владельца 24.09, #88). Guard: ошибка импорта при
+ * РЕАЛЬНОМ входе в раздел → ОДИН reload страницы за сессионный флаг (против
+ * цикла), успешный импорт флаг снимает; повторный неуспех после reload —
+ * честная ошибка в экран роутера.
  *
- * Страница отвечает на `preload()` (#1051): роутер зовёт его при наведении на
- * раздел (`defaultPreload: 'intent'`) — чанк грузится до клика. У `React.lazy`
- * такого метода нет (роутер молча пропускает `component.preload?.()`), поэтому
- * наведение и первый рендер ждут один и тот же импорт.
+ * Страница отвечает на `preload()` (#1051): роутер зовёт его при наведении и
+ * фокусе на ссылку раздела (`defaultPreload: 'intent'`) — чанк грузится до
+ * клика. У `React.lazy` такого метода нет (роутер молча пропускает
+ * `component.preload?.()`), поэтому наведение и первый рендер ждут один и тот
+ * же импорт. Предзагрузка guard НЕ включает: после выкатки устаревший чанк
+ * перезагружал бы страницу по одному наведению, с потерей несохранённого ввода.
  */
 const CHUNK_RELOAD_KEY = 'nodus-chunk-reload';
 type PageModule = { default: ComponentType };
@@ -36,8 +39,16 @@ export type PreloadablePage = LazyExoticComponent<ComponentType> & {
 
 export function pageLoader(loader: () => Promise<PageModule>): PreloadablePage {
   let pending: Promise<PageModule> | undefined;
-  const load = (): Promise<PageModule> => {
-    pending ??= loader().then(
+  /** Один импорт на все пути; отказ не копится — следующая попытка пробует снова. */
+  const importPage = (): Promise<PageModule> => {
+    pending ??= loader().catch((error: unknown) => {
+      pending = undefined;
+      throw error;
+    });
+    return pending;
+  };
+  const Page = lazy(() =>
+    importPage().then(
       (module) => {
         sessionStorage.removeItem(CHUNK_RELOAD_KEY);
         return module;
@@ -49,17 +60,14 @@ export function pageLoader(loader: () => Promise<PageModule>): PreloadablePage {
           return new Promise<never>(() => {});
         }
         sessionStorage.removeItem(CHUNK_RELOAD_KEY);
-        // Не копится: клик и повторное наведение пробуют импорт снова.
-        pending = undefined;
         throw error;
       },
-    );
-    return pending;
-  };
-  const Page = lazy(load) as PreloadablePage;
-  // Провал предзагрузки не рвёт страницу: рендер повторит импорт сам.
+    ),
+  ) as PreloadablePage;
+  // Провал предзагрузки не рвёт страницу и не перезагружает её: вход повторит
+  // импорт сам — и уже его guard решает, перезагружать ли.
   Page.preload = () =>
-    load().then(
+    importPage().then(
       () => undefined,
       () => undefined,
     );

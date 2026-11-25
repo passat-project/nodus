@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { createElement, Suspense } from 'react';
+import { render, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PAGE_IMPORTS, pageImportForPath, preloadPage } from './page-imports.js';
@@ -49,24 +51,50 @@ describe('page-imports: адрес раздела → его чанк (#1051)', 
     }
   });
 
-  it('pageLoader: наведение и рендер ждут один импорт; провал предзагрузки не копится', async () => {
-    const importer = vi.fn(async () => ({ default: () => null }));
-    const Page = pageLoader(importer);
-    await Page.preload();
-    await Page.preload();
-    expect(importer).toHaveBeenCalledTimes(1);
+  it('pageLoader: наведение и рендер ждут один импорт; провал предзагрузки не копится и НЕ перезагружает страницу', async () => {
+    try {
+      const importer = vi.fn(async () => ({ default: () => null }));
+      const Page = pageLoader(importer);
+      await Page.preload();
+      await Page.preload();
+      expect(importer).toHaveBeenCalledTimes(1);
 
-    // Флаг guard стоит — перезагрузки не будет; ошибка проглочена, попытка повторяется.
-    sessionStorage.setItem('nodus-chunk-reload', '1');
-    const flaky = vi
-      .fn<() => Promise<{ default: () => null }>>()
-      .mockRejectedValueOnce(new Error('сеть'))
-      .mockResolvedValue({ default: () => null });
-    const Flaky = pageLoader(flaky);
-    await expect(Flaky.preload()).resolves.toBeUndefined();
-    await Flaky.preload();
-    expect(flaky).toHaveBeenCalledTimes(2);
-    sessionStorage.removeItem('nodus-chunk-reload');
+      // Устаревший чанк после выкатки: наведение перезагружать страницу не имеет
+      // права — терялся бы несохранённый ввод. Ошибка проглочена, попытка повторяется.
+      const flaky = vi
+        .fn<() => Promise<{ default: () => null }>>()
+        .mockRejectedValueOnce(new Error('404'))
+        .mockResolvedValue({ default: () => null });
+      const Flaky = pageLoader(flaky);
+      await expect(Flaky.preload()).resolves.toBeUndefined();
+      // Флаг guard ставится непосредственно перед reload: его нет — reload не звался.
+      expect(sessionStorage.getItem('nodus-chunk-reload')).toBeNull();
+      await Flaky.preload();
+      expect(flaky).toHaveBeenCalledTimes(2);
+    } finally {
+      sessionStorage.removeItem('nodus-chunk-reload');
+    }
+  });
+
+  it('guard перезагрузки — только на реальном входе: после неудачной предзагрузки вход перезагружает один раз', async () => {
+    // jsdom навигацию не реализует («Not implemented» в консоль) — факт reload
+    // фиксируем флагом guard, который ставится непосредственно перед ним.
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const dead = vi
+        .fn<() => Promise<{ default: () => null }>>()
+        .mockRejectedValue(new Error('Failed to fetch dynamically imported module: 404'));
+      const Dead = pageLoader(dead);
+      await expect(Dead.preload()).resolves.toBeUndefined();
+      expect(sessionStorage.getItem('nodus-chunk-reload')).toBeNull();
+
+      const view = render(createElement(Suspense, { fallback: null }, createElement(Dead)));
+      await waitFor(() => expect(sessionStorage.getItem('nodus-chunk-reload')).toBe('1'));
+      view.unmount();
+    } finally {
+      consoleError.mockRestore();
+      sessionStorage.removeItem('nodus-chunk-reload');
+    }
   });
 
   it('провал предзагрузки не рвёт страницу: перезагрузит guard роутера при входе', async () => {

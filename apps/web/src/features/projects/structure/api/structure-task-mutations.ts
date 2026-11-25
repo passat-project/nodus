@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type { InfiniteData } from '@tanstack/react-query';
 import type { Paginated, TaskBulkResult, TaskListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -7,11 +7,21 @@ import { toast } from 'sonner';
 import { api } from '../../../../shared/api-client.js';
 import { toastApiError } from '../../../../shared/api/error-toast.js';
 import { projectsKeys } from '../../../../shared/api/projects-list.js';
+import { invalidateAllTasksNow, invalidateNow } from '../../../../shared/api/task-invalidate.js';
 import { mapTaskInPages, tasksKeys } from '../../../../shared/api/tasks-keys.js';
 import { structureKeys } from './structure-api.js';
 
 /** Переносы задач в папки структуры (#467): одиночный DnD — PATCH задачи,
  *  мультиселект — bulk set_node. Вынесено из structure-api (I5). */
+
+/** После переноса в узел (#1051): витрины задач — сразу и все, с меткой (эхо
+ *  собственных событий волну не повторяет); дерево узлов и карточка проекта
+ *  несут агрегаты (счётчики, прогресс) — перечитываются с сервера. */
+function refreshAfterNodeChange(queryClient: QueryClient, projectId: string): void {
+  invalidateAllTasksNow(queryClient);
+  void invalidateNow(queryClient, structureKeys.of(projectId));
+  void invalidateNow(queryClient, projectsKeys.detail(projectId));
+}
 
 /** Одиночный перенос задачи в узел — PATCH /tasks/:id (контракт
  *  `taskUpdateBodySchema.nodeId`). Bulk set_node остаётся для мультиселекта:
@@ -42,11 +52,7 @@ export function useMoveTaskNode(projectId: string) {
       for (const [key, data] of context?.snapshots ?? []) queryClient.setQueryData(key, data);
       toastApiError(error);
     },
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: tasksKeys.all });
-      void queryClient.invalidateQueries({ queryKey: structureKeys.of(projectId) });
-      void queryClient.invalidateQueries({ queryKey: projectsKeys.detail(projectId) });
-    },
+    onSettled: () => refreshAfterNodeChange(queryClient, projectId),
   });
 }
 
@@ -94,10 +100,6 @@ export function useSetTasksNode(projectId: string) {
       const failed = results.length - ok;
       if (failed > 0) toast.error(`${ui.tasks.bulkSkipped} ${failed}`);
     },
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: tasksKeys.all });
-      void queryClient.invalidateQueries({ queryKey: structureKeys.of(projectId) });
-      void queryClient.invalidateQueries({ queryKey: projectsKeys.detail(projectId) });
-    },
+    onSettled: () => refreshAfterNodeChange(queryClient, projectId),
   });
 }
