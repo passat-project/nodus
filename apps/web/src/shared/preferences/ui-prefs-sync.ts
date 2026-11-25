@@ -135,15 +135,17 @@ function schedulePush(): void {
   }, DEBOUNCE_MS);
 }
 
-/** Запуск один раз на приложение (AppShell): подписки на auth и стор. */
-export function startPreferencesSync(): void {
-  if (started) return;
+/** Запуск один раз на приложение (AppShell): подписки на auth и стор.
+ *  Возвращает stop для размонтирования (#1032): без него подписки живут
+ *  после сноса дерева и пишут PUT'ы из «мёртвой» вкладки. */
+export function startPreferencesSync(): () => void {
+  if (started) return () => {};
   started = true;
 
   lastUserId = useAuthStore.getState().user?.id ?? null;
   if (lastUserId) void hydrateFromServer();
 
-  useAuthStore.subscribe((state) => {
+  const unsubscribeAuth = useAuthStore.subscribe((state) => {
     const nextUserId = state.user?.id ?? null;
     if (nextUserId === lastUserId) return;
     lastUserId = nextUserId;
@@ -152,7 +154,7 @@ export function startPreferencesSync(): void {
     if (nextUserId) void hydrateFromServer();
   });
 
-  useUiPrefsStore.subscribe((state, previous) => {
+  const unsubscribePrefs = useUiPrefsStore.subscribe((state, previous) => {
     // Только действия пользователя: загрузка кэша при смене аккаунта и
     // серверная гидратация personal НЕ меняют localRevision — иначе пустой
     // кэш нового сотрудника ушёл бы PUT'ом и стёр его серверные настройки.
@@ -161,4 +163,12 @@ export function startPreferencesSync(): void {
     if (hydrating) return;
     schedulePush();
   });
+
+  return () => {
+    if (!started) return;
+    started = false;
+    unsubscribeAuth();
+    unsubscribePrefs();
+    cancelTimers();
+  };
 }

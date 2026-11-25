@@ -59,7 +59,9 @@ export const demoDepartments: Department[] = [
     name: 'ПассатПроект',
     kind: 'legal',
     parentId: null,
-    headId: userIds.shaiderova,
+    // #1032: глава — отдельный человек: один сотрудник не может быть главой
+    // двух узлов (UNIQUE head_id на сервере, #817).
+    headId: userIds.voronina,
     deputyIds: [],
     sortOrder: 0,
     isActive: true,
@@ -69,8 +71,10 @@ export const demoDepartments: Department[] = [
     name: 'Группа ГИПов',
     kind: 'legal',
     parentId: departmentIds.legalCompany,
-    headId: userIds.klevantovich,
-    deputyIds: [userIds.klimovich],
+    // #1032: у главы и зама юридического узла — свои места: они не занимают
+    // руководящие роли управленческой структуры (сервер: «одно место», #946).
+    headId: userIds.polomar,
+    deputyIds: [userIds.matorin],
     sortOrder: 0,
     isActive: true,
   },
@@ -79,6 +83,25 @@ export const demoDepartments: Department[] = [
 /** Принадлежность сотрудника структуре: management → departmentId, legal → legalDepartmentId. */
 export function departmentOfUser(user: UserListItem, kind: OrgUnitKind): string | null {
   return kind === 'management' ? user.departmentId : user.legalDepartmentId;
+}
+
+/** Перевод сотрудника в другое подразделение снимает его руководящие роли
+ *  СТАРОГО узла (как `users-transfer.ts`, #946): глава/зам живут в своём
+ *  отделе. `keepDepartmentId` — целевой узел: место в нём сохраняется. */
+export function clearLeadershipSeats(
+  source: readonly Department[],
+  userId: string,
+  keepDepartmentId: string | null,
+): Department[] {
+  const keep = keepDepartmentId?.toLowerCase() ?? null;
+  const target = userId.toLowerCase();
+  return source.map((department) => {
+    if (department.id.toLowerCase() === keep) return department;
+    const isHead = department.headId?.toLowerCase() === target;
+    const deputies = department.deputyIds.filter((id) => id.toLowerCase() !== target);
+    if (!isHead && deputies.length === department.deputyIds.length) return department;
+    return { ...department, headId: isHead ? null : department.headId, deputyIds: deputies };
+  });
 }
 
 /**

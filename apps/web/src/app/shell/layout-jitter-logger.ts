@@ -30,12 +30,15 @@ const WATCH: WatchPoint[] = [
 
 const THRESHOLD_PX = 0.5;
 
-export function startLayoutJitterLogger(): void {
-  if (!wsDebugEnabled || typeof window === 'undefined') return;
+export function startLayoutJitterLogger(): () => void {
+  if (!wsDebugEnabled || typeof window === 'undefined') return () => {};
   const prev = new Map<Element, { left: number; width: number }>();
   let lastLogAt = 0;
+  let frame = 0;
+  let stopped = false;
 
   const tick = () => {
+    if (stopped) return;
     const now = performance.now();
     // Коалесцируем: не чаще ~5 строк/с — читаемый журнал одного дёрганья.
     const quiet = now - lastLogAt > 200;
@@ -58,7 +61,11 @@ export function startLayoutJitterLogger(): void {
         }
       }
     }
-    requestAnimationFrame(tick);
+    frame = requestAnimationFrame(tick);
   };
-  requestAnimationFrame(tick);
+  frame = requestAnimationFrame(tick);
+  return () => {
+    stopped = true;
+    cancelAnimationFrame(frame);
+  };
 }

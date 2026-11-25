@@ -104,4 +104,20 @@ describe('ui-prefs-sync: гидратация не затирает неотпр
       apiMock.mock.calls.filter(([path, init]) => path === '/me/preferences' && !init),
     ).toHaveLength(2);
   });
+
+  it('stop снимает подписки: правка после stop не планирует PUT (#1032)', async () => {
+    const { startPreferencesSync } = await import('./ui-prefs-sync.js');
+    const stop = startPreferencesSync();
+    stop();
+    stop(); // повторный stop — no-op
+    expect(() => stop()).not.toThrow();
+
+    const { useUiPrefsStore } = await import('./ui-prefs-store.js');
+    const state = useUiPrefsStore.getState();
+    useUiPrefsStore.setState({ localRevision: state.localRevision + 1 });
+    await vi.advanceTimersByTimeAsync(600);
+
+    const puts = apiMock.mock.calls.filter(([, init]) => init?.method === 'PUT');
+    expect(puts).toHaveLength(0);
+  });
 });

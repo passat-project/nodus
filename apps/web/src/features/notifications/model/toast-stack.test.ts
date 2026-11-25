@@ -78,6 +78,33 @@ describe('toast-store push', () => {
     s.push(snap(2, { priority: 'urgent', kind: 'urgent.message' }), 0);
     expect(useNotificationsToastStore.getState().personal).toHaveLength(2);
   });
+
+  it('#1032: две смены срока за 60 с — «+1» с СВЕЖИМ сроком, не старым', () => {
+    const s = useNotificationsToastStore.getState();
+    const deadline = (n: number, preview: string) =>
+      snap(n, {
+        kind: 'task.deadline_changed',
+        conversationId: null,
+        sourceId: 'task-1',
+        messageId: null,
+        preview,
+      });
+    s.push(deadline(1, 'Срок: 26.11.2026'), 0);
+    s.push(deadline(2, 'Срок: 28.11.2026'), 0);
+    const personal = useNotificationsToastStore.getState().personal;
+    expect(personal).toHaveLength(1);
+    expect(personal[0]!.count).toBe(2);
+    expect(personal[0]!.snapshot.preview).toBe('Срок: 28.11.2026');
+  });
+
+  it('#1032: новые сообщения чата сохраняют превью первого (B7 не сломан)', () => {
+    const s = useNotificationsToastStore.getState();
+    s.push(snap(1, { preview: 'первое' }), 0);
+    s.push(snap(2, { preview: 'второе' }), 0);
+    const personal = useNotificationsToastStore.getState().personal;
+    expect(personal[0]!.count).toBe(2);
+    expect(personal[0]!.snapshot.preview).toBe('первое');
+  });
 });
 
 describe('toast-store syncWithAttention (#616)', () => {

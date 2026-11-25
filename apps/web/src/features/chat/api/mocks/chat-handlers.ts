@@ -240,7 +240,11 @@ const conversationHandlers = [
         );
       applyThreadReadReceipt(parsed.data.threadRootId, getMockActor().id, parsed.data.upToSeq);
     }
-    const upToSeq = applyReadReceipt(conversationId, parsed.data.upToSeq);
+    const upToSeq = applyReadReceipt(
+      conversationId,
+      parsed.data.upToSeq,
+      parsed.data.threadRootId ?? null,
+    );
     if (upToSeq < 0)
       return HttpResponse.json(
         { code: ErrorCode.NOT_FOUND, message: 'Conversation not found' },

@@ -207,8 +207,8 @@ let installed: (() => void) | null = null;
  * Начать слежение за вводом/видимостью (идемпотентно; зовётся хостом
  * приложения при монтировании). Слушатели passive — ничего не отменяют.
  */
-export function startAttentionTracking(): void {
-  if (started || typeof document === 'undefined') return;
+export function startAttentionTracking(): () => void {
+  if (started || typeof document === 'undefined') return () => {};
   started = true;
   lastPointerMoveAt = 0;
   document.addEventListener('visibilitychange', onVisibilityChange);
@@ -224,6 +224,14 @@ export function startAttentionTracking(): void {
     window.removeEventListener('blur', onBlur);
     for (const type of inputEvents) window.removeEventListener(type, noteInput);
     window.removeEventListener('pointermove', onPointerMove);
+  };
+  // Хост (AppShell) снимает слежение при размонтировании; повторный start
+  // после stop снова навешивает слушатели (#1032).
+  return () => {
+    if (!started) return;
+    started = false;
+    installed?.();
+    installed = null;
   };
 }
 
