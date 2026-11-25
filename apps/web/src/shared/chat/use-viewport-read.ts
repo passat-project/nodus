@@ -10,6 +10,7 @@ import { isDomainMocked } from '../api/api-mock-config.js';
 import { wsDebugLog } from '../socket/ws-debug.js';
 import { chatKeys } from './chat-keys.js';
 import { invalidateConversationLists } from './conversation-list-invalidation.js';
+import { wasInvalidatedRecently } from '../api/task-invalidate.js';
 import { patchConversationRowsRead } from './conversation-rows.js';
 import {
   createReadReceiptScheduler,
@@ -111,6 +112,25 @@ export function applyReadToCache(
   }
 }
 
+/**
+ * Кэш после квитанции прочтения. Бейдж непрочитанного гаснет сразу и без WS
+ * (событие придёт — инвалидация идемпотентна); `myLastReadSeq` двигается на
+ * тот же upToSeq — граница плашки не откатывается отставшим снимком.
+ *
+ * Списки перезапрашиваются, только если их не обновили только что (#1051):
+ * квитанция по своему сообщению шла сразу за отправкой и повторяла её раунд.
+ */
+export function settleReadReceipt(
+  queryClient: QueryClient,
+  conversationId: string,
+  upToSeq?: number,
+): void {
+  applyReadToCache(queryClient, conversationId, upToSeq);
+  if (!wasInvalidatedRecently(chatKeys.conversations())) {
+    invalidateConversationLists(queryClient);
+  }
+}
+
 function useReadReceiptScheduler(
   conversationId: string,
   threadRootIdRef: RefObject<string | null>,
@@ -144,11 +164,7 @@ function useReadReceiptScheduler(
           body: { upToSeq, ...(threadRootId ? { threadRootId } : {}) },
         })
           .then(() => {
-            // Бейдж непрочитанных гаснет сразу и без WS (событие придёт —
-            // инвалидация идемпотентна); myLastReadSeq двигается на тот же
-            // upToSeq — граница плашки не откатывается отставшим снимком.
-            applyReadToCache(queryClient, conversationId, upToSeq);
-            void invalidateConversationLists(queryClient);
+            settleReadReceipt(queryClient, conversationId, upToSeq);
             if (threadRootId) {
               // Точка «есть новые» на посте гасится квитанцией трэда.
               void queryClient.invalidateQueries({
