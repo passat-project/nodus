@@ -1,4 +1,5 @@
 import { queryClient } from './lib/query-client.js';
+import { nextSessionEpoch } from './lib/session-epoch.js';
 import { clearSavedListFilters } from './views/list-filters-storage.js';
 
 /**
@@ -23,6 +24,9 @@ export function registerSessionReset(handler: SessionResetHandler): void {
  *  пользователя удаляются из localStorage (черновики остаются — их вернёт
  *  повторный вход, см. chat-drafts). */
 export function resetSessionState(previousUserId: string | null = null): void {
+  // Новая эпоха — ДО чистки: мутации прежней сессии, ещё в полёте, по ответе
+  // не пишут в чистый кэш (колбэки привязаны к эпохе старта).
+  nextSessionEpoch();
   queryClient.clear();
   clearSavedListFilters(previousUserId);
   for (const handler of handlers) handler(previousUserId);

@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { queryOptions, useQuery } from '@tanstack/react-query';
 import type { TaskStageWithCount } from '@nodus/contracts';
 
 import { api } from '../api-client.js';
@@ -13,10 +13,9 @@ export const taskStagesKey = ['tasks', 'stages'] as const;
 /** Без typeId — статусы всех живых типов (подписи «Тип · Статус» там, где
  *  типов больше одного); с typeId — статусы маршрута одного типа (колонки
  *  доски, массовая смена стадии). */
-export function useTaskStages(typeId?: string, options?: { enabled?: boolean }) {
-  return useQuery({
+export function taskStagesOptions(typeId?: string) {
+  return queryOptions({
     queryKey: typeId ? [...taskStagesKey, typeId] : taskStagesKey,
-    enabled: options?.enabled ?? true,
     queryFn: () =>
       api<TaskStageWithCount[]>(
         typeId ? `/tasks/stages?typeId=${encodeURIComponent(typeId)}` : '/tasks/stages',
@@ -25,4 +24,8 @@ export function useTaskStages(typeId?: string, options?: { enabled?: boolean }) 
     // переспрашивал стадии (аудит #45: 301 запрос на 50 переключений вида).
     staleTime: 60_000,
   });
+}
+
+export function useTaskStages(typeId?: string, options?: { enabled?: boolean }) {
+  return useQuery({ ...taskStagesOptions(typeId), enabled: options?.enabled ?? true });
 }

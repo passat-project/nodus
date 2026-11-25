@@ -4,6 +4,16 @@
 # порты публикуются через .env (шаблон — .env.example).
 name: nodus
 
+# Ротация логов контейнеров (#1051): json-file без лимита растёт бесконечно —
+# api и gateway пишут по строке на каждый запрос (~70 и ~60 МБ в сутки), лимитов
+# на проде не было. 50 МБ × 5 файлов на контейнер (~неделя диагностики);
+# действует после пересоздания контейнера.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '50m'
+    max-file: '5'
+
 services:
   web:
     build:
@@ -14,6 +24,7 @@ services:
         VITE_API_MOCK: '${NODUS_WEB_MOCK:-true}'
     container_name: nodus_web
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - '${NODUS_WEB_PORT:-3000}:80'
     volumes:
@@ -38,6 +49,7 @@ services:
       dockerfile: apps/api/Dockerfile
     container_name: nodus_api
     restart: unless-stopped
+    logging: *default-logging
     environment:
       API_PORT: '3001'
       NODE_ENV: 'production'
@@ -145,6 +157,7 @@ services:
       dockerfile: apps/gateway/Dockerfile
     container_name: nodus_gateway
     restart: unless-stopped
+    logging: *default-logging
     environment:
       GATEWAY_PORT: '3002'
       # WS-gateway (#104): HS256 тех же access-токенов, READ-ONLY Postgres
@@ -172,6 +185,7 @@ services:
     image: postgres:18-alpine
     container_name: nodus_postgres
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?задайте в .env}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте в .env}
@@ -194,6 +208,7 @@ services:
     image: redis:8-alpine
     container_name: nodus_redis
     restart: unless-stopped
+    logging: *default-logging
     # requirepass: official image выключает protected-mode, без пароля любой
     # процесс хоста/LAN мог FLUSHALL и читать стрим событий (аудит #123).
     command:
@@ -219,6 +234,7 @@ services:
     image: pgsty/silo:RELEASE.2026-09-16T00-00-00Z
     container_name: nodus_minio
     restart: unless-stopped
+    logging: *default-logging
     command: server /data --console-address ':9001'
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?задайте в .env}
@@ -313,6 +329,7 @@ services:
     image: onlyoffice/documentserver:9.4.0.1
     container_name: nodus_documentserver
     restart: unless-stopped
+    logging: *default-logging
     profiles: [office]
     environment:
       JWT_ENABLED: 'true'
@@ -350,6 +367,7 @@ services:
     image: gotenberg/gotenberg:8
     container_name: nodus_gotenberg
     restart: unless-stopped
+    logging: *default-logging
     # Вторая линия обороны конвертера (security #56): Chromium-роуту разрешены
     # только локальные схемы и рабочая папка формы — чужие http(s)/file:// в
     # недоверенном HTML письма (включая file:///etc/…) не открываются вовсе.
@@ -373,6 +391,7 @@ services:
     image: gotenberg/gotenberg:8
     container_name: nodus_gotenberg_sandbox
     restart: unless-stopped
+    logging: *default-logging
     # Тот же allow-list, что у прода (security #56) — единая защита конвертера.
     command:
       - gotenberg
@@ -388,6 +407,7 @@ services:
     image: cloudflare/cloudflared:2026.8.3
     container_name: nodus_cloudflared
     restart: unless-stopped
+    logging: *default-logging
     command: tunnel --no-autoupdate run --token ${NODUS_TUNNEL_TOKEN:?задайте в .env}
     depends_on:
       - web

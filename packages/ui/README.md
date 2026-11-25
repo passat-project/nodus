@@ -35,3 +35,8 @@
 - Компоненты фич живут в `apps/web/src/features/*/components`, здесь — только
   общие примитивы без доменной логики.
 - Иконки — lucide-react; шрифт — Onest (self-hosted, `@fontsource-variable/onest`, I11).
+- Tailwind — не ниже 4.3.4: в 4.3.4 исправлена генерация `group-*`/`peer-*`
+  (`:is(:where(.group):has(A) &)` вместо `… *)`). На 4.3.3 `group-has-*` с
+  субъектом `*` заставляет Chromium пересчитывать поддеревья групп на каждой
+  вставке узла (gotcha `frontend.md`, «`:has()` на корне (и `group-has-*`)»).
+  Версия общая для `apps/web`, `apps/desktop` и этого пакета — обновлять вместе.

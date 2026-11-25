@@ -13,6 +13,8 @@ import { PAGINATION_MAX_LIMIT, ui } from '@nodus/contracts';
 import { toast } from 'sonner';
 
 import { api } from '../../api-client.js';
+import { boardMoveSettledAt } from '../../api/task-invalidate.js';
+import { consumeTaskItems } from '../../api/task-overlay.js';
 import type { BoardAxis } from '../../lib/board/kanban-board.js';
 import { kanbanColumnKey } from '../../lib/board/kanban-column-key.js';
 import { mergeRefreshedColumns } from '../../lib/board/kanban-merge.js';
@@ -29,8 +31,10 @@ interface UseKanbanFeedsParams {
   feedUrl: (stageId: string, cursor: string | null, limit: number) => string;
   /** Размер страницы фида (sentinel-догрузка следующих страниц). */
   feedLimit: number;
-  /** Идёт перенос: свежие страницы не применяются до дропа. */
-  draggingRef: RefObject<boolean>;
+  /** Доска занята — drag или перенос в полёте: свежие страницы не применяются. */
+  lockRef: RefObject<boolean>;
+  /** Счётчик снятий замка: отложенные страницы применяются из кэша, без запроса. */
+  lockTick: number;
   /** Текущий борд: по нему считается загруженная глубина колонки (#330). */
   boardRef: RefObject<TaskListItem[] | null>;
   /** Сеттер борда движка (фиды наполняют его, dnd — переставляет). */
@@ -51,6 +55,14 @@ interface UseKanbanFeedsParams {
  * короче, прокрутка прыгала вверх, а переименования/удаления карточек хвоста
  * не доезжали до UI. `limit` = сколько уже загружено (≤ 100), ответ заменяет
  * колонку целиком; курсор — из ответа, дальше работает sentinel.
+ *
+ * Замок доски (#1051): пока идёт drag или летит мутация переноса, свежие
+ * страницы НЕ применяются. Прежде страница, пришедшая между дропом и ответом
+ * сервера, возвращала карточку в прежнюю колонку, а ответ переноса ставил её
+ * на место — «перенос откатывается и повторяется». После снятия замка
+ * отложенные страницы применяются из кэша; страница, пришедшая раньше ответа
+ * последнего переноса, не применяется вовсе — она могла застать задачу в
+ * прежней колонке (её колонку доска перезапрашивает в момент ответа).
  */
 export function useKanbanFeeds({
   axis,
@@ -58,7 +70,8 @@ export function useKanbanFeeds({
   queryKey,
   feedUrl,
   feedLimit,
-  draggingRef,
+  lockRef,
+  lockTick,
   boardRef,
   setBoard,
 }: UseKanbanFeedsParams) {
@@ -107,9 +120,10 @@ export function useKanbanFeeds({
   });
 
   useEffect(() => {
-    // Во время переноса борд — локальный (живая сортировка); свежие страницы
-    // применятся после дропа (инвалидация мутации даст новые версии).
-    if (draggingRef.current) return;
+    // Под замком (drag или перенос в полёте) доска локальная: живая сортировка
+    // и оптимистичный перенос. Пришедшие за это время страницы применятся
+    // после снятия замка (lockTick) — из кэша, без запроса.
+    if (lockRef.current) return;
     const stages = stageListRef.current;
     const current = columnsRef.current;
     // Борд показываем, когда у всех колонок есть первая страница (без
@@ -118,17 +132,34 @@ export function useKanbanFeeds({
     if (current.some((c) => !c.data)) return;
     const applied = appliedRef.current;
     const full = applied.signature !== stageSignature;
+    // Первая сборка доски в этом монтировании: страницы из кэша — сразу, даже
+    // пока летит их перезапрос. Иначе возврат в раздел каждый раз показывал
+    // скелетон до ответа сервера, и предзагрузка данных (#1051) не помогала:
+    // свежая страница применится, когда придёт.
+    const firstPaint = applied.signature === '';
+    const settledAt = boardMoveSettledAt();
     const fresh = new Map<string, TaskListItem[]>();
     const nextCursors: Record<string, string | null> = {};
+    const serverItems: TaskListItem[] = [];
     stages.forEach((s, i) => {
       const column = current[i];
       if (!column?.data) return;
-      if (!full && applied.at[s.id] === column.dataUpdatedAt) return;
+      const version = column.dataUpdatedAt;
+      const appliedAt = applied.at[s.id];
+      if (!full && appliedAt === version) return;
+      // Перезапрос колонки в полёте — применится его свежая страница.
+      if (column.isFetching && !firstPaint) return;
+      // Страница пришла раньше ответа последнего переноса и ещё не
+      // применялась: могла застать задачу в прежней колонке.
+      if (appliedAt !== undefined && version < settledAt) return;
       fresh.set(s.id, column.data.items);
       nextCursors[s.id] = column.data.nextCursor;
-      applied.at[s.id] = column.dataUpdatedAt;
+      applied.at[s.id] = version;
       // Свежий фид — повод снова пробовать догрузку сбойной колонки.
       delete failedRef.current[s.id];
+      // Страница из кэша не новее ответа мутации: записи оверлея снимет
+      // только её свежая версия.
+      if (!column.isFetching) serverItems.push(...column.data.items);
     });
     if (fresh.size === 0) return;
     applied.signature = stageSignature;
@@ -136,7 +167,9 @@ export function useKanbanFeeds({
     const cur = full ? nextCursors : { ...cursorsRef.current, ...nextCursors };
     setCursors(cur);
     cursorsRef.current = cur;
-  }, [updatedSignature, stageSignature, draggingRef, setBoard]);
+    // Строки из свежих страниц — серверные: записи оверлея доски больше не нужны.
+    consumeTaskItems(serverItems.map((t) => t.id));
+  }, [updatedSignature, stageSignature, lockRef, lockTick, setBoard]);
 
   /** Подгрузка следующей страницы колонки (sentinel в скролл-контейнере).
    *  Стабильная идентичность: уходит в колонки как проп, новая стрелка на
@@ -155,6 +188,7 @@ export function useKanbanFeeds({
       api<Paginated<TaskListItem>>(feedUrlRef.current(stageId, cursor, feedLimit)).then(
         (page) => {
           setBoard((prev) => [...(prev ?? []), ...page.items]);
+          consumeTaskItems(page.items.map((t) => t.id));
           setCursors((prev) => ({ ...prev, [stageId]: page.nextCursor }));
           cursorsRef.current = { ...cursorsRef.current, [stageId]: page.nextCursor };
           settle();
