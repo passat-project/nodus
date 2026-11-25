@@ -215,7 +215,7 @@ export function TabsStrip(): ReactNode {
     <div
       data-portal-tabs
       role="tablist"
-      aria-label={ui.desktop.tabMore}
+      aria-label={ui.desktop.tabStripLabel}
       className="h-full min-w-0 max-w-full overflow-x-auto overflow-y-hidden"
       data-no-scrollbar
       onPointerDown={(event) => event.stopPropagation()}

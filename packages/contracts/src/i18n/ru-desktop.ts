@@ -76,5 +76,6 @@ export const desktopStrings = {
   tabUnpin: 'Открепить вкладку',
   tabOpenInNew: 'Открыть в новой вкладке',
   tabMore: 'Ещё вкладки',
+  tabStripLabel: 'Вкладки портала',
   chatTabTitle: 'Чат·{name}',
 };
