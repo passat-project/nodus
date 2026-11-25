@@ -73,7 +73,7 @@ export function MediaTile({
                 глиф с точным центрированием; hairline-обводка держит чашку
                 на тёмных постерах. */}
             <span className="pointer-events-none absolute inset-0 m-auto grid size-8 place-items-center rounded-full border border-white/20 bg-black/50 text-white">
-              <VideoPlayGlyph className="size-3.5" />
+              <VideoPlayGlyph className="size-4" />
             </span>
             {durationMs !== null ? (
               <span className="pointer-events-none absolute right-1 bottom-1 rounded border border-white/10 bg-black/60 px-1 py-px font-mono text-label-xs text-white tabular-nums">

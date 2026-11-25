@@ -228,7 +228,7 @@ function VideoGalleryTile({
                 title={ui.chat.videoPlay}
                 className="absolute inset-0 z-10 m-auto grid size-12 place-items-center rounded-full border border-white/20 bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
               >
-                <VideoPlayGlyph className="size-5" />
+                <VideoPlayGlyph className="size-6" />
               </button>
               {duration !== null ? (
                 <span className="pointer-events-none absolute right-2 bottom-2 z-10 rounded-md border border-white/15 bg-black/55 px-1.5 py-0.5 font-mono text-label-xs text-white tabular-nums">

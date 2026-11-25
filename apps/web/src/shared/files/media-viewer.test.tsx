@@ -20,6 +20,9 @@ describe('MediaViewer: медиа ужимается по обеим осям (#
     );
     const video = container.querySelector('video');
     expect(video).not.toBeNull();
+    // Владелец 25.11.2026: видео стартует сразу при открытии просмотра.
+    expect(video!.hasAttribute('autoplay')).toBe(true);
+    expect(video!.getAttribute('preload')).toBe('auto');
     const stage = video!.parentElement!;
     expect(stage.className).toContain('flex');
     expect(stage.className).toContain('items-center');

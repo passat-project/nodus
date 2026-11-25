@@ -27,6 +27,9 @@ describe('VideoPlayerView — кинозал видео (#787)', () => {
     const video = document.querySelector('video');
     expect(video).not.toBeNull();
     expect(video?.hasAttribute('controls')).toBe(true);
+    // Владелец 25.11.2026: ролик в кинозале стартует сразу при открытии.
+    expect(video?.hasAttribute('autoplay')).toBe(true);
+    expect(video?.getAttribute('preload')).toBe('auto');
     // #1005: фокус на плеере при открытии — иначе ←/→ уходят в интерфейс.
     expect(video?.tabIndex).toBe(0);
     expect(document.activeElement).toBe(video);

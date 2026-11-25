@@ -112,7 +112,7 @@ export function AttachmentCard({
                 читался кривым). */}
             <span className="absolute inset-0 grid place-items-center">
               <span className="grid size-4 place-items-center rounded-full border border-white/25 bg-black/50 text-white">
-                <VideoPlayGlyph className="size-2.5" />
+                <VideoPlayGlyph className="size-3" />
               </span>
             </span>
           </span>

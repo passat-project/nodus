@@ -87,6 +87,8 @@ export function VideoPlayerView({
           key={url}
           src={url}
           controls
+          autoPlay
+          preload="auto"
           tabIndex={0}
           playsInline
           className="max-h-full max-w-full object-contain"
