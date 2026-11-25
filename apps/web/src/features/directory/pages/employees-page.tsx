@@ -17,6 +17,7 @@ import type { ActiveListFilter } from '../../../shared/views/list-filters.js';
 import { useFilteredList, useListToolbar } from '../../../shared/views/use-list-toolbar.js';
 import { useDepartmentTree, useUsersList } from '../api/directory-api.js';
 import { flattenDepartments } from '../../../shared/api/departments-list.js';
+import { DepartmentActionDialogs } from '../components/department-action-dialogs.js';
 import { DepartmentDialog } from '../components/department-dialog.js';
 import { DepartmentPanel } from '../components/department-panel.js';
 import type { StructureFocus } from '../components/divisions-view.js';
@@ -62,6 +63,8 @@ export function EmployeesPage() {
   const [highlightUserId, setHighlightUserId] = useState<string | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteDepartmentId, setInviteDepartmentId] = useState<string | null>(null);
+  const [transferNode, setTransferNode] = useState<DepartmentNode | null>(null);
+  const [deleteNode, setDeleteNode] = useState<DepartmentNode | null>(null);
   const canManage = useCanManageDirectory();
   const focusToken = useRef(0);
   const enteredStructure = useRef(false);
@@ -102,6 +105,7 @@ export function EmployeesPage() {
   const roots = useMemo(() => tree.data ?? [], [tree.data]);
   const activeIds = useMemo(() => activeDepartmentIds(roots), [roots]);
   const mainId = useMemo(() => mainDepartmentId(roots), [roots]);
+  const departmentOptions = useMemo(() => flattenDepartments(roots), [roots]);
   // Карточки структуры (руководитель/замы/подчинённые/чип) — ОДИН расчёт на
   // страницу из уже загруженного справочника (план 16.11.2026, §2).
   const cardStats = useMemo(
@@ -240,6 +244,8 @@ export function EmployeesPage() {
               setInviteOpen(true);
             }}
             onEdit={(node) => setDeptDialog({ open: true, parentId: null, editing: node })}
+            onTransfer={setTransferNode}
+            onDelete={setDeleteNode}
             onLocateMe={meItem ? () => pickEmployee(meItem) : undefined}
           />
         )}
@@ -252,15 +258,13 @@ export function EmployeesPage() {
           activeDepartmentIds={activeIds}
           highlightUserId={highlightUserId}
           topShift={topShift}
-          onArchived={(node) => {
-            setSelectedDeptId(node.parentId ?? mainId ?? null);
-            setHighlightUserId(null);
-          }}
           onInvite={(departmentId) => {
             setInviteDepartmentId(departmentId);
             setInviteOpen(true);
           }}
           onEdit={(node) => setDeptDialog({ open: true, parentId: null, editing: node })}
+          onTransfer={setTransferNode}
+          onDelete={setDeleteNode}
           canManage={canManage}
         />
       ) : null}
@@ -277,6 +281,32 @@ export function EmployeesPage() {
         onOpenChange={setInviteOpen}
         initialDepartmentId={inviteDepartmentId}
       />
+      <DepartmentActionDialogs
+        transferNode={transferNode}
+        deleteNode={deleteNode}
+        roots={roots}
+        users={items}
+        departmentOptions={departmentOptions}
+        onTransferOpenChange={(open) => {
+          if (!open) setTransferNode(null);
+        }}
+        onDeleteOpenChange={(open) => {
+          if (!open) setDeleteNode(null);
+        }}
+        onMoved={(node, userId) => {
+          setSelectedDeptId(node.id);
+          setRightPanel('dept');
+          setHighlightUserId(userId);
+          centerOn(node.id);
+        }}
+        onDeleted={(parentId) => {
+          setSelectedDeptId(parentId);
+          setRightPanel('dept');
+          setHighlightUserId(null);
+          centerOn(parentId);
+          setDeleteNode(null);
+        }}
+      />
       <DepartmentDialog
         open={deptDialog.open}
         onOpenChange={(open) => setDeptDialog((prev) => ({ ...prev, open }))}
@@ -284,7 +314,7 @@ export function EmployeesPage() {
         parentId={deptDialog.parentId}
         editing={deptDialog.editing}
         users={items}
-        departmentOptions={flattenDepartments(roots)}
+        departmentOptions={departmentOptions}
       />
     </div>
   );

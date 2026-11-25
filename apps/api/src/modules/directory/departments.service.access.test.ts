@@ -45,7 +45,6 @@ describe('DepartmentsService: отзыв доступа при изменени�
     findParentChain: vi.fn(),
     findSubtreeIds: vi.fn(),
     findRef: vi.fn(),
-    countActiveChildren: vi.fn(),
   };
   const users = { findActiveIdsByDepartmentIds: vi.fn(), findRef: vi.fn() };
   const positions = { findRef: vi.fn() };
@@ -63,7 +62,6 @@ describe('DepartmentsService: отзыв доступа при изменени�
     audience.roleIdsOfDepartments.mockResolvedValue([]);
     audience.departmentUserIds.mockResolvedValue([]);
     departments.lockForUpdate.mockResolvedValue(true);
-    departments.countActiveChildren.mockResolvedValue(0);
     const guard = new RoleAssignmentGuard(roles as never, membership as never);
     const references = new ReferenceGuard(users as never, departments as never, positions as never);
     service = new DepartmentsService(
@@ -109,34 +107,4 @@ describe('DepartmentsService: отзыв доступа при изменени�
     );
   });
 
-  it('архивация снимает действующие роли сотрудников — токены отзываются', async () => {
-    departments.findById.mockResolvedValue(row('dep', 'root'));
-    audience.roleIdsOfDepartments.mockResolvedValue(['role-dept']);
-    audience.departmentUserIds.mockResolvedValue(['u-1', 'u-2']);
-
-    await service.archive('dep', 'admin-1');
-
-    expect(audience.roleIdsOfDepartments).toHaveBeenCalledWith(['dep'], 'tx-handle');
-    expect(audience.departmentUserIds).toHaveBeenCalledWith('dep', 'tx-handle');
-    expect(eventBus.emit).toHaveBeenCalledWith(
-      'tx-handle',
-      'directory.role.access_changed',
-      { roleId: 'role-dept', reason: 'membership', userIds: ['u-1', 'u-2'] },
-      expect.objectContaining({ actorId: 'admin-1', aggregateType: 'role' }),
-    );
-  });
-
-  it('архивация узла без привязанных ролей — только department.archived', async () => {
-    departments.findById.mockResolvedValue(row('dep', 'root'));
-    audience.departmentUserIds.mockResolvedValue(['u-1']);
-
-    await service.archive('dep', 'admin-1');
-
-    expect(eventBus.emit).not.toHaveBeenCalledWith(
-      'tx-handle',
-      'directory.role.access_changed',
-      expect.anything(),
-      expect.anything(),
-    );
-  });
 });

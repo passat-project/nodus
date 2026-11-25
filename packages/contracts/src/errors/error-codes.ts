@@ -59,6 +59,9 @@ export const ErrorCode = {
    *  меняет родителя, но не теряет его. Юридическая структура — можно.
    *  details.id — подразделение. */
   DIRECTORY_DEPARTMENT_ROOT_FORBIDDEN: 'DIRECTORY_DEPARTMENT_ROOT_FORBIDDEN',
+  /** Удаление юридического подразделения запрещено (#881) — 409: юр. структура
+   *  формальная и в управленческом удалении не участвует. details.id — узел. */
+  DIRECTORY_DEPARTMENT_LEGAL_FORBIDDEN: 'DIRECTORY_DEPARTMENT_LEGAL_FORBIDDEN',
   /** Токен приглашения/сброса неизвестен, просрочен или отозван (#101) — 400:
    *  один код на все причины, чтобы не выдавать состояние токена. */
   INVITATION_INVALID: 'INVITATION_INVALID',

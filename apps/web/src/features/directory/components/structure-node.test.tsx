@@ -99,6 +99,8 @@ function mount(options: MountOptions) {
   const onCreateChild = vi.fn();
   const onInvite = vi.fn();
   const onEdit = vi.fn();
+  const onTransfer = vi.fn();
+  const onDelete = vi.fn();
   render(
     <StructureNode
       node={options.subject}
@@ -117,9 +119,11 @@ function mount(options: MountOptions) {
       onCreateChild={onCreateChild}
       onInvite={onInvite}
       onEdit={onEdit}
+      onTransfer={onTransfer}
+      onDelete={onDelete}
     />,
   );
-  return { stats, onSelect, onToggle, onCreateChild, onInvite, onEdit };
+  return { stats, onSelect, onToggle, onCreateChild, onInvite, onEdit, onTransfer, onDelete };
 }
 
 const card = () => document.querySelector('[data-tree-node]') as HTMLElement;
@@ -246,7 +250,7 @@ describe('StructureNode: композиция карточки (#768)', () => {
     expect(card().className).not.toContain('shadow-');
   });
 
-  it('«⋯» — администратору: приглашение в Nodus и правка отдела', async () => {
+  it('«⋯» — администратору: правка, перевод, приглашение и удаление (#881)', async () => {
     const { onEdit } = mount({ subject: bim, canManage: true });
     expect(screen.queryByRole('menuitem')).toBeNull();
     const trigger = screen.getByRole('button', { name: ui.employees.departmentActions });
@@ -254,7 +258,7 @@ describe('StructureNode: композиция карточки (#768)', () => {
     fireEvent.pointerDown(trigger, { button: 0, pointerType: 'mouse' });
     fireEvent.click(trigger);
     fireEvent.click(
-      await screen.findByRole('menuitem', { name: ui.employees.editDepartmentAction }),
+      await screen.findByRole('menuitem', { name: new RegExp(ui.employees.editDepartmentAction) }),
     );
     expect(onEdit).toHaveBeenCalledWith(bim);
     cleanup();
@@ -263,12 +267,49 @@ describe('StructureNode: композиция карточки (#768)', () => {
     const inviteTrigger = screen.getByRole('button', { name: ui.employees.departmentActions });
     fireEvent.pointerDown(inviteTrigger, { button: 0, pointerType: 'mouse' });
     fireEvent.click(inviteTrigger);
-    fireEvent.click(await screen.findByRole('menuitem', { name: ui.employees.inviteToDepartment }));
+    fireEvent.click(
+      await screen.findByRole('menuitem', { name: new RegExp(ui.employees.inviteToDepartment) }),
+    );
     expect(next.onInvite).toHaveBeenCalledWith(bim);
+    cleanup();
+
+    const transfer = mount({ subject: bim, canManage: true });
+    const transferTrigger = screen.getByRole('button', { name: ui.employees.departmentActions });
+    fireEvent.pointerDown(transferTrigger, { button: 0, pointerType: 'mouse' });
+    fireEvent.click(transferTrigger);
+    fireEvent.click(
+      await screen.findByRole('menuitem', {
+        name: new RegExp(ui.employees.transferFromDepartment),
+      }),
+    );
+    expect(transfer.onTransfer).toHaveBeenCalledWith(bim);
+    cleanup();
+
+    const remove = mount({ subject: bim, canManage: true });
+    const deleteTrigger = screen.getByRole('button', { name: ui.employees.departmentActions });
+    fireEvent.pointerDown(deleteTrigger, { button: 0, pointerType: 'mouse' });
+    fireEvent.click(deleteTrigger);
+    fireEvent.click(
+      await screen.findByRole('menuitem', { name: new RegExp(ui.employees.deleteDepartment) }),
+    );
+    expect(remove.onDelete).toHaveBeenCalledWith(bim);
     cleanup();
 
     mount({ subject: bim, canManage: false });
     expect(screen.queryByRole('button', { name: ui.employees.departmentActions })).toBeNull();
+  });
+
+  it('у главной карточки компании пункта удаления нет (#881)', async () => {
+    mount({ subject: bim, mainId: 'bim', canManage: true });
+    const trigger = screen.getByRole('button', { name: ui.employees.departmentActions });
+    fireEvent.pointerDown(trigger, { button: 0, pointerType: 'mouse' });
+    fireEvent.click(trigger);
+    expect(
+      await screen.findByRole('menuitem', { name: new RegExp(ui.employees.editDepartmentAction) }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole('menuitem', { name: new RegExp(ui.employees.deleteDepartment) }),
+    ).toBeNull();
   });
 
   it('бейдж «Ваше подразделение» — только на моей карточке, верхним краем, нейтральным тоном', () => {

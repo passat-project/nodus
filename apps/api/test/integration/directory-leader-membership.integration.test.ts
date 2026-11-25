@@ -247,13 +247,10 @@ describe('Назначение главы/зама переводит в под�
       name: `Архив-назначение ${f.runId}`,
       kind: 'management',
     });
-    const archived = await f.api(
-      f.users.structureAdmin,
-      'POST',
-      `/directory/departments/${node.id}/archive`,
-      { key: randomUUID() },
-    );
-    expect(archived.status).toBe(204);
+    await f.prisma.department.update({
+      where: { id: node.id },
+      data: { isActive: false },
+    });
     const before = (await card(f.users.employee.id)).departmentId;
 
     const response = await patchDepartment(node.id, { headId: f.users.employee.id });

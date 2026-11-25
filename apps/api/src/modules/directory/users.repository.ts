@@ -173,6 +173,31 @@ export class UsersRepository {
     return this.prisma.user.count({ where: { id: { in: ids } } });
   }
 
+  /** Все сотрудники подразделения, включая уволенных (#881): при удалении
+   *  подразделения они переезжают к родителю в данных, структура показывает
+   *  только активных. Порядок детерминирован. */
+  async findIdsByDepartmentId(departmentId: string, tx?: TransactionClient): Promise<string[]> {
+    const rows = await (tx ?? this.prisma).user.findMany({
+      where: { departmentId },
+      select: { id: true },
+      orderBy: { id: 'asc' },
+    });
+    return rows.map((row) => row.id);
+  }
+
+  /** Массовый перевод сотрудников при удалении подразделения (#881). */
+  async moveDepartment(
+    userIds: readonly string[],
+    departmentId: string,
+    tx: TransactionClient,
+  ): Promise<void> {
+    if (userIds.length === 0) return;
+    await tx.user.updateMany({
+      where: { id: { in: [...userIds] } },
+      data: { departmentId },
+    });
+  }
+
   /** Активные сотрудники управленческих подразделений (bind #490: затронутые
    *  переносом подразделения). Порядок детерминирован. */
   async findActiveIdsByDepartmentIds(

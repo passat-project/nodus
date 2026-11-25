@@ -50,6 +50,8 @@ export function StructureNode({
   onCreateChild,
   onInvite,
   onEdit,
+  onTransfer,
+  onDelete,
 }: {
   node: DepartmentNode;
   /** Глубина в дереве — для порядка наложения рядов детей. */
@@ -73,8 +75,12 @@ export function StructureNode({
   onCreateChild: (parentId: string) => void;
   /** «⋯» карточки: приглашение с предвыбранным подразделением (#101). */
   onInvite: (node: DepartmentNode) => void;
-  /** «⋯» карточки: правка отдела (полное меню действий — #881). */
+  /** «⋯» карточки: правка подразделения. */
   onEdit: (node: DepartmentNode) => void;
+  /** «⋯» карточки: перевод сотрудника в это подразделение (#881). */
+  onTransfer: (node: DepartmentNode) => void;
+  /** «⋯» карточки: удаление с переносом (#881); у главной карточки скрыто. */
+  onDelete: (node: DepartmentNode) => void;
 }) {
   const isMain = node.id === mainId;
   const isMine = myDepartmentId !== null && node.id === myDepartmentId;
@@ -235,7 +241,16 @@ export function StructureNode({
           </span>
         </button>
 
-        {canManage && <StructureNodeMenu node={node} onInvite={onInvite} onEdit={onEdit} />}
+        {canManage && (
+          <StructureNodeMenu
+            node={node}
+            mainCard={isMain}
+            onInvite={onInvite}
+            onEdit={onEdit}
+            onTransfer={onTransfer}
+            onDelete={onDelete}
+          />
+        )}
 
         <StructureNodeFooter
           node={node}
@@ -292,6 +307,8 @@ export function StructureNode({
               onCreateChild={onCreateChild}
               onInvite={onInvite}
               onEdit={onEdit}
+              onTransfer={onTransfer}
+              onDelete={onDelete}
             />
           ))}
         </div>

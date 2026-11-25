@@ -48,7 +48,6 @@ describe('DepartmentsService', () => {
     findParentChain: vi.fn(),
     findSubtreeIds: vi.fn(),
     findRef: vi.fn(),
-    countActiveChildren: vi.fn(),
   };
   const users = { findActiveIdsByDepartmentIds: vi.fn(), findRef: vi.fn() };
   const positions = { findRef: vi.fn() };
@@ -66,7 +65,6 @@ describe('DepartmentsService', () => {
     audience.roleIdsOfDepartments.mockResolvedValue([]);
     audience.departmentUserIds.mockResolvedValue([]);
     departments.lockForUpdate.mockResolvedValue(true);
-    departments.countActiveChildren.mockResolvedValue(0);
     const guard = new RoleAssignmentGuard(roles as never, membership as never);
     const references = new ReferenceGuard(users as never, departments as never, positions as never);
     service = new DepartmentsService(
@@ -310,31 +308,4 @@ describe('DepartmentsService', () => {
     });
   });
 
-  describe('archive', () => {
-    it('архивирует (isActive=false) + событие archived', async () => {
-      departments.findById.mockResolvedValue(row('dep', 'root'));
-
-      await service.archive('dep', 'admin-1');
-
-      expect(departments.update).toHaveBeenCalledWith('dep', { isActive: false }, 'tx-handle');
-      expect(eventBus.emit).toHaveBeenCalledWith(
-        'tx-handle',
-        'directory.department.archived',
-        { departmentId: 'dep' },
-        expect.objectContaining({ actorId: 'admin-1' }),
-      );
-    });
-
-    it('непустой узел → 409 CONFLICT has_children, без записи и события (#441)', async () => {
-      departments.findById.mockResolvedValue(row('dep', 'root'));
-      departments.countActiveChildren.mockResolvedValue(2);
-
-      await expect(service.archive('dep', 'admin-1')).rejects.toMatchObject({
-        code: ErrorCode.CONFLICT,
-        details: { reason: 'has_children' },
-      });
-      expect(departments.update).not.toHaveBeenCalled();
-      expect(eventBus.emit).not.toHaveBeenCalled();
-    });
-  });
 });

@@ -50,6 +50,7 @@ describe('обработчики outbox → проекция поиска (#952)
     );
     expect(SearchIndexProjectHandler.eventTypes).toContain(PROJECT_EVENTS.UPDATED);
     expect(SearchIndexDirectoryHandler.eventTypes).toContain(DIRECTORY_EVENTS.USER_DEACTIVATED);
+    expect(SearchIndexDirectoryHandler.eventTypes).toContain(DIRECTORY_EVENTS.DEPARTMENT_DELETED);
   });
 
   it('handler делегирует событие в runner', async () => {
@@ -73,6 +74,12 @@ describe('обработчики outbox → проекция поиска (#952)
       ['project', ['p1']],
       ['employee', ['u1']],
     ]);
+  });
+
+  it('удаление подразделения переиндексирует прямых сотрудников по userIds', async () => {
+    const { index, runner } = runnerWith();
+    await runner.run(event(DIRECTORY_EVENTS.DEPARTMENT_DELETED, { userIds: ['u1', 42, 'u2'] }));
+    expect(index.indexIds.mock.calls).toEqual([['employee', ['u1', 'u2']]]);
   });
 
   it('оргструктура: отдел/должность/держатели, пустые payload — без вызовов', async () => {
