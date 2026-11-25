@@ -2,7 +2,7 @@
 -- Expand-only: колонка nullable, существующие данные не переписываются, кроме
 -- классификации kind (без неё старые видео остаются «файлами» и не получают
 -- медиа-плитку/постер).
-ALTER TABLE "message_attachments" ADD COLUMN "duration_ms" INTEGER;
+ALTER TABLE "message_attachments" ADD COLUMN IF NOT EXISTS "duration_ms" INTEGER;
 
 UPDATE "message_attachments"
 SET "kind" = 'video'
