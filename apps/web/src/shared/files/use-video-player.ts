@@ -103,6 +103,9 @@ export function useVideoPlayer({
       const max = Number.isFinite(el.duration) ? el.duration : 0;
       el.currentTime = Math.min(Math.max(0, seconds), max);
       setTime(el.currentTime);
+      // Браузер снимает `ended` при перемотке назад — состояние полосы должно
+      // следовать за ним, иначе кнопка остаётся «Воспроизвести заново».
+      setEnded(el.ended);
     },
     [playerRef],
   );

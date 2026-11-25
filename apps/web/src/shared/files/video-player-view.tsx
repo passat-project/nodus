@@ -54,6 +54,37 @@ function handlePlayerKey(event: KeyboardEvent<HTMLVideoElement>, player: VideoPl
   }
 }
 
+/** Пробел на кнопке/ссылке — их собственное нажатие; на фоне и ползунках — пуск/пауза. */
+function spaceBelongsToTarget(target: EventTarget | null): boolean {
+  return !(target instanceof HTMLElement) || target.closest('button, a, [role="button"]') === null;
+}
+
+/**
+ * Клавиши зала на всём слое: после клика по ползунку/кнопке фокус уходит с
+ * кадра, а команды зала должны работать (нативная полоса такого ограничения
+ * не имела — её события всплывали на `<video>`). Кадр свои клавиши уже
+ * обработал (`defaultPrevented`) — здесь только остаток.
+ */
+function handleHallKey(event: KeyboardEvent<HTMLDivElement>, player: VideoPlayer) {
+  if (event.defaultPrevented) return;
+  if (event.altKey || event.ctrlKey || event.metaKey) return;
+  if (event.key === ' ') {
+    if (!spaceBelongsToTarget(event.target)) return;
+    event.preventDefault();
+    player.togglePlay();
+    return;
+  }
+  if (event.code === 'KeyM') {
+    event.preventDefault();
+    player.toggleMute();
+    return;
+  }
+  if (event.code === 'KeyF') {
+    event.preventDefault();
+    player.toggleFullscreen();
+  }
+}
+
 export function VideoPlayerView({
   url,
   name,
@@ -90,6 +121,7 @@ export function VideoPlayerView({
       className="fixed inset-0 z-[80] flex flex-col bg-black/75"
       // Задник закрывает; клики по кадру, шапке и полосе — нет (stopPropagation).
       onClick={close}
+      onKeyDown={(event) => handleHallKey(event, player)}
     >
       <header
         className="flex h-12 shrink-0 items-center gap-2 bg-black px-3"

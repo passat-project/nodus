@@ -59,6 +59,8 @@ function setup() {
     get: () => currentTime,
     set: (value: number) => {
       currentTime = value;
+      // Как в браузере: перемотка до конца — конец, назад — ролик снова живой.
+      ended = duration > 0 && value >= duration;
     },
   });
   return { video, onClose };
@@ -110,6 +112,44 @@ describe('VideoControlBar — своя полоса под кадром (#1054)'
 
     fireEvent.change(seek, { target: { value: '3' } });
     expect(currentTime).toBe(3);
+  });
+
+  it('перемотка назад после конца снимает «Воспроизвести заново»', () => {
+    const { video } = setup();
+    duration = 9;
+    act(() => {
+      video.dispatchEvent(new Event('durationchange'));
+    });
+    ended = true;
+    paused = true;
+    currentTime = 9;
+    act(() => {
+      video.dispatchEvent(new Event('ended'));
+    });
+    expect(screen.getByRole('button', { name: ui.files.replay })).toBeTruthy();
+
+    fireEvent.change(screen.getByRole('slider', { name: ui.files.seek }), {
+      target: { value: '3' },
+    });
+    expect(screen.getByRole('button', { name: ui.files.play })).toBeTruthy();
+  });
+
+  it('клавиши зала работают и без фокуса на кадре', () => {
+    const { video } = setup();
+
+    // Фокус на ползунке (после клика мышью): пробел — пуск/пауза, M — звук.
+    const seek = screen.getByRole('slider', { name: ui.files.seek });
+    fireEvent.keyDown(seek, { key: ' ' });
+    expect(playSpy).toHaveBeenCalled();
+
+    const mute = screen.getByRole('button', { name: ui.files.mute });
+    fireEvent.keyDown(mute, { key: 'm', code: 'KeyM' });
+    expect(video.muted).toBe(true);
+
+    // Пробел на кнопке — её собственное нажатие: пуск не дублируется.
+    playSpy.mockClear();
+    fireEvent.keyDown(mute, { key: ' ' });
+    expect(playSpy).not.toHaveBeenCalled();
   });
 
   it('звук: выключение и включение', () => {
