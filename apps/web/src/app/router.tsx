@@ -1,4 +1,4 @@
-import { lazy, type ComponentType } from 'react';
+import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
 import {
   createRootRoute,
   createRoute,
@@ -22,14 +22,25 @@ import { useRemoveBootSplash } from './boot-splash.js';
  * открывается» (репорт владельца 24.09, #88). Guard: ошибка импорта → ОДИН
  * reload страницы за сессионный флаг (против цикла), успешный импорт флаг
  * снимает; повторный неуспех после reload — честная ошибка в экран роутера.
+ *
+ * Страница отвечает на `preload()` (#1051): роутер зовёт его при наведении на
+ * раздел (`defaultPreload: 'intent'`) — чанк грузится до клика. У `React.lazy`
+ * такого метода нет (роутер молча пропускает `component.preload?.()`), поэтому
+ * наведение и первый рендер ждут один и тот же импорт.
  */
 const CHUNK_RELOAD_KEY = 'nodus-chunk-reload';
-function pageLoader(loader: () => Promise<{ default: ComponentType }>) {
-  return lazy(() =>
-    loader().then(
-      (m) => {
+type PageModule = { default: ComponentType };
+export type PreloadablePage = LazyExoticComponent<ComponentType> & {
+  preload: () => Promise<void>;
+};
+
+export function pageLoader(loader: () => Promise<PageModule>): PreloadablePage {
+  let pending: Promise<PageModule> | undefined;
+  const load = (): Promise<PageModule> => {
+    pending ??= loader().then(
+      (module) => {
         sessionStorage.removeItem(CHUNK_RELOAD_KEY);
-        return m;
+        return module;
       },
       (error: unknown) => {
         if (!sessionStorage.getItem(CHUNK_RELOAD_KEY)) {
@@ -38,10 +49,21 @@ function pageLoader(loader: () => Promise<{ default: ComponentType }>) {
           return new Promise<never>(() => {});
         }
         sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+        // Не копится: клик и повторное наведение пробуют импорт снова.
+        pending = undefined;
         throw error;
       },
-    ),
-  );
+    );
+    return pending;
+  };
+  const Page = lazy(load) as PreloadablePage;
+  // Провал предзагрузки не рвёт страницу: рендер повторит импорт сам.
+  Page.preload = () =>
+    load().then(
+      () => undefined,
+      () => undefined,
+    );
+  return Page;
 }
 
 const LoginPage = pageLoader(PAGE_IMPORTS.login);

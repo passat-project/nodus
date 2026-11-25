@@ -16,7 +16,7 @@ import {
 } from '../../../shared/custom-fields/value-patch.js';
 import {
   applyServerTask,
-  publishOptimisticTask,
+  publishTaskFace,
   restoreTaskOverlay,
 } from '../../../shared/api/task-cache.js';
 import { invalidateAfterTaskMutation } from '../../../shared/api/task-invalidate.js';
@@ -55,10 +55,13 @@ export function useUpdateTaskCustomField(taskId: string) {
         queryKey: tasksKeys.listPages(),
       });
       // Доски — оверлеем (#1051): атрибут на карточке меняется в тот же кадр.
-      const previousItem = publishOptimisticTask(queryClient, taskId, (row) => ({
-        customFields: patchedValues(row.customFields, vars.fieldId, vars.value),
-        customFieldRefs: mergedRefs(row.customFieldRefs, vars.refs),
-      }));
+      // База патча — карточка детали (тот же состав атрибутов, что у строки).
+      const previousItem = previous
+        ? publishTaskFace(taskId, {
+            customFields: patchedValues(previous.customFields, vars.fieldId, vars.value),
+            customFieldRefs: mergedRefs(previous.customFieldRefs, vars.refs),
+          })
+        : undefined;
       if (previous) {
         queryClient.setQueryData<TaskDetail>(tasksKeys.detail(taskId), {
           ...previous,

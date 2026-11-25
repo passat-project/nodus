@@ -69,7 +69,8 @@ export function networkAllowsWarmup(connection: NetworkInformation | undefined):
   return !(connection?.saveData || SLOW_NETWORKS.has(connection?.effectiveType ?? ''));
 }
 
-function browserEnv(): WarmupEnv {
+/** Среда браузера: реальная пауза, реальный простой, реальные импорты. */
+export function browserEnv(): WarmupEnv {
   let first = true;
   return {
     async idle() {

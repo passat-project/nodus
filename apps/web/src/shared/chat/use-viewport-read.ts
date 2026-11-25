@@ -10,6 +10,7 @@ import { isDomainMocked } from '../api/api-mock-config.js';
 import { wsDebugLog } from '../socket/ws-debug.js';
 import { chatKeys } from './chat-keys.js';
 import { invalidateConversationLists } from './conversation-list-invalidation.js';
+import { patchConversationRowsRead } from './conversation-rows.js';
 import {
   createReadReceiptScheduler,
   type ReadReceiptScheduler,
@@ -63,6 +64,9 @@ export function maxSeenSeq(
  * сервере): иначе отставший знак в следующем снимке списка «воскрешал» плашку
  * «Непрочитанные сообщения» над уже прочитанным (#845). Параметр необязателен
  * для вызовов, которым нужен только счётчик.
+ *
+ * Одиночная строка той же беседы (вкладка чата карточки задачи, #1051) гасится
+ * вместе со списком: её значок непрочитанного читает та же строка.
  */
 export function applyReadToCache(
   queryClient: QueryClient,
@@ -95,6 +99,7 @@ export function applyReadToCache(
       : old,
   );
   const cleared = target?.snoozed ? 0 : (target?.unreadCount ?? 0);
+  patchConversationRowsRead(queryClient, conversationId, upToSeq);
   if (cleared > 0) {
     const entity = target?.type === 'task' || target?.type === 'letter';
     queryClient.setQueryData<ChatUnreadSummary>(chatKeys.unreadSummary(), (old) => {

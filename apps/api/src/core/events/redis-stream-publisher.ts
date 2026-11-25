@@ -23,6 +23,8 @@ interface PendingEventRow {
   type: string;
   payload: unknown;
   createdAt: Date;
+  /** Автор действия (`events.actor_id`); null — системное событие. */
+  actorId: string | null;
 }
 
 /**
@@ -104,7 +106,7 @@ export class RedisStreamPublisher implements OnModuleInit, OnModuleDestroy {
   private async runPass(): Promise<void> {
     try {
       const rows = await this.prisma.$queryRaw<PendingEventRow[]>(
-        Prisma.sql`SELECT id, seq, type, payload, created_at AS "createdAt"
+        Prisma.sql`SELECT id, seq, type, payload, created_at AS "createdAt", actor_id AS "actorId"
                    FROM events
                    WHERE fanout_at IS NULL
                    ORDER BY seq ASC
@@ -120,6 +122,7 @@ export class RedisStreamPublisher implements OnModuleInit, OnModuleDestroy {
           payload: row.payload,
           seq: Number(row.seq),
           ts: row.createdAt.toISOString(),
+          ...(row.actorId ? { actorId: row.actorId } : {}),
         };
         pipeline.xadd(
           DOMAIN_EVENTS_STREAM,

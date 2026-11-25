@@ -118,4 +118,24 @@ describe('boot-splash: стартовая заставка (#1051)', () => {
   it('повторный вызов и отсутствие заставки — не ошибка', () => {
     expect(() => removeBootSplash()).not.toThrow();
   });
+
+  it('страховка: скрипты не дошли — заставку снимает таймер в index.html', () => {
+    vi.useFakeTimers();
+    try {
+      const splash = mountSplash();
+      const safety = indexHtml.match(
+        /<script>([^<]*getElementById\('nodus-boot-splash'\)[^<]*)<\/script>/,
+      );
+      expect(safety).not.toBeNull();
+      new Function(safety![1]!)();
+      vi.advanceTimersByTime(14_999);
+      expect(splash.isConnected).toBe(true);
+      vi.advanceTimersByTime(1);
+      expect(splash.isConnected).toBe(false);
+      // Повторный тик (второй запуск скрипта) — не ошибка: заставки уже нет.
+      expect(() => new Function(safety![1]!)()).not.toThrow();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -24,8 +24,12 @@ function fakeIo() {
   return { io, calls };
 }
 
-function envelope(type: string, payload: Record<string, unknown>): RealtimeEnvelope {
-  return { type, payload, seq: 1, ts: '2026-09-25T00:00:00.000Z' };
+function envelope(
+  type: string,
+  payload: Record<string, unknown>,
+  actorId?: string,
+): RealtimeEnvelope {
+  return { type, payload, seq: 1, ts: '2026-09-25T00:00:00.000Z', ...(actorId ? { actorId } : {}) };
 }
 
 describe('routeEnvelope', () => {
@@ -230,6 +234,21 @@ describe('routeEnvelope', () => {
     for (const call of calls) {
       expect(call.envelope.payload).not.toHaveProperty('audience');
       expect(call.envelope.payload).toMatchObject({ taskId: 't1', number: 1 });
+    }
+  });
+
+  it('actorId доходит до клиента — и при вырезании служебной аудитории (#1051)', async () => {
+    const { io, calls } = fakeIo();
+    const store: MembershipStore = { isMember: vi.fn(), memberIds: vi.fn(), userRef: vi.fn() };
+    await routeEnvelope(
+      io,
+      store,
+      envelope('task.updated', { taskId: 't1', audience: [USER_A, USER_B] }, USER_B),
+    );
+    // Актёр — в аудитории: своё эхо он гасит по автору события.
+    for (const call of calls) {
+      expect(call.envelope.actorId).toBe(USER_B);
+      expect(call.envelope.payload).toEqual({ taskId: 't1' });
     }
   });
 

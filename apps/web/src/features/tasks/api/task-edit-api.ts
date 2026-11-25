@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { api } from '../../../shared/api-client.js';
 import {
   applyServerTask,
-  publishOptimisticTask,
+  publishTaskFace,
   restoreTaskOverlay,
 } from '../../../shared/api/task-cache.js';
 import { invalidateAfterTaskMutation } from '../../../shared/api/task-invalidate.js';
@@ -55,7 +55,7 @@ export function useUpdateTask(taskId: string) {
         queryKey: tasksKeys.listPages(),
       });
       const row = listPatch(patch);
-      const previousItem = publishOptimisticTask(queryClient, taskId, () => row);
+      const previousItem = publishTaskFace(taskId, row);
       if (previous)
         queryClient.setQueryData<TaskDetail>(tasksKeys.detail(taskId), { ...previous, ...patch });
       queryClient.setQueriesData<InfiniteData<Paginated<TaskListItem>>>(

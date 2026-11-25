@@ -73,6 +73,15 @@
         </g>
       </svg>
     </div>
+    <!-- Страховка: заставку снимает первый экран приложения (app/boot-splash.ts).
+         Если скрипты не дошли или упали до него — снимает таймер: иначе вечная
+         заставка закрывала бы и экран ошибки роутера. -->
+    <script>
+      setTimeout(function () {
+        var splash = document.getElementById('nodus-boot-splash');
+        if (splash) splash.remove();
+      }, 15000);
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

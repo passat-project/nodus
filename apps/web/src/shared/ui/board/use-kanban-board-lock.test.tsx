@@ -11,7 +11,12 @@ import type { DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core'
 import type { TaskListItem, TaskStage } from '@nodus/contracts';
 
 import { resetRecentInvalidations } from '../../api/task-invalidate.js';
-import { publishTaskItem, resetTaskOverlay, taskOverlayItem } from '../../api/task-overlay.js';
+import {
+  hasTaskOverlay,
+  publishTaskItem,
+  publishTaskPatch,
+  resetTaskOverlay,
+} from '../../api/task-overlay.js';
 import { globalAxis } from '../../lib/board/kanban-board.js';
 import { useKanbanBoard } from './use-kanban-board.js';
 
@@ -121,6 +126,7 @@ const columnOf = (board: Board, id: string) =>
 describe('useKanbanBoard: замок переносов и оверлей (#1051)', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     resetTaskOverlay();
     resetRecentInvalidations();
     server.a = [];
@@ -203,10 +209,9 @@ describe('useKanbanBoard: замок переносов и оверлей (#1051
     stubFeeds();
     const board = renderBoard();
     await waitFor(() => expect(board.rendered.result.current.ready).toBe(true));
-    const before = board.rendered.result.current.items[0] as TaskListItem;
 
     act(() => {
-      publishTaskItem({ ...before, title: 'Новое имя' }, true);
+      publishTaskPatch('t1', { title: 'Новое имя' });
     });
     expect(titleOf(board, 't1')).toBe('Новое имя');
 
@@ -214,14 +219,99 @@ describe('useKanbanBoard: замок переносов и оверлей (#1051
     await refetchColumns(board.client);
     expect(titleOf(board, 't1')).toBe('Новое имя');
 
-    // Ответ сервера → запись более не оптимистичная; свежая страницу её снимает.
+    // Ответ сервера: запись более не оптимистичная — свежая страница её снимает.
     act(() => {
-      publishTaskItem({ ...before, title: 'Новое имя' });
+      publishTaskPatch('t1', { title: 'Новое имя' }, false);
     });
-    expect(taskOverlayItem('t1')).toBeDefined();
+    expect(hasTaskOverlay('t1')).toBe(true);
     server.a = [task('t1', A, 'Новое имя')];
     await refetchColumns(board.client);
-    await waitFor(() => expect(taskOverlayItem('t1')).toBeUndefined());
+    await waitFor(() => expect(hasTaskOverlay('t1')).toBe(false));
     expect(titleOf(board, 't1')).toBe('Новое имя');
+  });
+
+  it('строка оверлея с прежней колонкой не уводит карточку: размещение — за бордом', async () => {
+    server.a = [task('t1', A)];
+    stubFeeds();
+    const onMove = vi.fn();
+    const board = renderBoard(onMove);
+    const opts = await dragT1ToB(board, onMove); // перенос в полёте: карточка в B под замком
+
+    // Ответ мутации правки принёс задачу, какой сервер видел ДО переноса.
+    act(() => {
+      publishTaskItem(task('t1', A, 'Переименована в полёте'));
+    });
+    expect(titleOf(board, 't1')).toBe('Переименована в полёте');
+    expect(columnOf(board, 't1')).toBe('b');
+
+    // Патч, собранный из строки кэша с прежней колонкой, — та же история.
+    act(() => {
+      publishTaskPatch('t1', { title: 'Ещё правка', stage: A });
+    });
+    expect(titleOf(board, 't1')).toBe('Ещё правка');
+    expect(columnOf(board, 't1')).toBe('b');
+
+    // Ответ сервера подтверждает правку: запись более не оптимистичная.
+    act(() => {
+      publishTaskPatch('t1', { title: 'Ещё правка', stage: A }, false);
+    });
+
+    // Ответ переноса: свежая страница колонки расставляет всё по серверу.
+    server.a = [];
+    server.b = [task('t1', B, 'Ещё правка')];
+    await act(async () => {
+      opts.onSettled();
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
+    await waitFor(() => expect(hasTaskOverlay('t1')).toBe(false));
+    expect(columnOf(board, 't1')).toBe('b');
+    expect(titleOf(board, 't1')).toBe('Ещё правка');
+  });
+
+  it('карточка, которой нет ни в одном кэше (догружена sentinel-ом), тоже принимает правку', async () => {
+    server.a = [task('t1', A)];
+    stubFeeds();
+    const board = renderBoard();
+    await waitFor(() => expect(board.rendered.result.current.ready).toBe(true));
+    // Борд держит карточку в своём состоянии, страницы колонок в кэше нет.
+    for (const query of board.client.getQueryCache().findAll({ queryKey: ['test-board'] })) {
+      board.client.getQueryCache().remove(query);
+    }
+
+    act(() => {
+      publishTaskPatch('t1', { title: 'Правка без кэша' });
+    });
+
+    expect(titleOf(board, 't1')).toBe('Правка без кэша');
+    expect(columnOf(board, 't1')).toBe('a');
+  });
+
+  it('страховка замка: ответ переноса потерян — через 15 с доска снова принимает свежие страницы', async () => {
+    server.a = [task('t1', A)];
+    stubFeeds();
+    let safety: (() => void) | undefined;
+    const schedule = globalThis.setTimeout;
+    vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: () => void, ms?: number) => {
+      if (ms === 15_000) {
+        safety = fn;
+        return {} as ReturnType<typeof setTimeout>;
+      }
+      return schedule(fn, ms);
+    }) as typeof setTimeout);
+    const onMove = vi.fn();
+    const board = renderBoard(onMove);
+    await dragT1ToB(board, onMove); // ни onError, ни onSettled не пришли
+    await waitFor(() => expect(safety).toBeTypeOf('function'));
+
+    server.a = [task('t1', A, 't1-fresh')];
+    await refetchColumns(board.client);
+    expect(columnOf(board, 't1')).toBe('b'); // под замком страница не применяется
+
+    act(() => {
+      safety?.();
+    });
+    await refetchColumns(board.client);
+    await waitFor(() => expect(titleOf(board, 't1')).toBe('t1-fresh'));
+    expect(columnOf(board, 't1')).toBe('a');
   });
 });

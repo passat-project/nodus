@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PAGE_IMPORTS, pageImportForPath, preloadPage } from './page-imports.js';
-import { router } from './router.js';
+import { pageLoader, router, type PreloadablePage } from './router.js';
 
 /**
  * Чанк раздела грузится заранее — при обновлении страницы (параллельно входу)
@@ -33,7 +33,40 @@ describe('page-imports: адрес раздела → его чанк (#1051)', 
   });
 
   it('по наведению на раздел чанк грузится до клика', () => {
+    // Роутер вызывает component.preload?.() и молча пропускает страницы без него
+    // (router-core, load-client.ts); у React.lazy такого метода нет — «intent»
+    // без preload ничего не грузил. Любая lazy-страница обязана его иметь.
     expect(router.options.defaultPreload).toBe('intent');
+    const lazyPages = Object.values(router.routesById).filter(
+      (route) =>
+        (route.options.component as { $$typeof?: symbol } | undefined)?.$$typeof ===
+        Symbol.for('react.lazy'),
+    );
+    expect(lazyPages.length).toBeGreaterThan(5);
+    for (const route of lazyPages) {
+      const page = route.options.component as PreloadablePage;
+      expect(typeof page.preload, route.id).toBe('function');
+    }
+  });
+
+  it('pageLoader: наведение и рендер ждут один импорт; провал предзагрузки не копится', async () => {
+    const importer = vi.fn(async () => ({ default: () => null }));
+    const Page = pageLoader(importer);
+    await Page.preload();
+    await Page.preload();
+    expect(importer).toHaveBeenCalledTimes(1);
+
+    // Флаг guard стоит — перезагрузки не будет; ошибка проглочена, попытка повторяется.
+    sessionStorage.setItem('nodus-chunk-reload', '1');
+    const flaky = vi
+      .fn<() => Promise<{ default: () => null }>>()
+      .mockRejectedValueOnce(new Error('сеть'))
+      .mockResolvedValue({ default: () => null });
+    const Flaky = pageLoader(flaky);
+    await expect(Flaky.preload()).resolves.toBeUndefined();
+    await Flaky.preload();
+    expect(flaky).toHaveBeenCalledTimes(2);
+    sessionStorage.removeItem('nodus-chunk-reload');
   });
 
   it('провал предзагрузки не рвёт страницу: перезагрузит guard роутера при входе', async () => {
@@ -41,6 +74,13 @@ describe('page-imports: адрес раздела → его чанк (#1051)', 
 
     await expect(preloadPage('/login')).resolves.toBeUndefined();
     expect(failing).toHaveBeenCalledTimes(1);
+  });
+
+  it('каждый импорт таблицы разрешается модулем страницы', async () => {
+    for (const [key, load] of Object.entries(PAGE_IMPORTS)) {
+      const module = await load();
+      expect(typeof module.default, key).toBe('function');
+    }
   });
 
   it('предзагрузка корня ничего не грузит', async () => {

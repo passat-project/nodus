@@ -14,7 +14,8 @@ import { chatKeys } from './chat-keys.js';
  * участников.
  *
  * Обновляют списки: сам список (превью, порядок по активности), вкладки
- * мессенджера, пикеры поиска и сводка непрочитанных по вкладкам.
+ * мессенджера, пикеры поиска и сводка непрочитанных по вкладкам. Одиночные
+ * строки куста обновляет событие своей беседы — `conversation-rows.ts`.
  */
 export function invalidateConversationLists(queryClient: QueryClient): void {
   const base = chatKeys.conversations();

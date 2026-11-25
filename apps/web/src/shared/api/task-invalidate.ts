@@ -35,6 +35,12 @@ export function invalidateNow(
   return queryClient.invalidateQueries({ queryKey: key, ...options });
 }
 
+/** Поставить метку «только что своими руками» без перезапроса: ключ уже
+ *  записан в кэш из ответа собственной мутации, эхо этого события его пропустит. */
+export function stampRecentInvalidation(key: readonly unknown[], at = Date.now()): void {
+  recently.set(stampOf(key), at);
+}
+
 /** Пометить устаревшим без перезапроса — догонит эхо, монтирование или фокус. */
 export function markStale(queryClient: QueryClient, key: readonly unknown[]): Promise<void> {
   return queryClient.invalidateQueries({ queryKey: key, refetchType: 'none' });

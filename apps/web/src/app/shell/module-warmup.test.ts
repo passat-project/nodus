@@ -1,14 +1,30 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useUiPrefsStore } from '../../shared/preferences/ui-prefs-store.js';
+import { PAGE_IMPORTS } from '../page-imports.js';
 import {
+  browserEnv,
   networkAllowsWarmup,
   runModuleWarmup,
+  startModuleWarmup,
   warmupPlan,
   type WarmupEnv,
   type WarmupKey,
 } from './module-warmup.js';
+
+// Движок PDF в тесте не нужен: импорт подменён, грузится сама ветка `load('pdf')`.
+vi.mock('../../shared/files/pdf-viewer.js', () => ({ PdfViewer: () => null }));
+
+/** Свободные моменты браузера под ручным управлением: колбэк зовёт тест. */
+function idleSink() {
+  const idled: Array<{ fire: () => void; timeout: number | undefined }> = [];
+  vi.stubGlobal('requestIdleCallback', (cb: () => void, options?: { timeout?: number }) => {
+    idled.push({ fire: cb, timeout: options?.timeout });
+    return idled.length;
+  });
+  return idled;
+}
 
 /**
  * Фоновый прогрев разделов (#1051): чанки видимых модулей и движок PDF
@@ -147,5 +163,83 @@ describe('module-warmup: план и ход прогрева (#1051)', () => {
     expect(networkAllowsWarmup({ saveData: false, effectiveType: '4g' })).toBe(true);
     expect(networkAllowsWarmup(undefined)).toBe(true);
     expect(networkAllowsWarmup({})).toBe(true);
+  });
+
+  it('браузерная среда: пауза до первого чанка, дальше — свободный момент за свободным', async () => {
+    vi.useFakeTimers();
+    const idled = idleSink();
+    const tasks = vi.spyOn(PAGE_IMPORTS, 'tasks').mockResolvedValue({ default: () => null });
+    try {
+      const env = browserEnv();
+
+      const first = env.idle();
+      await vi.advanceTimersByTimeAsync(1_499);
+      expect(idled).toHaveLength(0);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(idled[0]?.timeout).toBe(4_000); // без простоя под непрерывным вводом
+      idled[0]!.fire();
+      await first;
+
+      const second = env.idle();
+      expect(idled).toHaveLength(2);
+      idled[1]!.fire();
+      await second;
+
+      expect(env.allowed()).toBe(true);
+      await env.load('tasks');
+      await env.load('pdf');
+      expect(tasks).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('без requestIdleCallback свободный момент — таймер; Data Saver выключает прогрев', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('requestIdleCallback', undefined);
+    try {
+      const env = browserEnv();
+      const first = env.idle();
+      await vi.advanceTimersByTimeAsync(1_500 + 500);
+      await first;
+
+      // Data Saver в браузере — прогрев выключен (jsdom даёт navigator без connection).
+      Object.defineProperty(navigator, 'connection', {
+        value: { saveData: true },
+        configurable: true,
+      });
+      try {
+        expect(env.allowed()).toBe(false);
+      } finally {
+        Reflect.deleteProperty(navigator, 'connection');
+      }
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('startModuleWarmup: один запуск на страницу; чанк — после паузы и в свободный момент', async () => {
+    vi.useFakeTimers();
+    const idled = idleSink();
+    const home = vi.spyOn(PAGE_IMPORTS, 'home').mockResolvedValue({ default: () => null });
+    try {
+      void startModuleWarmup();
+      expect(home).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1_500);
+      expect(home).not.toHaveBeenCalled(); // ждёт свободного момента
+      idled[0]!.fire();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(home).toHaveBeenCalledTimes(1);
+
+      // Второй вызов ничего не грузит: прогрев уже идёт.
+      await startModuleWarmup();
+      expect(idled).toHaveLength(2);
+      expect(home).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
   });
 });

@@ -3,9 +3,9 @@ import { TASK_EVENTS, type Paginated, type TaskListItem } from '@nodus/contracts
 
 import { projectsKeys } from '../api/projects-list.js';
 import { tasksKeys } from '../api/tasks-keys.js';
-import { isFreshFromMutation } from '../api/fresh-from-mutation.js';
 import { stageIdOfColumnKey } from '../lib/board/kanban-column-key.js';
 import type { KeyBatcher } from './invalidation-batcher.js';
+import type { EchoAwareBatcher } from './echo-batcher.js';
 
 /** Задача могла ВПЕРВЫЕ появиться на доске в колонке, которую событие не
  *  называет: точечно не вычислить — доски перезапрашиваются целиком (редкие
@@ -110,10 +110,11 @@ function pushKanbanKeys(
 
 /** Ключи кэша задач по событию `task.*` (#311). Сервер шлёт событие
  *  аудитории задачи (user-комнаты, gateway fanout #37) — включая актёра:
- *  собственная мутация уже инвалидировала то же самое, батчер схлопнет
- *  повтор в окне. Личные стадии «Моего плана» — только доска и каталог. */
+ *  эхо собственной мутации батчер гасит по автору события и метке недавней
+ *  инвалидации (`echo-batcher.ts`), правка коллеги проходит. Личные стадии
+ *  «Моего плана» — только доска и каталог. */
 export function pushTaskKeys(
-  batcher: KeyBatcher,
+  batcher: EchoAwareBatcher,
   queryClient: QueryClient,
   type: string,
   payload: Record<string, unknown>,
@@ -124,10 +125,8 @@ export function pushTaskKeys(
     batcher.push(tasksKeys.kanbanAll(), 'list');
     return;
   }
-  // Деталь и кнопки, только что записанные из ответа своей мутации, эхо не
-  // перезапрашивает (отклик панели процесса, #378). Исключение — формульная
-  // запись: пересчёт зависимых ячеек идёт ПОСЛЕ ответа мутации, поэтому
-  // ответ содержит старые значения и деталь нужно перечитать даже автору.
+  // Формульная запись: пересчёт зависимых ячеек идёт ПОСЛЕ ответа мутации,
+  // поэтому ответ содержит старые значения — деталь перечитывает и автор.
   const formulaWrite = payload.formulaWrite === true;
   if (taskId && formulaWrite) {
     // Пересчёт приходит ПОСЛЕ ответа мутации. К этому моменту деталь уже
@@ -138,8 +137,8 @@ export function pushTaskKeys(
     void queryClient
       .cancelQueries({ queryKey: tasksKeys.detail(taskId) })
       .then(() => queryClient.invalidateQueries({ queryKey: tasksKeys.detail(taskId) }));
-    batcher.push(tasksKeys.transitions(taskId), 'feed');
-  } else if (taskId && !isFreshFromMutation(taskId)) {
+    batcher.push(tasksKeys.transitions(taskId), 'feed', { force: true });
+  } else if (taskId) {
     batcher.push(tasksKeys.detail(taskId), 'feed');
     batcher.push(tasksKeys.transitions(taskId), 'feed');
   }

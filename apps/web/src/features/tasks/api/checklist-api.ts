@@ -4,7 +4,11 @@ import { ui } from '@nodus/contracts';
 import { toast } from 'sonner';
 
 import { api } from '../../../shared/api-client.js';
-import { publishOptimisticTask, restoreTaskOverlay } from '../../../shared/api/task-cache.js';
+import {
+  publishTaskFace,
+  restoreTaskOverlay,
+  type OverlayToken,
+} from '../../../shared/api/task-cache.js';
 import { invalidateAfterTaskMutation } from '../../../shared/api/task-invalidate.js';
 import { tasksKeys } from '../../../shared/api/tasks-keys.js';
 
@@ -32,16 +36,19 @@ function patchChecklist(
 
 /** Бейдж «n/m» на карточке доски — оверлеем (#1051): сервер отвечает пунктом,
  *  а не строкой задачи, поэтому после ответа публикуется итоговое значение. */
-function publishChecklistCounts(queryClient: QueryClient, taskId: string, optimistic: boolean) {
+function publishChecklistCounts(
+  queryClient: QueryClient,
+  taskId: string,
+  optimistic: boolean,
+): OverlayToken | undefined {
   const detail = queryClient.getQueryData<TaskDetail>(tasksKeys.detail(taskId));
   if (!detail) return undefined;
-  return publishOptimisticTask(
-    queryClient,
+  return publishTaskFace(
     taskId,
-    () => ({
+    {
       checklistTotal: detail.checklist.length,
       checklistDone: detail.checklist.filter((i) => i.done).length,
-    }),
+    },
     optimistic,
   );
 }
