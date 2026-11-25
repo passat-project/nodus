@@ -2463,6 +2463,7 @@ dependencies = [
  "tauri-plugin-snap-layout",
  "tauri-plugin-updater",
  "tauri-plugin-window-state",
+ "uuid",
  "windows 0.61.3",
 ]
 

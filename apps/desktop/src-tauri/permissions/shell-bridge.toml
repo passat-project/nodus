@@ -78,3 +78,13 @@ commands.allow = ["window_minimize", "window_toggle_maximize", "window_close", "
 identifier = "allow-copy-text"
 description = "Записать текст в буфер обмена (только запись, до 4096 символов)."
 commands.allow = ["copy_text"]
+
+[[permission]]
+identifier = "allow-downloads-list"
+description = "Реестр загрузок оболочки (последние 100 завершённых, новые первыми)."
+commands.allow = ["downloads_list"]
+
+[[permission]]
+identifier = "allow-download-reveal"
+description = "Показать скачанный файл в проводнике (только каталог «Загрузки», симлинки наружу отвергаются)."
+commands.allow = ["download_reveal"]

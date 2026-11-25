@@ -3,6 +3,7 @@ mod anchor;
 mod badge;
 mod bridge;
 mod deep_link;
+mod download_registry;
 mod download_slot;
 mod downloads;
 mod fade;
@@ -124,6 +125,9 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
             create_main_window(&handle)?;
+            // Реестр загрузок (#1038, раздел 5): помнит последние 100 между
+            // запусками; битый файл = пустой реестр (лог, не паника).
+            download_registry::load_registry(&handle);
             tray_menu::setup(&handle)?;
             deep_link::setup(&handle)?;
             // Активность пользователя (клик/клавиша, без движения мыши) —
@@ -220,6 +224,8 @@ pub fn run() {
             popups::popup_submit_reply,
             popups::popup_open,
             downloads::popup_reveal_download,
+            download_registry::downloads_list,
+            download_registry::download_reveal,
         ])
         .run(tauri::generate_context!())
         .expect("оболочка Nodus упала");

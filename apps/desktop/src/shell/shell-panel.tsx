@@ -1,10 +1,23 @@
 import { useEffect, useState } from 'react';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { SHELL_PANEL_HEIGHT, ui, type ShellUpdateState } from '@nodus/contracts';
+import {
+  SHELL_PANEL_HEIGHT,
+  ui,
+  type DownloadEntry,
+  type ShellUpdateState,
+} from '@nodus/contracts';
 
 import { shellApi, type UpdateOutcome } from './shell-ipc.js';
 
 const t = ui.desktop;
+
+/** Метка времени записи реестра: день.месяц часы:минуты (язык интерфейса один — ru). */
+const finishedAtFmt = new Intl.DateTimeFormat('ru-RU', {
+  day: '2-digit',
+  month: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+});
 
 /** DOM-id кнопки максимизации — по нему snap-плагин оболочки навешивает
  *  нативный HTMAXBUTTON-оверлей (Win11 Snap Layouts, ADR-0055). Тот же id
@@ -21,6 +34,7 @@ const MAXIMIZE_BUTTON_ID = 'portal-window-maximize';
 export function ShellPanel() {
   const [maximized, setMaximized] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [downloadsOpen, setDownloadsOpen] = useState(false);
   // Оверлей перехватывает pointer-события над кнопкой максимизации —
   // :hover страницы не срабатывает; плагин прокидывает вход/выход курсора
   // событиями (Tailwind-классовое :hover их автоматика не зеркалит).
@@ -92,15 +106,22 @@ export function ShellPanel() {
               N
             </span>
           </button>
-          <button
-            type="button"
-            disabled
-            title={t.panelDownloads}
-            aria-label={t.panelDownloads}
-            className="text-muted-foreground/50 hover:bg-muted flex w-[42px] cursor-default items-center justify-center text-[15px]"
-          >
-            ⤓
-          </button>
+          {/* «Загрузки» (эпик #1038, раздел 5): реестр последних загрузок
+              оболочки с «Показать в папке». */}
+          <div className="relative flex">
+            <button
+              type="button"
+              title={t.panelDownloads}
+              aria-label={t.panelDownloads}
+              aria-haspopup="dialog"
+              aria-expanded={downloadsOpen}
+              onClick={() => setDownloadsOpen(true)}
+              className="text-muted-foreground hover:bg-muted hover:text-foreground flex w-[42px] items-center justify-center text-[15px]"
+            >
+              ⤓
+            </button>
+            {downloadsOpen ? <DownloadsPopover onClose={() => setDownloadsOpen(false)} /> : null}
+          </div>
           <button
             type="button"
             title={t.panelWindowMinimize}
@@ -242,5 +263,83 @@ function AppMenuDialog({ onClose }: { onClose: () => void }) {
         </div>
       </section>
     </div>
+  );
+}
+
+/**
+ * Поповер «Загрузки» (эпик #1038, раздел 5): реестр последних завершённых
+ * загрузок оболочки — память между запусками (downloads.json в Rust), новые
+ * сверху. «Показать в папке» — только у успешных записей с путём; гвард
+ * каталога «Загрузки» выполняет Rust-сторона команды.
+ */
+function DownloadsPopover({ onClose }: { onClose: () => void }) {
+  const [entries, setEntries] = useState<DownloadEntry[] | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void shellApi
+      .downloadsList()
+      .then((list) => {
+        if (alive) setEntries(list);
+      })
+      .catch(() => {
+        if (alive) setEntries([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <>
+      {/* Невидимый фон: клик/выбор мимо списка закрывает поповер. */}
+      <div className="fixed inset-0" onMouseDown={onClose} />
+      <section
+        role="dialog"
+        aria-label={t.downloadsTitle}
+        className="bg-card text-foreground absolute right-0 top-full z-50 mt-1 max-h-[320px] w-80 overflow-y-auto rounded-[10px] border py-1 shadow-lg"
+      >
+        {entries === null ? (
+          <p className="text-muted-foreground px-3 py-2 text-sm">…</p>
+        ) : entries.length === 0 ? (
+          <p className="text-muted-foreground px-3 py-2 text-sm">{t.downloadsEmpty}</p>
+        ) : (
+          entries.map((entry) => (
+            <div
+              key={entry.id}
+              className="hover:bg-muted flex items-center gap-2 border-b px-3 py-2 last:border-b-0"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm leading-snug" title={entry.fileName}>
+                  {entry.fileName}
+                </p>
+                <p className="text-muted-foreground mt-0.5 text-xs leading-snug">
+                  {entry.success
+                    ? finishedAtFmt.format(new Date(entry.finishedAtMs))
+                    : t.downloadFailedShort}
+                </p>
+              </div>
+              {entry.success && entry.path ? (
+                <button
+                  type="button"
+                  onClick={() => void shellApi.downloadReveal(entry.path)}
+                  className="text-muted-foreground hover:text-foreground h-7 shrink-0 rounded-[8px] px-2 text-xs"
+                >
+                  {t.downloadsShowInFolder}
+                </button>
+              ) : null}
+            </div>
+          ))
+        )}
+      </section>
+    </>
   );
 }

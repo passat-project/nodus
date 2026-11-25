@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 
-import type { PopupPayload, ShellInfo, ShellUpdateState } from '@nodus/contracts';
+import type { DownloadEntry, PopupPayload, ShellInfo, ShellUpdateState } from '@nodus/contracts';
 
 /**
  * Типизированные обёртки IPC мини-UI оболочки (локальный origin — команды
@@ -47,6 +47,14 @@ export const shellApi = {
   /** Перетаскивание за пустое место панели (pointerdown левой кнопкой). */
   windowStartDragging: () => invoke<void>('window_start_dragging'),
   windowIsMaximized: () => invoke<boolean>('window_is_maximized'),
+
+  /** Реестр загрузок оболочки (#1038, раздел 5): панель «Загрузки» — список
+   *  последних завершённых (новые первыми) и «Показать в папке» (гвард
+   *  каталога «Загрузки» — в Rust). */
+  downloadsList: () => invoke<DownloadEntry[]>('downloads_list'),
+
+  /** Показать скачанный файл в проводнике (по записи реестра). */
+  downloadReveal: (path: string) => invoke<void>('download_reveal', { path }),
 };
 
 /** Данные попапа (pull из Rust после загрузки окна; автозакрытия нет —

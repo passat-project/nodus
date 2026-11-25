@@ -92,6 +92,9 @@ pub fn grant_portal_capability(app: &AppHandle, root: &str) -> tauri::Result<()>
         .permission("allow-shell-ready")
         .permission("allow-window-controls")
         .permission("allow-copy-text")
+        // Реестр загрузок (эпик #1038, раздел 5): панель «Загрузки» портала.
+        .permission("allow-downloads-list")
+        .permission("allow-download-reveal")
         // Snap-оверлей (ADR-0055): скрипт плагина инжектится и в портал;
         // пока кнопки максимизации в DOM портала нет, он гасит оверлей
         // командой detach (иначе над шапкой портала остаётся невидимая

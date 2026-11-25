@@ -28,6 +28,26 @@ export const popupDownloadSchema = z.object({
 });
 export type PopupDownload = z.infer<typeof popupDownloadSchema>;
 
+/** Запись реестра загрузок оболочки (эпик #1038, раздел 5): помнит последние
+ *  завершённые загрузки между запусками (downloads.json в оболочке) — успех И
+ *  неуспех. Путь — абсолютный: это доверенные данные оболочки (по образцу
+ *  UNC-команд #558), «Показать в папке» по записи (downloadReveal) всё равно
+ *  прогоняет путь через Rust-гвард каталога «Загрузки»; пустой путь — WebView2
+ *  не отдал его (неуспех), кнопки reveal у записи нет. */
+export const downloadEntrySchema = z.object({
+  /** Ключ записи (uuid v4): уникален между запусками. */
+  id: z.string().uuid(),
+  /** Имя файла (оболочка обрезает до 255 символов при создании). */
+  fileName: z.string().trim().min(1).max(255),
+  /** Абсолютный путь файла; пустая строка — путь неизвестен (неуспех). */
+  path: z.string().max(32768),
+  /** Успех загрузки: false — строка «Не удалось скачать» без кнопки. */
+  success: z.boolean(),
+  /** Момент завершения (unix epoch, мс) — переживает перезапуск. */
+  finishedAtMs: z.number().int().min(0),
+});
+export type DownloadEntry = z.infer<typeof downloadEntrySchema>;
+
 /** Запрос оболочке показать попап уведомления (стек право-низ, ADR-0019 п.4).
  *  Цель попапа — ровно ОДНА: беседа (сообщение чата), письмо (#618:
  *  «Поступило письмо» канцелярии) или скачанный файл (#647); клик открывает
@@ -164,6 +184,9 @@ export const DESKTOP_BRIDGE_EVENTS = {
   shellVisibility: 'shell-visibility',
   shellFocus: 'shell-focus',
   updateState: 'update-state',
+  /** Загрузка завершилась (эпик #1038): payload — `downloadEntrySchema`,
+   *  полная запись реестра (панель «Загрузки» портала живёт на ней). */
+  downloadFinished: 'download-finished',
 } as const;
 export type DesktopBridgeEventType =
   (typeof DESKTOP_BRIDGE_EVENTS)[keyof typeof DESKTOP_BRIDGE_EVENTS];
@@ -180,3 +203,7 @@ export const SHELL_PANEL_HEIGHT = 40;
 
 /** Лимит `copyText` моста (символов, не байт) — зеркало Rust copy_text. */
 export const COPY_TEXT_MAX_CHARS = 4096;
+
+/** Сколько загрузок помнит реестр оболочки (эпик #1038) — зеркало Rust
+ *  `download_registry::REGISTRY_LIMIT`: новые вытесняют старейшие. */
+export const DOWNLOADS_REGISTRY_LIMIT = 100;
