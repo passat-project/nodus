@@ -183,6 +183,7 @@ export function MessageMenu({
         message,
         mine,
         fragment,
+        replyMode,
         isFavorite,
         canModerate,
         hideFavorite,
@@ -329,6 +330,7 @@ export function MessageMenu({
           data-chat-message={message.id}
           data-chat-scope={scope}
           data-chat-conversation={conversationId}
+          data-chat-reply-mode={replyMode}
         >
           <MessageReplyProvider action={replyAction}>{children}</MessageReplyProvider>
         </span>

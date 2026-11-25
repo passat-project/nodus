@@ -257,4 +257,20 @@ describe('SelectionQuoteBubble — баббл только на тексте с�
     expect(document.querySelector('[data-quote-bubble]')).toBeNull();
     host.remove();
   });
+
+  it('лента канала (reply-mode=thread): цитата не предлагается (#1027)', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    seedMessage(client);
+    const host = messageContainer();
+    host.setAttribute('data-chat-reply-mode', 'thread');
+    const text = host.querySelector('[data-slot="message-text"]')!;
+    selectRangeOf(text.firstChild!, 0, text.firstChild!, 5);
+    renderBubble(client);
+
+    act(() => {
+      document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    });
+    expect(document.querySelector('[data-quote-bubble]')).toBeNull();
+    host.remove();
+  });
 });
