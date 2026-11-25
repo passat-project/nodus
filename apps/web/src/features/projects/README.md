@@ -197,7 +197,10 @@ localStorage-кэш на пользователя + серверный GET/PUT).
 - `api/projects-api.ts` — журнал (`useProjectsJournal`), карточка
   (`useProjectDetail`), история (`useProjectHistory`), состав
   (`useProjectMembers`), задачи проекта (`useProjectTaskPages`,
-  `useMoveProjectTask`); реэкспорт справочников.
+  `useMoveProjectTask`); реэкспорт справочников. Перенос задачи: ответ
+  сервера пишется во все витрины строки (`applyServerTask`), по завершении —
+  `invalidateAfterTaskMutation` (деталь, переходы, действия и агрегаты узлов
+  структуры сразу; доски и журнал — одним раундом эха WS, #1051).
 - `api/project-mutations.ts` — создание (оптимистичная вставка в подходящие
   журналы), правка полей, статусы, передача руководства.
 - `api/project-member-mutations.ts` — join/leave, ручной состав, атрибут

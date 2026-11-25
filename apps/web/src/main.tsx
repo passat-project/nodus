@@ -4,7 +4,15 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { App } from './app/app';
+import { initPreloadErrorReload } from './app/chunk-reload.js';
 import { getApiMockConfig } from './shared/api/api-mock-config.js';
+
+// Старая вкладка сломалась после пересборки (#1038 — расширение guard'а
+// роутера #88 на ВСЕ dynamic import'ы): Vite эмитит `vite:preloadError`
+// на window при провале modulepreload (доки:
+// https://vite.dev/guide/build#vitepreloaderror). Регистрируется ДО
+// рендера — успевает поймать и импорты стартового графа.
+initPreloadErrorReload();
 
 /** MSW (ADR-0001, #48): воркер стартует ДО рендера, только если есть
  *  мокаемые домены: VITE_API_MOCK=true — демо целиком, список —

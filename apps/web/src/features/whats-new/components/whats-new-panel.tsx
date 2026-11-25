@@ -12,6 +12,8 @@ import {
 } from '@nodus/ui/components/sheet';
 import { cn } from '@nodus/ui/lib/utils';
 
+import { shellPanelHeight } from '../../../shared/desktop/desktop-bridge.js';
+import { uiPx } from '../../../shared/ui/ui-scale.js';
 import { groupByModule, modulesWithChanges } from '../model/group-release.js';
 import { RELEASES } from '../model/releases.js';
 import { useWhatsNewStore } from '../model/whats-new-store.js';
@@ -80,9 +82,10 @@ export function WhatsNewPanel() {
           event.preventDefault();
           contentRef.current?.focus({ preventScroll: true });
         }}
+        style={{ top: uiPx(8) + shellPanelHeight() }}
         className={cn(
           'gap-0 overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-(--slider-shadow) outline-none',
-          'data-[side=right]:inset-y-2 data-[side=right]:right-2 data-[side=right]:h-auto data-[side=right]:w-[min(460px,calc(100vw-1rem))] data-[side=right]:border-l data-[side=right]:sm:max-w-none',
+          'data-[side=right]:bottom-2 data-[side=right]:right-2 data-[side=right]:h-auto data-[side=right]:w-[min(460px,calc(100vw-1rem))] data-[side=right]:border-l data-[side=right]:sm:max-w-none',
         )}
       >
         <header className="flex h-14 shrink-0 items-center gap-2 pr-3 pl-5">

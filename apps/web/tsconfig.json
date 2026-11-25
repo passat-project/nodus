@@ -1,4 +1,11 @@
 {
   "extends": "@nodus/config/tsconfig/react.json",
-  "include": ["src", "vite.config.ts", "vite-pdfjs-wasm.ts", "vite-pdfjs-wasm.test.ts"]
+  "include": [
+    "src",
+    "vite.config.ts",
+    "vite-pdfjs-wasm.ts",
+    "vite-pdfjs-wasm.test.ts",
+    "vite-portal-version.ts",
+    "vite-portal-version.test.ts"
+  ]
 }

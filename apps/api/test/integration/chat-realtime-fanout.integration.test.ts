@@ -119,6 +119,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(found1!.envelope.seq).toBeGreaterThan(0);
       expect(found2!.envelope.seq).toBeGreaterThan(found1!.envelope.seq);
       expect(found1!.envelope.ts).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      // Автор действия — в envelope живьём (из events.actor_id): клиент гасит
+      // им эхо своей мутации, а правку коллеги пропускает (#1051).
+      expect(found1!.envelope.actorId).toBe(alice.id);
+      expect(found2!.envelope.actorId).toBe(alice.id);
     });
   },
 );

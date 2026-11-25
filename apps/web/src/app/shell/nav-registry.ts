@@ -19,6 +19,7 @@ import {
 } from '../../features/directory/lib/employees-tab.js';
 import { assistantAvailable } from '../../shared/api/assistant-available.js';
 import { registriesAvailable } from '../../shared/api/registries-available.js';
+import type { PageImportKey } from '../page-imports.js';
 
 /** Вкладка модуля топбара (подмодуль): search-параметр + предикат активности.
  *  `permission` — вкладка видна только держателю права (#55: «Новые» — у
@@ -51,6 +52,9 @@ export interface NavModuleDef {
   icon: LucideIcon;
   /** Активен по точному совпадению пути (Главная) или по префиксу. */
   exact?: boolean;
+  /** Страница раздела (`app/page-imports.ts`): её чанк грузится заранее —
+   *  при обновлении страницы и в свободное время (`module-warmup.ts`). */
+  page: PageImportKey;
   /** Источник счётчика-значка (считается в рейке по живым данным). */
   badge?: 'tasks' | 'letters' | 'chat' | 'notifications';
   /** Окно-сплит (мессенджер, Автоматизация): ось контура идёт до правого
@@ -77,6 +81,7 @@ export interface NavModuleDef {
 export const NAV_MODULES: NavModuleDef[] = [
   {
     id: 'home',
+    page: 'home',
     to: '/home',
     label: ui.nav.home,
     icon: House,
@@ -86,6 +91,7 @@ export const NAV_MODULES: NavModuleDef[] = [
   },
   {
     id: 'tasks',
+    page: 'tasks',
     to: '/tasks',
     label: ui.nav.tasks,
     icon: ListTodo,
@@ -107,6 +113,7 @@ export const NAV_MODULES: NavModuleDef[] = [
   },
   {
     id: 'letters',
+    page: 'letters',
     to: '/letters',
     label: ui.nav.letters,
     icon: Mail,
@@ -139,6 +146,7 @@ export const NAV_MODULES: NavModuleDef[] = [
   },
   {
     id: 'crm',
+    page: 'crm',
     to: '/crm',
     label: ui.nav.crm,
     icon: Building2,
@@ -156,6 +164,7 @@ export const NAV_MODULES: NavModuleDef[] = [
   },
   {
     id: 'projects',
+    page: 'projects',
     to: '/projects',
     label: ui.nav.projects,
     icon: FolderOpen,
@@ -163,6 +172,7 @@ export const NAV_MODULES: NavModuleDef[] = [
   },
   {
     id: 'chat',
+    page: 'chat',
     to: '/chat',
     label: ui.nav.chat,
     icon: MessageSquare,
@@ -194,6 +204,7 @@ export const NAV_MODULES: NavModuleDef[] = [
   },
   {
     id: 'employees',
+    page: 'employees',
     to: '/employees',
     label: ui.nav.employees,
     icon: Users,
@@ -216,6 +227,7 @@ export const NAV_MODULES: NavModuleDef[] = [
   },
   {
     id: 'automation',
+    page: 'automation',
     to: '/automation',
     label: ui.nav.automation,
     icon: Workflow,
@@ -258,6 +270,7 @@ export const NAV_MODULES: NavModuleDef[] = [
   },
   {
     id: 'settings',
+    page: 'settings',
     to: '/settings',
     label: ui.nav.settings,
     icon: SlidersHorizontal,

@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 
 import { ApiError, api } from '../api-client.js';
 import { chatKeys } from './chat-keys.js';
+import { invalidateConversationLists } from './conversation-list-invalidation.js';
 import { uploadAvatar } from './avatar-upload.js';
 
 /**
@@ -46,7 +47,7 @@ export function useRenameConversation() {
       toast.error(ui.common.saveError);
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
+      void invalidateConversationLists(queryClient);
     },
   });
 }
@@ -68,7 +69,7 @@ export function useSetConversationAvatar() {
       toast.success(ui.common.avatarSaved);
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
+      void invalidateConversationLists(queryClient);
     },
   });
 }
@@ -82,7 +83,7 @@ export function useRemoveConversationAvatar(conversationId: string) {
         method: 'DELETE',
       }),
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
+      void invalidateConversationLists(queryClient);
     },
   });
 }
@@ -131,7 +132,7 @@ export function useAddMembers(conversationId: string) {
       );
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
+      void invalidateConversationLists(queryClient);
       void queryClient.invalidateQueries({ queryKey: chatKeys.members(conversationId) });
     },
   });
@@ -164,7 +165,7 @@ export function useRemoveMember(conversationId: string) {
       toast.success(ui.chat.memberRemoved);
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
+      void invalidateConversationLists(queryClient);
       void queryClient.invalidateQueries({ queryKey: chatKeys.members(conversationId) });
     },
   });

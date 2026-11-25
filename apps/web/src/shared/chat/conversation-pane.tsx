@@ -13,6 +13,7 @@ import { MessageGroup } from '@nodus/ui/components/message';
 import type { ConversationListItem } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
+import { ApiError } from '../api-client.js';
 import { useAuthStore } from '../auth-store.js';
 import { useConversationMessages, useConversations } from './chat-queries.js';
 import { ChatComposer } from './chat-composer.js';
@@ -191,7 +192,7 @@ function ConversationFeed({
   // Открытая беседа для гейта уведомлений (#124/#300): реестр хостов —
   // анмаунт одного хоста не гасит признак, пока жив другой (лента+тред).
   useConversationHost(conversationId);
-  const { data, isLoading, isFetching } = useConversationMessages(conversationId);
+  const { data, isLoading, isFetching, error } = useConversationMessages(conversationId);
   const me = useAuthStore((s) => s.user);
 
   // Поиск беседы — правая панель (лупа в шапке, модель Битрикс24): лента
@@ -298,6 +299,19 @@ function ConversationFeed({
     items,
     meId: me?.id,
   });
+
+  // Доступ отозван, а событие «исключили меня» потеряно при разрыве канала:
+  // перезапрос получает 403/404, библиотека держит прежнюю ленту — она не
+  // показывается, вместе с композером (#1051).
+  if (error instanceof ApiError && (error.status === 403 || error.status === 404)) {
+    return (
+      <div className="flex h-full items-center justify-center bg-chat-zone">
+        <Empty>
+          <EmptyTitle>{emptyLabel}</EmptyTitle>
+        </Empty>
+      </div>
+    );
+  }
 
   return (
     <>

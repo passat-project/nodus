@@ -20,12 +20,19 @@ export const DOMAIN_EVENTS_STREAM = 'nodus:domain:events';
  * догрузки пропущенного после reconnect (такой канал обязан, как gateway,
  * вырезать служебное `audience` из payload — #328). Клиент применяет события
  * ТОЛЬКО как сигнал к рефечу (сервер — единственная истина).
+ *
+ * actorId — автор действия (`events.actor_id`): сервер шлёт событие и актёру,
+ * и клиент отличает эхо СВОЕЙ мутации (ключи уже перезапрошены по ответу —
+ * второй раунд не нужен, #1051) от правки коллеги по той же задаче в те же
+ * две секунды. Системные события (таймеры, почта, автоматика) автора не
+ * имеют — поле отсутствует, клиент их не гасит.
  */
 export const realtimeEnvelopeSchema = z.object({
   type: z.string().min(1),
   payload: z.unknown(),
   seq: z.number().int().nonnegative(),
   ts: z.iso.datetime(),
+  actorId: z.string().min(1).optional(),
 });
 export type RealtimeEnvelope = z.infer<typeof realtimeEnvelopeSchema>;
 

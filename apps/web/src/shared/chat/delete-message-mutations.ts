@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 
 import { api } from '../api-client.js';
 import { chatKeys } from './chat-keys.js';
+import { invalidateConversationLists } from './conversation-list-invalidation.js';
 import {
   cachedHasLiveReplies,
   mapMessage,
@@ -48,7 +49,7 @@ export function useDeleteMessage() {
 
     onSettled: (_data, _error, vars) => {
       void qc.invalidateQueries({ queryKey: chatKeys.messages(vars.conversationId) });
-      void qc.invalidateQueries({ queryKey: chatKeys.conversations() });
+      void invalidateConversationLists(qc);
       void qc.invalidateQueries({ queryKey: chatKeys.pins(vars.conversationId) });
     },
   });
@@ -90,7 +91,7 @@ export function useBatchDeleteMessages() {
 
     onSettled: (_data, _error, vars) => {
       void qc.invalidateQueries({ queryKey: chatKeys.messages(vars.conversationId) });
-      void qc.invalidateQueries({ queryKey: chatKeys.conversations() });
+      void invalidateConversationLists(qc);
       void qc.invalidateQueries({ queryKey: chatKeys.pins(vars.conversationId) });
     },
   });

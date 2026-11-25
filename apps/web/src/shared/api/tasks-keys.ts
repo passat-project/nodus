@@ -1,7 +1,6 @@
 import type { InfiniteData } from '@tanstack/react-query';
 import type { Paginated, TaskListItem } from '@nodus/contracts';
 
-import { projectsKeys } from './projects-list.js';
 import { taskStagesKey } from './task-stages.js';
 
 /** Ключи кэша задач — CANONICAL в shared (потребители: фича задач и
@@ -58,24 +57,6 @@ export const tasksKeys = {
   /** Идущий таймер текущего пользователя (один на сотрудника). */
   timer: () => [...tasksKeys.all, 'timer'] as const,
 };
-
-/** Всё, что зависит от полей/состояния задачи: деталь, переходы (гейты
- *  DoR/DoD читают поля), доски, журнал, счётчики каталогов и агрегаты узлов
- *  структуры проекта (#467: прогресс/часы/сроки узла считаются из задач). */
-export function taskDependentKeys(taskId: string) {
-  return [
-    tasksKeys.detail(taskId),
-    tasksKeys.transitions(taskId),
-    tasksKeys.actions(taskId),
-    tasksKeys.listPages(),
-    tasksKeys.assistantContext(),
-    tasksKeys.kanbanAll(),
-    tasksKeys.personalStages(),
-    tasksKeys.stages(),
-    tasksKeys.branchAll(),
-    projectsKeys.structures(),
-  ];
-}
 
 /** Точечное обновление задачи в бесконечном кэше журнала (оптимистичные
  *  мутации переноса, I4): задача встречается на одной из подгруженных страниц. */

@@ -15,7 +15,7 @@ import { Input } from '@nodus/ui/components/input';
 import { api } from '../../../shared/api-client.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { useActiveUsersList } from '../../../shared/api/users-list.js';
-import { chatKeys } from '../../../shared/chat/chat-keys.js';
+import { invalidateConversationLists } from '../../../shared/chat/conversation-list-invalidation.js';
 import { useDebouncedValue } from '../../../shared/lib/use-debounced-value.js';
 import {
   useActiveConversation,
@@ -139,7 +139,7 @@ export function MessengerBody({
         method: 'PATCH',
         body: { hidden: false },
       });
-      await queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
+      await invalidateConversationLists(queryClient);
       setQuery('');
       onSelectConversation(conversation.id);
     } catch {

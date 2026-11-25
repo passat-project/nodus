@@ -1,4 +1,4 @@
-import { lazy, type ComponentType } from 'react';
+import { createElement, type ComponentType, type FunctionComponent } from 'react';
 import {
   createRootRoute,
   createRoute,
@@ -7,89 +7,100 @@ import {
   redirect,
 } from '@tanstack/react-router';
 
+import { markChunkLoaded, reloadOnceOnChunkError } from './chunk-reload.js';
 import { AppShell } from './shell/app-shell.js';
+import { PAGE_IMPORTS, preloadPage } from './page-imports.js';
 import { RAIL_MODULES } from './shell/nav-registry.js';
 import { NotFoundScreen, RouterErrorScreen } from './shell/system-screens.js';
 import { resolveHidden, resolveOrder } from './shell/ui-prefs.js';
 import { useUiPrefsStore } from '../shared/preferences/ui-prefs-store.js';
 import { useAuthStore } from '../shared/auth-store.js';
+import { useRemoveBootSplash } from './boot-splash.js';
+import { prefetchPersonalBoard } from '../features/tasks/api/tasks-board-prefetch.js';
+import { queryClient } from '../shared/lib/query-client.js';
+import { browserAllowsWarmup } from './shell/module-warmup.js';
 
 /**
- * Гибель lazy-чанка после деплоя (вкладка оставлена открытой через пересборку
- * прода/рестарт dev): импорт чанка со старым именем даёт 404 и раздел «не
- * открывается» (репорт владельца 24.09, #88). Guard: ошибка импорта → ОДИН
- * reload страницы за сессионный флаг (против цикла), успешный импорт флаг
- * снимает; повторный неуспех после reload — честная ошибка в экран роутера.
+ * Страница раздела отвечает на `preload()` (#1051): роутер зовёт его при
+ * наведении и фокусе на ссылку раздела (`defaultPreload: 'intent'`) — чанк
+ * грузится до клика. Предзагрузка guard НЕ включает: после выкатки устаревший
+ * чанк перезагружал бы страницу по одному наведению, с потерей несохранённого
+ * ввода.
+ *
+ * Страница — НЕ `React.lazy`: тот при первом рендере всегда приостанавливается,
+ * даже когда код давно загружен, а React после приостановки держит контент ещё
+ * 300 мс (`FALLBACK_THROTTLE_MS`; react.dev, `<Suspense>`: «reveals suspended
+ * content at most once every 300ms»). Прогретый раздел простаивал треть
+ * секунды прежде, чем начать грузить данные (#1051, замер: раздел монтировался
+ * через 360 мс после клика). Здесь код, полученный предзагрузкой, рендерится
+ * сразу; ждёт импорта только раздел, которого на руках нет.
+ *
+ * Guard гибели чанка после деплоя (репорт владельца 24.09, #88) включён только
+ * реальным входом; семантика — общая в `chunk-reload.ts`.
  */
-const CHUNK_RELOAD_KEY = 'nodus-chunk-reload';
-function pageLoader(loader: () => Promise<{ default: ComponentType }>) {
-  return lazy(() =>
-    loader().then(
-      (m) => {
-        sessionStorage.removeItem(CHUNK_RELOAD_KEY);
-        return m;
+type PageModule = { default: ComponentType };
+export type PreloadablePage = FunctionComponent & { preload: () => Promise<void> };
+
+export function pageLoader(loader: () => Promise<PageModule>): PreloadablePage {
+  let pending: Promise<PageModule> | undefined;
+  /** Код раздела на руках — признак ставится раньше, чем разрешится промис. */
+  let loaded: ComponentType | undefined;
+  let reloading = false;
+  /** Один импорт на все пути; отказ не копится — следующая попытка пробует снова. */
+  const importPage = (): Promise<PageModule> => {
+    pending ??= loader().then(
+      (module) => {
+        loaded = module.default;
+        markChunkLoaded();
+        return module;
       },
       (error: unknown) => {
-        if (!sessionStorage.getItem(CHUNK_RELOAD_KEY)) {
-          sessionStorage.setItem(CHUNK_RELOAD_KEY, '1');
-          window.location.reload();
-          return new Promise<never>(() => {});
-        }
-        sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+        pending = undefined;
         throw error;
       },
-    ),
-  );
+    );
+    return pending;
+  };
+  /** Реальный вход кода на руках не принёс: отказ включает guard. */
+  const enter = async (): Promise<PageModule> => {
+    try {
+      return await importPage();
+    } catch (error) {
+      // Запущенный reload не отменить: повторный рендер не должен «снимать»
+      // флаг и показывать ошибку поверх уходящей страницы.
+      if (reloading || reloadOnceOnChunkError()) {
+        reloading = true;
+        return new Promise<never>(() => {});
+      }
+      throw error;
+    }
+  };
+  const Page: PreloadablePage = function Page() {
+    if (!loaded) throw enter();
+    return createElement(loaded);
+  };
+  // Провал предзагрузки не рвёт страницу и не перезагружает её: вход повторит
+  // импорт сам — и уже его guard решает, перезагружать ли.
+  Page.preload = () =>
+    importPage().then(
+      () => undefined,
+      () => undefined,
+    );
+  return Page;
 }
 
-const LoginPage = pageLoader(() =>
-  import('../features/auth/pages/login-page.js').then((m) => ({ default: m.LoginPage })),
-);
-const InviteAcceptPage = pageLoader(() =>
-  import('../features/directory/pages/invite-accept-page.js').then((m) => ({
-    default: m.InviteAcceptPage,
-  })),
-);
-const PasswordResetPage = pageLoader(() =>
-  import('../features/directory/pages/password-reset-page.js').then((m) => ({
-    default: m.PasswordResetPage,
-  })),
-);
-const HomePage = pageLoader(() =>
-  import('./home-route.js').then((m) => ({ default: m.HomeRoute })),
-);
-const TasksPage = pageLoader(() =>
-  import('../features/tasks/pages/tasks-page.js').then((m) => ({ default: m.TasksPage })),
-);
-const LettersPage = pageLoader(() =>
-  import('../features/correspondence/pages/letters-page.js').then((m) => ({
-    default: m.LettersPage,
-  })),
-);
-const CounterpartiesPage = pageLoader(() =>
-  import('../features/crm/pages/counterparties-page.js').then((m) => ({
-    default: m.CounterpartiesPage,
-  })),
-);
-const ProjectsPage = pageLoader(() =>
-  import('../features/projects/pages/projects-page.js').then((m) => ({ default: m.ProjectsPage })),
-);
-const ChatPage = pageLoader(() =>
-  import('../features/chat/pages/chat-page.js').then((m) => ({ default: m.ChatPage })),
-);
-const EmployeesPage = pageLoader(() =>
-  import('../features/directory/pages/employees-page.js').then((m) => ({
-    default: m.EmployeesPage,
-  })),
-);
-const AutomationPage = pageLoader(() =>
-  import('./automation-route.js').then((m) => ({ default: m.AutomationRoute })),
-);
-const PortalSettingsPage = pageLoader(() =>
-  import('../features/settings/pages/portal-settings-page.js').then((m) => ({
-    default: m.PortalSettingsPage,
-  })),
-);
+const LoginPage = pageLoader(PAGE_IMPORTS.login);
+const InviteAcceptPage = pageLoader(PAGE_IMPORTS.inviteAccept);
+const PasswordResetPage = pageLoader(PAGE_IMPORTS.passwordReset);
+const HomePage = pageLoader(PAGE_IMPORTS.home);
+const TasksPage = pageLoader(PAGE_IMPORTS.tasks);
+const LettersPage = pageLoader(PAGE_IMPORTS.letters);
+const CounterpartiesPage = pageLoader(PAGE_IMPORTS.crm);
+const ProjectsPage = pageLoader(PAGE_IMPORTS.projects);
+const ChatPage = pageLoader(PAGE_IMPORTS.chat);
+const EmployeesPage = pageLoader(PAGE_IMPORTS.employees);
+const AutomationPage = pageLoader(PAGE_IMPORTS.automation);
+const PortalSettingsPage = pageLoader(PAGE_IMPORTS.settings);
 
 /**
  * Роутер SPA (TanStack Router, code-splitting по разделам).
@@ -100,8 +111,19 @@ const PortalSettingsPage = pageLoader(() =>
  * к прежней. Разделные search-параметры (папка писем, тред канала) живут
  * рядом и при открытии карточки сохраняются.
  */
+/**
+ * Корневая рамка: первый экран приложения (оболочка, страница входа) снимает
+ * стартовую заставку `index.html` — до него она держится на экране всё время
+ * загрузки скриптов и входа. Системные экраны снимают её сами: они заменяют
+ * эту рамку, а не рендерятся в ней.
+ */
+export function RootGate() {
+  useRemoveBootSplash();
+  return <Outlet />;
+}
+
 const rootRoute = createRootRoute({
-  component: Outlet,
+  component: RootGate,
   // Системные экраны — русские, с выходом на главную (аудит #45).
   errorComponent: RouterErrorScreen,
   notFoundComponent: NotFoundScreen,
@@ -195,6 +217,12 @@ const indexRoute = createRoute({
 const tasksRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: '/tasks',
+  // Данные доски — в кэш заранее (#1051): роутер зовёт loader и при наведении
+  // на раздел (defaultPreload: 'intent'), и при входе. Переход не блокирует:
+  // страница монтируется сразу, её запросы примыкают к начатым.
+  loader: () => {
+    if (browserAllowsWarmup()) void prefetchPersonalBoard(queryClient).catch(() => undefined);
+  },
   component: TasksPage,
 });
 
@@ -301,7 +329,16 @@ const routeTree = rootRoute.addChildren([
   ]),
 ]);
 
-export const router = createRouter({ routeTree });
+export const router = createRouter({
+  routeTree,
+  // Наведение на раздел — за 50 мс до клика чанк страницы уже грузится:
+  // переход не ждёт сети (#1051).
+  defaultPreload: 'intent',
+});
+
+// Чанк открытого раздела — сразу, параллельно входу (refresh → me), а не после
+// него: после обновления страницы раздел открывается на шаг водопада раньше.
+void preloadPage(window.location.pathname);
 
 // Смена auth-статуса (logout, протухшая сессия) → повторный beforeLoad:
 // защищённый маршрут сам уйдёт на /login, /login — на главную.
