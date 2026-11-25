@@ -4,6 +4,7 @@
  * гвард «мы внутри оболочки». Отдельным файлом, чтобы секции моста
  * (команды окна, файлы/загрузки) импортировали ядро без циклов.
  */
+import { SHELL_PANEL_HEIGHT } from '@nodus/contracts';
 
 /** Сигнатура инъекции оболочки (инициализационный скрипт bridge.rs). */
 interface NodusDesktopGlobal {
@@ -54,4 +55,16 @@ export function getDesktopBridge(): NodusDesktopGlobal | null {
 /** Портал открыт внутри десктоп-оболочки (не в браузере). */
 export function isDesktopShell(): boolean {
   return getDesktopBridge() !== null;
+}
+
+/**
+ * Высота строки панели безрамочного окна (ADR-0055) над окном: в оболочке —
+ * контракт `SHELL_PANEL_HEIGHT` (px, не масштабируется), в браузере — 0
+ * (панель не монтируется). Оверлеи карточек продукта (ADR-0009) и прочие
+ * «парящие листы» отступают от этой кромки с тем же зазором периметра:
+ * верхняя строка окна (вкладки, ⟳, адрес) остаётся видимой и кликабельной
+ * при открытой карточке (#1038, вердикт владельца 25.11).
+ */
+export function shellPanelHeight(): number {
+  return isDesktopShell() ? SHELL_PANEL_HEIGHT : 0;
 }

@@ -14,6 +14,7 @@ import { cn } from '@nodus/ui/lib/utils';
 import { inputModality } from '../../shared/lib/input-modality.js';
 import { hasOpenPopperLayer } from '../../shared/lib/overlay-layers.js';
 import { SurfaceVisibilityProvider } from '../../shared/lib/surface-visibility.js';
+import { shellPanelHeight } from '../../shared/desktop/desktop-bridge.js';
 import { CardHeaderActionsContext } from './card-header-actions.js';
 import { useRailHidden } from './rail-visibility.js';
 import { EDGE_W_COLLAPSED } from './right-rail.js';
@@ -45,9 +46,12 @@ const CONTENT_FADE_MS = 100;
  * Детальная панель — общий слой карточки-сущности и ЕДИНСТВЕННАЯ геометрия
  * карточек продукта (ADR-0009, вердикт владельца 2026-09-10): все сущности
  * (задача, проект, письмо, сотрудник) открываются панелью ОДНОГО размера
- * (inset-2 внутри хоста: парящий лист от самого верха со скруглением всех
+ * (зазоры периметра 8css внутри хоста: парящий лист со скруглением всех
  * углов, пакет мягкости, вердикт владельца 12.09.2026: «карточка не до
- * самого верха»; правый край хоста = левый край служебной полосы — карточка
+ * самого верха»; в оболочке верх — ПОД строкой панели безрамочного окна
+ * (ADR-0055) с тем же зазором — вкладки/⟳/адрес живы при открытой карточке,
+ * вердикт владельца 25.11 #1038; правый край хоста = левый край служебной
+ * полосы — карточка
  * НЕ накрывает полосу и сужается вместе с мягкой рамой при её раскрытии,
  * план R4) и НАСЛАИВАЮТСЯ друг на друга
  * стеком (хост —
@@ -147,6 +151,11 @@ export function SliderPanel({
   const railHidden = useRailHidden();
   // Окно ассистента — оверлей внутри рамы: геометрию карточек не двигает.
   const stripW = fullscreen || railHidden ? 0 : EDGE_W_COLLAPSED;
+  // Верхняя кромка карточки (#1038, вердикт владельца 25.11): в оболочке —
+  // ПОД строкой панели безрамочного окна с тем же зазором периметра (8css),
+  // иначе карточка накрывала вкладки/⟳/адрес; в браузере — от края окна,
+  // как прежде. Правая/нижняя кромки не менялись.
+  const cardTop = uiPx(8) + shellPanelHeight();
 
   function requestClose() {
     if (closingRef.current) return;
@@ -285,9 +294,9 @@ export function SliderPanel({
     ? (() => {
         const dst = {
           x: uiPx(8),
-          y: uiPx(8),
+          y: cardTop,
           w: window.innerWidth - stripW - uiPx(16),
-          h: window.innerHeight - uiPx(16),
+          h: window.innerHeight - cardTop - uiPx(8),
         };
         return {
           '--flip-tx': `${sourceRect.x - dst.x}px`,
@@ -307,8 +316,16 @@ export function SliderPanel({
           квитанции прочтения и попапы обязаны молчать. */}
       <SurfaceVisibilityProvider visible={!dormant}>
         {/* Прозрачный click-catcher вместо затемняющего задника: страница за
-          панелью цвета не меняет; клик мимо панели закрывает её. */}
-        <div className="absolute inset-0" onClick={requestClose} aria-hidden="true" />
+          панелью цвета не меняет; клик мимо панели закрывает её. Начинается
+          ОТ верхней кромки карточки: строка панели оболочки (вкладки, ⟳,
+          адрес) ЛОВУШКОЙ не накрыта — клики до неё доезжают при открытой
+          карточке (#1038, вердикт владельца 25.11). */}
+        <div
+          className="absolute inset-x-0 bottom-0"
+          style={{ top: cardTop }}
+          onClick={requestClose}
+          aria-hidden="true"
+        />
         <CardHeaderActionsContext.Provider value={headerActionsHost}>
           <section
             ref={panelRef}
@@ -319,9 +336,13 @@ export function SliderPanel({
                маркеру исключает её из «поверхность перекрыта». */
             data-card-surface=""
             aria-labelledby={title && !headerContent ? `${id}-title` : undefined}
-            style={{ ...(flipStyle ?? {}), willChange: flipPromoted ? 'transform' : undefined }}
+            style={{
+              top: cardTop,
+              ...(flipStyle ?? {}),
+              willChange: flipPromoted ? 'transform' : undefined,
+            }}
             className={cn(
-              'slider-shadow absolute inset-2 z-20 flex flex-col overflow-hidden rounded-2xl border border-border bg-card text-card-foreground',
+              'slider-shadow absolute right-2 bottom-2 left-2 z-20 flex flex-col overflow-hidden rounded-2xl border border-border bg-card text-card-foreground',
               sourceRect ? 'slider-expand' : 'slider-pop',
             )}
           >

@@ -50,26 +50,29 @@ await page.evaluate(() => window.dispatchEvent(new Event('focus')));
 await page.waitForTimeout(2500);
 const reload = panel.getByRole('button', { name: 'Обновить страницу' });
 const plate = page.locator('[data-portal-update-callout]');
-const arrow = plate.locator('span[aria-hidden="true"]');
 console.log('plate.left =', (await rect(plate)).left, ' reload.left =', (await rect(reload)).left);
+// Стрелка — часть ЕДИНОГО SVG-силуэта (канон bubble-outline): кончик = первая
+// L-команда пути (локальные css px), обводка ОДНА на весь силуэт.
+const fin = await plate.evaluate((el) => {
+  const path = el.querySelector('path');
+  if (!path) return null;
+  const m = path.getAttribute('d')?.match(/L([\d.]+) (-[\d.]+)/) ?? null;
+  const s = getComputedStyle(path);
+  return {
+    tipX: m ? Number(m[1]) : null,
+    tipY: m ? Number(m[2]) : null,
+    stroke: `${s.strokeWidth} ${s.stroke} @ ${s.strokeOpacity}`,
+  };
+});
+const plateLeft = (await rect(plate)).left;
+const reloadCenter = (await rect(reload)).centerX;
 console.log(
-  'arrow.cx =',
-  (await rect(arrow)).centerX,
+  'arrow.cx (plate.left + tip) =',
+  plateLeft + (fin?.tipX ?? NaN),
   ' reload.cx =',
-  (await rect(reload)).centerX,
+  reloadCenter,
 );
-// Обводка стрелки обязана совпадать с рамкой плашки (вердикт владельца
-// 25.11: «уголок без границы» — дефект).
-const arrowBorder = await arrow.evaluate((el) => {
-  const s = getComputedStyle(el);
-  return `${s.borderTopWidth} ${s.borderTopColor} / ${s.borderLeftWidth} ${s.borderLeftColor}`;
-});
-console.log('arrow border (t/l) =', arrowBorder);
-const ring = await plate.evaluate((el) => {
-  const s = getComputedStyle(el);
-  return `${s.boxShadow || s.getPropertyValue('--tw-ring-shadow')}`;
-});
-console.log('plate ring =', ring.slice(0, 90));
+console.log('fin.tip above top edge =', fin?.tipY, ' stroke =', fin?.stroke);
 await page.screenshot({ path: `${out}/panel-02-callout-light.png` });
 await page.screenshot({
   path: `${out}/panel-02b-callout-zoom.png`,

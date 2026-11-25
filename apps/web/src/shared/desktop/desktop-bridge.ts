@@ -20,7 +20,7 @@ import { setShellFocused, setShellVisible } from '../attention/attention-store.j
 import { notifyDownloadFinished } from './desktop-bridge-files.js';
 import { getDesktopBridge } from './desktop-bridge-global.js';
 
-export { getDesktopBridge, isDesktopShell } from './desktop-bridge-global.js';
+export { getDesktopBridge, isDesktopShell, shellPanelHeight } from './desktop-bridge-global.js';
 export * from './desktop-bridge-window.js';
 export * from './desktop-bridge-files.js';
 
