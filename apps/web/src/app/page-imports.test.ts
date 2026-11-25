@@ -36,16 +36,23 @@ describe('page-imports: адрес раздела → его чанк (#1051)', 
 
   it('по наведению на раздел чанк грузится до клика; страница — не React.lazy', () => {
     // Роутер вызывает component.preload?.() и молча пропускает страницы без него
-    // (router-core, load-client.ts). Каждая страница раздела обязана его иметь.
+    // (router-core, load-client.ts). Проверяются ВСЕ страницы: фильтр «у кого уже
+    // есть preload» пропускал бы страницу, собранную через lazy(), — то есть
+    // исходный баг #1051. Корень — не страница (inline-компонент без раздела).
     expect(router.options.defaultPreload).toBe('intent');
-    const pages = Object.values(router.routesById)
-      .map((route) => route.options.component as PreloadablePage | undefined)
-      .filter((page): page is PreloadablePage => typeof page?.preload === 'function');
+    const pages = Object.values(router.routesById).filter(
+      (route) => typeof route.options.path === 'string' && route.options.path !== '/',
+    );
+    // Страховка от пустого перебора: страниц в дереве больше пяти.
     expect(pages.length).toBeGreaterThan(5);
-    for (const page of pages) {
+    for (const route of pages) {
+      const page = route.options.component as PreloadablePage | undefined;
       // React.lazy при первом рендере всегда приостанавливается — даже с готовым
       // кодом; React после приостановки держит контент ещё 300 мс.
-      expect((page as { $$typeof?: symbol }).$$typeof).not.toBe(Symbol.for('react.lazy'));
+      expect((page as { $$typeof?: symbol } | undefined)?.$$typeof, route.id).not.toBe(
+        Symbol.for('react.lazy'),
+      );
+      expect(typeof page?.preload, route.id).toBe('function');
     }
   });
 
