@@ -18,7 +18,6 @@ import { ApiErrors } from '../../../core/openapi/api-errors.decorator.js';
 import { ApiIdempotencyKey } from '../../../core/openapi/api-idempotency.decorator.js';
 import { ZodValidationPipe } from '../../../core/pipes/zod-validation.pipe.js';
 import { DomainException } from '../../../core/errors/domain-exception.js';
-import { MAX_ATTACHMENT_BYTES } from './attachments.constants.js';
 import { AttachmentsService } from './attachments.service.js';
 
 const uuidSchema = z.uuid();
@@ -28,7 +27,9 @@ const uuidSchema = z.uuid();
  *  хранилище), width/height — габариты изображения от клиента (резерв бокса
  *  ленты без сдвига). previewUrl — мок-поле, живой контур игнорирует. */
 const uploadFieldsSchema = z.object({
-  size: z.coerce.number().int().min(0).max(MAX_ATTACHMENT_BYTES),
+  // Верхняя граница размера — в сервисе (413 CHAT_ATTACHMENT_TOO_LARGE):
+  // zod-потолок здесь отдавал 400 и ломал контракт ошибки #57.
+  size: z.coerce.number().int().min(0),
   // Потолки — гигиена входа (security #250): без max клиентский мусор
   // роняет int4-вставку в 500 вместо 400; авторитетные значения всё равно
   // приходят от sharp/ffprobe.
