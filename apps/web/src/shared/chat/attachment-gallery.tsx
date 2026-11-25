@@ -5,6 +5,7 @@ import { cn } from '@nodus/ui/lib/utils';
 
 import { useViewerHost } from '../files/viewer-host.js';
 import { handleVideoSeekKey } from '../files/video-seek-keys.js';
+import { formatVideoDuration } from '../lib/format.js';
 import { ImageLightbox } from './image-lightbox.js';
 import { VideoPlayGlyph } from './video-play-glyph.js';
 import { uiPx } from '../ui/ui-scale.js';
@@ -68,17 +69,6 @@ export function fitSingleBox(
     }
   }
   return { width: Math.round(w), height: Math.round(h) };
-}
-
-/** Длительность бейджа: M:SS (≥ часа — H:MM:SS). Чистая — unit-тест. */
-export function formatVideoDuration(durationMs: number): string {
-  const total = Math.max(0, Math.round(durationMs / 1000));
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const seconds = total % 60;
-  const mm = hours > 0 ? String(minutes).padStart(2, '0') : String(minutes);
-  const ss = String(seconds).padStart(2, '0');
-  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
 const TILE_CLASS = 'relative min-w-0 overflow-hidden bg-muted';

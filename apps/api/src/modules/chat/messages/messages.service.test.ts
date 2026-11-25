@@ -460,7 +460,13 @@ describe('MessagesService', () => {
       expect(eventBus.emit).toHaveBeenCalledWith(
         TX,
         CHAT_EVENTS.MESSAGE_READ,
-        { conversationId: CONV, userId: ME, upToSeq: 4, readAt: readAt.toISOString() },
+        {
+          conversationId: CONV,
+          userId: ME,
+          upToSeq: 4,
+          threadRootId: null,
+          readAt: readAt.toISOString(),
+        },
         { actorId: ME, aggregateType: 'conversation', aggregateId: CONV },
       );
     });

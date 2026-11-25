@@ -4,6 +4,7 @@ import {
   firstNameOf,
   formatDateTimeCompact,
   formatListTimestamp,
+  formatVideoDuration,
   shortPersonName,
   withoutPatronymic,
 } from './format.js';
@@ -36,6 +37,15 @@ describe('shortPersonName', () => {
 describe('formatDateTimeCompact (превью ссылки на задачу)', () => {
   it('день.месяц + время без года', () => {
     expect(formatDateTimeCompact(new Date(2026, 10, 12, 14, 5).toISOString())).toBe('12.11, 14:05');
+  });
+});
+
+describe('formatVideoDuration — бейдж длительности и время плеера (#250, #1054)', () => {
+  it('минуты и секунды, часы', () => {
+    expect(formatVideoDuration(0)).toBe('0:00');
+    expect(formatVideoDuration(65_000)).toBe('1:05');
+    expect(formatVideoDuration(9_920)).toBe('0:10');
+    expect(formatVideoDuration(3_725_000)).toBe('1:02:05');
   });
 });
 

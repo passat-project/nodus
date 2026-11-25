@@ -1,12 +1,11 @@
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
-import { useEffect, useRef, type MouseEvent as ReactMouseEvent } from 'react';
+import { ChevronLeft, ChevronRight, Minus, Plus, Scan, X } from 'lucide-react';
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { MessageAttachment } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 
 import { useImageZoom } from '../files/use-image-zoom.js';
-import { ViewerZoomBar } from '../files/viewer-zoom-bar.js';
 import { LightboxFrame } from './lightbox-frame.js';
 /**
  * Лайтбокс изображения галереи (plan chat-attachments-plan, добро владельца
@@ -18,13 +17,24 @@ import { LightboxFrame } from './lightbox-frame.js';
  * (a11y); клики по самому фото и кнопкам не закрывают диалог. Кадр, загрузка
  * и ретрай — `lightbox-frame.tsx`.
  *
- * Зум (#721): та же панель масштаба, что у вложений (`ViewerZoomBar`), в той
- * же верхней полосе; 100% — натуральные пиксели, вписывание — «по размеру
- * экрана» с полями 15%. Стрелки делят две роли (решение #721): фокус в
- * области просмотра И картинка больше окна — стрелки сдвигают её (панорама),
- * иначе — листают галерею, как раньше; `+`/`−`/`0` работают только при фокусе
- * в области. Смена кадра сбрасывает масштаб и сдвиг.
+ * Зум (#721): 100% — натуральные пиксели, вписывание — «по размеру экрана»
+ * с полями 15%. Стрелки делят две роли (решение #721): фокус в области
+ * просмотра И картинка больше окна — стрелки сдвигают её (панорама), иначе —
+ * листают галерею, как раньше; `+`/`−`/`0` работают только при фокусе в
+ * области. Смена кадра сбрасывает масштаб и сдвиг.
+ *
+ * Хром (вердикт владельца 25.11.2026): фон — СПЛОШНОЕ затемнение всего экрана
+ * (кадр остаётся ярким), а строка масштаба с крестиком плавает свободной
+ * группой в тёмном поле НАД кадром и закреплена у верхней кромки (середина
+ * стандартного поля 15%) — от размера кадра не зависит, у маленькой картинки
+ * не сползает в середину экрана. Так значки не читаются рядом с кнопками окна
+ * оболочки и не накрывают фото; компактные плашки под счётчиком и группой
+ * держат контраст, когда увеличенный кадр уходит под хром.
  */
+
+/** Кнопки масштаба в группе хрома: белые ghost-значки крупнее обычных. */
+const CONTROL_CLASS =
+  "text-white hover:bg-white/15 hover:text-white [&_svg:not([class*='size-'])]:size-5";
 
 /** Доля экрана под вписанную картинку — те же поля, что у кадра лайтбокса. */
 const FIT_FACTOR = 0.85;
@@ -53,6 +63,21 @@ export function ImageLightbox({
   const image = images[index];
   // Зум живёт на весь лайтбокс, но сбрасывается сменой кадра (resetKey).
   const zoom = useImageZoom({ fitFactor: FIT_FACTOR, resetKey: image?.id });
+
+  // Хром закреплён у верхней кромки — середина стандартного поля 15% (эталон
+  // владельца 25.11.2026): у большого кадра он у верха, как на скриншоте 1,
+  // а у маленького НЕ сползает в середину экрана, как на 2. От размера кадра
+  // позиция не зависит.
+  const [viewportHeight, setViewportHeight] = useState(() =>
+    typeof window === 'undefined' ? 0 : window.innerHeight,
+  );
+  useEffect(() => {
+    const measure = () => setViewportHeight(window.innerHeight);
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+  const chromeTop = (viewportHeight * 0.075) / 2;
 
   // Отложенное закрытие по заднику (см. BACKDROP_CLOSE_DELAY): второй клик
   // пары или `dblclick` его отменяют — двойной клик только меняет масштаб.
@@ -129,37 +154,75 @@ export function ImageLightbox({
       onPointerDown={(event) => event.stopPropagation()}
       className="pointer-events-auto fixed inset-0 z-[80] flex items-center justify-center bg-black/85 outline-none"
     >
-      {/* Хром лайтбокса — ОТДЕЛЬНЫЙ слой над кадром (z-20 против z-0 кадра).
-          Подложка СПЛОШНАЯ (`bg-black/60` + blur), не градиент: на светлом
-          скриншоте градиентный скрим не читался и полоса сливалась с фото
-          (живая проверка 11.11). Справа `pr-12` — место под крестик, чтобы
-          группа масштаба его не наезжала. */}
-      <div className="absolute inset-x-0 top-0 z-20" onClick={(event) => event.stopPropagation()}>
-        <ViewerZoomBar
-          leading={`${index + 1} / ${images.length}`}
-          leadingClassName="font-mono text-xs tabular-nums text-white"
-          percent={zoom.percent}
-          canZoomIn={zoom.canZoomIn}
-          canZoomOut={zoom.canZoomOut}
-          onZoomIn={zoom.zoomIn}
-          onZoomOut={zoom.zoomOut}
-          onReset={zoom.reset}
-          className="bg-black/60 pr-12 text-white/90 backdrop-blur-sm"
-          controlClassName="text-white hover:bg-white/15 hover:text-white"
-        />
-      </div>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label={ui.common.close}
-        className="absolute top-1 right-3 z-20 text-white hover:bg-white/15"
-        onClick={(e) => {
-          e.stopPropagation();
-          onClose();
-        }}
+      {/* Хром — свободная строка в тёмном поле над кадром (вердикт 25.11.2026):
+          фон сплошной, кадр яркий и не накрыт; строка закреплена у верхней
+          кромки (середина стандартного поля) и от размера кадра не зависит —
+          у маленькой картинки не сползает в середину экрана. Компактные
+          плашки держат контраст, когда увеличенный кадр уходит под хром. */}
+      <div
+        role="toolbar"
+        aria-label={ui.files.zoomPanel}
+        className="absolute inset-x-0 z-20 -translate-y-1/2 px-6"
+        style={{ top: chromeTop }}
+        onClick={(event) => event.stopPropagation()}
       >
-        <X />
-      </Button>
+        <div className="flex items-center justify-between gap-3">
+          <span className="rounded-full bg-black/35 px-2.5 py-1 font-mono text-xs tabular-nums text-white backdrop-blur-sm">
+            {index + 1} / {images.length}
+          </span>
+          <div className="flex items-center gap-1 rounded-2xl bg-black/35 p-1 pr-2 text-white backdrop-blur-sm">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-lg"
+              onClick={zoom.zoomOut}
+              disabled={!zoom.canZoomOut}
+              aria-label={ui.files.zoomOut}
+              title={ui.files.zoomOut}
+              className={CONTROL_CLASS}
+            >
+              <Minus />
+            </Button>
+            <span className="w-12 text-center text-[13px] tabular-nums">{zoom.percent}%</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-lg"
+              onClick={zoom.zoomIn}
+              disabled={!zoom.canZoomIn}
+              aria-label={ui.files.zoomIn}
+              title={ui.files.zoomIn}
+              className={CONTROL_CLASS}
+            >
+              <Plus />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-lg"
+              onClick={zoom.reset}
+              aria-label={ui.files.zoomFit}
+              title={ui.files.zoomFit}
+              className={`${CONTROL_CLASS} ml-1`}
+            >
+              <Scan />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              aria-label={ui.common.close}
+              title={ui.common.close}
+              className="ml-1 size-10 border-white/25 bg-black/45 text-white hover:border-white/40 hover:bg-white/15 hover:text-white [&_svg:not([class*='size-'])]:size-5"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+            >
+              <X />
+            </Button>
+          </div>
+        </div>
+      </div>
       {index > 0 ? (
         <Button
           variant="ghost"

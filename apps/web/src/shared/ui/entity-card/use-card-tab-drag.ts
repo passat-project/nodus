@@ -114,7 +114,7 @@ export function useCardTabDrag({ state, labelOf, geometry, onResolve }: CardTabD
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', onUp);
         window.removeEventListener('pointercancel', onCancel);
-        window.removeEventListener('keydown', onKeyDown);
+        window.removeEventListener('keydown', onKeyDown, true);
         element.removeEventListener('lostpointercapture', onLostCapture);
         if (updateRaf) cancelAnimationFrame(updateRaf);
         if (scrollRaf) cancelAnimationFrame(scrollRaf);

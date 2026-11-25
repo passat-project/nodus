@@ -182,14 +182,15 @@ export class MessagesService {
         // но не курсор ленты — «Просмотрено» ленты не пересекает границу треда.
         { feed: threadRootId === undefined },
       );
+      let threadAdvanced = false;
       if (threadRootId !== undefined) {
         // Тихо: событие беседы ниже уже инвалидирует thread-state клиентам.
         await this.threadParticipants.advanceReadCursor(threadRootId, userId, target, tx);
         // Квитанция «Просмотрено» ответов треда (#971): пишется любому
         // участнику беседы, участие в треде (уведомления) не меняется.
-        await this.threadReads.advance(threadRootId, userId, target, tx);
+        threadAdvanced = await this.threadReads.advance(threadRootId, userId, target, tx);
       }
-      if (advanced) {
+      if (advanced || threadAdvanced) {
         await this.eventBus.emit(
           tx,
           CHAT_EVENTS.MESSAGE_READ,
@@ -197,7 +198,13 @@ export class MessagesService {
             conversationId,
             userId,
             upToSeq: Number(target),
-            readAt: (lastReadAt ?? new Date()).toISOString(),
+            // #1026: область квитанции — без неё клиент ставил галку не той
+            // ленте (тред/пост канала).
+            threadRootId: threadRootId ?? null,
+            readAt:
+              !advanced && threadAdvanced
+                ? new Date().toISOString()
+                : (lastReadAt ?? new Date()).toISOString(),
           },
           { actorId: userId, aggregateType: 'conversation', aggregateId: conversationId },
         );
