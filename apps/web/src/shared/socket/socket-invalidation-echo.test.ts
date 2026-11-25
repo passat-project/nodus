@@ -55,12 +55,13 @@ function fakeClient() {
   };
 }
 
-/** Реальный клиент с кэшем: строка беседы задачи, deep-link к ней, канал проекта. */
+/** Реальный клиент с кэшем: строка беседы задачи, deep-link к ней, лента, канал проекта. */
 function rowsClient() {
   const client = new QueryClient();
   const row = (id: string): ConversationListItem => ({ id }) as ConversationListItem;
   client.setQueryData(chatKeys.byTask('t1'), row(CONV));
   client.setQueryData(chatKeys.conversationLookup(CONV), row(CONV));
+  client.setQueryData(chatKeys.messages(CONV), { items: [], nextCursor: null });
   client.setQueryData(chatKeys.byProject('p1'), row(OTHER_CONVERSATION));
   return { client, invalidateQueries: vi.spyOn(client, 'invalidateQueries') };
 }
@@ -249,7 +250,7 @@ describe('эхо собственной мутации не повторяет �
     invalidator.dispose();
   });
 
-  it('меня исключили из беседы или сменили мою роль — куст бесед перечитывается целиком', () => {
+  it('меня исключили — кэш беседы сбрасывается сразу и куст перечитывается; сменили мою роль — перечитывается', () => {
     vi.useFakeTimers();
     useAuthStore.setState({
       status: 'authenticated',
@@ -259,7 +260,7 @@ describe('эхо собственной мутации не повторяет �
     const { client, invalidateQueries } = rowsClient();
     const invalidator = createRealtimeInvalidator(client);
     // Куст — одним префиксом (без точечного набора списков), за ним — сама беседа:
-    // доступ отозван или роль сменилась, сервер своим ответом заменяет кэш.
+    // доступ отозван или роль сменилась, ответ сервера заменяет кэш.
     const aboutMe = [
       LIST,
       ...[
@@ -269,26 +270,45 @@ describe('эхо собственной мутации не повторяет �
         chatKeys.members(CONV),
       ].map(key),
     ];
+    const rowKey = chatKeys.byTask('t1');
+    const feedKey = chatKeys.messages(CONV);
+    /** Строка беседы в карточке и её лента: в кэше или нет. */
+    const cached = () => [
+      client.getQueryData(rowKey) !== undefined,
+      client.getQueryData(feedKey) !== undefined,
+    ];
+    const restore = () => {
+      client.setQueryData(rowKey, { id: CONV } as ConversationListItem);
+      client.setQueryData(feedKey, { items: [], nextCursor: null });
+    };
 
     invalidator.handle(
       event('chat.member_removed', { conversationId: CONV, userId: ME }, COLLEAGUE),
     );
+    // Сразу, до перезапроса: не участнику сервер ответит отказом, а после отказа
+    // библиотека держит прежние данные — переписка оставалась бы на экране.
+    expect(cached()).toEqual([false, false]);
     vi.advanceTimersByTime(200);
     expect(invalidated(invalidateQueries)).toEqual(aboutMe);
     expect(invalidateQueries.mock.calls[0]![0]).toEqual({ queryKey: chatKeys.conversations() });
 
-    // Мой же выход (эхо моей мутации) — то же: гашение здесь недопустимо.
+    // Смена моей роли — тоже моё событие: гашение здесь недопустимо.
+    restore();
     invalidateQueries.mockClear();
     invalidator.handle(event('chat.member_role_changed', { conversationId: CONV, userId: ME }, ME));
+    // Доступ остаётся: данные на месте, перезапрос принесёт новые права.
+    expect(cached()).toEqual([true, true]);
     vi.advanceTimersByTime(200);
     expect(invalidated(invalidateQueries)).toEqual(aboutMe);
 
-    // Исключили ДРУГОГО: моя беседа и мой доступ не тронуты.
+    // Исключили ДРУГОГО: мой кэш и мой доступ не тронуты.
+    restore();
     invalidateQueries.mockClear();
     invalidator.handle(
       event('chat.member_removed', { conversationId: CONV, userId: COLLEAGUE }, ME),
     );
     vi.advanceTimersByTime(700);
+    expect(cached()).toEqual([true, true]);
     expect(invalidated(invalidateQueries)).not.toContain(key(chatKeys.messages(CONV)));
     expect(invalidateQueries.mock.calls.some((c) => JSON.stringify(c[0]?.queryKey) === LIST)).toBe(
       true,

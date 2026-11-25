@@ -96,28 +96,38 @@ export function createRealtimeInvalidator(queryClient: QueryClient): RealtimeInv
     for (const key of conversationRowKeys(queryClient, conversationId)) batcher.push(key, tier);
   }
 
+  /** Кэш самой беседы: лента (с трэдами), закрепы, состояния трэдов, участники. */
+  const conversationKeys = (conversationId: string) => [
+    chatKeys.messages(conversationId),
+    chatKeys.pins(conversationId),
+    chatKeys.threadStates(conversationId),
+    chatKeys.members(conversationId),
+  ];
+
   /** Событие адресовано МНЕ (исключили, сменили мою роль): куст бесед —
-   *  целиком и без гашения, даже если это эхо моего же выхода. Кэш самой
-   *  беседы (лента, закрепы, треды, участники) — тоже: доступ отозван или роль
-   *  сменилась, и сервер своим ответом (403/новые права) заменит то, что
-   *  осталось в памяти. */
+   *  целиком и без гашения, даже если это эхо моего же выхода, и кэш самой
+   *  беседы — тоже. Исключённому кэш к тому же СБРАСЫВАЕТСЯ до перезапроса:
+   *  не участнику сервер ответит отказом, а после неудачного перезапроса
+   *  библиотека держит прежние данные — переписка оставалась бы и на экране,
+   *  и в памяти, пока кэш жив. */
   function aboutMe(
     batcher: EchoAwareBatcher,
     payload: Record<string, unknown>,
     conversationId: string | null,
+    removed: boolean,
   ): boolean {
     const userId = typeof payload.userId === 'string' ? payload.userId : null;
     if (userId === null || userId !== useAuthStore.getState().user?.id) return false;
     batcher.push(chatKeys.conversations(), 'feed', { wide: true, force: true });
     if (conversationId) {
-      for (const key of [
-        chatKeys.messages(conversationId),
-        chatKeys.pins(conversationId),
-        chatKeys.threadStates(conversationId),
-        chatKeys.members(conversationId),
-      ]) {
-        batcher.push(key, 'feed', { force: true });
+      if (removed) {
+        void queryClient.resetQueries({ queryKey: chatKeys.conversations() });
+        for (const key of conversationKeys(conversationId)) {
+          void queryClient.resetQueries({ queryKey: key });
+        }
       }
+      for (const key of conversationKeys(conversationId))
+        batcher.push(key, 'feed', { force: true });
     }
     return true;
   }
@@ -239,7 +249,8 @@ export function createRealtimeInvalidator(queryClient: QueryClient): RealtimeInv
           return;
         case 'chat.member_removed':
         case 'chat.member_role_changed':
-          if (aboutMe(batcher, payload, conversationId)) return;
+          if (aboutMe(batcher, payload, conversationId, envelope.type === 'chat.member_removed'))
+            return;
           batcher.push(chatKeys.conversations(), 'list');
           if (conversationId) batcher.push(chatKeys.members(conversationId), 'feed');
           pushRows(batcher, conversationId, 'feed');
