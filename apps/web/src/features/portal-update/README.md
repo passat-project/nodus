@@ -4,8 +4,12 @@
 (define `__PORTAL_VERSION__`, плагин `apps/web/vite-portal-version.ts`),
 раздача публикует `version.json` в корне (dist-asset / dev-middleware /
 nginx `location = /version.json`, no-cache). Хук в каркасе сверяет их и
-поднимает флаг в сторе. UI-индикация (баннер «вышло обновление» с
-перезагрузкой) — следующая фаза эпика #1038; сейчас фича только модель.
+поднимает флаг в сторе. Веб-индикация — плашка «Портал обновился» в
+топбаре (#1038 фаза F, `app/shell/portal-update-plate.tsx`): только браузер
+(в оболочке обновление применяет панель окна), зелёная точка + кнопка
+«Обновить» → перезагрузка страницы; TEMP overlay-вариант для выбора
+владельца — по URL `?updatePlate=overlay`. Системные браузерные пуша
+(Notification API) не используются (решение владельца).
 
 ## Состав
 
@@ -24,13 +28,13 @@ nginx `location = /version.json`, no-cache). Хук в каркасе сверя
 
 ## Интеграционные точки (вне фичи)
 
-`app/shell/app-shell.tsx` (монтаж хука), `shared/socket/socket-reconnect.ts`
-(реестр реконнектов, вызывается из connect-хендлера socket-client),
-`apps/web/vite-portal-version.ts` (источник версии + генерация
-version.json), `infra/nginx/web.conf` (раздача `version.json`).
+`app/shell/app-shell.tsx` (монтаж хука), `app/shell/top-bar.tsx` +
+`app/shell/portal-update-plate.tsx` (плашка в браузере), `app/shell/
+reload-portal.ts` (точка перезагрузки для тестов), `shared/socket/
+socket-reconnect.ts` (реестр реконнектов, вызывается из connect-хендлера
+socket-client), `apps/web/vite-portal-version.ts` (источник версии +
+генерация version.json), `infra/nginx/web.conf` (раздача `version.json`).
 
 ## Ограничения
 
 - Препинки/билд-метки semver не сравниваются: выпуски портала строго X.Y.Z.
-- Обновление только ДЕТЕКТИРУЕТСЯ: перезагрузку пользователь делает сам
-  (подсказка/UI — следующая фаза эпика).
