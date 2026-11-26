@@ -23,7 +23,7 @@ import { useFrameReady } from '../../../../shared/ui/use-frame-ready.js';
 import { useNodePanelEscape } from '../lib/use-node-panel-escape.js';
 import { CommitInput } from '../../../../shared/ui/panel/commit-field.js';
 import { PanelField } from '../../../../shared/ui/panel/panel-kit.js';
-import { NodeKindTile } from '../lib/node-kind-icon.js';
+import { NodeKindTile } from '../../../../shared/ui/node-kind-icon.js';
 import { useUpdateNode } from '../api/structure-api.js';
 import { NodeKindChangeStep } from './node-kind-change-step.js';
 import { NodePanelFields } from './node-form-fields.js';

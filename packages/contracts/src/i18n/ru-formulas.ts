@@ -89,7 +89,7 @@ export const formulasStrings = {
     },
     node: {
       name: 'Название папки',
-      kind: 'Вид папки',
+      kind: 'Тип папки',
       createdAt: 'Папка создана',
     },
   },
@@ -122,7 +122,7 @@ export const formulasStrings = {
     parent: 'Родительская задача',
     folderNearest: 'Ближайшая папка',
     folderChain: 'Цепочка папок',
-    folderKind: 'Вид папки',
+    folderKind: 'Тип папки',
     project: 'Проект записи',
     company: 'Компания',
     refField: 'Запись по ссылке',

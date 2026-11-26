@@ -23,7 +23,7 @@ import {
 import { RowMenu, type RowMenuItem } from '../../../../shared/views/row-menu.js';
 import type { FieldDef, ViewField } from '../../../../shared/views/use-view-fields.js';
 import { ProcessTypeGlyph } from '../../../../shared/workflow/process-type-icon.js';
-import { NodeKindGlyph } from '../lib/node-kind-icon.js';
+import { NodeKindGlyph } from '../../../../shared/ui/node-kind-icon.js';
 import type { StructureNodeRow } from '../lib/structure-tree.js';
 
 /** Общие ячейки строк структуры: значок/номер, прогресс, часы, срок,

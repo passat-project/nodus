@@ -2,15 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { NodeKind } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 
-import {
-  capabilitiesSummary,
-  fieldsCountLabel,
-  fieldsCountShort,
-  FIELD_STATES,
-  formSummary,
-  kindRowSummary,
-  stateOptions,
-} from './node-kind-summary.js';
+import { fieldsCountLabel, formSummary, kindRowSummary } from './node-kind-summary.js';
 
 /** Сводки строки и панели вида (#556, ревизия #631): счётчики атрибутов
  *  формы, обязательные и возможности — таблицей по формам видов. */
@@ -63,28 +55,8 @@ describe('сводки формы вида', () => {
     );
   });
 
-  it('строка «Настроек типа» — та же сводка; короткий счётчик — «N атр.»', () => {
+  it('строка страницы «Какие папки здесь бывают» — та же сводка', () => {
     const withRequired = kind([slot(1, 'optional'), slot(2, 'required'), slot(3, 'required')]);
     expect(kindRowSummary(withRequired)).toBe(formSummary(withRequired));
-    expect(fieldsCountShort(withRequired)).toBe('3 атр.');
-  });
-});
-
-describe('capabilitiesSummary', () => {
-  it('нет возможностей — «Нет»; есть — «Включено: N»', () => {
-    expect(capabilitiesSummary(kind([]))).toBe(ui.nodeKinds.panel.capabilitiesSummaryNone);
-    expect(capabilitiesSummary(kind([], ['document_changes']))).toBe('Включено: 1');
-    expect(capabilitiesSummary(kind([], ['document_changes', 'pulse_row', 'schema_row']))).toBe(
-      'Включено: 3',
-    );
-  });
-});
-
-describe('stateOptions', () => {
-  it('три состояния с подписями окна вида', () => {
-    expect(stateOptions()).toEqual(
-      FIELD_STATES.map((value) => ({ value, label: ui.nodeKinds.form.state[value] })),
-    );
-    expect(FIELD_STATES).toEqual(['hidden', 'optional', 'required']);
   });
 });

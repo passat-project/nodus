@@ -114,8 +114,16 @@ export const projectCatalogHandlers = [
     const parsed = projectTypeCreateBodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return invalid();
     if (demoProjectTypes.some((entry) => entry.name === parsed.data.name)) return conflict();
-    if (parsed.data.form) {
-      const issues = projectTypeFormIssues(parsed.data.form);
+    // Основа-копия (#857): форма и допустимые типы папок — с живой основы
+    // (архивной/чужой — 404, зеркало сервера).
+    const baseTypeId = parsed.data.base?.kind === 'copy' ? parsed.data.base.typeId : null;
+    const source = baseTypeId
+      ? demoProjectTypes.find((entry) => entry.id === baseTypeId && entry.archivedAt === null)
+      : undefined;
+    if (baseTypeId && !source) return notFound();
+    const form = parsed.data.form ?? (source ? structuredClone(source.form) : null);
+    if (form) {
+      const issues = projectTypeFormIssues(form);
       if (issues.length > 0) return formInvalid(issues);
     }
     const type: ProjectType = {
@@ -123,8 +131,8 @@ export const projectCatalogHandlers = [
       name: parsed.data.name,
       icon: parsed.data.icon ?? 'file-text',
       color: parsed.data.color ?? 'blue',
-      form: parsed.data.form ?? DEFAULT_PROJECT_TYPE_FORM,
-      kindIds: null,
+      form: form ?? DEFAULT_PROJECT_TYPE_FORM,
+      kindIds: source ? (source.kindIds === null ? null : [...source.kindIds]) : null,
       archivedAt: null,
     };
     syncFieldBindings(

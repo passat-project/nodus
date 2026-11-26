@@ -14,41 +14,35 @@ import {
   useUpdateProjectType,
 } from '../api/project-catalog-mutations.js';
 import { kindsSummary, creationSummary } from '../lib/project-type-summary.js';
-import { ProjectTypeCreationSection } from './project-type-creation.js';
-import { ProjectTypeKindsSection } from './project-type-kinds.js';
-
-/** Разделы панели типа: корень и страницы поверх него (как «Настройки
- *  типа» в «Процессах» — раздел заменяет содержимое, «назад» в шапке). */
-export type ProjectTypeSection = 'root' | 'kinds' | 'creation';
 
 /**
- * Настройки типа проекта (#556) — правая панель окна-сплита и та же
- * анатомия, что у настроек типа процесса (#432): в корне — поля самого типа
- * (название, значок, цвет) и строка «Виды папок» со сводкой. Окна создания
- * проекта здесь НЕТ: оно открывается с узла «Создание проекта» на канвасе,
- * как «создание» в «Процессах» (вердикт владельца 08.11.2026); атрибуты
- * привязываются к типу в справочнике «Атрибуты». Всё сохраняется сразу
- * (оптимистично); архив — внизу, это не удаление.
+ * «Настройки типа» проекта (#556, #857) — правая панель рабочей области
+ * типа: корень с полями самого типа (название, значок, цвет) и строками-
+ * ссылками на отдельные страницы («Что здесь можно создавать», «Какие
+ * папки здесь бывают») — глубже одного уровня вложенности панель не
+ * растёт (единая модель §5). Окно создания проекта открывается с узла
+ * «Создание проекта» на канвасе. Всё сохраняется сразу (оптимистично);
+ * архив — внизу, это не удаление.
  */
 export function ProjectTypeSettingsPanel({
   type,
   kinds,
   open,
-  section,
   canSetup,
-  onSection,
   onClose,
-  onOpenKind,
+  onOpenCreation,
+  onOpenKinds,
 }: {
   type: ProjectType | null;
   kinds: NodeKind[];
   open: boolean;
-  section: ProjectTypeSection;
   /** Право `project.setup.manage` — правка; иначе только просмотр. */
   canSetup: boolean;
-  onSection: (section: ProjectTypeSection) => void;
   onClose: () => void;
-  onOpenKind: (id: string) => void;
+  /** Страница «Что здесь можно создавать» (#665) на всю правую область. */
+  onOpenCreation: () => void;
+  /** Страница «Какие папки здесь бывают» на всю правую область. */
+  onOpenKinds: () => void;
 }) {
   if (!type) {
     return (
@@ -61,13 +55,7 @@ export function ProjectTypeSettingsPanel({
   return (
     <SidePanel
       open={open}
-      title={
-        section === 'root'
-          ? ui.projects.schemasTypeSettings
-          : section === 'kinds'
-            ? ui.projects.schemasKinds
-            : ui.automation.creationScope.projectSectionTitle
-      }
+      title={ui.projects.schemasTypeSettings}
       leading={
         <span
           aria-hidden
@@ -80,20 +68,14 @@ export function ProjectTypeSettingsPanel({
         </span>
       }
       onClose={onClose}
-      onBack={section === 'root' ? undefined : () => onSection('root')}
     >
-      {section === 'root' ? (
-        <TypeRoot type={type} kinds={kinds} canSetup={canSetup} onSection={onSection} />
-      ) : section === 'kinds' ? (
-        <ProjectTypeKindsSection
-          type={type}
-          kinds={kinds}
-          canSetup={canSetup}
-          onOpenKind={onOpenKind}
-        />
-      ) : (
-        <ProjectTypeCreationSection type={type} canSetup={canSetup} />
-      )}
+      <TypeRoot
+        type={type}
+        kinds={kinds}
+        canSetup={canSetup}
+        onOpenCreation={onOpenCreation}
+        onOpenKinds={onOpenKinds}
+      />
     </SidePanel>
   );
 }
@@ -104,12 +86,14 @@ function TypeRoot({
   type,
   kinds,
   canSetup,
-  onSection,
+  onOpenCreation,
+  onOpenKinds,
 }: {
   type: ProjectType;
   kinds: NodeKind[];
   canSetup: boolean;
-  onSection: (section: ProjectTypeSection) => void;
+  onOpenCreation: () => void;
+  onOpenKinds: () => void;
 }) {
   const update = useUpdateProjectType();
   const archive = useSetProjectTypeArchived();
@@ -177,14 +161,14 @@ function TypeRoot({
 
       <div className="flex min-w-0 flex-col">
         <SectionLink
-          title={ui.automation.creationScope.projectSectionTitle}
+          title={ui.projects.schemasCreationPage}
           summary={creationSummary(type, processTypes)}
-          onClick={() => onSection('creation')}
+          onClick={onOpenCreation}
         />
         <SectionLink
           title={ui.projects.schemasKinds}
           summary={kindsSummary(type, kinds)}
-          onClick={() => onSection('kinds')}
+          onClick={onOpenKinds}
         />
       </div>
 

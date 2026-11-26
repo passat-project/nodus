@@ -14,7 +14,6 @@ describe('реестр навигации: вкладка «Права дост�
     expect(automation.tabs.map((tab) => tab.id)).toEqual([
       'processes',
       'fields',
-      'project-schemas',
       'registries',
       'access',
     ]);
@@ -55,7 +54,7 @@ describe('реестр навигации: вкладка «Права дост�
 });
 
 describe('портфели — папки журнала «Проекты» (#559)', () => {
-  it('в «Автоматизации» нет раздела-портфелей: только процессы, атрибуты, схемы, реестры, права', () => {
+  it('в «Автоматизации» нет раздела-портфелей: только процессы, атрибуты, реестры, права', () => {
     const automation = NAV_MODULES.find((module) => module.id === 'automation')!;
     const ids = automation.tabs.map((tab) => tab.id);
     expect(ids).not.toContain('portfolios');
@@ -64,10 +63,9 @@ describe('портфели — папки журнала «Проекты» (#55
     expect(automation.tabs.map((tab) => tab.label)).not.toContain(ui.projects.portfoliosTitle);
   });
 
-  it('«Схемы проектов» — единственная вкладка проектов в «Автоматизации»', () => {
+  it('вкладки «Схем проектов» нет — единый вход «Процессы» (#857)', () => {
     const automation = NAV_MODULES.find((module) => module.id === 'automation')!;
-    const projectTabs = automation.tabs.filter((tab) => tab.label.startsWith('Схем'));
-    expect(projectTabs.map((tab) => tab.id)).toEqual(['project-schemas']);
+    expect(automation.tabs.map((tab) => tab.id)).not.toContain('project-schemas');
   });
 });
 

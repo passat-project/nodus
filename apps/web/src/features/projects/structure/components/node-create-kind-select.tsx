@@ -9,7 +9,7 @@ import {
   SelectValue,
 } from '@nodus/ui/components/select';
 
-import { NodeKindTile } from '../lib/node-kind-icon.js';
+import { NodeKindTile } from '../../../../shared/ui/node-kind-icon.js';
 
 const SETUP_VALUE = '__setup';
 

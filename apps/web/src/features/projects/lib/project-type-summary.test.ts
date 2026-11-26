@@ -92,18 +92,18 @@ describe('visibleTypeKinds', () => {
 });
 
 describe('typeMeta', () => {
-  it('счётчик видов — как мета строки «Процессов»', () => {
+  it('счётчик типов папок — как мета строки «Процессов»', () => {
     const kinds = [kind(), kind({ id: OTHER_KIND, name: 'Раздел' })];
-    expect(typeMeta(type({ kindIds: null }), kinds)).toBe('2 вида');
-    expect(typeMeta(type({ kindIds: [KIND] }), kinds)).toBe('1 вид');
-    expect(typeMeta(type({ kindIds: [] }), kinds)).toBe('0 видов');
+    expect(typeMeta(type({ kindIds: null }), kinds)).toBe('2 типа');
+    expect(typeMeta(type({ kindIds: [KIND] }), kinds)).toBe('1 тип');
+    expect(typeMeta(type({ kindIds: [] }), kinds)).toBe('0 типов');
   });
 });
 
 describe('kindsSummary', () => {
-  it('null — «Все виды · N», явный список — «K из N»', () => {
+  it('null — «Все типы · N», явный список — «K из N»', () => {
     const kinds = [kind(), kind({ id: OTHER_KIND, name: 'Раздел' })];
-    expect(kindsSummary(type({ kindIds: null }), kinds)).toBe('Все виды · 2');
+    expect(kindsSummary(type({ kindIds: null }), kinds)).toBe('Все типы · 2');
     expect(kindsSummary(type({ kindIds: [KIND] }), kinds)).toBe('1 из 2');
     expect(kindsSummary(type({ kindIds: [] }), kinds)).toBe('0 из 2');
   });

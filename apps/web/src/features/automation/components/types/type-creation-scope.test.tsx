@@ -89,10 +89,10 @@ describe('«Где создаётся» (#665)', () => {
     });
   });
 
-  it('письму «Без проекта» и вид папки не показываются', () => {
+  it('письму «Без проекта» и тип папки не показываются', () => {
     setup({ ...type(), category: 'letter', direction: 'incoming' } as ProcessType);
     expect(screen.queryByRole('switch', { name: /Без проекта/ })).toBeNull();
-    expect(screen.queryByText('Вид папки')).toBeNull();
+    expect(screen.queryByText('Тип папки')).toBeNull();
   });
 
   it('«Разрешить во всех типах проектов» снимает все исключения', () => {

@@ -10,7 +10,7 @@ import {
   useUpdateTypeCreation,
 } from '../../../shared/api/process-types-api.js';
 import { useCanManageWorkflows } from '../../../shared/api/use-can-manage-workflows.js';
-import { ProjectTypeCreationSection } from './project-type-creation.js';
+import { ProjectTypeCreationPage } from './project-type-creation.js';
 
 vi.mock('../../../shared/api/process-types-api.js', () => ({
   useLiveProcessTypes: vi.fn(),
@@ -81,6 +81,7 @@ function setup(
   manage = true,
 ) {
   const mutate = vi.fn();
+  const onOpenType = vi.fn();
   vi.mocked(useCanManageWorkflows).mockReturnValue(manage);
   vi.mocked(useLiveProcessTypes).mockImplementation(
     (category) =>
@@ -89,11 +90,18 @@ function setup(
       }) as never,
   );
   vi.mocked(useUpdateTypeCreation).mockReturnValue({ mutate, isPending: false } as never);
-  render(<ProjectTypeCreationSection type={projectType} canSetup={canSetup} />);
-  return { mutate };
+  render(
+    <ProjectTypeCreationPage
+      type={projectType}
+      canSetup={canSetup}
+      onBack={vi.fn()}
+      onOpenType={onOpenType}
+    />,
+  );
+  return { mutate, onOpenType };
 }
 
-describe('«Типы задач и писем» (#665)', () => {
+describe('страница «Что здесь можно создавать» (#665, #857)', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
@@ -136,7 +144,7 @@ describe('«Типы задач и писем» (#665)', () => {
     expect(screen.getAllByText(ui.automation.creationScope.empty).length).toBeGreaterThan(0);
   });
 
-  it('снятие работы, привязанной к виду, — предупреждение', () => {
+  it('снятие работы, привязанной к типу папки, — предупреждение', () => {
     const bound = {
       ...TASK,
       config: normalizeTypeConfig({
@@ -152,5 +160,11 @@ describe('«Типы задач и писем» (#665)', () => {
     expect(vi.mocked(toast.warning)).toHaveBeenCalledWith(
       ui.automation.creationScope.unbindWarning,
     );
+  });
+
+  it('клик по строке (не по тумблеру) открывает настройку этого типа', () => {
+    const { onOpenType } = setup();
+    fireEvent.click(screen.getByTitle('Комплект'));
+    expect(onOpenType).toHaveBeenCalledWith(TASK.id);
   });
 });

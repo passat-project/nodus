@@ -1,9 +1,16 @@
-import { useState } from 'react';
-import type { ProcessTypeIcon, ProjectColor } from '@nodus/contracts';
+import { useMemo, useState } from 'react';
+import type { ProcessTypeIcon, ProjectColor, ProjectTypeBase } from '@nodus/contracts';
 import { processTypeIconSchema, projectColorSchema, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@nodus/ui/components/dialog';
 import { Input } from '@nodus/ui/components/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@nodus/ui/components/select';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { identityTone } from '../../../shared/ui/identity-tone.js';
@@ -12,32 +19,42 @@ import { ProcessTypeGlyph } from '../../../shared/workflow/process-type-icon.js'
 import { useCreateProjectType } from '../api/project-catalog-mutations.js';
 
 /**
- * Окно создания типа проекта (#556) — грамматика создания типа процесса:
- * название, значок закрытым набором, цвет-идентичность. Тип сразу получает
- * все виды справочника (`kindIds: null`) — сужение делается в «Настройках
- * типа». Мимо-клик окно не закрывает (правило 30.09: вводимое жалко).
+ * Окно создания типа проекта (#556; копия — #857) — грамматика создания
+ * типа процесса: название, значок закрытым набором, цвет-идентичность,
+ * основа «копия живого типа или с нуля» (копия берёт форму и допустимые
+ * типы папок основы). Мимо-клик окно не закрывает (правило 30.09).
  */
 export function ProjectTypeCreateDialog({
   onClose,
   onCreated,
+  defaultBaseTypeId,
 }: {
   onClose: () => void;
-  /** Созданный тип становится выбранным в левой колонке. */
+  /** Созданный тип становится выбранным в колонке («Процессы»). */
   onCreated: (id: string) => void;
+  /** Основа по умолчанию («Копировать тип» из меню строки). */
+  defaultBaseTypeId?: string;
 }) {
   const create = useCreateProjectType();
   const { data: types } = useProjectTypes(true);
   const [name, setName] = useState('');
   const [icon, setIcon] = useState<ProcessTypeIcon>('file-text');
   const [color, setColor] = useState<ProjectColor>('blue');
+  const [base, setBase] = useState<ProjectTypeBase>(
+    defaultBaseTypeId ? { kind: 'copy', typeId: defaultBaseTypeId } : { kind: 'simple' },
+  );
 
+  const baseTypes = useMemo(
+    () => (types ?? []).filter((type) => type.archivedAt === null),
+    [types],
+  );
   const trimmed = name.trim();
-  const taken = (types ?? []).some((type) => type.name.toLowerCase() === trimmed.toLowerCase());
+  const taken = baseTypes.some((type) => type.name.toLowerCase() === trimmed.toLowerCase());
 
   const submit = () => {
     if (!trimmed || taken || create.isPending) return;
     create.mutate(
-      { name: trimmed, icon, color },
+      { name: trimmed, icon, color, base: base.kind === 'copy' ? base : { kind: 'simple' } },
       {
         onSuccess: (type) => {
           onCreated(type.id);
@@ -116,6 +133,28 @@ export function ProjectTypeCreateDialog({
               ))}
             </div>
           </div>
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-label text-muted-foreground">{ui.projects.fieldBase}</span>
+            <Select
+              value={base.kind === 'copy' ? base.typeId : 'simple'}
+              onValueChange={(value) =>
+                setBase(value === 'simple' ? { kind: 'simple' } : { kind: 'copy', typeId: value })
+              }
+            >
+              <SelectTrigger className="w-full min-w-0" aria-label={ui.projects.fieldBase}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                <SelectItem value="simple">{ui.projects.baseSimple}</SelectItem>
+                {baseTypes.map((type) => (
+                  <SelectItem key={type.id} value={type.id}>
+                    {ui.projects.baseCopy}: {type.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
         </div>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>

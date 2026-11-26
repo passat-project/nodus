@@ -138,8 +138,8 @@ export const errorMessages: Record<ErrorCode, string> = {
     'Узел не пустой — сначала перенесите из него задачи и дочерние узлы',
   [ErrorCode.PROJECT_NODE_CODE_TAKEN]: 'Шифр уже занят другим узлом этого проекта',
   [ErrorCode.PROJECT_NODE_LIMIT_REACHED]: 'Достигнут предел структуры проекта',
-  [ErrorCode.PROJECT_NODE_KIND_ARCHIVED]: 'Этот вид папки в архиве — выберите другой',
-  [ErrorCode.PROJECT_NODE_KIND_NAME_TAKEN]: 'Вид папки с таким названием уже есть',
+  [ErrorCode.PROJECT_NODE_KIND_ARCHIVED]: 'Этот тип папки в архиве — выберите другой',
+  [ErrorCode.PROJECT_NODE_KIND_NAME_TAKEN]: 'Тип папки с таким названием уже есть',
   [ErrorCode.PROJECT_NODE_FIELDS_REQUIRED]: 'Заполните обязательные поля папки',
   [ErrorCode.PROJECT_TASK_MEMBERS_INVALID]: 'У сотрудников нет доступа к секретному проекту',
   [ErrorCode.PROJECT_MEMBER_HAS_TASKS]:
@@ -148,7 +148,7 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.PROJECT_FIELDS_REQUIRED]: 'Заполните обязательные атрибуты проекта',
   [ErrorCode.PROJECT_NODE_KIND_FORM_INVALID]: 'Форма вида ссылается на негодные атрибуты',
   [ErrorCode.PROJECT_TYPE_FORM_INVALID]: 'Форма типа проекта ссылается на негодные атрибуты',
-  [ErrorCode.PROJECT_NODE_KIND_NOT_ALLOWED]: 'Этот вид папки не назначен типу проекта',
+  [ErrorCode.PROJECT_NODE_KIND_NOT_ALLOWED]: 'Этот тип папки не назначен типу проекта',
   [ErrorCode.ASSISTANT_PROVIDER_NOT_CONFIGURED]:
     'ИИ-агент не настроен: добавьте провайдера и модель в настройках',
   [ErrorCode.ASSISTANT_PROVIDER_NOT_FOUND]: 'Провайдер не найден',

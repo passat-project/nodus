@@ -56,14 +56,29 @@ export const structureKindHandlers = [
     if (demoNodeKinds.some((kind) => key(kind.name) === key(parsed.data.name))) {
       return conflict(ErrorCode.PROJECT_NODE_KIND_NAME_TAKEN, 'Kind name is already taken');
     }
+    // Основа-копия (#857): форма и возможности — с живой основы
+    // (архивной/чужой — 404, зеркало сервера).
+    const baseKindId = parsed.data.base?.kind === 'copy' ? parsed.data.base.kindId : null;
+    const source = baseKindId
+      ? demoNodeKinds.find((entry) => entry.id === baseKindId && entry.archivedAt === null)
+      : undefined;
+    if (baseKindId && !source) return nodeNotFound();
     const kind: NodeKind = {
       id: crypto.randomUUID(),
       archivedAt: null,
-      form: DEFAULT_NODE_KIND_FORM,
-      capabilities: [],
-      ...parsed.data,
+      form: source ? structuredClone(source.form) : DEFAULT_NODE_KIND_FORM,
+      capabilities: source ? [...source.capabilities] : [],
+      name: parsed.data.name,
+      icon: parsed.data.icon,
+      color: parsed.data.color,
     };
     demoNodeKinds.push(kind);
+    // Привязки скопированной формы — к новому типу (зеркало сервера).
+    syncKindBindings(
+      kind.id,
+      [],
+      formSlots(kind.form).map((slot) => slot.fieldId),
+    );
     return HttpResponse.json(kind, { status: 201 });
   }),
 

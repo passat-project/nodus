@@ -1,24 +1,16 @@
-import type { NodeKind, NodeKindFieldState } from '@nodus/contracts';
+import type { NodeKind } from '@nodus/contracts';
 import { nodeKindFormOf, ui, formSlots } from '@nodus/contracts';
 
 import { plural } from '../../../../shared/lib/format.js';
 
-/** Подписи состояний слота формы вида (#556): «Скрыто / По желанию /
- *  Обязательно» — одни на панель вида, окно создания и свойства папки. */
-export const FIELD_STATES: readonly NodeKindFieldState[] = ['hidden', 'optional', 'required'];
-
-export function stateOptions() {
-  return FIELD_STATES.map((value) => ({ value, label: ui.nodeKinds.form.state[value] }));
-}
-
-/** Обязательные слоты формы вида (состояние «обязательно»). */
+/** Обязательные слоты формы типа (состояние «обязательно»). */
 function requiredCount(kind: NodeKind): number {
   return formSlots(nodeKindFormOf(kind)).filter((slot) => slot.state === 'required').length;
 }
 
-/** Сводка формы для строки-ссылки панели: «1 атрибут · обязательных: 1»
- *  (или «Папки этого вида спрашивают только название»). Код папки — обычный
- *  слот атрибута «Код», отдельной сводки шифра нет (ревизия #631). */
+/** Сводка формы для строки типа: «1 атрибут · обязательных: 1» (или «Папки
+ *  этого типа спрашивают только название»). Код папки — обычный слот
+ *  атрибута «Код», отдельной сводки шифра нет (ревизия #631). */
 export function formSummary(kind: NodeKind): string {
   const form = nodeKindFormOf(kind);
   if (formSlots(form).length === 0) {
@@ -32,27 +24,14 @@ export function formSummary(kind: NodeKind): string {
   return parts.join(' · ');
 }
 
-/** Счётчик атрибутов формы в строке вида: «1 атрибут» (моно, тихо). */
+/** Счётчик атрибутов формы в строке типа: «1 атрибут» (моно, тихо). */
 export function fieldsCountLabel(kind: NodeKind): string {
   const count = formSlots(nodeKindFormOf(kind)).length;
   return `${count} ${plural(count, ui.nodeKinds.fieldsCount)}`;
 }
 
-/** Компактная сводка строки вида в «Настройках типа»: та же форма, что у
- *  строки-ссылки панели — одно число и обязательные, без расхождений. */
+/** Компактная сводка строки типа в странице «Какие папки здесь бывают»:
+ *  та же форма, что у сводки типа — одно число и обязательные. */
 export function kindRowSummary(kind: NodeKind): string {
   return formSummary(kind);
-}
-
-/** Тот же счётчик коротко для узкой строки вида: «1 атр.». */
-export function fieldsCountShort(kind: NodeKind): string {
-  return `${formSlots(nodeKindFormOf(kind)).length} ${ui.nodeKinds.fieldsCountShort}`;
-}
-
-/** Сводка возможностей для строки-ссылки: «Включено: 2» или «Нет». */
-export function capabilitiesSummary(kind: NodeKind): string {
-  const count = kind.capabilities.length;
-  return count === 0
-    ? ui.nodeKinds.panel.capabilitiesSummaryNone
-    : ui.nodeKinds.panel.capabilitiesSummary.replace('{count}', String(count));
 }

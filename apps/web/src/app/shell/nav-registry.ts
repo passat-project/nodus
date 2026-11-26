@@ -234,9 +234,9 @@ export const NAV_MODULES: NavModuleDef[] = [
     // Окно-сплит: колонка типов + холст, ось — верхняя граница окна.
     splitWindow: true,
     // Единый дом настройки (#377): вкладки сверху, не модули в меню;
+    // «Процессы» — единый вход типов проектов, задач, писем и папок (#857),
     // «Атрибуты» — реестр кастомных полей (#431), «Права доступа» — матрица
-    // прав раздела (#379, ADR-0034) — последняя, появляется по каталогу,
-    // «Схемы проектов» — #38 (V2).
+    // прав раздела (#379, ADR-0034) — последняя, появляется по каталогу.
     tabs: [
       {
         id: 'processes',
@@ -249,13 +249,6 @@ export const NAV_MODULES: NavModuleDef[] = [
         label: ui.automation.tabFields,
         search: { tab: 'fields' },
         isActive: (s) => s.get('tab') === 'fields',
-      },
-      {
-        id: 'project-schemas',
-        label: ui.projects.schemasTitle,
-        search: { tab: 'project-schemas' },
-        permission: Permission.PROJECT_SETUP_MANAGE,
-        isActive: (s) => s.get('tab') === 'project-schemas',
       },
       {
         id: 'registries',

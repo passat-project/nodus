@@ -4,7 +4,7 @@ import { ui } from '@nodus/contracts';
 
 import { plural } from '../../../../shared/lib/format.js';
 import { identityTone } from '../../../../shared/ui/identity-tone.js';
-import { NodeKindGlyph } from '../lib/node-kind-icon.js';
+import { NodeKindGlyph } from '../../../../shared/ui/node-kind-icon.js';
 import type { DragPayload } from '../lib/use-structure-dnd.js';
 
 /** Плашка DragOverlay дерева структуры: узел с ярлыком вида, название

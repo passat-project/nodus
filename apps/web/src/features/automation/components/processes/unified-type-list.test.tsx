@@ -1,0 +1,201 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { NodeKind, ProcessType, ProjectType } from '@nodus/contracts';
+import { ui } from '@nodus/contracts';
+
+vi.mock('../../api/automation-api.js', () => ({
+  useArchiveProcessType: vi.fn(() => ({ mutate: vi.fn() })),
+}));
+
+import { UnifiedTypeList } from './unified-type-list.js';
+
+const NOW = '2026-11-26T00:00:00.000Z';
+
+const task = (id: string, name: string, patch: Partial<ProcessType> = {}) =>
+  ({
+    id,
+    code: id,
+    name,
+    category: 'task',
+    direction: null,
+    icon: 'square-check',
+    color: 'neutral',
+    description: '',
+    creatable: true,
+    isSystem: false,
+    sortOrder: 0,
+    archivedAt: null,
+    workflowId: `wf-${id}`,
+    config: {
+      card: {},
+      access: {},
+      creation: { excludedProjectTypeIds: [], folderKindId: null, withoutProject: true },
+    },
+    viewer: { canView: true, canCreate: true },
+    numbering: null,
+    ...patch,
+  }) as unknown as ProcessType;
+
+const projectType = (id: string, name: string, patch: Partial<ProjectType> = {}) =>
+  ({
+    id,
+    name,
+    icon: 'file-text',
+    color: 'blue',
+    form: { fields: [] },
+    kindIds: null,
+    archivedAt: null,
+    ...patch,
+  }) as unknown as ProjectType;
+
+const kind = (id: string, name: string, patch: Partial<NodeKind> = {}) =>
+  ({
+    id,
+    name,
+    icon: 'folder',
+    color: 'blue',
+    archivedAt: null,
+    form: { fields: [] },
+    capabilities: [],
+    ...patch,
+  }) as unknown as NodeKind;
+
+const fixtures = {
+  processTypes: [
+    task('t1', 'Задание смежнику'),
+    task('t2', 'Смета', { category: 'letter' }),
+    task('t-dead', 'Старый тип', { archivedAt: NOW }),
+  ],
+  projectTypes: [projectType('p1', 'Договор'), projectType('p2', 'Тема', { archivedAt: NOW })],
+  kinds: [kind('k1', 'Комплект'), kind('k2', 'Здание', { archivedAt: NOW })],
+};
+
+function setup(patch: Partial<Parameters<typeof UnifiedTypeList>[0]> = {}) {
+  const props = {
+    processTypes: fixtures.processTypes,
+    projectTypes: fixtures.projectTypes,
+    kinds: fixtures.kinds,
+    canSetup: true,
+    canManage: true,
+    isLoading: false,
+    dirtyIds: new Set<string>(),
+    noProjectSelected: false,
+    onSelectProcessType: vi.fn(),
+    onOpenProcessTypeSettings: vi.fn(),
+    onSelectProjectType: vi.fn(),
+    onOpenProjectSettings: vi.fn(),
+    onSelectNoProject: vi.fn(),
+    onSelectKind: vi.fn(),
+    onArchiveProject: vi.fn(),
+    onArchiveNodeKind: vi.fn(),
+    ...patch,
+  };
+  render(<UnifiedTypeList {...props} />);
+  return props;
+}
+
+function groupOf(label: string): HTMLElement {
+  // Заголовок группы — кнопка сворачивания с меткой; группа — её родитель.
+  return screen.getByRole('button', { name: new RegExp(label) }).closest('div')!
+    .parentElement as HTMLElement;
+}
+
+describe('единая колонка «Процессов» (#857)', () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it('четыре группы в строгом порядке, «Без проекта» — последняя строка «Проектов»', () => {
+    setup();
+    const labels = [
+      ui.automation.entry.groups.project,
+      ui.automation.entry.groups.task,
+      ui.automation.entry.groups.letter,
+      ui.automation.entry.groups.folder,
+    ];
+    const nodes = labels.map((label) => screen.getByText(label));
+    for (let i = 1; i < nodes.length; i += 1) {
+      // Following (4) — заголовок i стоит в документе после заголовка i-1.
+      expect((nodes[i - 1]!.compareDocumentPosition(nodes[i]!) & 4) !== 0).toBe(true);
+    }
+    const projects = groupOf(ui.automation.entry.groups.project);
+    const rows = within(projects)
+      .getAllByRole('button')
+      .filter(
+        (button) =>
+          button.textContent !== null &&
+          !button.textContent.includes(ui.automation.entry.groups.project),
+      );
+    expect(within(rows[rows.length - 1]!).getByText(ui.automation.entry.noProjectRow)).toBeTruthy();
+  });
+
+  it('без права project.setup.manage проектные группы скрыты', () => {
+    setup({ canSetup: false });
+    expect(screen.queryByText(ui.automation.entry.groups.project)).toBeNull();
+    expect(screen.queryByText(ui.automation.entry.groups.folder)).toBeNull();
+    expect(screen.getByText(ui.automation.entry.groups.task)).toBeTruthy();
+    expect(screen.getByText(ui.automation.entry.groups.letter)).toBeTruthy();
+    expect(screen.queryByText(ui.automation.entry.noProjectRow)).toBeNull();
+  });
+
+  it('поиск фильтрует все группы, раскрывает свёрнутую, прячет пустые', () => {
+    setup();
+    // свернуть «Задачи» до поиска
+    fireEvent.click(
+      screen.getByRole('button', { name: new RegExp(ui.automation.entry.groups.task) }),
+    );
+    expect(screen.queryByText('Задание смежнику')).toBeNull();
+
+    const search = screen.getByPlaceholderText(ui.common.search);
+    fireEvent.change(search, { target: { value: 'договор' } });
+    // группа «Задачи» без найденного скрыта целиком
+    expect(screen.queryByText(ui.automation.entry.groups.task)).toBeNull();
+    expect(screen.queryByText('Задание смежнику')).toBeNull();
+    // «Проекты» раскрыта поиском и показывает найденное
+    expect(screen.getByText('Договор')).toBeTruthy();
+  });
+
+  it('поиск «смеж» раскрывает свёрнутую группу «Задачи»', () => {
+    setup();
+    fireEvent.click(
+      screen.getByRole('button', { name: new RegExp(ui.automation.entry.groups.task) }),
+    );
+    fireEvent.change(screen.getByPlaceholderText(ui.common.search), { target: { value: 'смеж' } });
+    expect(screen.getByText('Задание смежнику')).toBeTruthy();
+  });
+
+  it('сворачивание и разворачивание группы кликом по заголовку', () => {
+    setup();
+    const header = screen.getByRole('button', {
+      name: new RegExp(ui.automation.entry.groups.letter),
+    });
+    fireEvent.click(header);
+    expect(screen.queryByText('Смета')).toBeNull();
+    fireEvent.click(header);
+    expect(screen.getByText('Смета')).toBeTruthy();
+  });
+
+  it('архив — свёрнутая группа внизу со всеми категориями вместе', () => {
+    setup();
+    const archive = screen.getByRole('button', { name: new RegExp(ui.automation.archiveGroup) });
+    expect(screen.queryByText('Старый тип')).toBeNull();
+    fireEvent.click(archive);
+    expect(screen.getByText('Старый тип')).toBeTruthy();
+    expect(screen.getByText('Тема')).toBeTruthy();
+    expect(screen.getByText('Здание')).toBeTruthy();
+  });
+
+  it('клик по строке вызывает выбор соответствующей категории', () => {
+    const props = setup();
+    fireEvent.click(screen.getByText('Задание смежнику'));
+    expect(props.onSelectProcessType).toHaveBeenCalledWith('t1');
+    fireEvent.click(screen.getByText('Договор'));
+    expect(props.onSelectProjectType).toHaveBeenCalledWith('p1');
+    fireEvent.click(screen.getByText('Комплект'));
+    expect(props.onSelectKind).toHaveBeenCalledWith('k1');
+    fireEvent.click(screen.getByText(ui.automation.entry.noProjectRow));
+    expect(props.onSelectNoProject).toHaveBeenCalled();
+  });
+});

@@ -19,9 +19,9 @@ import {
 import type { NodeKind, NodeKindIcon } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
-import { identityTone } from '../../../../shared/ui/identity-tone.js';
+import { identityTone } from './identity-tone.js';
 
-/** Реестр значков видов уровней (#467): закрытый набор ключей lucide из
+/** Реестр значков типов папок (shared, #857: закрытый набор ключей lucide из
  *  контракта `nodeKindIconSchema`; новая иконка = расширение набора там и
  *  здесь (рассинхрон — ошибка типов). Паттерн process-type-icon.tsx. */
 const ICONS: Record<NodeKindIcon, LucideIcon> = {
