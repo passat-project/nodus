@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ProcessType } from '@nodus/contracts';
 
@@ -44,17 +44,24 @@ vi.mock('../../../../shared/custom-fields/use-can-manage-fields.js', () => ({
 vi.mock('../../../../shared/workflow/workflow-api.js', () => ({
   useWorkflowDetail: vi.fn(() => ({ data: { id: 'wf-1', document: { stages: [] } } })),
 }));
-vi.mock('../editor/route-editor.js', () => ({
-  RouteEditor: (props: { type: ProcessType; settings?: React.ReactNode }) => (
-    <div data-testid="route-editor" data-type={props.type.name}>
-      {props.settings}
-    </div>
-  ),
-}));
-vi.mock('../types/type-settings.js', () => ({
-  TypeSettingsPanel: (props: { open: boolean }) => (
-    <div data-testid="type-settings" data-open={String(props.open)} />
-  ),
+const cardProps = vi.hoisted(() => ({ value: null as null | Record<string, unknown> }));
+vi.mock('./process-type-card.js', () => ({
+  ProcessTypeCard: (props: {
+    type: ProcessType;
+    settingsRequest?: number;
+    backLabel?: string;
+    onBack: () => void;
+  }) => {
+    cardProps.value = props;
+    return (
+      <div
+        data-testid="process-type-card"
+        data-type={props.type.name}
+        data-back-label={props.backLabel ?? ''}
+        data-settings-request={String(props.settingsRequest ?? 0)}
+      />
+    );
+  },
 }));
 vi.mock('./without-project-page.js', () => ({
   WithoutProjectPage: () => <div data-testid="without-project" />,
@@ -120,7 +127,7 @@ afterEach(cleanup);
 describe('диспетчер «Процессов» по URL (#857)', () => {
   it('?type= — редактор маршрута выбранного типа', () => {
     setup({ tab: 'processes', type: 't1' });
-    expect(screen.getByTestId('route-editor').dataset.type).toBe('Задание смежнику');
+    expect(screen.getByTestId('process-type-card').dataset.type).toBe('Задание смежнику');
     expect(screen.queryByTestId('workspace-slot')).toBeNull();
     expect(screen.queryByTestId('without-project')).toBeNull();
   });
@@ -128,7 +135,7 @@ describe('диспетчер «Процессов» по URL (#857)', () => {
   it('?ptype= — рабочая область типа проекта через слот', () => {
     setup({ tab: 'processes', ptype: 'p2' });
     expect(screen.getByTestId('workspace-slot').dataset.typeId).toBe('p2');
-    expect(screen.queryByTestId('route-editor')).toBeNull();
+    expect(screen.queryByTestId('process-type-card')).toBeNull();
   });
 
   it('без параметров — умолчание: первый живой тип проекта', () => {
@@ -152,17 +159,18 @@ describe('диспетчер «Процессов» по URL (#857)', () => {
 });
 
 describe('дорожка типа из типа проекта (#857)', () => {
-  it('?ptype+type — клик по проекту в дорожке снимает type, оставляя ptype', () => {
+  it('?ptype+type — крошка имени проекта в карточке; возврат снимает type', () => {
     setup({ tab: 'processes', type: 't1', ptype: 'p1' });
-    // Дорожка: [Договор] › [Задание смежнику]
-    fireEvent.click(screen.getByRole('button', { name: 'Договор' }));
+    // Крошка «‹ Договор» — имя живого типа проекта, из которого открыт тип.
+    expect(screen.getByTestId('process-type-card').dataset.backLabel).toBe('Договор');
+    act(() => (cardProps.value!.onBack as () => void)());
     expect(navigateSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         to: '/automation',
         search: expect.any(Function),
       }),
     );
-    const updater = navigateSpy.mock.calls[0]![0].search;
+    const updater = navigateSpy.mock.calls.at(-1)![0].search;
     expect(updater({ tab: 'processes', type: 't1', ptype: 'p1' })).toEqual({
       tab: 'processes',
       type: undefined,
@@ -170,9 +178,9 @@ describe('дорожка типа из типа проекта (#857)', () => {
     });
   });
 
-  it('без ptype дорожки нет', () => {
+  it('без ptype крошки нет', () => {
     setup({ tab: 'processes', type: 't1' });
-    expect(screen.queryByRole('button', { name: 'Договор' })).toBeNull();
+    expect(screen.getByTestId('process-type-card').dataset.backLabel).toBe('');
   });
 });
 
@@ -227,11 +235,18 @@ describe('колонка → URL: колбэки выбора строк (#857)'
     });
   });
 
-  it('«⋯ → Настройки типа» строки задачи открывает панель настроек', () => {
+  it('«⋯ → Настройки типа» строки задачи поднимает settingsRequest карточки', () => {
     setup({ tab: 'processes', type: 't1' });
-    expect(screen.getByTestId('type-settings').dataset.open).toBe('false');
+    expect(screen.getByTestId('process-type-card').dataset.settingsRequest).toBe('0');
     act(() => (listProps.value!.onOpenProcessTypeSettings as (id: string) => void)('t1'));
-    expect(screen.getByTestId('type-settings').dataset.open).toBe('true');
+    expect(screen.getByTestId('process-type-card').dataset.settingsRequest).toBe('1');
+    // и выделение редактора сбрасывается (окно не должно теряться за панелью)
+    expect(searchOf()).toEqual({
+      tab: 'processes',
+      type: 't1',
+      ptype: undefined,
+      noproject: undefined,
+    });
   });
 
   it('«⋯ → Настройки типа» строки проекта поднимает settingsRequest воркспейса', () => {

@@ -1,13 +1,26 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { NodeKind, ProcessType, ProjectType } from '@nodus/contracts';
 import { normalizeTypeConfig, ui } from '@nodus/contracts';
 
+// Журнальные списки вкладок меряют края скролла ResizeObserver-ом.
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  },
+);
+
 vi.mock('../../../../shared/api/node-kinds.js', () => ({
   useNodeKinds: vi.fn(),
 }));
+// projectsKeys нужны транзитивным импортам мутаций каталога (не только хук).
 vi.mock('../../../../shared/api/projects-list.js', () => ({
+  projectsKeys: { all: ['projects'], list: ['projects', 'list'] },
   useProjectTypes: vi.fn(),
 }));
 vi.mock('../../../../shared/api/process-types-api.js', () => ({
@@ -31,9 +44,6 @@ vi.mock('../api/node-kinds-api.js', () => ({
 }));
 vi.mock('./node-kind-form-section.js', () => ({
   NodeKindFormSection: () => <div data-testid="kind-form-section" />,
-}));
-vi.mock('./node-kind-capabilities-section.js', () => ({
-  NodeKindCapabilitiesSection: () => <div data-testid="kind-capabilities" />,
 }));
 
 import { useNodeKinds } from '../../../../shared/api/node-kinds.js';
@@ -95,6 +105,7 @@ function setup(
 ) {
   const mutate = vi.fn();
   const onOpenProjectType = vi.fn();
+  const onOpenType = vi.fn();
   const onBack = vi.fn();
   api.update.mockClear();
   api.archive.mockClear();
@@ -114,48 +125,50 @@ function setup(
     backLabel,
     onBack,
     onOpenProjectType,
+    onOpenType,
   };
-  const view = render(<NodeKindScreen {...props} />);
-  return { mutate, onOpenProjectType, onBack, view, props };
+  const queryClient = new QueryClient();
+  const view = render(
+    <QueryClientProvider client={queryClient}>
+      <NodeKindScreen {...props} />
+    </QueryClientProvider>,
+  );
+  return { mutate, onOpenProjectType, onOpenType, onBack, view, props };
 }
 
-describe('экран типа папки (#857)', () => {
+describe('экран типа папки — рама с вкладками (#857)', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
   });
 
-  it('пять разделов одного уровня; «Поля и форма» — по умолчанию', () => {
+  it('три вкладки рамы; «Поля и форма» — по умолчанию, имя справа не дублируется', () => {
     setup();
     expect(screen.getByTestId('kind-form-section')).toBeTruthy();
-    for (const label of [
-      ui.nodeKinds.screen.fieldsForm,
-      ui.nodeKinds.screen.metrics,
-      ui.nodeKinds.screen.actions,
-      ui.nodeKinds.screen.works,
-      ui.nodeKinds.screen.usage,
-    ]) {
-      expect(screen.getByRole('button', { name: label })).toBeTruthy();
-    }
+    expect(screen.getByRole('tab', { name: ui.nodeKinds.screen.fieldsForm })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: ui.nodeKinds.screen.works })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: ui.nodeKinds.screen.usage })).toBeTruthy();
+    expect(
+      screen
+        .getByRole('tab', { name: ui.nodeKinds.screen.fieldsForm })
+        .getAttribute('aria-selected'),
+    ).toBe('true');
+    // Имя и плитка типа живут только в строке колонки слева.
+    expect(screen.queryByText('Комплект')).toBeNull();
   });
 
-  it('«Показатели» и «Действия» — пустые состояния с пояснением', () => {
-    setup();
-    fireEvent.click(screen.getByRole('button', { name: ui.nodeKinds.screen.metrics }));
-    expect(screen.getByText(ui.nodeKinds.screen.metricsEmpty)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: ui.nodeKinds.screen.actions }));
-    expect(screen.getByText(ui.nodeKinds.screen.actionsEmpty)).toBeTruthy();
-  });
-
-  it('шапка: возврат с меткой типа проекта, имя и плитка типа', () => {
-    setup();
+  it('шапка: крошка возврата с именем типа проекта и подсказка использования', () => {
+    const { onBack } = setup();
     expect(screen.getByRole('button', { name: 'Договор' })).toBeTruthy();
-    expect(screen.getByText('Комплект')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Договор' }));
+    expect(onBack).toHaveBeenCalled();
+    // Один живой тип проекта со всеми папками — «во всех типах».
+    expect(screen.getByText(ui.automation.entry.usageEverywhere)).toBeTruthy();
   });
 
   it('«Работы в папке»: тумблер байндит и анбайндит folderKindId', () => {
     const { mutate } = setup({ tasks: [TASK('t1', null)] });
-    fireEvent.click(screen.getByRole('button', { name: ui.nodeKinds.screen.works }));
+    fireEvent.click(screen.getByRole('tab', { name: ui.nodeKinds.screen.works }));
     const toggle = screen.getByRole('switch', { name: /Задание смежнику/ });
     expect(toggle.getAttribute('aria-checked')).toBe('false');
     fireEvent.click(toggle);
@@ -168,7 +181,7 @@ describe('экран типа папки (#857)', () => {
     cleanup();
     vi.clearAllMocks();
     const bound = setup({ tasks: [TASK('t2', KIND_ID)] });
-    fireEvent.click(screen.getByRole('button', { name: ui.nodeKinds.screen.works }));
+    fireEvent.click(screen.getByRole('tab', { name: ui.nodeKinds.screen.works }));
     const boundToggle = screen.getByRole('switch', { name: /Задание смежнику/ });
     expect(boundToggle.getAttribute('aria-checked')).toBe('true');
     fireEvent.click(boundToggle);
@@ -178,67 +191,27 @@ describe('экран типа папки (#857)', () => {
     });
   });
 
-  it('«Где используется»: kindIds null → «Все типы папок», клик ведёт в тип проекта', () => {
-    // backLabel «Назад»: заголовок возврата не путается со строкой «Договор».
+  it('«Где используется»: строка типа проекта; клик открывает его карточку', () => {
+    // backLabel «Назад»: крошка не путается со строкой «Договор» списка.
     const { onOpenProjectType } = setup({ projects: [PROJECT('p1', null)] }, 'Назад');
-    fireEvent.click(screen.getByRole('button', { name: ui.nodeKinds.screen.usage }));
-    expect(screen.getByText(ui.nodeKinds.screen.usageAll)).toBeTruthy();
-    fireEvent.click(screen.getByTitle('Договор'));
+    fireEvent.click(screen.getByRole('tab', { name: ui.nodeKinds.screen.usage }));
+    // Строка журнала — role=row: клик по имени открывает карточку типа.
+    fireEvent.click(screen.getByText('Договор'));
     expect(onOpenProjectType).toHaveBeenCalledWith('p1');
   });
 
   it('«Где используется»: тип без этого типа папки не показан; нигде — пустое состояние', () => {
     setup({ projects: [PROJECT('p-other', ['другой-тип'])] }, 'Назад');
-    fireEvent.click(screen.getByRole('button', { name: ui.nodeKinds.screen.usage }));
-    expect(screen.queryByTitle('Договор')).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: ui.nodeKinds.screen.usage }));
+    expect(screen.queryByRole('button', { name: /Договор/ })).toBeNull();
     expect(screen.getByText(ui.nodeKinds.screen.usageEmpty)).toBeTruthy();
   });
 
-  it('подсказка шапки: сколько типов проектов используют тип папки', () => {
-    setup({ projects: [PROJECT('p1', null), PROJECT('p2', ['другой'])] });
-    expect(screen.getByText('Используется: 1 тип проекта')).toBeTruthy();
-  });
-
-  it('архивный тип: чип и «Вернуть из архива»; живой — «В архив»', () => {
-    setup({ kinds: [{ ...KIND, archivedAt: '2026-11-01T00:00:00.000Z' } as unknown as NodeKind] });
-    expect(screen.getByText(ui.projects.schemasKindArchived)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: ui.nodeKinds.panel.restore }));
-    expect(api.archive).toHaveBeenCalledWith({ id: KIND_ID, archived: false });
-
-    cleanup();
+  it('окно настроек: имя, значок, цвет; архив закрывает окно (onSuccess)', () => {
     setup();
-    fireEvent.click(screen.getByRole('button', { name: ui.nodeKinds.panel.archive }));
-    expect(api.archive).toHaveBeenCalledWith({ id: KIND_ID, archived: true });
-  });
+    expect(screen.queryByLabelText(ui.nodeKinds.panel.name)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: ui.nodeKinds.panel.settingsTitle }));
 
-  it('смена kindId сбрасывает раздел на «Поля и формы»', () => {
-    const { view, props } = setup();
-    fireEvent.click(screen.getByRole('button', { name: ui.nodeKinds.screen.works }));
-    expect(screen.queryByTestId('kind-form-section')).toBeNull();
-    const other = { ...KIND, id: 'other-kind' } as unknown as NodeKind;
-    act(() => {
-      view.rerender(<NodeKindScreen {...props} kindId={other.id} />);
-    });
-    vi.mocked(useNodeKinds).mockReturnValue({
-      data: [other],
-      isLoading: false,
-    } as never);
-    act(() => {
-      view.rerender(<NodeKindScreen {...props} kindId={other.id} />);
-    });
-    expect(screen.getByTestId('kind-form-section')).toBeTruthy();
-  });
-
-  it('пропавший тип откатывает экран: onBack', () => {
-    const { view, props, onBack } = setup();
-    act(() => {
-      view.rerender(<NodeKindScreen {...props} kindId="missing" />);
-    });
-    expect(onBack).toHaveBeenCalled();
-  });
-
-  it('«Поля и форма»: имя, значок и цвет сохраняются сразу', () => {
-    setup();
     // значок — другой ключ реестра
     fireEvent.click(screen.getAllByRole('button', { name: ui.structure.iconNames.building! })[0]!);
     expect(api.update).toHaveBeenCalledWith({ id: KIND_ID, icon: 'building' });
@@ -250,5 +223,58 @@ describe('экран типа папки (#857)', () => {
     fireEvent.change(name, { target: { value: 'Комплект КЖ' } });
     fireEvent.blur(name);
     expect(api.update).toHaveBeenCalledWith({ id: KIND_ID, name: 'Комплект КЖ' });
+
+    // Архив из окна: мутация с onSuccess-закрытием (выбор сбрасывает резолвер).
+    fireEvent.click(screen.getByRole('button', { name: ui.nodeKinds.panel.archive }));
+    expect(api.archive).toHaveBeenCalledWith(
+      { id: KIND_ID, archived: true },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+  });
+
+  it('архивный тип: окно настроек предлагает «Вернуть из архива»', () => {
+    setup({ kinds: [{ ...KIND, archivedAt: '2026-11-01T00:00:00.000Z' } as unknown as NodeKind] });
+    fireEvent.click(screen.getByRole('button', { name: ui.nodeKinds.panel.settingsTitle }));
+    fireEvent.click(screen.getByRole('button', { name: ui.nodeKinds.panel.restore }));
+    // Возврат окно не закрывает: экран архивного типа остаётся под ним.
+    expect(api.archive).toHaveBeenCalledWith({ id: KIND_ID, archived: false });
+  });
+
+  it('смена kindId сбрасывает вкладку на «Поля и форму»', () => {
+    const { view, props } = setup();
+    fireEvent.click(screen.getByRole('tab', { name: ui.nodeKinds.screen.works }));
+    expect(screen.queryByTestId('kind-form-section')).toBeNull();
+    const other = { ...KIND, id: 'other-kind' } as unknown as NodeKind;
+    act(() => {
+      view.rerender(
+        <QueryClientProvider client={new QueryClient()}>
+          <NodeKindScreen {...props} kindId={other.id} />
+        </QueryClientProvider>,
+      );
+    });
+    vi.mocked(useNodeKinds).mockReturnValue({
+      data: [other],
+      isLoading: false,
+    } as never);
+    act(() => {
+      view.rerender(
+        <QueryClientProvider client={new QueryClient()}>
+          <NodeKindScreen {...props} kindId={other.id} />
+        </QueryClientProvider>,
+      );
+    });
+    expect(screen.getByTestId('kind-form-section')).toBeTruthy();
+  });
+
+  it('пропавший тип откатывает экран: onBack', () => {
+    const { view, props, onBack } = setup();
+    act(() => {
+      view.rerender(
+        <QueryClientProvider client={new QueryClient()}>
+          <NodeKindScreen {...props} kindId="missing" />
+        </QueryClientProvider>,
+      );
+    });
+    expect(onBack).toHaveBeenCalled();
   });
 });

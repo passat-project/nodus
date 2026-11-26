@@ -1,4 +1,5 @@
 import { creationScopeStrings } from './ru-automation-creation-scope.js';
+import { entryStrings } from './ru-automation-entry.js';
 import { creationStrings, typeSettingsStrings } from './ru-automation-forms.js';
 import { deciderStrings } from './ru-automation-deciders.js';
 import { problemStrings } from './ru-automation-problems.js';
@@ -27,43 +28,7 @@ export const automationStrings = {
   statButtons: ['кнопка', 'кнопки', 'кнопок'],
   /** Единый вход «Процессы» (#857): четыре группы колонки, страница
    *  «Без проекта», дорожка типа, метки строк о местах создания (#665). */
-  entry: {
-    /** Заголовки групп колонки в строгом порядке. */
-    groups: { project: 'Проекты', task: 'Задачи', letter: 'Письма', folder: 'Папки' },
-    /** Мета строки задачи/письма: где тип разрешён. */
-    metaAllowedEverywhere: 'Разрешён везде',
-    metaAllowedIn: 'Разрешён: {names}',
-    /** Все типы проектов исключены — тип живёт только без проекта. */
-    metaNoProjectOnly: 'Без проекта',
-    /** Колонка «Категория» списка типов (задача/письмо). */
-    category: 'Категория',
-    categoryTask: 'Задача',
-    categoryLetter: 'Письмо',
-    /** Строка «Без проекта» в группе «Проекты». */
-    noProjectRow: 'Без проекта',
-    noProjectRowHint: 'Лёгкие внутренние задачи',
-    /** Страница «Без проекта» в правой области. */
-    noProjectTitle: 'Без проекта',
-    noProjectHint: 'Какие типы задач можно ставить без проекта — для лёгких внутренних задач',
-    noProjectToggle: 'Можно без проекта',
-    createTaskType: 'Тип задачи',
-    createProjectType: 'Тип проекта',
-    noProjectEnable: 'Разрешить без проекта',
-    noProjectDisable: 'Запретить без проекта',
-    noProjectEmpty: 'Живых типов задач нет — создайте тип в группе «Задачи»',
-    /** Сводка шапки страницы: сколько живых типов разрешено без проекта. */
-    noProjectSummary: 'Включено: {enabled} из {total}',
-    /** Дорожка «Договор → Задание смежнику» над редактором маршрута. */
-    trailAria: 'Откуда открыт маршрут',
-    /** Пустая группа колонки (кнопка «+» — в заголовке группы). */
-    emptyGroup: 'Типов пока нет',
-    /** Поиск не нашёл ни одного типа ни в одной группе. */
-    searchEmpty: 'Ничего не найдено',
-    /** Подсказка в шапке «Настроек типа»: где тип используется (#857). */
-    usageIn: 'Используется в: {names}',
-    usageEverywhere: 'Используется во всех типах проектов',
-    usageNowhere: 'Не используется ни в одном типе проекта',
-  },
+  entry: entryStrings,
   /** Диалог создания типа. */
   createTitle: 'Новый процесс',
   fieldName: 'Название',

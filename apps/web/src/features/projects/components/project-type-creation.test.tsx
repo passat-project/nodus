@@ -1,9 +1,19 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ProcessType, ProjectType } from '@nodus/contracts';
 import { normalizeTypeConfig, ui } from '@nodus/contracts';
 import { toast } from 'sonner';
+
+// Журнальный список вкладки меряет края скролла ResizeObserver-ом.
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  },
+);
 
 import {
   useLiveProcessTypes,
@@ -22,6 +32,7 @@ vi.mock('../../../shared/api/use-can-manage-workflows.js', () => ({
 vi.mock('sonner', () => ({ toast: { warning: vi.fn() } }));
 
 const PROJECT_TYPE_ID = '11111111-1111-4111-8111-111111111111';
+const NEW_TYPE_ID = '44444444-4444-4444-8444-444444444444';
 
 const projectType = {
   id: PROJECT_TYPE_ID,
@@ -74,11 +85,26 @@ const LETTER = processType({
   excluded: [PROJECT_TYPE_ID],
 });
 
+/** Слот создания: захватываем onCreated — создаёт «окно» теста. */
+function makeCreateSlot() {
+  const slot = {
+    onCreated: undefined as ((id: string) => void) | undefined,
+    render: vi.fn((props: { onClose: () => void; onCreated: (id: string) => void }) =>
+      (() => {
+        slot.onCreated = props.onCreated;
+        return <div data-testid="create-slot">slot</div>;
+      })(),
+    ),
+  };
+  return slot;
+}
+
 function setup(
   canSetup = true,
   tasks: ProcessType[] = [TASK],
   letters: ProcessType[] = [LETTER],
   manage = true,
+  createSlot: ReturnType<typeof makeCreateSlot> | undefined = undefined,
 ) {
   const mutate = vi.fn();
   const onOpenType = vi.fn();
@@ -90,20 +116,29 @@ function setup(
       }) as never,
   );
   vi.mocked(useUpdateTypeCreation).mockReturnValue({ mutate, isPending: false } as never);
-  render(<ProjectTypeCreationTab type={projectType} canSetup={canSetup} onOpenType={onOpenType} />);
-  return { mutate, onOpenType };
+  const view = render(
+    <ProjectTypeCreationTab
+      type={projectType}
+      canSetup={canSetup}
+      onOpenType={onOpenType}
+      renderProcessTypeCreate={createSlot?.render}
+    />,
+  );
+  return { mutate, onOpenType, view };
 }
 
-describe('страница «Что здесь можно создавать» (#665, #857)', () => {
+describe('вкладка «Что здесь можно создавать» — журнальный список (#665, #857)', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
   });
 
-  it('показывает задачи и письма; выключение пишет исключение в настройку типа', () => {
+  it('показывает задачи и письма с чипами категорий; выключение пишет исключение', () => {
     const { mutate } = setup();
     expect(screen.getByText('Комплект')).toBeTruthy();
     expect(screen.getByText('Входящее письмо')).toBeTruthy();
+    expect(screen.getByText(ui.automation.entry.categoryTask)).toBeTruthy();
+    expect(screen.getByText(ui.automation.entry.categoryLetter)).toBeTruthy();
 
     fireEvent.click(screen.getByRole('switch', { name: /Комплект/ }));
     expect(mutate).toHaveBeenCalledWith({
@@ -121,9 +156,10 @@ describe('страница «Что здесь можно создавать» (
     });
   });
 
-  it('без права настройки тумблеры недоступны', () => {
+  it('без права настройки тумблеры недоступны и кнопки создания нет', () => {
     setup(false);
     expect(screen.getByRole('switch', { name: /Комплект/ })).toHaveProperty('disabled', true);
+    expect(screen.queryByText(ui.automation.entry.createTaskType)).toBeNull();
   });
 
   it('без права процессов — пояснение вместо 403', () => {
@@ -132,9 +168,9 @@ describe('страница «Что здесь можно создавать» (
     expect(screen.getByRole('switch', { name: /Комплект/ })).toHaveProperty('disabled', true);
   });
 
-  it('пустые группы — спокойная подсказка', () => {
+  it('пустой список — спокойная подсказка', () => {
     setup(true, [], []);
-    expect(screen.getAllByText(ui.automation.creationScope.empty).length).toBeGreaterThan(0);
+    expect(screen.getByText(ui.automation.creationScope.empty)).toBeTruthy();
   });
 
   it('снятие работы, привязанной к типу папки, — предупреждение', () => {
@@ -157,7 +193,44 @@ describe('страница «Что здесь можно создавать» (
 
   it('клик по строке (не по тумблеру) открывает настройку этого типа', () => {
     const { onOpenType } = setup();
-    fireEvent.click(screen.getByTitle('Комплект'));
+    fireEvent.click(screen.getByText('Комплект'));
     expect(onOpenType).toHaveBeenCalledWith(TASK.id);
+  });
+
+  it('создать-и-связать: созданный тип дождётся живых данных и разрешится', () => {
+    const slot = makeCreateSlot();
+    const { mutate, view } = setup(true, [TASK], [LETTER], true, slot);
+    fireEvent.click(screen.getByRole('button', { name: ui.automation.entry.createTaskType }));
+    expect(screen.getByTestId('create-slot')).toBeTruthy();
+    expect(slot.onCreated).toBeTruthy();
+
+    // «Окно» создало тип: живые данные ещё без него — связка не пишется.
+    act(() => slot.onCreated!(NEW_TYPE_ID));
+    expect(mutate).not.toHaveBeenCalled();
+
+    // Справочник перечитан: тип появился — связка пишется в его настройку.
+    vi.mocked(useLiveProcessTypes).mockImplementation(
+      (category) =>
+        ({
+          data:
+            category === 'task'
+              ? [TASK, processType({ id: NEW_TYPE_ID, name: 'Новый', category: 'task' })]
+              : [LETTER],
+        }) as never,
+    );
+    act(() => {
+      view.rerender(
+        <ProjectTypeCreationTab
+          type={projectType}
+          canSetup
+          onOpenType={vi.fn()}
+          renderProcessTypeCreate={slot.render}
+        />,
+      );
+    });
+    expect(mutate).toHaveBeenCalledWith({
+      typeId: NEW_TYPE_ID,
+      creation: expect.objectContaining({ excludedProjectTypeIds: [] }),
+    });
   });
 });

@@ -41,10 +41,37 @@ vi.mock('../features/projects/api/project-catalog-mutations.js', () => ({
   useSetProjectTypeArchived: vi.fn(() => ({ mutate: vi.fn() })),
 }));
 
+/** Последние пропсы карточки типа папки: проверяем связку слота (I6). */
+const kindScreenProps = vi.hoisted(() => ({
+  value: null as null | {
+    kindId: string;
+    backLabel?: string;
+    settingsRequest?: number;
+    onBack: () => void;
+    onOpenProjectType: (id: string) => void;
+    onOpenType: (id: string) => void;
+  },
+}));
+
 vi.mock('../features/projects/node-kinds/components/node-kind-screen.js', () => ({
-  NodeKindScreen: (props: { kindId: string; backLabel: string }) => (
-    <div data-testid="kind-screen" data-kind={props.kindId} data-back={props.backLabel} />
-  ),
+  NodeKindScreen: (props: {
+    kindId: string;
+    backLabel?: string;
+    settingsRequest?: number;
+    onBack: () => void;
+    onOpenProjectType: (id: string) => void;
+    onOpenType: (id: string) => void;
+  }) => {
+    kindScreenProps.value = props;
+    return (
+      <div
+        data-testid="kind-screen"
+        data-kind={props.kindId}
+        data-back={props.backLabel ?? ''}
+        data-request={String(props.settingsRequest ?? '')}
+      />
+    );
+  },
 }));
 vi.mock('../features/projects/components/project-type-workspace.js', () => ({
   ProjectTypeWorkspace: (props: { typeId: string; settingsRequest: number }) => (
@@ -81,42 +108,70 @@ function setup(search: Record<string, unknown>) {
   searchState.value = search;
   navigateSpy.mockClear();
   pageSlots.value = null;
+  kindScreenProps.value = null;
   render(<AutomationRoute />);
 }
+
+type FolderSlot = {
+  kindId: string;
+  backLabel?: string;
+  settingsRequest?: number;
+  onBack: () => void;
+  onOpenProjectType: (id: string) => void;
+};
+type CreateSlot = { baseId?: string; onClose: () => void; onCreated: (id: string) => void };
 
 afterEach(cleanup);
 
 describe('композиция раздела «Автоматизация» (#857, I6)', () => {
-  it('?ftype= — экран типа папки на всю область, дорожка из ptype в возврате', () => {
+  it('левая колонка видна всегда: ftype не перехватывается на уровне раздела', () => {
+    // Полноэкранных режимов больше нет — выбор типа папки показывает карточку
+    // в раме «Процессов», а не подменяет весь раздел.
     setup({ tab: 'processes', ptype: 'p1', ftype: 'k1' });
-    const screenEl = screen.getByTestId('kind-screen');
-    expect(screenEl.dataset.kind).toBe('k1');
-    expect(screenEl.dataset.back).toBe('Договор');
-    expect(screen.queryByTestId('automation-page')).toBeNull();
-  });
-
-  it('?ftype= без ptype — возврат «Назад»', () => {
-    setup({ tab: 'processes', ftype: 'k1' });
-    expect(screen.getByTestId('kind-screen').dataset.back).toBe('Назад');
-  });
-
-  it('чужой ftype при загруженном справочнике — откат: navigate снимает ftype', () => {
-    setup({ tab: 'processes', ftype: 'missing' });
+    expect(screen.getByTestId('automation-page')).toBeTruthy();
     expect(screen.queryByTestId('kind-screen')).toBeNull();
+  });
+
+  it('слот карточки типа папки рендерит NodeKindScreen с kindId, крошкой и счётчиком настроек', () => {
+    setup({ tab: 'processes', ptype: 'p1', ftype: 'k1' });
+    const slot = pageSlots.value!.renderFolderCard as (slot: FolderSlot) => ReactNode;
+    const node = slot({
+      kindId: 'k1',
+      backLabel: 'Договор',
+      settingsRequest: 2,
+      onBack: vi.fn(),
+      onOpenProjectType: vi.fn(),
+    });
+    cleanup();
+    render(node as React.ReactElement);
+    const el = screen.getByTestId('kind-screen');
+    expect(el.dataset.kind).toBe('k1');
+    expect(el.dataset.back).toBe('Договор');
+    expect(el.dataset.request).toBe('2');
+  });
+
+  it('карточка типа папки: переход к типу задачи ведёт на ?type= и снимает ftype', () => {
+    setup({ tab: 'processes', ptype: 'p1', ftype: 'k1' });
+    const slot = pageSlots.value!.renderFolderCard as (slot: FolderSlot) => ReactNode;
+    const node = slot({
+      kindId: 'k1',
+      onBack: vi.fn(),
+      onOpenProjectType: vi.fn(),
+    });
+    cleanup();
+    render(node as React.ReactElement);
+    const props = kindScreenProps.value!;
+    props.onOpenType('t1');
     expect(navigateSpy).toHaveBeenCalledWith(
       expect.objectContaining({ to: '/automation', search: expect.any(Function) }),
     );
     const updater = navigateSpy.mock.calls[0]![0].search;
-    expect(updater({ tab: 'processes', ftype: 'missing' })).toEqual({
+    expect(updater({ tab: 'processes', ptype: 'p1', ftype: 'k1' })).toEqual({
       tab: 'processes',
+      ptype: 'p1',
       ftype: undefined,
+      type: 't1',
     });
-  });
-
-  it('tab=fields с ftype — вкладка «Атрибуты», экран типа папки не перехватывает', () => {
-    setup({ tab: 'fields', ftype: 'k1' });
-    expect(screen.getByTestId('automation-page')).toBeTruthy();
-    expect(screen.queryByTestId('kind-screen')).toBeNull();
   });
 
   it('слот рабочей области рендерит ProjectTypeWorkspace с typeId', () => {
@@ -136,9 +191,6 @@ describe('композиция раздела «Автоматизация» (#8
       onOpenKind: vi.fn(),
       renderCreateField: undefined,
     });
-    const host = document.createElement('div');
-    document.body.append(host);
-    // Слот — JSX; проверяем через вспомогательный рендер.
     cleanup();
     render(node as React.ReactElement);
     const workspace = screen.getByTestId('workspace');
@@ -148,16 +200,8 @@ describe('композиция раздела «Автоматизация» (#8
 
   it('слоты окон создания несут основу-копию', () => {
     setup({ tab: 'processes' });
-    const typeCreate = pageSlots.value!.renderProjectTypeCreate as (slot: {
-      baseId?: string;
-      onClose: () => void;
-      onCreated: (id: string) => void;
-    }) => ReactNode;
-    const kindCreate = pageSlots.value!.renderKindCreate as (slot: {
-      baseId?: string;
-      onClose: () => void;
-      onCreated: (id: string) => void;
-    }) => ReactNode;
+    const typeCreate = pageSlots.value!.renderProjectTypeCreate as (slot: CreateSlot) => ReactNode;
+    const kindCreate = pageSlots.value!.renderKindCreate as (slot: CreateSlot) => ReactNode;
     cleanup();
     render(
       typeCreate({ baseId: 'p1', onClose: vi.fn(), onCreated: vi.fn() }) as React.ReactElement,

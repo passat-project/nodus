@@ -105,6 +105,7 @@ export function TopBar() {
           tabs.map((tab) => {
             const link = (
               <Link
+                key={tab.id}
                 to={module.to}
                 search={tab.search}
                 data-tab-port

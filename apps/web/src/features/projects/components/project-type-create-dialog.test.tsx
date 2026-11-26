@@ -82,6 +82,20 @@ describe('окно создания типа проекта: основа-коп
     expect(screen.getByRole('option', { name: `${ui.projects.baseCopy}: Договор` })).toBeTruthy();
   });
 
+  it('выбор основы в списке переключает создание на копию живого типа', () => {
+    setup();
+    fireEvent.click(screen.getByRole('combobox', { name: ui.projects.fieldBase }));
+    fireEvent.click(screen.getByRole('option', { name: `${ui.projects.baseCopy}: Договор` }));
+    fireEvent.change(screen.getByPlaceholderText(ui.projects.typesNamePlaceholder), {
+      target: { value: 'Тендер КЖ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Создать' }));
+    expect(mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ base: { kind: 'copy', typeId: 'p1' } }),
+      expect.anything(),
+    );
+  });
+
   it('дубль имени живого типа блокирует создание', () => {
     setup();
     fireEvent.change(screen.getByPlaceholderText(ui.projects.typesNamePlaceholder), {

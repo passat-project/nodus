@@ -51,6 +51,15 @@ describe('URL-модель единого входа «Процессы» (#857)
     expect(resolveProcessesSurface({ noproject: '1' }, data()).surface).toBe('no-project');
   });
 
+  it('deep-link ?noproject=1: разбор адреса даёт ЧИСЛО 1, строка — из navigate', () => {
+    // TanStack Router читает search-параметры с JSON-семантикой: `1` в адресе
+    // приходит числом, а `go({ noproject: '1' })` пишет строку — оба валидны.
+    expect(resolveProcessesSurface({ noproject: 1 }, data()).surface).toBe('no-project');
+    expect(resolveProcessesSurface({ noproject: '1' }, data()).surface).toBe('no-project');
+    expect(resolveProcessesSurface({ noproject: 0 }, data()).surface).toBe('project');
+    expect(resolveProcessesSurface({ noproject: '0' }, data()).surface).toBe('project');
+  });
+
   it('умолчание — первая живая строка «Проектов», без неё — первый живой тип задач', () => {
     expect(defaultProcessesSurface(data())).toEqual({ surface: 'project', typeId: 'proj-1' });
     expect(defaultProcessesSurface(data({ canSetup: false }))).toEqual({

@@ -4,6 +4,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { NodeKind, NodeKindForm } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 
+// Журнальный список вкладки меряет края скролла ResizeObserver-ом.
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  },
+);
+
 const b = ui.forms.builder;
 const FIELD_ID = 'c0000000-0000-4000-8000-0000000000e1';
 const KIND_ID = '70000000-0000-4000-8000-000000000001';
@@ -55,7 +65,7 @@ const KIND = {
 } as unknown as NodeKind;
 
 describe('раздел «При создании папки»: вход в общий редактор (#496)', () => {
-  it('сводка окна и «Создать атрибут» в лотке редактора', () => {
+  it('журнальный список атрибутов окна и «Создать атрибут» в лотке редактора', () => {
     const onCreate = vi.fn();
     render(
       <NodeKindFormSection
@@ -67,7 +77,8 @@ describe('раздел «При создании папки»: вход в об�
       />,
     );
 
-    expect(screen.getByRole('button', { name: new RegExp(`${b.edit}.*Шифр`) })).toBeTruthy();
+    // Состав окна — журнальной таблицей вкладки: атрибут видим строкой.
+    expect(screen.getByText('Шифр')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: new RegExp(b.edit) }));
     expect(screen.getByText(`${b.titles.folder} · Договор`)).toBeTruthy();
 
@@ -118,5 +129,20 @@ describe('раздел «При создании папки»: вход в об�
     );
 
     expect(screen.getByText(ui.nodeKinds.form.empty)).toBeTruthy();
+  });
+
+  it('журнал состава окна сортируется по колонке; строка в просмотре не открывает редактор', () => {
+    render(<NodeKindFormSection kind={KIND} canSetup canCreateField={false} onSave={vi.fn()} />);
+
+    const nameHeader = screen
+      .getAllByRole('columnheader')
+      .find((header) => header.getAttribute('title') === ui.projects.fieldName)!;
+    fireEvent.keyDown(nameHeader, { key: 'Enter' });
+    expect(nameHeader.getAttribute('aria-sort')).toBe('ascending');
+
+    // Вкладка «Поля и форма» — журнал состава: клик по строке не открывает
+    // карточку (onOpenRow — пустышка), состав правится только окном.
+    fireEvent.click(screen.getByText('Шифр'));
+    expect(screen.queryByText(`${b.titles.folder} · Договор`)).toBeNull();
   });
 });

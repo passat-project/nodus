@@ -11,7 +11,9 @@ const state = vi.hoisted(() => ({
 vi.mock('../../../shared/api/node-kinds.js', () => ({
   useNodeKinds: vi.fn(() => ({ data: [] })),
 }));
+// projectsKeys нужны транзитивным импортам мутаций каталога (не только хук).
 vi.mock('../../../shared/api/projects-list.js', () => ({
+  projectsKeys: { all: ['projects'], list: ['projects', 'list'] },
   useProjectTypes: vi.fn(() => ({ data: state.types })),
 }));
 vi.mock('../../../shared/auth-store.js', () => ({
@@ -23,43 +25,25 @@ vi.mock('../../../shared/custom-fields/use-can-manage-fields.js', () => ({
 }));
 
 vi.mock('./project-schema-canvas.js', () => ({
-  ProjectSchemaCanvas: (props: { type: ProjectType; onOpenSettings: () => void }) => (
+  ProjectSchemaCanvas: (props: { type: ProjectType; onOpenWindow: () => void }) => (
     <div data-testid="canvas" data-type={props.type.name}>
-      <button type="button" onClick={props.onOpenSettings}>
-        canvas-settings
+      <button type="button" onClick={props.onOpenWindow}>
+        canvas-window
       </button>
     </div>
   ),
-}));
-vi.mock('./project-type-settings.js', () => ({
-  ProjectTypeSettingsPanel: (props: {
-    open: boolean;
-    onOpenCreation: () => void;
-    onOpenKinds: () => void;
-  }) => (
-    <div data-testid="settings-panel" data-open={String(props.open)}>
-      <button type="button" onClick={props.onOpenCreation}>
-        open-creation
-      </button>
-      <button type="button" onClick={props.onOpenKinds}>
-        open-kinds
-      </button>
-    </div>
-  ),
-}));
-vi.mock('./project-window-panel.js', () => ({
-  ProjectWindowPanel: () => <div data-testid="window-panel" />,
 }));
 vi.mock('./project-type-creation.js', () => ({
-  ProjectTypeCreationPage: (props: {
+  ProjectTypeCreationTab: (props: {
     type: ProjectType;
-    onBack: () => void;
     onOpenType: (id: string) => void;
+    renderProcessTypeCreate?: unknown;
   }) => (
-    <div data-testid="creation-page" data-type={props.type.name}>
-      <button type="button" onClick={props.onBack}>
-        creation-back
-      </button>
+    <div
+      data-testid="creation-tab"
+      data-type={props.type.name}
+      data-create-slot={props.renderProcessTypeCreate ? 'yes' : 'no'}
+    >
       <button type="button" onClick={() => props.onOpenType('t9')}>
         creation-open-type
       </button>
@@ -67,17 +51,35 @@ vi.mock('./project-type-creation.js', () => ({
   ),
 }));
 vi.mock('./project-type-kinds.js', () => ({
-  ProjectTypeKindsPage: (props: {
-    type: ProjectType;
-    onBack: () => void;
-    onOpenKind: (id: string) => void;
-  }) => (
-    <div data-testid="kinds-page" data-type={props.type.name}>
-      <button type="button" onClick={props.onBack}>
-        kinds-back
-      </button>
+  ProjectTypeKindsTab: (props: { type: ProjectType; onOpenKind: (id: string) => void }) => (
+    <div data-testid="kinds-tab" data-type={props.type.name}>
       <button type="button" onClick={() => props.onOpenKind('k9')}>
         kinds-open-kind
+      </button>
+    </div>
+  ),
+}));
+vi.mock('./project-type-settings-dialog.js', () => ({
+  ProjectTypeSettingsDialog: (props: {
+    type: ProjectType;
+    onEditWindow: () => void;
+    onClose: () => void;
+  }) => (
+    <div data-testid="settings-dialog" data-type={props.type.name}>
+      <button type="button" onClick={props.onEditWindow}>
+        settings-edit-window
+      </button>
+      <button type="button" onClick={props.onClose}>
+        settings-close
+      </button>
+    </div>
+  ),
+}));
+vi.mock('./project-window-builder.js', () => ({
+  ProjectWindowBuilder: (props: { open: boolean; onClose: () => void }) => (
+    <div data-testid="window-builder" data-open={String(props.open)}>
+      <button type="button" onClick={props.onClose}>
+        builder-close
       </button>
     </div>
   ),
@@ -108,6 +110,7 @@ function setup(typeId: string, settingsRequest = 0) {
       onOpenKind={(id) => {
         state.captured.openKind = id;
       }}
+      renderProcessTypeCreate={() => <div data-testid="create-type-slot" />}
     />,
   );
 }
@@ -117,53 +120,105 @@ afterEach(() => {
   state.types = [];
 });
 
-describe('рабочая область типа проекта (#857)', () => {
-  it('канвас выбранного типа; чужой id — пустое состояние', () => {
+describe('рабочая область типа проекта — рама с вкладками (#857)', () => {
+  it('первая вкладка — холст выбранного типа; чужой id — пустое состояние', () => {
     state.types = [TYPE('p1', 'Договор')];
     setup('p1');
     expect(screen.getByTestId('canvas').dataset.type).toBe('Договор');
+    expect(screen.getByRole('tab', { name: 'Схема' }).getAttribute('aria-selected')).toBe('true');
     cleanup();
     setup('missing');
     expect(screen.queryByTestId('canvas')).toBeNull();
     expect(screen.getByText('Типов пока нет')).toBeTruthy();
   });
 
-  it('«Настройки типа» открываются кнопкой канваса и командой строки (settingsRequest)', () => {
+  it('вкладки рамы переключают содержание: холст → создание → папки', () => {
     state.types = [TYPE('p1', 'Договор')];
     setup('p1');
-    expect(screen.getByTestId('settings-panel').dataset.open).toBe('false');
-    fireEvent.click(screen.getByText('canvas-settings'));
-    expect(screen.getByTestId('settings-panel').dataset.open).toBe('true');
-    cleanup();
-    setup('p1', 1);
-    expect(screen.getByTestId('settings-panel').dataset.open).toBe('true');
-  });
-
-  it('строки панели открывают страницы; «‹» возвращает к канвасу', () => {
-    state.types = [TYPE('p1', 'Договор')];
-    setup('p1');
-    fireEvent.click(screen.getByText('open-creation'));
-    expect(screen.getByTestId('creation-page').dataset.type).toBe('Договор');
+    fireEvent.click(screen.getByRole('tab', { name: 'Что здесь можно создавать' }));
+    expect(screen.getByTestId('creation-tab').dataset.type).toBe('Договор');
     expect(screen.queryByTestId('canvas')).toBeNull();
-    fireEvent.click(screen.getByText('creation-back'));
-    expect(screen.getByTestId('canvas')).toBeTruthy();
-
-    fireEvent.click(screen.getByText('open-kinds'));
-    expect(screen.getByTestId('kinds-page')).toBeTruthy();
-    fireEvent.click(screen.getByText('kinds-back'));
-    expect(screen.getByTestId('canvas')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Какие папки здесь бывают' }));
+    expect(screen.getByTestId('kinds-tab').dataset.type).toBe('Договор');
+    // Слот создания типа задачи дошёл до вкладки создания (I6).
+    fireEvent.click(screen.getByRole('tab', { name: 'Что здесь можно создавать' }));
+    expect(screen.getByTestId('creation-tab').dataset.createSlot).toBe('yes');
+    // Обратно к холсту — та же рама, без потери выбора.
+    fireEvent.click(screen.getByRole('tab', { name: 'Схема' }));
+    expect(screen.getByTestId('canvas').dataset.type).toBe('Договор');
   });
 
-  it('клик по строкам страниц проходит насквозь: onOpenType/onOpenKind', () => {
+  it('клики строк вкладок проходят насквозь: onOpenType/onOpenKind', () => {
     state.types = [TYPE('p1', 'Договор')];
     setup('p1');
-    fireEvent.click(screen.getByText('open-creation'));
+    fireEvent.click(screen.getByRole('tab', { name: 'Что здесь можно создавать' }));
     fireEvent.click(screen.getByText('creation-open-type'));
     expect(state.captured.openType).toBe('t9');
-    fireEvent.click(screen.getByText('creation-back'));
-
-    fireEvent.click(screen.getByText('open-kinds'));
+    fireEvent.click(screen.getByRole('tab', { name: 'Какие папки здесь бывают' }));
     fireEvent.click(screen.getByText('kinds-open-kind'));
     expect(state.captured.openKind).toBe('k9');
+  });
+
+  it('окно настроек: шестерёнка рамы и команда строки (settingsRequest)', () => {
+    state.types = [TYPE('p1', 'Договор')];
+    setup('p1');
+    expect(screen.queryByTestId('settings-dialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Настройки типа' }));
+    expect(screen.getByTestId('settings-dialog').dataset.type).toBe('Договор');
+    fireEvent.click(screen.getByText('settings-close'));
+    expect(screen.queryByTestId('settings-dialog')).toBeNull();
+    // «⋯ → Настройки типа…» строки колонки: счётчик открывает окно выбранного.
+    cleanup();
+    setup('p1', 1);
+    expect(screen.getByTestId('settings-dialog').dataset.type).toBe('Договор');
+  });
+
+  it('окно создания проекта: шестерёнка вкладки «Схема» и канвас', () => {
+    state.types = [TYPE('p1', 'Договор')];
+    setup('p1');
+    expect(screen.getByTestId('window-builder').dataset.open).toBe('false');
+    fireEvent.click(screen.getByRole('button', { name: 'Окно создания проекта' }));
+    expect(screen.getByTestId('window-builder').dataset.open).toBe('true');
+    fireEvent.click(screen.getByText('canvas-window'));
+    expect(screen.getByTestId('window-builder').dataset.open).toBe('true');
+    // Окно создания закрывается своим onClose (поле рамы не переключается).
+    fireEvent.click(screen.getByText('builder-close'));
+    expect(screen.getByTestId('window-builder').dataset.open).toBe('false');
+  });
+
+  it('из окна настроек в редактор окна создания: настройки закрываются', () => {
+    state.types = [TYPE('p1', 'Договор')];
+    setup('p1');
+    fireEvent.click(screen.getByRole('button', { name: 'Настройки типа' }));
+    fireEvent.click(screen.getByText('settings-edit-window'));
+    expect(screen.queryByTestId('settings-dialog')).toBeNull();
+    expect(screen.getByTestId('window-builder').dataset.open).toBe('true');
+  });
+
+  it('смена выбранного типа сбрасывает вкладку на «Схему» и закрывает окна', () => {
+    state.types = [TYPE('p1', 'Договор'), TYPE('p2', 'Тема')];
+    const view = render(
+      <ProjectTypeWorkspace
+        typeId="p1"
+        settingsRequest={0}
+        onOpenType={() => void 0}
+        onOpenKind={() => void 0}
+      />,
+    );
+    fireEvent.click(screen.getByRole('tab', { name: 'Что здесь можно создавать' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Настройки типа' }));
+    expect(screen.getByTestId('settings-dialog')).toBeTruthy();
+
+    view.rerender(
+      <ProjectTypeWorkspace
+        typeId="p2"
+        settingsRequest={0}
+        onOpenType={() => void 0}
+        onOpenKind={() => void 0}
+      />,
+    );
+    expect(screen.queryByTestId('settings-dialog')).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Схема' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByTestId('canvas').dataset.type).toBe('Тема');
   });
 });

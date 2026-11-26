@@ -137,7 +137,14 @@ export function ProjectTypeSettingsDialog({
               ) : (
                 <PanelDanger
                   icon={Archive}
-                  onClick={() => archive.mutate({ id: type.id, archived: true })}
+                  onClick={() =>
+                    archive.mutate(
+                      { id: type.id, archived: true },
+                      // Архивация закрывает окно: ptype больше не резолвится,
+                      // выбор сбрасывается на умолчание.
+                      { onSuccess: onClose },
+                    )
+                  }
                 >
                   {ui.projects.typesArchive}
                 </PanelDanger>

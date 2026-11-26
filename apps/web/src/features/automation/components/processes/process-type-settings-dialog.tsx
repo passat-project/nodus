@@ -228,7 +228,12 @@ export function ProcessTypeSettingsDialog({
           ) : null}
 
           <div className="mt-5 flex items-center justify-between gap-3 border-t border-border pt-4">
-            <PanelDanger icon={Trash2} onClick={() => archive.mutate(type.id)}>
+            {/* Архивация закрывает окно: строка уходит из живых, выбор
+                сбрасывается на умолчание резолвером (архived id не ищется). */}
+            <PanelDanger
+              icon={Trash2}
+              onClick={() => archive.mutate(type.id, { onSuccess: onClose })}
+            >
               {ui.automation.menuArchive}
             </PanelDanger>
             <Button variant="ghost" onClick={onClose}>

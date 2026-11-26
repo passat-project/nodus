@@ -112,7 +112,14 @@ export function NodeKindSettingsDialog({
               ) : (
                 <PanelDanger
                   icon={Archive}
-                  onClick={() => archive.mutate({ id: kind.id, archived: true })}
+                  onClick={() =>
+                    archive.mutate(
+                      { id: kind.id, archived: true },
+                      // Архивация закрывает окно; экран типа остаётся — у
+                      // архивного внизу «Вернуть» (резолвер его открывает).
+                      { onSuccess: onClose },
+                    )
+                  }
                 >
                   {ui.nodeKinds.panel.archive}
                 </PanelDanger>

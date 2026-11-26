@@ -16,8 +16,10 @@ export interface ProcessesSearch {
   ptype?: string;
   /** Тип папки — экран на всю рабочую область (колонка скрыта). */
   ftype?: string;
-  /** Страница «Без проекта». */
-  noproject?: string;
+  /** Страница «Без проекта». Тановский разбор адреса читает `1` как ЧИСЛО
+   *  (JSON-семантика search-параметров), а `navigate` пишет строку —
+   *  принимаем оба написания. */
+  noproject?: string | number;
 }
 
 export type ProcessesSurface =
@@ -75,7 +77,7 @@ export function resolveProcessesSurface(
   const project = aliveProject(search.ptype);
   if (project) return { surface: 'project', typeId: project.id };
 
-  if (search.noproject === '1') return { surface: 'no-project' };
+  if (search.noproject === '1' || search.noproject === 1) return { surface: 'no-project' };
 
   return defaultProcessesSurface(data);
 }

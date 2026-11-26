@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { NodeKind, ProcessType, ProjectType } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -211,16 +211,22 @@ describe('единая колонка «Процессов» (#857)', () => {
     expect(screen.getByText('Здание')).toBeTruthy();
   });
 
-  it('«+» группы «Задачи» — диалог без основы; «Копировать тип» — с основой (регрессия #857)', async () => {
-    setup();
-    // «+» в заголовке — создание с нуля («Новый тип» у групп «Проекты» и «Задачи»)
-    fireEvent.click(screen.getAllByRole('button', { name: ui.automation.newType }).at(-1)!);
+  it('пустая группа «Задачи» — главная кнопка создаёт тип без основы (регрессия #857)', () => {
+    // Создание теперь живёт в пустой группе (кнопок «+» в заголовках нет).
+    setup({
+      processTypes: [fixtures.processTypes[1]!, fixtures.processTypes[2]!],
+    });
+    expect(screen.getByText(ui.automation.entry.emptyGroup)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: ui.automation.newType }));
     expect(screen.getByTestId('task-create-dialog')).toBeTruthy();
     expect(dialogProps.last!.defaultBaseTypeId).toBeUndefined();
     // закрытие снимает диалог
-    dialogProps.onClose();
+    act(() => dialogProps.onClose());
+    expect(screen.queryByTestId('task-create-dialog')).toBeNull();
+  });
 
-    // «⋯ → Копировать тип» строки ЗАДАЧИ — основа подставляется
+  it('«⋯ → Копировать тип» строки задачи — диалог с основой (регрессия #857)', async () => {
+    setup();
     const taskRow = screen.getByText('Задание смежнику').closest('button')!.parentElement!;
     const menu = within(taskRow).getByRole('button', { name: ui.common.rowMenu });
     fireEvent.pointerDown(menu, { button: 0, pointerType: 'mouse' });
@@ -230,27 +236,37 @@ describe('единая колонка «Процессов» (#857)', () => {
     expect(dialogProps.last!.defaultBaseTypeId).toBe('t1');
   });
 
-  it('«+» проектных групп открывает слоты; onCreated выбирает созданное', () => {
-    setup();
-    // «+» группы «Проекты» — слот фичи проектов (первая кнопка «Новый тип»)
-    fireEvent.click(screen.getAllByRole('button', { name: ui.projects.typesCreate })[0]!);
-    expect(screen.getByTestId('project-create-slot')).toBeTruthy();
+  it('«Проекты» без типов — остаётся строка «Без проекта»; слот копии строки передаёт основу и выбор', async () => {
+    // Строка «Без проекта» держит группу непустой: кнопки создания в ней нет.
+    setup({ projectTypes: [] });
+    expect(screen.getAllByText(ui.automation.entry.noProjectRow).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: ui.projects.typesCreate })).toBeNull();
+
+    // Слот создания проекта — из «⋯ → Копировать тип» строки типа проекта.
     cleanup();
     const props2 = setup();
     let created: (id: string) => void = () => {};
+    let base: string | undefined;
     props2.renderProjectTypeCreate = (slot) => {
       created = slot.onCreated;
+      base = slot.baseId;
       return <div data-testid="slot" />;
     };
     cleanup();
     render(<SlotProbe {...props2} />);
-    fireEvent.click(screen.getAllByRole('button', { name: ui.projects.typesCreate })[0]!);
-    created('new-p');
+    const projectRow = screen.getByText('Договор').closest('button')!.parentElement!;
+    const menu = within(projectRow).getByRole('button', { name: ui.common.rowMenu });
+    fireEvent.pointerDown(menu, { button: 0, pointerType: 'mouse' });
+    fireEvent.click(menu);
+    fireEvent.click(await screen.findByRole('menuitem', { name: ui.automation.menuCopyType }));
+    expect(screen.getByTestId('slot')).toBeTruthy();
+    expect(base).toBe('p1');
+    act(() => created('new-p'));
     expect(props2.onSelectProjectType).toHaveBeenCalledWith('new-p');
   });
 
-  it('«+» группы «Папки» — слот создания типа папки', () => {
-    const props = setup();
+  it('пустые «Папки» — главная кнопка открывает слот создания типа папки', () => {
+    const props = setup({ kinds: [] });
     let created: (id: string) => void = () => {};
     props.renderKindCreate = (slot) => {
       created = slot.onCreated;
@@ -258,7 +274,7 @@ describe('единая колонка «Процессов» (#857)', () => {
     };
     cleanup();
     render(<SlotProbe {...props} />);
-    fireEvent.click(screen.getAllByRole('button', { name: ui.projects.schemasCreateKind })[0]!);
+    fireEvent.click(screen.getByRole('button', { name: ui.projects.schemasCreateKind }));
     expect(screen.getByTestId('kind-slot')).toBeTruthy();
     created('new-k');
     expect(props.onSelectKind).toHaveBeenCalledWith('new-k');

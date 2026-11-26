@@ -1,15 +1,24 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { NodeKind, ProjectType } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
+
+// Журнальный список вкладки меряет края скролла ResizeObserver-ом.
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  },
+);
 
 import {
   useLiveProcessTypes,
   useUpdateTypeCreation,
 } from '../../../shared/api/process-types-api.js';
 import { useUpdateProjectType } from '../api/project-catalog-mutations.js';
-import { useCreateNodeKind } from '../node-kinds/api/node-kinds-api.js';
 
 vi.mock('../../../shared/api/process-types-api.js', () => ({
   useLiveProcessTypes: vi.fn(() => ({ data: [] })),
@@ -21,37 +30,49 @@ vi.mock('../../../shared/api/use-can-manage-workflows.js', () => ({
 vi.mock('../api/project-catalog-mutations.js', () => ({
   useUpdateProjectType: vi.fn(() => ({ mutate: vi.fn() })),
 }));
-vi.mock('../node-kinds/api/node-kinds-api.js', () => ({
-  useCreateNodeKind: vi.fn(() => ({ mutate: vi.fn() })),
+// Окно создания типа папки — на своём месте (#857): здесь проверяем СВЯЗКУ
+// «создан → разрешён в этом типе проекта», само окно живёт своими тестами.
+vi.mock('../node-kinds/components/node-kind-create-dialog.js', () => ({
+  NodeKindCreateDialog: (props: { onClose: () => void; onCreated: (id: string) => void }) => (
+    <div data-testid="kind-create-dialog">
+      <button type="button" onClick={() => props.onCreated('55555555-5555-4555-8555-555555555555')}>
+        dialog-created
+      </button>
+      <button type="button" onClick={props.onClose}>
+        dialog-close
+      </button>
+    </div>
+  ),
 }));
 
 import { ProjectTypeKindsTab } from './project-type-kinds.js';
 
 const KIND_A = '70000000-0000-4000-8000-000000000001';
 const KIND_B = '70000000-0000-4000-8000-000000000002';
-const P1 = '11111111-1111-4111-8111-111111111111';
+const KIND_ARCHIVED = '70000000-0000-4000-8000-000000000003';
+const KIND_C = '70000000-0000-4000-8000-000000000004';
 const NEW_KIND = '55555555-5555-4555-8555-555555555555';
+const P1 = '11111111-1111-4111-8111-111111111111';
 
-const kinds = [
-  {
-    id: KIND_A,
-    name: 'Комплект',
+const kind = (id: string, name: string, patch: Partial<NodeKind> = {}) =>
+  ({
+    id,
+    name,
     icon: 'folder',
     color: 'blue',
     archivedAt: null,
     form: { fields: [] },
     capabilities: [],
-  },
-  {
-    id: KIND_B,
-    name: 'Здание',
-    icon: 'building',
-    color: 'green',
-    archivedAt: null,
-    form: { fields: [] },
-    capabilities: [],
-  },
-] as unknown as NodeKind[];
+    ...patch,
+  }) as unknown as NodeKind;
+
+const kinds = [kind(KIND_A, 'Комплект'), kind(KIND_B, 'Здание')] as NodeKind[];
+/** Три живых типа: полный набор НЕ достигается добавлением одного —
+ *  `kindIdsAfterToggle` пишет явный список, а не схлопывает в null. */
+const kindsThree = [...kinds, kind(KIND_C, 'Очередь')] as NodeKind[];
+const archivedKind = kind(KIND_ARCHIVED, 'Старый', {
+  archivedAt: '2026-11-01T00:00:00.000Z',
+});
 
 const type = (kindIds: string[] | null) =>
   ({
@@ -68,14 +89,12 @@ function setup(
   kindIds: string[] | null = null,
   canSetup = true,
   tasks: unknown[] = [],
-  pageKinds: (typeof kinds)[number][] = kinds,
+  pageKinds: NodeKind[] = kinds,
 ) {
   const update = { mutate: vi.fn() };
-  const createKind = { mutate: vi.fn() };
   const updateScope = { mutate: vi.fn() };
   const onOpenKind = vi.fn();
   vi.mocked(useUpdateProjectType).mockReturnValue(update as never);
-  vi.mocked(useCreateNodeKind).mockReturnValue(createKind as never);
   vi.mocked(useUpdateTypeCreation).mockReturnValue(updateScope as never);
   vi.mocked(useLiveProcessTypes).mockReturnValue({ data: tasks } as never);
   render(
@@ -86,10 +105,10 @@ function setup(
       onOpenKind={onOpenKind}
     />,
   );
-  return { update, createKind, updateScope, onOpenKind };
+  return { update, updateScope, onOpenKind };
 }
 
-describe('страница «Какие папки здесь бывают» (#556, #857)', () => {
+describe('вкладка «Какие папки здесь бывают» — журнальный список (#556, #857)', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
@@ -110,49 +129,38 @@ describe('страница «Какие папки здесь бывают» (#5
     expect(update.mutate).toHaveBeenCalledWith({ id: P1, kindIds: null });
   });
 
-  it('клик по строке открывает экран типа папки', () => {
+  it('клик по строке журнала открывает экран типа папки', () => {
     const { onOpenKind } = setup();
-    fireEvent.click(screen.getByTitle('Комплект'));
+    fireEvent.click(screen.getByText('Комплект'));
     expect(onOpenKind).toHaveBeenCalledWith(KIND_A);
   });
 
-  it('без права настройки тумблеры недоступны', () => {
+  it('без права настройки тумблеры недоступны и кнопки создания нет', () => {
     setup(null, false);
     expect(screen.getByRole('switch', { name: /Комплект/ })).toHaveProperty('disabled', true);
-    // и создания типа на месте нет
     expect(screen.queryByText(ui.projects.schemasCreateKind)).toBeNull();
   });
 
-  it('инлайн-создание типа папки: Enter создаёт и привязывает к явному списку', () => {
-    // один вид в справочнике: добавление нового НЕ завершает полный набор
-    const { createKind, update } = setup([KIND_A], true, [], [kinds[0]!]);
+  it('создание из окна: новый тип добавляется к явному списку', () => {
+    const { update } = setup([KIND_A], true, [], kindsThree);
     fireEvent.click(screen.getByRole('button', { name: ui.projects.schemasCreateKind }));
-    const input = screen.getByLabelText(ui.projects.schemasCreateKind);
-    fireEvent.change(input, { target: { value: 'Очередь строительства' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
-    expect(createKind.mutate).toHaveBeenCalledWith(
-      { name: 'Очередь строительства', icon: 'folder', color: 'blue' },
-      expect.objectContaining({ onSuccess: expect.any(Function) }),
-    );
-    // успех: при явном списке новый тип добавляется в kindIds, поле сбрасывается
-    const { onSuccess } = createKind.mutate.mock.calls[0]![1] as {
-      onSuccess: (kind: unknown) => void;
-    };
-    act(() => {
-      onSuccess({ id: NEW_KIND });
-    });
+    fireEvent.click(screen.getByText('dialog-created'));
     expect(update.mutate).toHaveBeenCalledWith({ id: P1, kindIds: [KIND_A, NEW_KIND] });
-    expect(screen.queryByLabelText(ui.projects.schemasCreateKind)).toBeNull();
   });
 
-  it('Escape отменяет инлайн-создание без мутации', () => {
-    const { createKind } = setup();
+  it('создание при «все типы» — записи нет: новый тип уже разрешён', () => {
+    const { update } = setup(null);
     fireEvent.click(screen.getByRole('button', { name: ui.projects.schemasCreateKind }));
-    const input = screen.getByLabelText(ui.projects.schemasCreateKind);
-    fireEvent.change(input, { target: { value: 'Черновик' } });
-    fireEvent.keyDown(input, { key: 'Escape' });
-    expect(createKind.mutate).not.toHaveBeenCalled();
-    expect(screen.queryByLabelText(ui.projects.schemasCreateKind)).toBeNull();
+    fireEvent.click(screen.getByText('dialog-created'));
+    expect(update.mutate).not.toHaveBeenCalled();
+  });
+
+  it('закрытие окна создания не пишет связку', () => {
+    const { update } = setup([KIND_A]);
+    fireEvent.click(screen.getByRole('button', { name: ui.projects.schemasCreateKind }));
+    fireEvent.click(screen.getByText('dialog-close'));
+    expect(screen.queryByTestId('kind-create-dialog')).toBeNull();
+    expect(update.mutate).not.toHaveBeenCalled();
   });
 
   it('«Включить все типы папок» возвращает null', () => {
@@ -184,23 +192,18 @@ describe('страница «Какие папки здесь бывают» (#5
   });
 
   it('архивный тип папки помечен чипом «в архиве»', () => {
-    const archivedKind = {
-      id: '70000000-0000-4000-8000-000000000003',
-      name: 'Старый',
-      icon: 'folder',
-      color: 'blue',
-      archivedAt: '2026-11-01T00:00:00.000Z',
-      form: { fields: [] },
-      capabilities: [],
-    } as unknown as (typeof kinds)[number];
-    render(
-      <ProjectTypeKindsTab
-        type={type([KIND_A, '70000000-0000-4000-8000-000000000003'])}
-        kinds={[...kinds, archivedKind]}
-        canSetup
-        onOpenKind={vi.fn()}
-      />,
-    );
+    setup([KIND_A, KIND_ARCHIVED], true, [], [...kinds, archivedKind]);
     expect(screen.getByText(ui.projects.schemasKindArchived)).toBeTruthy();
+    // Живой тип — без чипа: чип один на архивную строку.
+    expect(screen.getAllByText(ui.projects.schemasKindArchived).length).toBe(1);
+  });
+
+  it('пакетная правка островком: выбранное включается одним списком', () => {
+    const { update } = setup([KIND_A], true, [], kindsThree);
+    // Чекбокс строки «Здание»: пакетное включение пишет явный список.
+    const row = screen.getByText('Здание').closest('[role="row"]')!;
+    fireEvent.click(row.querySelector('button[role="checkbox"]')!);
+    fireEvent.click(screen.getByRole('button', { name: ui.projects.schemasKindAllow }));
+    expect(update.mutate).toHaveBeenCalledWith({ id: P1, kindIds: [KIND_A, KIND_B] });
   });
 });
