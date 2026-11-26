@@ -9,7 +9,7 @@ import {
 
 import { markChunkLoaded, reloadOnceOnChunkError } from './chunk-reload.js';
 import { AppShell } from './shell/app-shell.js';
-import { legacyProjectSchemasSearch } from './legacy-automation-search.js';
+import { automationBeforeLoad } from './legacy-automation-search.js';
 import { PAGE_IMPORTS, preloadPage } from './page-imports.js';
 import { RAIL_MODULES } from './shell/nav-registry.js';
 import { NotFoundScreen, RouterErrorScreen } from './shell/system-screens.js';
@@ -267,12 +267,7 @@ const automationRoute = createRoute({
   path: '/automation',
   // Легаси «Схемы проектов» (#857): вкладки больше нет — старый адрес
   // перенаправляется на единый вход «Процессы» (type→ptype, kind→ftype).
-  beforeLoad: ({ search }) => {
-    const replacement = legacyProjectSchemasSearch(search);
-    if (replacement) {
-      throw redirect({ to: '/automation', search: replacement, replace: true });
-    }
-  },
+  beforeLoad: automationBeforeLoad,
   component: AutomationPage,
 });
 

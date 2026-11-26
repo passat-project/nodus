@@ -8,6 +8,18 @@ vi.mock('../../api/automation-api.js', () => ({
   useArchiveProcessType: vi.fn(() => ({ mutate: vi.fn() })),
 }));
 
+const dialogProps = vi.hoisted(() => ({
+  last: null as null | { defaultBaseTypeId?: string },
+  onClose: () => {},
+}));
+vi.mock('../types/type-create-dialog.js', () => ({
+  ProcessTypeCreateDialog: (props: { defaultBaseTypeId?: string; onClose: () => void }) => {
+    dialogProps.last = props;
+    dialogProps.onClose = props.onClose;
+    return <div data-testid="task-create-dialog" />;
+  },
+}));
+
 import { UnifiedTypeList } from './unified-type-list.js';
 
 const NOW = '2026-11-26T00:00:00.000Z';
@@ -71,6 +83,18 @@ const fixtures = {
   kinds: [kind('k1', 'Комплект'), kind('k2', 'Здание', { archivedAt: NOW })],
 };
 
+function SlotProbe(props: Partial<Parameters<typeof UnifiedTypeList>[0]>) {
+  return (
+    <UnifiedTypeList
+      {...(props as Parameters<typeof UnifiedTypeList>[0])}
+      renderProjectTypeCreate={
+        props.renderProjectTypeCreate ?? (() => <div data-testid="project-create-slot" />)
+      }
+      renderKindCreate={props.renderKindCreate ?? (() => <div data-testid="kind-create-slot" />)}
+    />
+  );
+}
+
 function setup(patch: Partial<Parameters<typeof UnifiedTypeList>[0]> = {}) {
   const props = {
     processTypes: fixtures.processTypes,
@@ -91,7 +115,7 @@ function setup(patch: Partial<Parameters<typeof UnifiedTypeList>[0]> = {}) {
     onArchiveNodeKind: vi.fn(),
     ...patch,
   };
-  render(<UnifiedTypeList {...props} />);
+  render(<SlotProbe {...props} />);
   return props;
 }
 
@@ -185,6 +209,75 @@ describe('единая колонка «Процессов» (#857)', () => {
     expect(screen.getByText('Старый тип')).toBeTruthy();
     expect(screen.getByText('Тема')).toBeTruthy();
     expect(screen.getByText('Здание')).toBeTruthy();
+  });
+
+  it('«+» группы «Задачи» — диалог без основы; «Копировать тип» — с основой (регрессия #857)', async () => {
+    setup();
+    // «+» в заголовке — создание с нуля («Новый тип» у групп «Проекты» и «Задачи»)
+    fireEvent.click(screen.getAllByRole('button', { name: ui.automation.newType }).at(-1)!);
+    expect(screen.getByTestId('task-create-dialog')).toBeTruthy();
+    expect(dialogProps.last!.defaultBaseTypeId).toBeUndefined();
+    // закрытие снимает диалог
+    dialogProps.onClose();
+
+    // «⋯ → Копировать тип» строки ЗАДАЧИ — основа подставляется
+    const taskRow = screen.getByText('Задание смежнику').closest('button')!.parentElement!;
+    const menu = within(taskRow).getByRole('button', { name: ui.common.rowMenu });
+    fireEvent.pointerDown(menu, { button: 0, pointerType: 'mouse' });
+    fireEvent.click(menu);
+    fireEvent.click(await screen.findByRole('menuitem', { name: ui.automation.menuCopyType }));
+    expect(screen.getByTestId('task-create-dialog')).toBeTruthy();
+    expect(dialogProps.last!.defaultBaseTypeId).toBe('t1');
+  });
+
+  it('«+» проектных групп открывает слоты; onCreated выбирает созданное', () => {
+    setup();
+    // «+» группы «Проекты» — слот фичи проектов (первая кнопка «Новый тип»)
+    fireEvent.click(screen.getAllByRole('button', { name: ui.projects.typesCreate })[0]!);
+    expect(screen.getByTestId('project-create-slot')).toBeTruthy();
+    cleanup();
+    const props2 = setup();
+    let created: (id: string) => void = () => {};
+    props2.renderProjectTypeCreate = (slot) => {
+      created = slot.onCreated;
+      return <div data-testid="slot" />;
+    };
+    cleanup();
+    render(<SlotProbe {...props2} />);
+    fireEvent.click(screen.getAllByRole('button', { name: ui.projects.typesCreate })[0]!);
+    created('new-p');
+    expect(props2.onSelectProjectType).toHaveBeenCalledWith('new-p');
+  });
+
+  it('«+» группы «Папки» — слот создания типа папки', () => {
+    const props = setup();
+    let created: (id: string) => void = () => {};
+    props.renderKindCreate = (slot) => {
+      created = slot.onCreated;
+      return <div data-testid="kind-slot" />;
+    };
+    cleanup();
+    render(<SlotProbe {...props} />);
+    fireEvent.click(screen.getAllByRole('button', { name: ui.projects.schemasCreateKind })[0]!);
+    expect(screen.getByTestId('kind-slot')).toBeTruthy();
+    created('new-k');
+    expect(props.onSelectKind).toHaveBeenCalledWith('new-k');
+  });
+
+  it('поиск фильтрует и архивную секцию', () => {
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(ui.automation.archiveGroup) }));
+    // без поиска в архиве все три категории
+    expect(screen.getByText('Старый тип')).toBeTruthy();
+    expect(screen.getByText('Тема')).toBeTruthy();
+    expect(screen.getByText('Здание')).toBeTruthy();
+    // поиск по архивному типу проекта оставляет только его
+    fireEvent.change(screen.getByPlaceholderText(ui.common.search), {
+      target: { value: 'тема' },
+    });
+    expect(screen.getByText('Тема')).toBeTruthy();
+    expect(screen.queryByText('Старый тип')).toBeNull();
+    expect(screen.queryByText('Здание')).toBeNull();
   });
 
   it('клик по строке вызывает выбор соответствующей категории', () => {

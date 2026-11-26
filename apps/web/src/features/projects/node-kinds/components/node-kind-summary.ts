@@ -1,5 +1,5 @@
-import type { NodeKind } from '@nodus/contracts';
-import { nodeKindFormOf, ui, formSlots } from '@nodus/contracts';
+import type { NodeKind, ProjectType } from '@nodus/contracts';
+import { kindAllowedByType, nodeKindFormOf, ui, formSlots } from '@nodus/contracts';
 
 import { plural } from '../../../../shared/lib/format.js';
 
@@ -34,4 +34,16 @@ export function fieldsCountLabel(kind: NodeKind): string {
  *  та же форма, что у сводки типа — одно число и обязательные. */
 export function kindRowSummary(kind: NodeKind): string {
   return formSummary(kind);
+}
+
+/** Подсказка шапки экрана типа папки (#857, п.1 правил): сколько живых
+ *  типов проектов разрешают тип (`kindAllowedByType`; все — «все типы
+ *  проектов», без типов — пусто). Зеркало меты строки в колонке
+ *  «Процессов» (unified-meta, I6 — параллельная реализация). */
+export function kindUsageText(kind: NodeKind, projectTypes: readonly ProjectType[]): string {
+  const alive = projectTypes.filter((project) => project.archivedAt === null);
+  if (alive.length === 0) return '';
+  const count = alive.filter((project) => kindAllowedByType(project.kindIds, kind.id)).length;
+  if (count === alive.length) return ui.nodeKinds.screen.usageAllProjects;
+  return `${ui.nodeKinds.screen.usageLabel} ${count} ${plural(count, ui.nodeKinds.screen.usageForms)}`;
 }

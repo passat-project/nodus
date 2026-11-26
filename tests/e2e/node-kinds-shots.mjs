@@ -2,9 +2,10 @@ import { chromium } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 
 /**
- * Кадры UI-чекпоинта #556: вкладка «Схемы проектов» (канвас, меню типа,
- * настройки типа, виды папок, панель вида), «Атрибуты → Папки», «Свойства
- * папки», окно «Создать папку». Обе темы.
+ * Кадры UI-чекпоинта #556 (#857 — единый вход «Процессы»): канвас типа
+ * проекта, меню строки, настройки типа, страница «Какие папки здесь
+ * бывают», экран типа папки, «Атрибуты → Папки», «Свойства папки», окно
+ * «Создать папку». Обе темы.
  *   NODUS_BASE_URL=http://localhost:5173 node node-kinds-shots.mjs [outDir]
  * Мок-мир (`VITE_API_MOCK=true`): посевной «Комплект» и папка «ОВ1.1».
  */
@@ -48,8 +49,8 @@ for (const theme of ['light', 'dark']) {
   }
   await page.waitForTimeout(1400);
 
-  // 1. «Схемы проектов»: слева типы, справа канвас будущей схемы.
-  await page.goto(`${base}/automation?tab=project-schemas&type=${DOGOVOR}`);
+  // 1. Единый вход «Процессы»: слева четыре группы, справа канвас типа (#857).
+  await page.goto(`${base}/automation?tab=processes&ptype=${DOGOVOR}`);
   await shot('01-canvas');
 
   // 2. Меню строки типа — «Настройки типа».
@@ -62,32 +63,29 @@ for (const theme of ['light', 'dark']) {
   await page.getByRole('menuitem', { name: 'Настройки типа' }).click();
   await shot('03-type-settings');
 
-  // 3. Страница «Виды папок» поверх панели настроек.
-  await page.getByRole('button', { name: /Виды папок/ }).click();
+  // 3. Страница «Какие папки здесь бывают» — на всю правую область (#857).
+  await page.getByRole('button', { name: /Какие папки здесь бывают/ }).click();
   await shot('04-type-kinds');
 
-  // 4. Панель вида — из строки «Комплект».
+  // 4. Экран типа папки — из строки «Комплект» (вся рабочая область).
   await page
     .getByRole('button', { name: /Комплект/ })
     .first()
     .click();
-  await shot('05-kind-panel');
+  await shot('05-kind-screen');
 
-  // 5. Раздел «При создании папки».
-  await page.getByRole('button', { name: /При создании папки/ }).click();
-  await shot('06-kind-form');
+  // 5. Разделы экрана типа папки: «Работы в папке» и «Где используется».
+  await page.getByRole('button', { name: 'Работы в папке' }).click();
+  await shot('06-kind-works');
+  await page.getByRole('button', { name: 'Где используется' }).click();
+  await shot('07-kind-usage');
 
-  // 6. Раздел «Возможности» (из раздела формы — «назад»).
-  await page.getByRole('button', { name: 'Назад' }).click();
-  await page.getByRole('button', { name: /Возможности/ }).click();
-  await shot('07-kind-capabilities');
-
-  // 7. «Шифр проекта»: назад в корень вида, назад в «Виды папок», назад в корень типа.
-  await page.getByRole('button', { name: 'Назад' }).click();
-  await page.getByRole('button', { name: 'Назад' }).click();
-  await page.getByRole('button', { name: 'Назад' }).click();
-  await page.getByRole('button', { name: /Шифр проекта/ }).click();
-  await shot('08-code');
+  // 6. Возврат «‹» — в тип проекта (дорожка).
+  await page
+    .getByRole('button', { name: /Договор/ })
+    .first()
+    .click();
+  await shot('08-back-to-type');
 
   // 8. «Атрибуты → Папки».
   await page.goto(`${base}/automation?tab=fields&scope=node`);
@@ -114,7 +112,7 @@ for (const theme of ['light', 'dark']) {
   // 10b. Длинная марка не распирает окно (#615): колонка DialogContent
   // фиксирована, значение обрезается, «Создать» остаётся внутри карточки.
   const createDialog = page.getByRole('dialog', { name: 'Создать папку' });
-  await createDialog.getByRole('combobox', { name: 'Вид папки' }).click();
+  await createDialog.getByRole('combobox', { name: 'Тип папки' }).click();
   await page.getByRole('option', { name: /Комплект/ }).click();
   await createDialog.getByRole('button', { name: 'Марка' }).click();
   await page
@@ -144,7 +142,7 @@ for (const theme of ['light', 'dark']) {
   await page.getByRole('button', { name: 'Отмена' }).click();
 
   // 11. Глубокая ссылка на панель вида (проверка маршрута).
-  await page.goto(`${base}/automation?tab=project-schemas&type=${DOGOVOR}&kind=${KOMPLEKT}`);
+  await page.goto(`${base}/automation?tab=processes&ptype=${DOGOVOR}&ftype=${KOMPLEKT}`);
   await shot('12-kind-deeplink');
 
   await ctx.close();

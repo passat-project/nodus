@@ -9,6 +9,7 @@ import { RotateCcw } from 'lucide-react';
 
 import { useNodeKinds } from '../../../../shared/api/node-kinds.js';
 import { useCanManageWorkflows } from '../../../../shared/api/use-can-manage-workflows.js';
+import { useProjectTypes } from '../../../../shared/api/projects-list.js';
 import { useAuthStore } from '../../../../shared/auth-store.js';
 import { useCanManageFields } from '../../../../shared/custom-fields/use-can-manage-fields.js';
 import { identityTone } from '../../../../shared/ui/identity-tone.js';
@@ -23,6 +24,7 @@ import { useArchiveNodeKind, useUpdateNodeKind } from '../api/node-kinds-api.js'
 import type { RenderCreateField } from '../types.js';
 import { NodeKindCapabilitiesSection } from './node-kind-capabilities-section.js';
 import { NodeKindFormSection } from './node-kind-form-section.js';
+import { kindUsageText } from './node-kind-summary.js';
 import { NodeKindUsageSection } from './node-kind-usage-section.js';
 import { NodeKindWorksSection } from './node-kind-works-section.js';
 
@@ -61,6 +63,7 @@ export function NodeKindScreen({
   const kindsQuery = useNodeKinds();
   const kinds = kindsQuery.data ?? [];
   const kind = kinds.find((entry) => entry.id === kindId) ?? null;
+  const { data: projectTypes } = useProjectTypes();
   const update = useUpdateNodeKind();
   const archive = useArchiveNodeKind();
   const permissions = useAuthStore((s) => s.user?.permissions ?? []);
@@ -127,6 +130,16 @@ export function NodeKindScreen({
           <NodeChip tone="muted" className="shrink-0">
             {ui.projects.schemasKindArchived}
           </NodeChip>
+        ) : null}
+        {/* Подсказка «Используется: …» (#857, п.1 правил) — сколько живых
+            типов проектов разрешают этот тип папки. */}
+        {kindUsageText(kind, projectTypes ?? []) ? (
+          <span
+            className="min-w-0 truncate text-xs text-muted-foreground"
+            title={kindUsageText(kind, projectTypes ?? [])}
+          >
+            {kindUsageText(kind, projectTypes ?? [])}
+          </span>
         ) : null}
       </header>
 

@@ -58,7 +58,7 @@ export function UnifiedTypeList(props: UnifiedTypeListProps) {
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [archiveOpen, setArchiveOpen] = useState(false);
-  const [taskCreateOpen, setTaskCreateOpen] = useState(false);
+  const [taskCreate, setTaskCreate] = useState<{ baseId?: string } | null>(null);
   const [projectCreate, setProjectCreate] = useState<{ baseId?: string } | null>(null);
   const [kindCreate, setKindCreate] = useState<{ baseId?: string } | null>(null);
   const archiveType = useArchiveProcessType(true);
@@ -130,7 +130,7 @@ export function UnifiedTypeList(props: UnifiedTypeListProps) {
       metaProjects={metaProjects}
       onSelect={() => props.onSelectProcessType(type.id)}
       onOpenSettings={() => props.onOpenProcessTypeSettings(type.id)}
-      onCopy={() => setTaskCreateOpen(true)}
+      onCopy={() => setTaskCreate({ baseId: type.id })}
       onArchive={() => archiveType.mutate(type.id)}
       onRestore={() => restoreType.mutate(type.id)}
     />
@@ -157,6 +157,7 @@ export function UnifiedTypeList(props: UnifiedTypeListProps) {
       kind={kind}
       selected={props.selectedKindId === kind.id}
       canSetup={canSetup}
+      projectTypes={projectTypes}
       onSelect={() => props.onSelectKind(kind.id)}
       onCopy={() => setKindCreate({ baseId: kind.id })}
       onArchive={() => props.onArchiveNodeKind(kind.id, true)}
@@ -194,7 +195,7 @@ export function UnifiedTypeList(props: UnifiedTypeListProps) {
       label: ui.automation.entry.groups.task,
       rows: aliveTasks.map(processRow),
       ...(canManage
-        ? { onCreate: () => setTaskCreateOpen(true), createLabel: ui.automation.newType }
+        ? { onCreate: () => setTaskCreate({}), createLabel: ui.automation.newType }
         : {}),
     },
     { id: 'letter', label: ui.automation.entry.groups.letter, rows: aliveLetters.map(processRow) },
@@ -281,7 +282,12 @@ export function UnifiedTypeList(props: UnifiedTypeListProps) {
         ) : null}
       </div>
 
-      {taskCreateOpen ? <ProcessTypeCreateDialog onClose={() => setTaskCreateOpen(false)} /> : null}
+      {taskCreate ? (
+        <ProcessTypeCreateDialog
+          defaultBaseTypeId={taskCreate.baseId}
+          onClose={() => setTaskCreate(null)}
+        />
+      ) : null}
       {projectCreate && props.renderProjectTypeCreate
         ? props.renderProjectTypeCreate({
             baseId: projectCreate.baseId,

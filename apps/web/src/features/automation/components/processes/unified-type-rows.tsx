@@ -138,11 +138,13 @@ export function ProjectTypeRow({
   );
 }
 
-/** Строка типа папки: клик открывает экран типа, меню — копия/архив. */
+/** Строка типа папки: клик открывает экран типа, меню — копия/архив;
+ *  мета — «Используется: N типов проектов · атрибуты». */
 export function KindRow({
   kind,
   selected,
   canSetup,
+  projectTypes,
   onSelect,
   onCopy,
   onArchive,
@@ -151,6 +153,7 @@ export function KindRow({
   kind: NodeKind;
   selected: boolean;
   canSetup: boolean;
+  projectTypes: readonly ProjectType[];
   onSelect: () => void;
   onCopy: () => void;
   onArchive: () => void;
@@ -160,7 +163,7 @@ export function KindRow({
     <UnifiedTypeRow
       tile={<NodeKindTile icon={kind.icon} color={kind.color} className="size-9 rounded-lg" />}
       name={kind.name}
-      meta={nodeKindMeta(kind)}
+      meta={nodeKindMeta(kind, projectTypes)}
       selected={selected}
       archived={kind.archivedAt !== null}
       menu={

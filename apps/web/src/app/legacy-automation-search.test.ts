@@ -1,6 +1,10 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 
-import { legacyProjectSchemasSearch } from './legacy-automation-search.js';
+import { automationBeforeLoad, legacyProjectSchemasSearch } from './legacy-automation-search.js';
+// Импорт роутера исполняет привязку beforeLoad маршрута /automation
+// (строка в покрытии: ссылка на функцию — не мёртвый код).
+import './router.js';
 
 describe('легаси-редирект «Схемы проектов» → «Процессы» (#857)', () => {
   it('чужая вкладка не трогается', () => {
@@ -35,5 +39,20 @@ describe('легаси-редирект «Схемы проектов» → «П
     expect(legacyProjectSchemasSearch({ tab: 'project-schemas', foo: 'bar', type: 'p-1' })).toEqual(
       { foo: 'bar', tab: 'processes', ptype: 'p-1' },
     );
+  });
+});
+
+describe('beforeLoad маршрута /automation (#857)', () => {
+  it('легаси-адрес бросает redirect на единый вход', () => {
+    expect(() =>
+      automationBeforeLoad({ search: { tab: 'project-schemas', type: 'p-1' } }),
+    ).toThrow();
+  });
+
+  it('свежий адрес проходит без редиректа', () => {
+    expect(() =>
+      automationBeforeLoad({ search: { tab: 'processes', ptype: 'p-1', ftype: 'k-1' } }),
+    ).not.toThrow();
+    expect(() => automationBeforeLoad({ search: {} })).not.toThrow();
   });
 });

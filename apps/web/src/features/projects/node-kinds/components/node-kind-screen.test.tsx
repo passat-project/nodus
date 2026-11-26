@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { NodeKind, ProcessType, ProjectType } from '@nodus/contracts';
 import { normalizeTypeConfig, ui } from '@nodus/contracts';
@@ -24,9 +24,10 @@ vi.mock('../../../../shared/auth-store.js', () => ({
   useAuthStore: (selector: (state: { user: { permissions: string[] } | null }) => unknown) =>
     selector({ user: { permissions: ['project.setup.manage'] } }),
 }));
+const api = vi.hoisted(() => ({ update: vi.fn(), archive: vi.fn() }));
 vi.mock('../api/node-kinds-api.js', () => ({
-  useUpdateNodeKind: vi.fn(() => ({ mutate: vi.fn() })),
-  useArchiveNodeKind: vi.fn(() => ({ mutate: vi.fn() })),
+  useUpdateNodeKind: vi.fn(() => ({ mutate: api.update })),
+  useArchiveNodeKind: vi.fn(() => ({ mutate: api.archive })),
 }));
 vi.mock('./node-kind-form-section.js', () => ({
   NodeKindFormSection: () => <div data-testid="kind-form-section" />,
@@ -89,12 +90,18 @@ const PROJECT = (id: string, kindIds: string[] | null) =>
   }) as unknown as ProjectType;
 
 function setup(
-  patch: { tasks?: ProcessType[]; projects?: ProjectType[] } = {},
+  patch: { tasks?: ProcessType[]; projects?: ProjectType[]; kinds?: NodeKind[] } = {},
   backLabel = 'Договор',
 ) {
   const mutate = vi.fn();
   const onOpenProjectType = vi.fn();
-  vi.mocked(useNodeKinds).mockReturnValue({ data: [KIND], isLoading: false } as never);
+  const onBack = vi.fn();
+  api.update.mockClear();
+  api.archive.mockClear();
+  vi.mocked(useNodeKinds).mockReturnValue({
+    data: patch.kinds ?? [KIND],
+    isLoading: false,
+  } as never);
   vi.mocked(useProjectTypes).mockReturnValue({
     data: patch.projects ?? [PROJECT('p1', null)],
   } as never);
@@ -102,15 +109,14 @@ function setup(
     data: patch.tasks ?? [TASK('t1', null)],
   } as never);
   vi.mocked(useUpdateTypeCreation).mockReturnValue({ mutate, isPending: false } as never);
-  render(
-    <NodeKindScreen
-      kindId={KIND_ID}
-      backLabel={backLabel}
-      onBack={vi.fn()}
-      onOpenProjectType={onOpenProjectType}
-    />,
-  );
-  return { mutate, onOpenProjectType };
+  const props = {
+    kindId: KIND_ID,
+    backLabel,
+    onBack,
+    onOpenProjectType,
+  };
+  const view = render(<NodeKindScreen {...props} />);
+  return { mutate, onOpenProjectType, onBack, view, props };
 }
 
 describe('экран типа папки (#857)', () => {
@@ -185,5 +191,64 @@ describe('экран типа папки (#857)', () => {
     setup({ projects: [PROJECT('p-other', ['другой-тип'])] }, 'Назад');
     fireEvent.click(screen.getByRole('button', { name: ui.nodeKinds.screen.usage }));
     expect(screen.queryByTitle('Договор')).toBeNull();
+    expect(screen.getByText(ui.nodeKinds.screen.usageEmpty)).toBeTruthy();
+  });
+
+  it('подсказка шапки: сколько типов проектов используют тип папки', () => {
+    setup({ projects: [PROJECT('p1', null), PROJECT('p2', ['другой'])] });
+    expect(screen.getByText('Используется: 1 тип проекта')).toBeTruthy();
+  });
+
+  it('архивный тип: чип и «Вернуть из архива»; живой — «В архив»', () => {
+    setup({ kinds: [{ ...KIND, archivedAt: '2026-11-01T00:00:00.000Z' } as unknown as NodeKind] });
+    expect(screen.getByText(ui.projects.schemasKindArchived)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: ui.nodeKinds.panel.restore }));
+    expect(api.archive).toHaveBeenCalledWith({ id: KIND_ID, archived: false });
+
+    cleanup();
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: ui.nodeKinds.panel.archive }));
+    expect(api.archive).toHaveBeenCalledWith({ id: KIND_ID, archived: true });
+  });
+
+  it('смена kindId сбрасывает раздел на «Поля и формы»', () => {
+    const { view, props } = setup();
+    fireEvent.click(screen.getByRole('button', { name: ui.nodeKinds.screen.works }));
+    expect(screen.queryByTestId('kind-form-section')).toBeNull();
+    const other = { ...KIND, id: 'other-kind' } as unknown as NodeKind;
+    act(() => {
+      view.rerender(<NodeKindScreen {...props} kindId={other.id} />);
+    });
+    vi.mocked(useNodeKinds).mockReturnValue({
+      data: [other],
+      isLoading: false,
+    } as never);
+    act(() => {
+      view.rerender(<NodeKindScreen {...props} kindId={other.id} />);
+    });
+    expect(screen.getByTestId('kind-form-section')).toBeTruthy();
+  });
+
+  it('пропавший тип откатывает экран: onBack', () => {
+    const { view, props, onBack } = setup();
+    act(() => {
+      view.rerender(<NodeKindScreen {...props} kindId="missing" />);
+    });
+    expect(onBack).toHaveBeenCalled();
+  });
+
+  it('«Поля и форма»: имя, значок и цвет сохраняются сразу', () => {
+    setup();
+    // значок — другой ключ реестра
+    fireEvent.click(screen.getAllByRole('button', { name: ui.structure.iconNames.building! })[0]!);
+    expect(api.update).toHaveBeenCalledWith({ id: KIND_ID, icon: 'building' });
+    // цвет-идентичность
+    fireEvent.click(screen.getByRole('button', { name: ui.structure.colorNames.green }));
+    expect(api.update).toHaveBeenCalledWith({ id: KIND_ID, color: 'green' });
+    // имя — по уходу фокуса
+    const name = screen.getByDisplayValue('Комплект');
+    fireEvent.change(name, { target: { value: 'Комплект КЖ' } });
+    fireEvent.blur(name);
+    expect(api.update).toHaveBeenCalledWith({ id: KIND_ID, name: 'Комплект КЖ' });
   });
 });

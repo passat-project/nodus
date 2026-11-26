@@ -9,6 +9,8 @@ import { processTypeIconSchema, ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useRoles } from '../../../../shared/api/roles.js';
+import { useProjectTypes } from '../../../../shared/api/projects-list.js';
+import { creationUsageText } from '../processes/unified-meta.js';
 import { stageColorOrder, stageTone } from '../../../../shared/ui/board/stage-tone.js';
 import { ProcessTypeGlyph } from '../../../../shared/workflow/process-type-icon.js';
 import { useUpdateProcessType } from '../../api/automation-api.js';
@@ -81,6 +83,7 @@ export function TypeSettingsPanel({
     >
       {section === 'root' ? (
         <>
+          <TypeUsageHint type={type} />
           <TypeBasics type={type} readOnly={canEdit} />
           <div className="flex min-w-0 flex-col">
             <SectionLink
@@ -124,6 +127,20 @@ export function TypeSettingsPanel({
       {section === 'numbering' ? <TypeNumberingSection type={type} /> : null}
     </SidePanel>
   );
+}
+
+/** Подсказка шапки «Используется в: …» (#857, п.1 правил): типы проектов,
+ *  где тип разрешён (сторона связи «где создаётся», #665). Сервер скрыл
+ *  конфигурацию — подсказки нет. */
+function TypeUsageHint({ type }: { type: ProcessType }) {
+  const { data: projectTypes } = useProjectTypes();
+  const alive = useMemo(
+    () => (projectTypes ?? []).filter((project) => project.archivedAt === null),
+    [projectTypes],
+  );
+  const text = creationUsageText(type, alive);
+  if (text === null) return null;
+  return <p className="text-xs break-words text-muted-foreground">{text}</p>;
 }
 
 /** Поля самого типа — первые в панели (название — первое поле, в шапке

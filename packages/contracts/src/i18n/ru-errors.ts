@@ -55,7 +55,7 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.PROCESS_TYPE_NAME_TAKEN]: 'Тип с таким названием уже существует',
   [ErrorCode.PROCESS_TYPE_NOT_ALLOWED_IN_PROJECT]: 'Этот тип нельзя создать в проекте такого типа',
   [ErrorCode.PROCESS_TYPE_PROJECT_REQUIRED]: 'Этот тип создаётся только в проекте',
-  [ErrorCode.PROCESS_TYPE_FOLDER_KIND_REQUIRED]: 'Этот тип создаётся только в папке своего вида',
+  [ErrorCode.PROCESS_TYPE_FOLDER_KIND_REQUIRED]: 'Этот тип создаётся только в папке своего типа',
   [ErrorCode.CHAT_ATTACHMENT_TOO_LARGE]:
     'Файл больше 100 МБ — вложения такого размера не поддерживаются',
   [ErrorCode.CHAT_ATTACHMENT_TOO_MANY]:
@@ -146,7 +146,7 @@ export const errorMessages: Record<ErrorCode, string> = {
     'Сотрудник назначен в задачах проекта — сначала снимите его с задач',
   [ErrorCode.PROJECT_MEMBER_ALREADY_PARTICIPANT]: 'Сотрудник уже участвует в проекте из задач',
   [ErrorCode.PROJECT_FIELDS_REQUIRED]: 'Заполните обязательные атрибуты проекта',
-  [ErrorCode.PROJECT_NODE_KIND_FORM_INVALID]: 'Форма вида ссылается на негодные атрибуты',
+  [ErrorCode.PROJECT_NODE_KIND_FORM_INVALID]: 'Форма типа папки ссылается на негодные атрибуты',
   [ErrorCode.PROJECT_TYPE_FORM_INVALID]: 'Форма типа проекта ссылается на негодные атрибуты',
   [ErrorCode.PROJECT_NODE_KIND_NOT_ALLOWED]: 'Этот тип папки не назначен типу проекта',
   [ErrorCode.ASSISTANT_PROVIDER_NOT_CONFIGURED]:
