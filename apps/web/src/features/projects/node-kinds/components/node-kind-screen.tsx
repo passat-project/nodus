@@ -1,50 +1,35 @@
-import { useEffect, useState } from 'react';
-import { Permission, projectColorSchema, ui } from '@nodus/contracts';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Permission, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Empty, EmptyTitle } from '@nodus/ui/components/empty';
-import { NodeChip } from '@nodus/ui/components/node-chip';
 import { Skeleton } from '@nodus/ui/components/skeleton';
-import { cn } from '@nodus/ui/lib/utils';
-import { RotateCcw } from 'lucide-react';
+import { ListChecks, Settings2, Share2, SlidersHorizontal } from 'lucide-react';
 
 import { useNodeKinds } from '../../../../shared/api/node-kinds.js';
 import { useCanManageWorkflows } from '../../../../shared/api/use-can-manage-workflows.js';
 import { useProjectTypes } from '../../../../shared/api/projects-list.js';
 import { useAuthStore } from '../../../../shared/auth-store.js';
 import { useCanManageFields } from '../../../../shared/custom-fields/use-can-manage-fields.js';
-import { identityTone } from '../../../../shared/ui/identity-tone.js';
-import { CommitInput } from '../../../../shared/ui/panel/commit-field.js';
-import { PanelDanger, PanelField } from '../../../../shared/ui/panel/panel-kit.js';
-import {
-  NODE_KIND_ICON_KEYS,
-  NodeKindGlyph,
-  NodeKindTile,
-} from '../../../../shared/ui/node-kind-icon.js';
-import { useArchiveNodeKind, useUpdateNodeKind } from '../api/node-kinds-api.js';
+import type { CardTabDef } from '../../../../shared/ui/entity-card/card-tab-strip.js';
+import { TypeCardFrame, TypeCardPanel } from '../../../../shared/ui/type-card-frame.js';
+import { useUpdateNodeKind } from '../api/node-kinds-api.js';
 import type { RenderCreateField } from '../types.js';
-import { NodeKindCapabilitiesSection } from './node-kind-capabilities-section.js';
 import { NodeKindFormSection } from './node-kind-form-section.js';
+import { NodeKindSettingsDialog } from './node-kind-settings-dialog.js';
 import { kindUsageText } from './node-kind-summary.js';
 import { NodeKindUsageSection } from './node-kind-usage-section.js';
 import { NodeKindWorksSection } from './node-kind-works-section.js';
 
-type ScreenSection = 'form' | 'metrics' | 'actions' | 'works' | 'usage';
-
-const SECTIONS: { id: ScreenSection; label: string }[] = [
-  { id: 'form', label: ui.nodeKinds.screen.fieldsForm },
-  { id: 'metrics', label: ui.nodeKinds.screen.metrics },
-  { id: 'actions', label: ui.nodeKinds.screen.actions },
-  { id: 'works', label: ui.nodeKinds.screen.works },
-  { id: 'usage', label: ui.nodeKinds.screen.usage },
-];
+type ScreenSection = 'form' | 'works' | 'usage';
 
 /**
- * Экран типа папки (#857, единая модель §5/§11) — на всю рабочую область
- * вкладки «Процессы» (`?ftype=`), колонка скрыта: шапка с возвратом
- * («‹ Договор», дорожку собирает app-уровень), имя и плитка типа, своя
- * навигация разделов одного уровня — «Поля и форма» · «Показатели» ·
- * «Действия» · «Работы в папке» · «Где используется». «Показатели» и
- * «Действия» — заделы (#865, #633) с понятным пустым состоянием.
+ * Тип папки в разделе «Процессы» (#857; ревизия вкладок 26.11.2026) — ТА ЖЕ
+ * рама, что у типа проекта и процесса, но вкладки — только БОЛЬШИЕ
+ * поверхности: «Поля и форма» (конструктор формы), «Работы в папке» и «Где
+ * используется» (журнальные списки). Имя, значок, цвет, возможности и архив
+ * переехали в компактное окно настроек (из «⋯ → Настройки типа…» строки и
+ * шестерёнки в полосе). «Показатели» и «Действия» скрыты до #865 — вернутся
+ * настоящими списками. Левая колонка всегда видна, имя справа не дублируется.
  */
 export function NodeKindScreen({
   kindId,
@@ -52,32 +37,56 @@ export function NodeKindScreen({
   onBack,
   renderCreateField,
   onOpenProjectType,
+  onOpenType,
+  renderProcessTypeCreate,
+  renderProjectTypeCreate,
+  settingsRequest = 0,
 }: {
   kindId: string;
-  /** Куда ведёт «‹»: имя типа проекта (дорожка) или «Назад». */
-  backLabel: string;
+  /** Имя типа проекта, из которого открыт тип (крошка «‹ Договор»). */
+  backLabel?: string;
   onBack: () => void;
   renderCreateField?: RenderCreateField;
   onOpenProjectType: (id: string) => void;
+  /** Переход в настройку маршрута типа задачи из «Работ в папке». */
+  onOpenType?: (id: string) => void;
+  /** Окна создания из списочных вкладок (слоты app, I6). */
+  renderProcessTypeCreate?: (slot: {
+    onClose: () => void;
+    onCreated: (id: string) => void;
+    baseId?: string;
+  }) => ReactNode;
+  renderProjectTypeCreate?: (slot: {
+    onClose: () => void;
+    onCreated: (id: string) => void;
+    baseId?: string;
+  }) => ReactNode;
+  /** Счётчик команд «⋯ → Настройки типа…» строки колонки: открыть окно. */
+  settingsRequest?: number;
 }) {
   const kindsQuery = useNodeKinds();
   const kinds = kindsQuery.data ?? [];
   const kind = kinds.find((entry) => entry.id === kindId) ?? null;
   const { data: projectTypes } = useProjectTypes();
   const update = useUpdateNodeKind();
-  const archive = useArchiveNodeKind();
   const permissions = useAuthStore((s) => s.user?.permissions ?? []);
   const canSetup = permissions.includes(Permission.PROJECT_SETUP_MANAGE);
   const canManageWorkflows = useCanManageWorkflows();
   const canCreateField = useCanManageFields();
 
   const [section, setSection] = useState<ScreenSection>('form');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [shownId, setShownId] = useState(kindId);
   // Смена типа — с первого раздела (derive-render).
   if (kindId !== shownId) {
     setShownId(kindId);
     setSection('form');
+    setSettingsOpen(false);
   }
+  // «⋯ → Настройки типа…» строки типа папки — окно настроек.
+  useEffect(() => {
+    if (settingsRequest > 0) setSettingsOpen(true);
+  }, [settingsRequest]);
 
   // Идентификатор пропал (справочник перечитан без него) — откат к умолчанию.
   const missing = !kind && !kindsQuery.isLoading;
@@ -105,177 +114,89 @@ export function NodeKindScreen({
     );
   }
 
-  const archived = kind.archivedAt !== null;
+  const idPrefix = `node-kind-${kind.id}`;
+  const tabs: CardTabDef[] = [
+    {
+      id: 'form',
+      label: ui.nodeKinds.screen.fieldsForm,
+      icon: <SlidersHorizontal className="size-3.5" strokeWidth={1.75} />,
+    },
+    {
+      id: 'works',
+      label: ui.nodeKinds.screen.works,
+      icon: <ListChecks className="size-3.5" strokeWidth={1.75} />,
+    },
+    {
+      id: 'usage',
+      label: ui.nodeKinds.screen.usage,
+      icon: <Share2 className="size-3.5" strokeWidth={1.75} />,
+    },
+  ];
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="shrink-0 hover:bg-accent"
-          onClick={onBack}
-          aria-label={backLabel}
-          title={backLabel}
-        >
-          <span aria-hidden className="text-lg leading-none">
-            ‹
-          </span>
-        </Button>
-        <NodeKindTile icon={kind.icon} color={kind.color} className="size-6" />
-        <span className="min-w-0 truncate text-sm font-medium" title={kind.name}>
-          {kind.name}
-        </span>
-        {archived ? (
-          <NodeChip tone="muted" className="shrink-0">
-            {ui.projects.schemasKindArchived}
-          </NodeChip>
-        ) : null}
-        {/* Подсказка «Используется: …» (#857, п.1 правил) — сколько живых
-            типов проектов разрешают этот тип папки. */}
-        {kindUsageText(kind, projectTypes ?? []) ? (
-          <span
-            className="min-w-0 truncate text-xs text-muted-foreground"
-            title={kindUsageText(kind, projectTypes ?? [])}
+    <>
+      <TypeCardFrame
+        meta={kindUsageText(kind, projectTypes ?? []) || undefined}
+        backLabel={backLabel}
+        onBack={backLabel ? onBack : undefined}
+        settingsAction={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setSettingsOpen(true)}
+            aria-label={ui.nodeKinds.panel.settingsTitle}
+            title={ui.nodeKinds.panel.settingsTitle}
           >
-            {kindUsageText(kind, projectTypes ?? [])}
-          </span>
-        ) : null}
-      </header>
-
-      <nav
-        aria-label={ui.nodeKinds.title}
-        className="flex h-10 shrink-0 items-center gap-1 border-b border-border px-3"
+            <Settings2 className="size-4" strokeWidth={1.75} />
+          </Button>
+        }
+        tabs={tabs}
+        activeTab={section}
+        onActivateTab={(id) => setSection(id as ScreenSection)}
+        idPrefix={idPrefix}
+        tabsLabel={ui.nodeKinds.title}
       >
-        {SECTIONS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setSection(tab.id)}
-            aria-current={section === tab.id || undefined}
-            className={cn(
-              'rounded-lg px-2.5 py-1 text-sm transition-colors',
-              section === tab.id
-                ? 'bg-accent text-foreground'
-                : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground',
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </nav>
+        {section === 'form' ? (
+          <TypeCardPanel idPrefix={idPrefix} tab="form">
+            <NodeKindFormSection
+              kind={kind}
+              canSetup={canSetup}
+              canCreateField={canCreateField}
+              renderCreateField={renderCreateField}
+              onSave={(form) => update.mutate({ id: kind.id, form })}
+            />
+          </TypeCardPanel>
+        ) : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-6 py-5">
-          {section === 'form' ? (
-            <>
-              <PanelField label={ui.nodeKinds.panel.name}>
-                <CommitInput
-                  value={kind.name}
-                  required
-                  disabled={!canSetup}
-                  onCommit={(name) => update.mutate({ id: kind.id, name })}
-                  className="h-8 text-sm"
-                />
-              </PanelField>
+        {section === 'works' ? (
+          <TypeCardPanel idPrefix={idPrefix} tab="works">
+            <NodeKindWorksSection
+              kind={kind}
+              canManage={canManageWorkflows}
+              onOpenType={onOpenType ?? (() => undefined)}
+              renderProcessTypeCreate={renderProcessTypeCreate}
+            />
+          </TypeCardPanel>
+        ) : null}
 
-              <PanelField label={ui.nodeKinds.panel.icon}>
-                <div className="grid grid-cols-8 gap-1">
-                  {NODE_KIND_ICON_KEYS.map((icon) => (
-                    <button
-                      key={icon}
-                      type="button"
-                      disabled={!canSetup}
-                      onClick={() => update.mutate({ id: kind.id, icon })}
-                      aria-label={ui.structure.iconNames[icon]}
-                      title={ui.structure.iconNames[icon]}
-                      aria-pressed={kind.icon === icon}
-                      className={cn(
-                        'flex aspect-square min-w-0 items-center justify-center rounded-lg border transition-colors disabled:cursor-default',
-                        kind.icon === icon
-                          ? 'border-ring bg-accent text-foreground'
-                          : 'border-border text-muted-foreground enabled:hover:border-input enabled:hover:text-foreground',
-                      )}
-                    >
-                      <NodeKindGlyph icon={icon} className="size-4" />
-                    </button>
-                  ))}
-                </div>
-              </PanelField>
+        {section === 'usage' ? (
+          <TypeCardPanel idPrefix={idPrefix} tab="usage">
+            <NodeKindUsageSection
+              kind={kind}
+              onOpenProjectType={onOpenProjectType}
+              renderProjectTypeCreate={renderProjectTypeCreate}
+            />
+          </TypeCardPanel>
+        ) : null}
+      </TypeCardFrame>
 
-              <PanelField label={ui.nodeKinds.panel.color}>
-                <div className="flex flex-wrap gap-2">
-                  {projectColorSchema.options.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      disabled={!canSetup}
-                      onClick={() => update.mutate({ id: kind.id, color })}
-                      aria-label={ui.structure.colorNames[color]}
-                      title={ui.structure.colorNames[color]}
-                      aria-pressed={kind.color === color}
-                      className={cn(
-                        'size-6 rounded-full border-2 transition-colors disabled:cursor-default',
-                        identityTone[color].dot,
-                        kind.color === color ? 'border-foreground' : 'border-transparent',
-                      )}
-                    />
-                  ))}
-                </div>
-              </PanelField>
-
-              <NodeKindFormSection
-                kind={kind}
-                canSetup={canSetup}
-                canCreateField={canCreateField}
-                renderCreateField={renderCreateField}
-                onSave={(form) => update.mutate({ id: kind.id, form })}
-              />
-
-              <NodeKindCapabilitiesSection
-                kind={kind}
-                canSetup={canSetup}
-                onToggle={(capabilities) => update.mutate({ id: kind.id, capabilities })}
-              />
-
-              {canSetup ? (
-                archived ? (
-                  <PanelDanger
-                    icon={RotateCcw}
-                    onClick={() => archive.mutate({ id: kind.id, archived: false })}
-                  >
-                    {ui.nodeKinds.panel.restore}
-                  </PanelDanger>
-                ) : (
-                  <PanelDanger onClick={() => archive.mutate({ id: kind.id, archived: true })}>
-                    {ui.nodeKinds.panel.archive}
-                  </PanelDanger>
-                )
-              ) : null}
-            </>
-          ) : null}
-
-          {section === 'metrics' ? (
-            <Empty>
-              <EmptyTitle>{ui.nodeKinds.screen.metricsEmpty}</EmptyTitle>
-            </Empty>
-          ) : null}
-
-          {section === 'actions' ? (
-            <Empty>
-              <EmptyTitle>{ui.nodeKinds.screen.actionsEmpty}</EmptyTitle>
-            </Empty>
-          ) : null}
-
-          {section === 'works' ? (
-            <NodeKindWorksSection kind={kind} canManage={canManageWorkflows} />
-          ) : null}
-
-          {section === 'usage' ? (
-            <NodeKindUsageSection kind={kind} onOpenProjectType={onOpenProjectType} />
-          ) : null}
-        </div>
-      </div>
-    </div>
+      {settingsOpen ? (
+        <NodeKindSettingsDialog
+          kind={kind}
+          canSetup={canSetup}
+          onClose={() => setSettingsOpen(false)}
+        />
+      ) : null}
+    </>
   );
 }

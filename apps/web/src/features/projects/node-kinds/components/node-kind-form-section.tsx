@@ -1,14 +1,20 @@
 import { useMemo, useState } from 'react';
 import type { NodeKind, NodeKindForm } from '@nodus/contracts';
-import { bindingsOf, formSlots, isFormDecor, nodeKindFormOf, ui } from '@nodus/contracts';
+import { bindingsOf, isFormDecor, nodeKindFormOf, ui } from '@nodus/contracts';
+import { Button } from '@nodus/ui/components/button';
+import { Empty, EmptyTitle } from '@nodus/ui/components/empty';
+import { NodeChip } from '@nodus/ui/components/node-chip';
+import { NodeLabel } from '@nodus/ui/components/node-label';
+import { SlidersHorizontal } from 'lucide-react';
 
 import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
 import { AttributeWindowBuilder } from '../../../../shared/forms/attribute-window-builder.js';
 import type { AttributeElement } from '../../../../shared/forms/attribute-form-model.js';
 import { isSlotElement } from '../../../../shared/forms/attribute-form-model.js';
-import { NodeLabel } from '@nodus/ui/components/node-label';
 import { PreviewControl } from '../../../../shared/forms/builder/preview-control.js';
-import { SectionLink } from '../../../../shared/ui/panel/panel-kit.js';
+import { previewOfFieldType } from '../../../../shared/forms/builder/preview-kind.js';
+import { CardTabToolbar } from '../../../../shared/ui/entity-card/card-tab-toolbar.js';
+import { DataTable, type DataTableField } from '../../../../shared/views/data-table.js';
 import type { RenderCreateField } from '../types.js';
 
 const b = ui.forms.builder;
@@ -42,22 +48,97 @@ export function NodeKindFormSection({
       ),
     [query.data, kind.id],
   );
-  // Сводка окна в панели: что спросит папка этого вида, по порядку.
-  const summary = form.fields.flatMap((element) => {
-    if (isFormDecor(element) || !isSlotElement(element)) return [];
-    const name = definitions.find((definition) => definition.id === element.fieldId)?.name;
-    return [name ?? b.unknownField];
-  });
+  // Что спросит окно папки этого вида — журнальный список на всю вкладку
+  // (ревизия 26.11.2026): поверхность заполнена, редактор окна — по кнопке.
+  const rows = useMemo(
+    () =>
+      form.fields.flatMap((element) => {
+        if (isFormDecor(element) || !isSlotElement(element)) return [];
+        const definition = definitions.find((entry) => entry.id === element.fieldId);
+        return [
+          {
+            id: element.fieldId,
+            name: definition?.name ?? b.unknownField,
+            state: element.state,
+            preview: previewOfFieldType(definition?.type ?? 'text'),
+            hint: element.hint ?? null,
+          },
+        ];
+      }),
+    [definitions, form.fields],
+  );
+
+  const defs = useMemo<DataTableField<(typeof rows)[number]>[]>(
+    () => [
+      {
+        id: 'name',
+        label: ui.projects.fieldName,
+        defaultVisible: true,
+        defaultWidth: 280,
+        minWidth: 180,
+        maxWidth: 340,
+        locked: true,
+        render: (row) => (
+          <>
+            <span className="truncate text-sm font-medium">{row.name}</span>
+            {row.state === 'required' ? (
+              <NodeChip tone="muted" className="shrink-0">
+                {ui.nodeKinds.form.state.required}
+              </NodeChip>
+            ) : null}
+            {row.state === 'hidden' ? (
+              <NodeChip tone="muted" className="shrink-0">
+                {ui.nodeKinds.form.state.hidden}
+              </NodeChip>
+            ) : null}
+          </>
+        ),
+        sortValue: (row) => row.name,
+      },
+      {
+        id: 'control',
+        label: ui.customFields.columns.type,
+        defaultVisible: true,
+        defaultWidth: 220,
+        minWidth: 140,
+        flex: true,
+        render: (row) => (
+          <span className="w-full max-w-56">
+            <PreviewControl kind={row.preview} />
+          </span>
+        ),
+      },
+    ],
+    [],
+  );
 
   return (
-    <div className="flex min-w-0 flex-col gap-2">
-      {/* Вход в редактор — строка раздела с шевроном, как в остальных
-          панелях (#496, замечание владельца 08.11.2026). */}
-      <SectionLink
-        title={canSetup ? b.edit : b.view}
-        summary={formSlots(form).length === 0 ? ui.nodeKinds.form.empty : summary.join(', ')}
-        onClick={() => setOpen(true)}
-      />
+    <div className="relative flex h-full min-h-0 flex-col">
+      <CardTabToolbar>
+        <Button variant="outline" onClick={() => setOpen(true)}>
+          <SlidersHorizontal className="size-4" strokeWidth={1.75} />
+          {canSetup ? b.edit : b.view}
+        </Button>
+      </CardTabToolbar>
+      <div className="min-h-0 flex-1">
+        {rows.length === 0 ? (
+          <div className="flex h-full items-center justify-center p-6">
+            <Empty>
+              <EmptyTitle>{ui.nodeKinds.form.empty}</EmptyTitle>
+            </Empty>
+          </div>
+        ) : (
+          <DataTable
+            viewKey="processes.kind-form"
+            defs={defs}
+            rows={rows}
+            rowKey={(row) => row.id}
+            label={ui.nodeKinds.screen.fieldsForm}
+            selectable={false}
+            onOpenRow={() => undefined}
+          />
+        )}
+      </div>
       <AttributeWindowBuilder
         open={open}
         title={`${b.titles.folder} · ${kind.name}`}

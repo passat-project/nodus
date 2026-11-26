@@ -66,7 +66,7 @@ export function ProcessRowMenu({
           <>
             <DropdownMenuItem onSelect={onOpenSettings}>
               <Settings2 className="size-3.5" />
-              {ui.automation.typeSettings.title}
+              {ui.automation.menuSettingsType}
             </DropdownMenuItem>
             {isTask ? (
               <DropdownMenuItem onSelect={onCopy}>
@@ -136,11 +136,13 @@ export function ProjectRowMenu({
  *  копия и архив/возврат. */
 export function KindRowMenu({
   archived,
+  onOpenSettings,
   onCopy,
   onArchive,
   onRestore,
 }: {
   archived: boolean;
+  onOpenSettings: () => void;
   onCopy: () => void;
   onArchive: () => void;
   onRestore: () => void;
@@ -151,6 +153,10 @@ export function KindRowMenu({
       <DropdownMenuContent align="end" className="w-52">
         {!archived ? (
           <>
+            <DropdownMenuItem onSelect={onOpenSettings}>
+              <Settings2 className="size-3.5" />
+              {ui.automation.menuSettingsType}
+            </DropdownMenuItem>
             <DropdownMenuItem onSelect={onCopy}>
               <Copy className="size-3.5" />
               {ui.automation.menuCopyType}

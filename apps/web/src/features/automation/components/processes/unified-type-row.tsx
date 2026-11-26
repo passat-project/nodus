@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { ui } from '@nodus/contracts';
+import { Button } from '@nodus/ui/components/button';
 import { NodeLabel } from '@nodus/ui/components/node-label';
 import { cn } from '@nodus/ui/lib/utils';
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
@@ -48,7 +49,10 @@ export function UnifiedTypeRow({
             {badges}
           </span>
           {meta ? (
-            <span className="mt-0.5 block truncate text-label-sm text-muted-foreground">
+            <span
+              className="mt-0.5 block truncate text-label-sm text-muted-foreground"
+              title={meta}
+            >
               {meta}
             </span>
           ) : null}
@@ -68,22 +72,19 @@ export function UnifiedTypeRow({
   );
 }
 
-/** Заголовок группы колонки: сворачивание кликом, «+» создаёт тип этой
- *  категории (по правам; у «Писем» создания нет — каталог заморожен, #55). */
+/** Заголовок группы колонки: только сворачивание и счётчик. Создание живёт
+ *  в ПУСТОМ состоянии группы (вердикт владельца 26.11.2026: «+» в заголовке
+ *  отвергнут — колонка остаётся списком, а не панелью инструментов). */
 export function UnifiedGroupHeader({
   label,
   count,
   collapsed,
   onToggle,
-  onCreate,
-  createLabel,
 }: {
   label: string;
   count: number;
   collapsed: boolean;
   onToggle: () => void;
-  onCreate?: () => void;
-  createLabel?: string;
 }) {
   return (
     <div className="flex items-center gap-1 pr-1 pl-1">
@@ -100,17 +101,6 @@ export function UnifiedGroupHeader({
         )}
         <NodeLabel label={label} count={count} className="min-w-0 truncate" />
       </button>
-      {onCreate ? (
-        <button
-          type="button"
-          onClick={onCreate}
-          aria-label={createLabel}
-          title={createLabel}
-          className="flex size-6 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <Plus className="size-3.5" strokeWidth={1.75} />
-        </button>
-      ) : null}
     </div>
   );
 }
@@ -136,7 +126,24 @@ export function UnifiedTypeTile({
   );
 }
 
-/** Пустая группа: строка-заглушка (высота строки не исчезает). */
-export function UnifiedGroupEmpty() {
-  return <div className="px-2.5 pb-1.5 text-xs text-muted-foreground">{ui.common.empty}</div>;
+/** Пустая группа: заглушка и — если категория создаётся — главная кнопка
+ *  создания (первый тип иначе создать нечем; у «Писем» каталог заморожен). */
+export function UnifiedGroupEmpty({
+  onCreate,
+  createLabel,
+}: {
+  onCreate?: () => void;
+  createLabel?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-2 px-2.5 pt-1 pb-2">
+      <span className="text-xs text-muted-foreground">{ui.automation.entry.emptyGroup}</span>
+      {onCreate && createLabel ? (
+        <Button type="button" size="sm" className="self-start" onClick={onCreate}>
+          <Plus data-icon="inline-start" strokeWidth={2} />
+          {createLabel}
+        </Button>
+      ) : null}
+    </div>
+  );
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { Permission, ui } from '@nodus/contracts';
 import { Empty, EmptyTitle } from '@nodus/ui/components/empty';
@@ -13,10 +13,8 @@ import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/quer
 import { useWorkflowDetail } from '../../../../shared/workflow/workflow-api.js';
 import { FieldDialog } from '../fields/field-dialog.js';
 import { useRouteDocStore } from '../../model/route-doc-store.js';
-import { RouteEditor } from '../editor/route-editor.js';
-import { TypeSettingsPanel } from '../types/type-settings.js';
+import { ProcessTypeCard } from './process-type-card.js';
 import { resolveProcessesSurface, type ProcessesSearch } from './resolve-surface.js';
-import { TypeTrail } from './type-trail.js';
 import { UnifiedTypeList } from './unified-type-list.js';
 import { WithoutProjectPage } from './without-project-page.js';
 
@@ -36,6 +34,9 @@ export interface ProjectWorkspaceSlot {
   onOpenType: (id: string) => void;
   onOpenKind: (id: string) => void;
   renderCreateField?: RenderCreateField;
+  /** Окна создания из списочных вкладок: тип задачи / тип проекта (I6). */
+  renderProcessTypeCreate?: RenderCreateDialog;
+  renderProjectTypeCreate?: RenderCreateDialog;
 }
 export type RenderProjectWorkspace = (slot: ProjectWorkspaceSlot) => ReactNode;
 
@@ -47,9 +48,27 @@ export interface CreateDialogSlot {
 }
 export type RenderCreateDialog = (slot: CreateDialogSlot) => ReactNode;
 
+/** Слот карточки типа папки (features/projects, I6): та же рама, что у типа
+ *  проекта, — колонка слева остаётся, меняется только содержимое справа. */
+export interface FolderCardSlot {
+  kindId: string;
+  /** Имя типа проекта, из которого открыт тип папки (крошка «‹ Договор»). */
+  backLabel?: string;
+  /** Счётчик команд «⋯ → Настройки типа…» строки папки: открыть окно. */
+  settingsRequest?: number;
+  onBack: () => void;
+  onOpenProjectType: (id: string) => void;
+  /** Окна создания из списочных вкладок: тип задачи / тип проекта (I6). */
+  renderProcessTypeCreate?: RenderCreateDialog;
+  renderProjectTypeCreate?: RenderCreateDialog;
+}
+export type RenderFolderCard = (slot: FolderCardSlot) => ReactNode;
+
 export interface ProcessesScreenSlots {
   renderProjectWorkspace?: RenderProjectWorkspace;
+  renderFolderCard?: RenderFolderCard;
   renderProjectTypeCreate?: RenderCreateDialog;
+  renderProcessTypeCreate?: RenderCreateDialog;
   renderKindCreate?: RenderCreateDialog;
   /** Архив/возврат типа проекта и типа папки — мутации фичи projects (I6). */
   onArchiveProject: (id: string, archived: boolean) => void;
@@ -86,31 +105,16 @@ export function ProcessesScreen(slots: ProcessesScreenSlots) {
 
   // Настройки типа открываются ДЛЯ КОНКРЕТНОЙ строки (#409): boolean терял
   // id, и панель всегда показывала selected. Выделение редактора не меняется.
-  const [settingsTypeId, setSettingsTypeId] = useState<string | null>(null);
+  const [processSettingsRequest, setProcessSettingsRequest] = useState(0);
   const [projectSettingsRequest, setProjectSettingsRequest] = useState(0);
+  const [kindSettingsRequest, setKindSettingsRequest] = useState(0);
 
   const alive = useMemo(() => (types ?? []).filter((t) => !t.archivedAt), [types]);
   const selected =
     surface.surface === 'type' ? (alive.find((t) => t.id === surface.typeId) ?? null) : null;
-  const settingsType = useMemo(
-    () => alive.find((t) => t.id === settingsTypeId) ?? null,
-    [alive, settingsTypeId],
-  );
-  const settingsOpen = settingsType !== null;
-  // Тип заархивировали/удалили, пока панель открыта — панель закрывается.
-  useEffect(() => {
-    if (settingsTypeId !== null && settingsType === null) setSettingsTypeId(null);
-  }, [settingsTypeId, settingsType]);
-
   const workflowQuery = useWorkflowDetail(selected?.workflowId ?? null);
   const workflow = workflowQuery.data;
 
-  // Одна правая панель за раз: выделение на холсте закрывает «Настройки
-  // типа», открытие настроек снимает выделение.
-  const editorSelection = useRouteDocStore((s) => s.selection);
-  useEffect(() => {
-    if (editorSelection) setSettingsTypeId(null);
-  }, [editorSelection]);
   const editorDirty = useRouteDocStore((s) => s.dirty);
   const editorWorkflowId = useRouteDocStore((s) => s.workflowId);
   const dirtyTypeIds = useMemo(() => {
@@ -150,6 +154,12 @@ export function ProcessesScreen(slots: ProcessesScreenSlots) {
     surface.surface === 'type' && surface.trailTypeId
       ? (projectTypes.find((p) => p.id === surface.trailTypeId) ?? null)
       : null;
+  // Крошка карточки типа папки: имя типа проекта, из которого он открыт
+  // (`?ftype=&ptype=`); без родителя крошки нет — «назад» не рисуется.
+  const folderTrail =
+    surface.surface === 'folder' && search.ptype
+      ? (projectTypes.find((p) => p.id === search.ptype && p.archivedAt === null) ?? null)
+      : null;
 
   return (
     <div className="flex h-full min-h-0">
@@ -166,29 +176,29 @@ export function ProcessesScreen(slots: ProcessesScreenSlots) {
         selectedKindId={surface.surface === 'folder' ? surface.kindId : undefined}
         noProjectSelected={surface.surface === 'no-project'}
         onSelectProcessType={(id) => {
-          setSettingsTypeId(null);
           go({ type: id, ptype: undefined, noproject: undefined });
         }}
         onOpenProcessTypeSettings={(id) => {
           useRouteDocStore.getState().select(null);
-          setSettingsTypeId(id);
+          go({ type: id, ptype: undefined, noproject: undefined });
+          setProcessSettingsRequest((count) => count + 1);
         }}
         onSelectProjectType={(id) => {
-          setSettingsTypeId(null);
           go({ ptype: id, type: undefined, noproject: undefined });
         }}
         onOpenProjectSettings={(id) => {
-          setSettingsTypeId(null);
           go({ ptype: id, type: undefined, noproject: undefined });
           setProjectSettingsRequest((count) => count + 1);
         }}
         onSelectNoProject={() => {
-          setSettingsTypeId(null);
           go({ noproject: '1', ptype: undefined, type: undefined });
         }}
         onSelectKind={(id) => {
-          setSettingsTypeId(null);
           go({ ftype: id, ptype: undefined });
+        }}
+        onOpenKindSettings={(id) => {
+          go({ ftype: id });
+          setKindSettingsRequest((count) => count + 1);
         }}
         onArchiveProject={slots.onArchiveProject}
         onArchiveNodeKind={slots.onArchiveNodeKind}
@@ -202,9 +212,20 @@ export function ProcessesScreen(slots: ProcessesScreenSlots) {
 
   function renderMain(): ReactNode {
     if (surface.surface === 'folder') {
-      // Экран типа папки открывает AutomationRoute на всю область; сюда
-      // попадаем, только если перехват не сработал — колонку не прячем.
-      return null;
+      if (!slots.renderFolderCard) return null;
+      return (
+        <main className="flex min-w-0 flex-1 flex-col">
+          {slots.renderFolderCard({
+            kindId: surface.kindId,
+            backLabel: folderTrail?.name,
+            settingsRequest: kindSettingsRequest,
+            onBack: () => go({ ftype: undefined }),
+            onOpenProjectType: (id) => go({ ptype: id, ftype: undefined }),
+            renderProcessTypeCreate: slots.renderProcessTypeCreate,
+            renderProjectTypeCreate: slots.renderProjectTypeCreate,
+          })}
+        </main>
+      );
     }
     if (surface.surface === 'no-project') {
       return (
@@ -222,6 +243,8 @@ export function ProcessesScreen(slots: ProcessesScreenSlots) {
             onOpenType: (id) => go({ type: id, ptype: surface.typeId, noproject: undefined }),
             onOpenKind: (id) => go({ ftype: id, ptype: surface.typeId }),
             renderCreateField,
+            renderProcessTypeCreate: slots.renderProcessTypeCreate,
+            renderProjectTypeCreate: slots.renderProjectTypeCreate,
           })}
         </main>
       );
@@ -229,25 +252,13 @@ export function ProcessesScreen(slots: ProcessesScreenSlots) {
     if (surface.surface === 'type' && selected && workflow) {
       return (
         <main className="flex min-w-0 flex-1 flex-col">
-          {trailType ? (
-            <TypeTrail
-              from={trailType}
-              to={selected}
-              onBackToProject={() => go({ type: undefined })}
-            />
-          ) : null}
-          <RouteEditor
+          <ProcessTypeCard
             type={selected}
             workflow={workflow}
-            settingsOpen={settingsOpen}
-            settings={
-              <TypeSettingsPanel
-                open={settingsOpen}
-                type={settingsType ?? selected}
-                readOnly={!canManage}
-                onClose={() => setSettingsTypeId(null)}
-              />
-            }
+            settingsRequest={processSettingsRequest}
+            backLabel={trailType?.name}
+            onBack={() => go({ type: undefined })}
+            renderProjectTypeCreate={slots.renderProjectTypeCreate}
           />
         </main>
       );

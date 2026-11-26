@@ -29,9 +29,13 @@ const ICONS = processTypeIconSchema.options;
  */
 export function ProcessTypeCreateDialog({
   onClose,
+  onCreated,
   defaultBaseTypeId,
 }: {
   onClose: () => void;
+  /** Созданный тип остаётся в контексте списка (без перехода на маршрут):
+   *  списочные вкладки «Процессов» увязывают его с местом создания (#857). */
+  onCreated?: (id: string) => void;
   /** Основа по умолчанию («Копировать тип» из шапки). */
   defaultBaseTypeId?: string;
 }) {
@@ -65,10 +69,13 @@ export function ProcessTypeCreateDialog({
       {
         onSuccess: (type) => {
           toast.success(ui.automation.createdHint);
-          void navigate({
-            to: '/automation',
-            search: (prev) => ({ ...prev, tab: 'processes', type: type.id }),
-          });
+          if (onCreated) onCreated(type.id);
+          else {
+            void navigate({
+              to: '/automation',
+              search: (prev) => ({ ...prev, tab: 'processes', type: type.id }),
+            });
+          }
           onClose();
         },
       },

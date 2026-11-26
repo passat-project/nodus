@@ -14,6 +14,7 @@ import {
 import { cn } from '@nodus/ui/lib/utils';
 
 import { identityTone } from '../../../../shared/ui/identity-tone.js';
+import { IconPickGrid } from '../../../../shared/ui/icon-pick-grid.js';
 import { useNodeKinds } from '../../../../shared/api/node-kinds.js';
 import { useCreateNodeKind } from '../api/node-kinds-api.js';
 import { NODE_KIND_ICON_KEYS, NodeKindGlyph } from '../../../../shared/ui/node-kind-icon.js';
@@ -91,26 +92,16 @@ export function NodeKindCreateDialog({
 
           <div className="flex flex-col gap-1.5">
             <span className="text-label text-muted-foreground">{ui.nodeKinds.panel.icon}</span>
-            <div className="grid grid-cols-8 gap-1.5">
-              {NODE_KIND_ICON_KEYS.map((key_) => (
-                <button
-                  key={key_}
-                  type="button"
-                  aria-pressed={icon === key_}
-                  aria-label={ui.structure.iconNames[key_]}
-                  title={ui.structure.iconNames[key_]}
-                  onClick={() => setIcon(key_)}
-                  className={cn(
-                    'flex aspect-square min-w-0 items-center justify-center rounded-lg border transition-colors',
-                    icon === key_
-                      ? 'border-ring bg-accent text-foreground'
-                      : 'border-border text-muted-foreground hover:border-input',
-                  )}
-                >
-                  <NodeKindGlyph icon={key_} className="size-4" />
-                </button>
-              ))}
-            </div>
+            <IconPickGrid
+              value={icon}
+              onSelect={setIcon}
+              options={NODE_KIND_ICON_KEYS.map((key_) => ({
+                value: key_,
+                label: ui.structure.iconNames[key_],
+                title: ui.structure.iconNames[key_],
+                glyph: <NodeKindGlyph icon={key_} className="size-4" />,
+              }))}
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">

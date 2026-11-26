@@ -14,6 +14,7 @@ import {
 import { cn } from '@nodus/ui/lib/utils';
 
 import { identityTone } from '../../../shared/ui/identity-tone.js';
+import { IconPickGrid } from '../../../shared/ui/icon-pick-grid.js';
 import { useProjectTypes } from '../../../shared/api/projects-list.js';
 import { ProcessTypeGlyph } from '../../../shared/workflow/process-type-icon.js';
 import { useCreateProjectType } from '../api/project-catalog-mutations.js';
@@ -92,25 +93,15 @@ export function ProjectTypeCreateDialog({
 
           <div className="flex flex-col gap-1.5">
             <span className="text-label text-muted-foreground">{ui.nodeKinds.panel.icon}</span>
-            <div className="grid grid-cols-8 gap-1.5">
-              {processTypeIconSchema.options.map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  aria-pressed={icon === key}
-                  aria-label={key}
-                  onClick={() => setIcon(key)}
-                  className={cn(
-                    'flex aspect-square min-w-0 items-center justify-center rounded-lg border transition-colors',
-                    icon === key
-                      ? 'border-ring bg-accent text-foreground'
-                      : 'border-border text-muted-foreground hover:border-input',
-                  )}
-                >
-                  <ProcessTypeGlyph icon={key} className="size-4" />
-                </button>
-              ))}
-            </div>
+            <IconPickGrid
+              value={icon}
+              onSelect={setIcon}
+              options={processTypeIconSchema.options.map((key) => ({
+                value: key,
+                label: key,
+                glyph: <ProcessTypeGlyph icon={key} className="size-4" />,
+              }))}
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">

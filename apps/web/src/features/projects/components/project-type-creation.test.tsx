@@ -10,7 +10,7 @@ import {
   useUpdateTypeCreation,
 } from '../../../shared/api/process-types-api.js';
 import { useCanManageWorkflows } from '../../../shared/api/use-can-manage-workflows.js';
-import { ProjectTypeCreationPage } from './project-type-creation.js';
+import { ProjectTypeCreationTab } from './project-type-creation.js';
 
 vi.mock('../../../shared/api/process-types-api.js', () => ({
   useLiveProcessTypes: vi.fn(),
@@ -90,14 +90,7 @@ function setup(
       }) as never,
   );
   vi.mocked(useUpdateTypeCreation).mockReturnValue({ mutate, isPending: false } as never);
-  render(
-    <ProjectTypeCreationPage
-      type={projectType}
-      canSetup={canSetup}
-      onBack={vi.fn()}
-      onOpenType={onOpenType}
-    />,
-  );
+  render(<ProjectTypeCreationTab type={projectType} canSetup={canSetup} onOpenType={onOpenType} />);
   return { mutate, onOpenType };
 }
 

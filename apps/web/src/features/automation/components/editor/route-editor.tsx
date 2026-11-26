@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { bindingsOf, checkWorkflowDocument } from '@nodus/contracts';
@@ -23,7 +24,7 @@ import { EditorPanel } from './panel/editor-panel.js';
 import { SIDE_PANEL_WIDTH } from '../../../../shared/ui/panel/side-panel.js';
 import { PublishDialog } from './publish-dialog.js';
 import { RouteCanvas } from './route-canvas.js';
-import { RouteToolbar } from './route-toolbar.js';
+import { RouteToolbarActions } from './route-toolbar.js';
 
 /**
  * Редактор маршрута (#378 ред. 2, реф Jira workflow editor / Трекер) —
@@ -41,6 +42,9 @@ interface RouteEditorProps {
    *  открыта ли она сейчас — новый статус ставится в видимую часть холста. */
   settings?: React.ReactNode;
   settingsOpen?: boolean;
+  /** Куда рисовать действия редактора: правая часть единого бара вкладок
+   *  карточки (портал; бара над холстом больше нет). */
+  actionsHost?: HTMLElement | null;
 }
 
 export function RouteEditor(props: RouteEditorProps) {
@@ -51,7 +55,13 @@ export function RouteEditor(props: RouteEditorProps) {
   );
 }
 
-function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: RouteEditorProps) {
+function RouteEditorInner({
+  type,
+  workflow,
+  settings,
+  settingsOpen = false,
+  actionsHost,
+}: RouteEditorProps) {
   const doc = useRouteDocStore((s) => s.document);
   const baseline = useRouteDocStore((s) => s.baseline);
   const dirty = useRouteDocStore((s) => s.dirty);
@@ -184,38 +194,39 @@ function RouteEditorInner({ type, workflow, settings, settingsOpen = false }: Ro
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1">
+      {actionsHost
+        ? createPortal(
+            <RouteToolbarActions
+              canManage={canManage}
+              dirty={dirty}
+              problems={problems}
+              publishBlocked={!dirty}
+              onAddStage={addStage}
+              addTransition={(trigger) => (
+                <AddTransitionPopover
+                  document={doc}
+                  onPick={(from, to) => useRouteDocStore.getState().addTransition(from, to)}
+                  trigger={trigger}
+                />
+              )}
+              onTidy={() => {
+                // «Упорядочить»: авторасстановка в общую раскладку и вписать.
+                useRouteDocStore.getState().arrange();
+                void fitView({ duration: 200, padding: 0.2, maxZoom: 1 });
+              }}
+              onProblemClick={onProblemClick}
+              onDiscard={() => useRouteDocStore.getState().discard()}
+              onPublish={() => {
+                // Счётчики предпросмотра — свежие: staleTime detail 30 с не
+                // должен решать, сколько задач «в полёте».
+                void queryClient.invalidateQueries({ queryKey: workflowKeys.detail(workflow.id) });
+                setPublishOpen(true);
+              }}
+            />,
+            actionsHost,
+          )
+        : null}
       <div className="flex min-w-0 flex-1 flex-col">
-        <RouteToolbar
-          type={type}
-          canManage={canManage}
-          dirty={dirty}
-          publishedAt={dirty ? null : workflow.publishedAt}
-          publishedBy={workflow.publishedBy?.displayName ?? null}
-          problems={problems}
-          publishBlocked={!dirty}
-          onAddStage={addStage}
-          addTransition={(trigger) => (
-            <AddTransitionPopover
-              document={doc}
-              onPick={(from, to) => useRouteDocStore.getState().addTransition(from, to)}
-              trigger={trigger}
-            />
-          )}
-          onTidy={() => {
-            // «Упорядочить»: авторасстановка в общую раскладку и вписать.
-            useRouteDocStore.getState().arrange();
-            void fitView({ duration: 200, padding: 0.2, maxZoom: 1 });
-          }}
-          onProblemClick={onProblemClick}
-          onDiscard={() => useRouteDocStore.getState().discard()}
-          onPublish={() => {
-            // Счётчики предпросмотра — свежие: staleTime detail 30 с не
-            // должен решать, сколько задач «в полёте».
-            void queryClient.invalidateQueries({ queryKey: workflowKeys.detail(workflow.id) });
-            setPublishOpen(true);
-          }}
-        />
-
         <div ref={canvasRef} className="relative min-h-0 flex-1 overflow-hidden">
           <RouteCanvas workflow={workflow} editable={canManage} problemStageIds={problemStageIds} />
           {locked ? <CatalogLockBanner text={ui.automation.letterCatalogLocked} /> : null}

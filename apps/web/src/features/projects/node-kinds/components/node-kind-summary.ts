@@ -36,14 +36,20 @@ export function kindRowSummary(kind: NodeKind): string {
   return formSummary(kind);
 }
 
-/** Подсказка шапки экрана типа папки (#857, п.1 правил): сколько живых
- *  типов проектов разрешают тип (`kindAllowedByType`; все — «все типы
- *  проектов», без типов — пусто). Зеркало меты строки в колонке
- *  «Процессов» (unified-meta, I6 — параллельная реализация). */
+/** Подсказка шапки карточки типа папки (#857, п.1 правил): ГДЕ тип папки
+ *  разрешён — имена живых типов проектов (`kindAllowedByType`), первые два
+ *  плюс счётчик остальных; все — «во всех типах проектов», нигде — честная
+ *  строка. Мета строки в колонке «Процессов» — счётчик (unified-meta, I6). */
 export function kindUsageText(kind: NodeKind, projectTypes: readonly ProjectType[]): string {
   const alive = projectTypes.filter((project) => project.archivedAt === null);
   if (alive.length === 0) return '';
-  const count = alive.filter((project) => kindAllowedByType(project.kindIds, kind.id)).length;
-  if (count === alive.length) return ui.nodeKinds.screen.usageAllProjects;
-  return `${ui.nodeKinds.screen.usageLabel} ${count} ${plural(count, ui.nodeKinds.screen.usageForms)}`;
+  const allowed = alive.filter((project) => kindAllowedByType(project.kindIds, kind.id));
+  if (allowed.length === 0) return ui.automation.entry.usageNowhere;
+  if (allowed.length === alive.length) return ui.automation.entry.usageEverywhere;
+  const rest = allowed.length - 2;
+  const names = allowed
+    .slice(0, 2)
+    .map((project) => project.name)
+    .join(', ');
+  return ui.automation.entry.usageIn.replace('{names}', rest > 0 ? `${names} +${rest}` : names);
 }

@@ -25,7 +25,7 @@ vi.mock('../node-kinds/api/node-kinds-api.js', () => ({
   useCreateNodeKind: vi.fn(() => ({ mutate: vi.fn() })),
 }));
 
-import { ProjectTypeKindsPage } from './project-type-kinds.js';
+import { ProjectTypeKindsTab } from './project-type-kinds.js';
 
 const KIND_A = '70000000-0000-4000-8000-000000000001';
 const KIND_B = '70000000-0000-4000-8000-000000000002';
@@ -79,11 +79,10 @@ function setup(
   vi.mocked(useUpdateTypeCreation).mockReturnValue(updateScope as never);
   vi.mocked(useLiveProcessTypes).mockReturnValue({ data: tasks } as never);
   render(
-    <ProjectTypeKindsPage
+    <ProjectTypeKindsTab
       type={type(kindIds)}
       kinds={pageKinds}
       canSetup={canSetup}
-      onBack={vi.fn()}
       onOpenKind={onOpenKind}
     />,
   );
@@ -195,11 +194,10 @@ describe('страница «Какие папки здесь бывают» (#5
       capabilities: [],
     } as unknown as (typeof kinds)[number];
     render(
-      <ProjectTypeKindsPage
+      <ProjectTypeKindsTab
         type={type([KIND_A, '70000000-0000-4000-8000-000000000003'])}
         kinds={[...kinds, archivedKind]}
         canSetup
-        onBack={vi.fn()}
         onOpenKind={vi.fn()}
       />,
     );

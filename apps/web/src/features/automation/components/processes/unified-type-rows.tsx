@@ -146,6 +146,7 @@ export function KindRow({
   canSetup,
   projectTypes,
   onSelect,
+  onOpenSettings,
   onCopy,
   onArchive,
   onRestore,
@@ -155,6 +156,7 @@ export function KindRow({
   canSetup: boolean;
   projectTypes: readonly ProjectType[];
   onSelect: () => void;
+  onOpenSettings: () => void;
   onCopy: () => void;
   onArchive: () => void;
   onRestore: () => void;
@@ -170,6 +172,7 @@ export function KindRow({
         canSetup ? (
           <KindRowMenu
             archived={kind.archivedAt !== null}
+            onOpenSettings={onOpenSettings}
             onCopy={onCopy}
             onArchive={onArchive}
             onRestore={onRestore}

@@ -48,6 +48,7 @@ export function CardTabStrip({
   onTabContextMenu,
   draggingTabId,
   stripRef,
+  tall = false,
 }: {
   /** aria-label полосы. */
   label: string;
@@ -76,6 +77,10 @@ export function CardTabStrip({
   draggingTabId?: string | null;
   /** Ссылка на скролл-контейнер полосы (замеры для линии вставки). */
   stripRef?: (el: HTMLDivElement | null) => void;
+  /** Полоса на всю высоту единого бара (h-14) — «Процессы» #857: вкладки
+   *  стоят на одной линии с шапкой-поиском колонки, подчёркивание активной —
+   *  на общей нижней границе бара. */
+  tall?: boolean;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef(new Map<string, HTMLDivElement>());
@@ -173,8 +178,8 @@ export function CardTabStrip({
     : undefined;
 
   return (
-    <div className="flex h-10 shrink-0 items-center">
-      <div className="relative h-10 min-w-0 flex-1">
+    <div className={cn('flex shrink-0 items-center', tall ? 'h-full' : 'h-10')}>
+      <div className={cn('relative min-w-0 flex-1', tall ? 'h-full' : 'h-10')}>
         <div
           ref={(el) => {
             listRef.current = el;
@@ -187,7 +192,10 @@ export function CardTabStrip({
           data-card-tab-strip
           data-group-id={groupId}
           style={maskImage ? { maskImage, WebkitMaskImage: maskImage } : undefined}
-          className="content-fade flex h-10 min-w-0 items-center gap-1 overflow-x-auto overflow-y-hidden px-3"
+          className={cn(
+            'content-fade flex min-w-0 items-center overflow-x-auto overflow-y-hidden px-3',
+            tall ? 'h-full gap-0.5' : 'h-10 gap-1',
+          )}
         >
           {tabs.map((tab) => {
             const isActive = tab.id === active;
@@ -200,7 +208,8 @@ export function CardTabStrip({
                 }}
                 data-card-tab-id={tab.id}
                 className={cn(
-                  'flex h-10 shrink-0 items-center border-b-2 transition-colors',
+                  'flex shrink-0 items-center border-b-2 transition-colors',
+                  tall ? 'h-full' : 'h-10',
                   isActive
                     ? 'border-port text-foreground'
                     : 'border-transparent text-muted-foreground hover:text-foreground/80',
@@ -224,7 +233,7 @@ export function CardTabStrip({
                     // Фокус — ИНСЕТНЫЙ outline: полоса вкладок скроллится по X
                     // (overflow-y-hidden), наружный outline обрезался бы снизу.
                     'flex h-full max-w-48 min-w-0 items-center gap-1.5 text-body-xs font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring/70',
-                    tab.closable ? 'pr-1 pl-2' : 'px-2.5',
+                    tab.closable ? 'pr-1 pl-2' : tall ? 'px-2' : 'px-2.5',
                   )}
                 >
                   <span aria-hidden className="shrink-0 opacity-80">
@@ -261,7 +270,11 @@ export function CardTabStrip({
               </div>
             );
           })}
-          {trailing ? <div className="ml-1 flex h-10 shrink-0 items-center">{trailing}</div> : null}
+          {trailing ? (
+            <div className={cn('ml-1 flex shrink-0 items-center', tall ? 'h-full' : 'h-10')}>
+              {trailing}
+            </div>
+          ) : null}
         </div>
         {scroll.overflow ? (
           <div className="pointer-events-none absolute inset-x-3 bottom-0 h-0.5">
@@ -273,7 +286,7 @@ export function CardTabStrip({
         ) : null}
       </div>
       {hint || actions ? (
-        <div className="flex h-10 shrink-0 items-center gap-1.5 pr-2">
+        <div className={cn('flex shrink-0 items-center gap-1.5 pr-2', tall ? 'h-full' : 'h-10')}>
           {hint}
           {actions}
         </div>

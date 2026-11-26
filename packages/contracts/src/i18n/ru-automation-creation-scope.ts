@@ -15,6 +15,8 @@ export const creationScopeStrings = {
   projectTypeRow: 'Проекты',
   projectTypesEmpty: 'Типов проектов нет',
   allowAll: 'Разрешить во всех типах проектов',
+  bulkAllow: 'Разрешить в выбранных',
+  bulkDeny: 'Запретить в выбранных',
   /** Связь пишется в настройку типа процесса: право `workflow.manage`. */
   noWorkflowPermission: 'Менять связь может настройщик процессов',
   /** Снятие работы, привязанной к включённому типу папки (#665). */

@@ -109,9 +109,9 @@ export const structureStrings = {
   propertiesTitle: 'Свойства папки',
   propertiesEmpty: 'Папка не выбрана',
   propertiesAttributes: 'Атрибуты',
-  propertiesAttributesEmpty: 'У этого вида нет атрибутов',
-  /** Шаг смены вида: каких обязательных полей нового вида не хватает. */
-  kindChangeFill: 'Для вида «{name}» заполните:',
+  propertiesAttributesEmpty: 'У этого типа папки нет атрибутов',
+  /** Шаг смены типа папки: каких обязательных полей нового типа не хватает. */
+  kindChangeFill: 'Для типа папки «{name}» заполните:',
   kindChangeApply: 'Применить',
   kindChangeCancel: 'Отмена',
   /** Обязательный атрибут, очищенный в панели: подсветка пустого. */

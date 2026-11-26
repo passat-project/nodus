@@ -19,6 +19,11 @@ import { UnifiedGroupEmpty, UnifiedGroupHeader } from './unified-type-row.js';
  * Проектные группы скрыты без права `project.setup.manage`; строки —
  * `unified-type-rows.tsx`.
  */
+/** Поиск по названию одного типа: пустой запрос пропускает всё. */
+function nameMatches(name: string, query: string): boolean {
+  return query === '' || name.toLowerCase().includes(query);
+}
+
 export interface UnifiedTypeListProps {
   processTypes: ProcessType[];
   projectTypes: ProjectType[];
@@ -37,6 +42,7 @@ export interface UnifiedTypeListProps {
   onOpenProjectSettings: (id: string) => void;
   onSelectNoProject: () => void;
   onSelectKind: (id: string) => void;
+  onOpenKindSettings: (id: string) => void;
   onArchiveProject: (id: string, archived: boolean) => void;
   onArchiveNodeKind: (id: string, archived: boolean) => void;
   /** Окно создания типа проекта — слот фичи projects (I6). */
@@ -69,56 +75,44 @@ export function UnifiedTypeList(props: UnifiedTypeListProps) {
   const toggle = (id: string) => setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const aliveProjects = useMemo(
-    () =>
-      projectTypes.filter(
-        (type) => type.archivedAt === null && (!q || type.name.toLowerCase().includes(q)),
-      ),
+    () => projectTypes.filter((type) => type.archivedAt === null && nameMatches(type.name, q)),
     [projectTypes, q],
   );
   const archivedProjects = useMemo(
-    () =>
-      projectTypes.filter(
-        (type) => type.archivedAt !== null && (!q || type.name.toLowerCase().includes(q)),
-      ),
+    () => projectTypes.filter((type) => type.archivedAt !== null && nameMatches(type.name, q)),
     [projectTypes, q],
   );
   const aliveTasks = useMemo(
     () =>
-      processTypes.filter(
-        (t) => t.category === 'task' && !t.archivedAt && (!q || t.name.toLowerCase().includes(q)),
-      ),
+      processTypes.filter((t) => t.category === 'task' && !t.archivedAt && nameMatches(t.name, q)),
     [processTypes, q],
   );
   const aliveLetters = useMemo(
     () =>
       processTypes.filter(
-        (t) => t.category === 'letter' && !t.archivedAt && (!q || t.name.toLowerCase().includes(q)),
+        (t) => t.category === 'letter' && !t.archivedAt && nameMatches(t.name, q),
       ),
     [processTypes, q],
   );
   const archivedProcess = useMemo(
-    () =>
-      processTypes.filter((t) => t.archivedAt !== null && (!q || t.name.toLowerCase().includes(q))),
+    () => processTypes.filter((t) => t.archivedAt !== null && nameMatches(t.name, q)),
     [processTypes, q],
   );
   const aliveKinds = useMemo(
-    () =>
-      kinds.filter(
-        (kind) => kind.archivedAt === null && (!q || kind.name.toLowerCase().includes(q)),
-      ),
+    () => kinds.filter((kind) => kind.archivedAt === null && nameMatches(kind.name, q)),
     [kinds, q],
   );
   const archivedKinds = useMemo(
-    () =>
-      kinds.filter(
-        (kind) => kind.archivedAt !== null && (!q || kind.name.toLowerCase().includes(q)),
-      ),
+    () => kinds.filter((kind) => kind.archivedAt !== null && nameMatches(kind.name, q)),
     [kinds, q],
   );
   const metaProjects = useMemo(
     () => projectTypes.filter((type) => type.archivedAt === null),
     [projectTypes],
   );
+  // «Без проекта» — строка группы «Проекты», а не тип: под поиском она
+  // остаётся, только если найдена, и в счётчик группы не входит.
+  const noProjectMatch = nameMatches(ui.automation.entry.noProjectRow, q);
 
   const processRow = (type: ProcessType): ReactNode => (
     <ProcessTypeRow
@@ -159,6 +153,7 @@ export function UnifiedTypeList(props: UnifiedTypeListProps) {
       canSetup={canSetup}
       projectTypes={projectTypes}
       onSelect={() => props.onSelectKind(kind.id)}
+      onOpenSettings={() => props.onOpenKindSettings(kind.id)}
       onCopy={() => setKindCreate({ baseId: kind.id })}
       onArchive={() => props.onArchiveNodeKind(kind.id, true)}
       onRestore={() => props.onArchiveNodeKind(kind.id, false)}
@@ -168,6 +163,7 @@ export function UnifiedTypeList(props: UnifiedTypeListProps) {
   const groups: {
     id: string;
     label: string;
+    count: number;
     rows: ReactNode[];
     onCreate?: () => void;
     createLabel?: string;
@@ -177,13 +173,18 @@ export function UnifiedTypeList(props: UnifiedTypeListProps) {
           {
             id: 'project',
             label: ui.automation.entry.groups.project,
+            count: aliveProjects.length,
             rows: [
               ...aliveProjects.map(projectRow),
-              <NoProjectRow
-                key="__no_project__"
-                selected={props.noProjectSelected}
-                onSelect={props.onSelectNoProject}
-              />,
+              ...(noProjectMatch
+                ? [
+                    <NoProjectRow
+                      key="__no_project__"
+                      selected={props.noProjectSelected}
+                      onSelect={props.onSelectNoProject}
+                    />,
+                  ]
+                : []),
             ],
             onCreate: () => setProjectCreate({}),
             createLabel: ui.projects.typesCreate,
@@ -193,17 +194,24 @@ export function UnifiedTypeList(props: UnifiedTypeListProps) {
     {
       id: 'task',
       label: ui.automation.entry.groups.task,
+      count: aliveTasks.length,
       rows: aliveTasks.map(processRow),
       ...(canManage
         ? { onCreate: () => setTaskCreate({}), createLabel: ui.automation.newType }
         : {}),
     },
-    { id: 'letter', label: ui.automation.entry.groups.letter, rows: aliveLetters.map(processRow) },
+    {
+      id: 'letter',
+      label: ui.automation.entry.groups.letter,
+      count: aliveLetters.length,
+      rows: aliveLetters.map(processRow),
+    },
     ...(canSetup
       ? [
           {
             id: 'folder',
             label: ui.automation.entry.groups.folder,
+            count: aliveKinds.length,
             rows: aliveKinds.map(kindRow),
             onCreate: () => setKindCreate({}),
             createLabel: ui.projects.schemasCreateKind,
@@ -211,6 +219,7 @@ export function UnifiedTypeList(props: UnifiedTypeListProps) {
         ]
       : []),
   ];
+  const nothingFound = q !== '' && groups.every((group) => group.rows.length === 0);
 
   const archivedRows = [
     ...(canSetup ? archivedProjects.map(projectRow) : []),
@@ -255,17 +264,26 @@ export function UnifiedTypeList(props: UnifiedTypeListProps) {
               <div key={group.id} className="flex flex-col gap-0.5">
                 <UnifiedGroupHeader
                   label={group.label}
-                  count={group.rows.length}
+                  count={group.count}
                   collapsed={!open}
                   onToggle={() => toggle(group.id)}
-                  onCreate={group.onCreate}
-                  createLabel={group.createLabel}
                 />
-                {open ? group.rows.length > 0 ? group.rows : <UnifiedGroupEmpty /> : null}
+                {open ? (
+                  group.rows.length > 0 ? (
+                    group.rows
+                  ) : (
+                    <UnifiedGroupEmpty onCreate={group.onCreate} createLabel={group.createLabel} />
+                  )
+                ) : null}
               </div>
             );
           })
         )}
+        {!props.isLoading && nothingFound ? (
+          <div className="px-2.5 py-2 text-sm text-muted-foreground">
+            {ui.automation.entry.searchEmpty}
+          </div>
+        ) : null}
         {archivedRows.length > 0 ? (
           <div className="mt-1">
             <button
