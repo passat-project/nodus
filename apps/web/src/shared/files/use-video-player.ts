@@ -13,12 +13,9 @@ import { useCallback, useEffect, useState, type RefObject } from 'react';
  */
 export function useVideoPlayer({
   playerRef,
-  containerRef,
   src,
 }: {
   playerRef: RefObject<HTMLVideoElement | null>;
-  /** Слой кинозала: его разворачиваем на весь экран (кадр остаётся с полосой). */
-  containerRef: RefObject<HTMLElement | null>;
   src: string;
 }) {
   const [playing, setPlaying] = useState(false);
@@ -27,7 +24,7 @@ export function useVideoPlayer({
   const [duration, setDuration] = useState(0);
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(1);
-  const [fullscreen, setFullscreen] = useState(false);
+  const [rate, setRate] = useState(1);
 
   useEffect(() => {
     const el = playerRef.current;
@@ -48,10 +45,12 @@ export function useVideoPlayer({
       setMuted(el.muted || el.volume === 0);
       setVolume(el.volume);
     };
+    const onRate = () => setRate(el.playbackRate);
 
     // Первичный снимок: метаданные могли прийти до подписки (кэш браузера).
     onDuration();
     onVolume();
+    onRate();
     setPlaying(!el.paused && !el.ended);
 
     el.addEventListener('timeupdate', onTime);
@@ -64,6 +63,7 @@ export function useVideoPlayer({
     el.addEventListener('pause', onPause);
     el.addEventListener('ended', onEnded);
     el.addEventListener('volumechange', onVolume);
+    el.addEventListener('ratechange', onRate);
     return () => {
       el.removeEventListener('timeupdate', onTime);
       el.removeEventListener('seeking', onTime);
@@ -75,15 +75,9 @@ export function useVideoPlayer({
       el.removeEventListener('pause', onPause);
       el.removeEventListener('ended', onEnded);
       el.removeEventListener('volumechange', onVolume);
+      el.removeEventListener('ratechange', onRate);
     };
   }, [playerRef, src]);
-
-  useEffect(() => {
-    const onChange = () => setFullscreen(document.fullscreenElement === containerRef.current);
-    document.addEventListener('fullscreenchange', onChange);
-    onChange();
-    return () => document.removeEventListener('fullscreenchange', onChange);
-  }, [containerRef]);
 
   const togglePlay = useCallback(() => {
     const el = playerRef.current;
@@ -127,15 +121,35 @@ export function useVideoPlayer({
     [playerRef],
   );
 
-  const toggleFullscreen = useCallback(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    if (document.fullscreenElement) {
-      void document.exitFullscreen().catch(() => undefined);
-      return;
-    }
-    void container.requestFullscreen().catch(() => undefined);
-  }, [containerRef]);
+  /** ↑/↓ в зале: шаг громкости; из мьюта первый ↑ возвращает звук. */
+  const nudgeVolume = useCallback(
+    (delta: number) => {
+      const el = playerRef.current;
+      if (!el) return;
+      if (el.muted) {
+        if (delta <= 0) return;
+        el.muted = false;
+        if (el.volume === 0) el.volume = 0.05;
+        return;
+      }
+      const next = Math.min(1, Math.max(0, el.volume + delta));
+      el.volume = next;
+      if (next === 0) el.muted = true;
+    },
+    [playerRef],
+  );
+
+  /** Скорость — от 0.5× до 2×, как в меню плеера Telegram. */
+  const changeRate = useCallback(
+    (value: number) => {
+      const el = playerRef.current;
+      if (!el) return;
+      const next = Math.min(2, Math.max(0.5, value));
+      el.playbackRate = next;
+      setRate(next);
+    },
+    [playerRef],
+  );
 
   return {
     playing,
@@ -144,12 +158,13 @@ export function useVideoPlayer({
     duration,
     muted,
     volume,
-    fullscreen,
     togglePlay,
     seekTo,
     toggleMute,
     changeVolume,
-    toggleFullscreen,
+    nudgeVolume,
+    rate,
+    changeRate,
   };
 }
 

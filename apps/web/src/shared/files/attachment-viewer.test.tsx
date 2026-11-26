@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ui } from '@nodus/contracts';
@@ -52,7 +52,7 @@ describe('AttachmentViewer — выбор оболочки по типу фай�
     renderViewer();
 
     const dialog = screen.getByRole('dialog');
-    expect(dialog.className).toContain('bg-black');
+    expect(dialog.className).toContain('bg-neutral-900/80');
     expect(dialog.querySelector('video')).not.toBeNull();
     // Шапка карточки файла (h-14) — хром документов, у кинозала её нет.
     expect(dialog.querySelector('header.h-14')).toBeNull();
@@ -66,9 +66,21 @@ describe('AttachmentViewer — выбор оболочки по типу фай�
     renderViewer();
 
     const dialog = screen.getByRole('dialog');
-    expect(dialog.className).not.toContain('bg-black');
+    expect(dialog.className).not.toContain('bg-neutral-900');
     expect(dialog.querySelector('header.h-14')).not.toBeNull();
     expect(dialog.querySelector('img')).not.toBeNull();
+  });
+
+  it('Esc в открытом меню скорости закрывает только меню, кинозал остаётся', async () => {
+    useViewerStore.setState({ target: target({ name: 'ролик.mp4' }) });
+    renderViewer();
+
+    fireEvent.click(screen.getByRole('button', { name: ui.files.playbackSpeed }));
+    expect(await screen.findByRole('button', { name: /1\.5x/ })).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('button', { name: /1\.5x/ })).toBeNull());
+    expect(screen.getByRole('dialog', { name: 'ролик.mp4' })).toBeTruthy();
   });
 
   it('после закрытия возвращает фокус триггеру (#1005)', () => {
