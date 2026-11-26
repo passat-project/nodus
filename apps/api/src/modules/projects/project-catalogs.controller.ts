@@ -108,9 +108,12 @@ export class ProjectCatalogsController {
   @Post('projects/types')
   @RequirePermissions(Permission.PROJECT_SETUP_MANAGE)
   @Audit({ action: 'project.type_create', entity: 'project_type' })
-  @ApiOperation({ summary: 'Новый тип проекта (название, значок, цвет)' })
+  @ApiOperation({
+    summary:
+      'Новый тип проекта: base.kind=simple — с нуля (название, значок, цвет), copy — копия живого типа (форма и допустимые виды папок наследуются, #857)',
+  })
   @ApiCreatedResponse({ standardSchema: projectTypeSchema })
-  @ApiErrors(400, 401, 403, 409)
+  @ApiErrors(400, 401, 403, 404, 409)
   @ApiIdempotencyKey()
   typeCreate(
     @Body({

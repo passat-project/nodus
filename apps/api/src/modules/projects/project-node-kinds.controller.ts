@@ -59,9 +59,12 @@ export class ProjectNodeKindsController {
   @Post('projects/node-kinds')
   @RequirePermissions(Permission.PROJECT_SETUP_MANAGE)
   @Audit({ action: 'project.node_kind_create', entity: 'node_kind' })
-  @ApiOperation({ summary: 'Новый вид папки (ярлык: значок + цвет)' })
+  @ApiOperation({
+    summary:
+      'Новый вид папки: base.kind=simple — ярлык с нуля (значок + цвет), copy — копия живого вида (форма и возможности наследуются, #857)',
+  })
   @ApiCreatedResponse({ standardSchema: nodeKindSchema })
-  @ApiErrors(400, 401, 403, 409)
+  @ApiErrors(400, 401, 403, 404, 409)
   @ApiIdempotencyKey()
   nodeKindCreate(
     @Body({

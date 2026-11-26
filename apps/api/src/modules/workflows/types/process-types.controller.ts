@@ -64,9 +64,12 @@ export class ProcessTypesController {
   @Post('types')
   @RequirePermissions(Permission.WORKFLOW_MANAGE)
   @Audit({ action: 'workflow.type_create', entity: 'process_type' })
-  @ApiOperation({ summary: 'Новый тип + маршрут из основы (копия/простой); тип скрыт' })
+  @ApiOperation({
+    summary:
+      'Новый тип + маршрут из основы (копия живого типа той же категории/простой); тип скрыт',
+  })
   @ApiCreatedResponse({ standardSchema: processTypeSchema })
-  @ApiErrors(400, 401, 403, 409)
+  @ApiErrors(400, 401, 403, 404, 409)
   @ApiIdempotencyKey()
   create(
     @GetUser() user: AuthUser,
