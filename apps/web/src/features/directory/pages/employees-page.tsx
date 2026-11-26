@@ -23,6 +23,7 @@ import { DepartmentPanel } from '../components/department-panel.js';
 import type { StructureFocus } from '../components/divisions-view.js';
 import { EmployeesPageHeader } from '../components/employees-page-header.js';
 import { EmployeesStructureCanvas } from '../components/employees-structure-canvas.js';
+import { PANEL_RESERVE, PANEL_TOGGLE_BELOW } from '../lib/structure-header-geometry.js';
 import { InviteDialog } from '../components/invite-dialog.js';
 import { PositionsPanel } from '../components/positions-panel.js';
 import { buildDepartmentCardStats } from '../lib/department-card-stats.js';
@@ -115,6 +116,10 @@ export function EmployeesPage() {
   const selectedNode = selectedDeptId ? findDepartment(roots, selectedDeptId) : null;
   const positionsOpen = tab === 'structure' && rightPanel === 'positions';
   const deptOpen = tab === 'structure' && !positionsOpen && selectedNode !== null;
+  // Тесная шапка: «Список должностей» из неё уезжает под панель — тот же
+  // переключатель дублируется в шапке самой панели (она видна всегда).
+  const headerAvailable = rowWidth > 0 ? rowWidth - PANEL_RESERVE : 0;
+  const showPanelPositionsToggle = rowWidth > 0 && headerAvailable < PANEL_TOGGLE_BELOW;
   // Бейдж «Ваше подразделение»: свой активный отдел, иначе главная карточка —
   // сотрудник без подразделения (или с архивным) показан там, и бейдж видят все
   // (вердикт 17.11.2026). Нет дерева/меня — бейджа нет.
@@ -154,6 +159,11 @@ export function EmployeesPage() {
   function centerOn(id: string | null) {
     focusToken.current += 1;
     setFocus({ id, token: focusToken.current });
+  }
+
+  /** «Должности»: подменить содержимое постоянной панели и вернуть обратно. */
+  function togglePositions() {
+    setRightPanel((prev) => (prev === 'positions' ? 'dept' : 'positions'));
   }
 
   /** Клик по карточке только выбирает отдел: панель постоянна и не
@@ -201,9 +211,7 @@ export function EmployeesPage() {
           setInviteDepartmentId(null);
           setInviteOpen(true);
         }}
-        onTogglePositions={() =>
-          setRightPanel((prev) => (prev === 'positions' ? 'dept' : 'positions'))
-        }
+        onTogglePositions={togglePositions}
         onPickDepartment={pickDepartment}
         onPickEmployee={pickEmployee}
       />
@@ -265,6 +273,8 @@ export function EmployeesPage() {
           onEdit={(node) => setDeptDialog({ open: true, parentId: null, editing: node })}
           onTransfer={setTransferNode}
           onDelete={setDeleteNode}
+          showPositionsToggle={showPanelPositionsToggle}
+          onTogglePositions={togglePositions}
           canManage={canManage}
         />
       ) : null}

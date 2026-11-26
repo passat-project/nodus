@@ -90,8 +90,32 @@ describe('MoveEmployeeDialog (#881)', () => {
 
     fireEvent.click(row);
     expect(row.getAttribute('aria-pressed')).toBe('true');
+    // Внизу — ОТКУДА человек уходит (грамматика окна правки подразделения):
+    // выбранный не теряется, даже если поиск скрыл его строку.
+    const source = screen.getByRole('status');
+    expect(source.textContent).toContain('from-other');
+    expect(source.textContent).toContain(ui.employees.leaderTransferFromOne);
+    expect(source.textContent).toContain('Проектный отдел');
     fireEvent.click(screen.getByRole('button', { name: ui.employees.transferEmployeeSubmit }));
     expect(onMoved).toHaveBeenCalledWith('from-other');
+  });
+
+  it('сотрудник без подразделения: строка-источник — «без подразделения»', () => {
+    render(
+      <MoveEmployeeDialog
+        open
+        onOpenChange={vi.fn()}
+        department={node}
+        users={[person('orphan')]}
+        departmentOptions={options}
+        onMoved={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /orphan/ }));
+    expect(screen.getByRole('status').textContent).toContain(
+      ui.employees.transferEmployeeNoDepartmentInline,
+    );
   });
 
   it('поиск фильтрует список и показывает заглушку пустого результата', () => {

@@ -22,21 +22,18 @@ export const employeesStrings = {
   createDepartment: 'Создать подразделение',
   editDepartmentTitle: 'Редактирование подразделения',
   editDepartmentAction: 'Редактировать подразделение',
-  editDepartmentHint: 'Название, руководитель и заместители',
   addSubdepartment: 'Добавить подразделение',
   inviteToDepartment: 'Пригласить в Nodus',
-  inviteToDepartmentHint: 'Новичок сразу попадёт в это подразделение',
   /** #881: перевод сотрудника в текущее подразделение из меню «⋯». */
   transferFromDepartment: 'Перевести из другого подразделения',
-  transferFromDepartmentHint: 'Сотрудник переедет в это подразделение',
   transferEmployeeTitle: 'Перевести сотрудника',
   /** #881: строка «куда» в окне перевода — название целевого подразделения. */
   transferEmployeeDestination: 'Перевести в',
-  /** #881: выбранный сотрудник в футере окна перевода (виден и при поиске). */
-  transferEmployeeSelected: 'Выбран',
   transferEmployeeSearch: 'Поиск по имени или должности',
   transferEmployeeNotFound: 'Сотрудник не найден — проверьте имя или должность',
   transferEmployeeNoDepartment: 'Без подразделения',
+  /** Строка-источник в футере окна перевода: сотрудник нигде не состоит. */
+  transferEmployeeNoDepartmentInline: 'без подразделения',
   transferEmployeeLeaderHint:
     'Сотрудник руководит другим подразделением — там роль снимется, подразделение останется без руководителя.',
   transferEmployeeSubmit: 'Перевести',
@@ -226,7 +223,6 @@ export const employeesStrings = {
   positionReassignNoTarget: 'Другой должности нет — сначала создайте новую',
   /** #881: жёсткое удаление подразделения с переносом детей и сотрудников. */
   deleteDepartment: 'Удалить подразделение',
-  deleteDepartmentHint: 'Дети и сотрудники перейдут выше',
   deleteDepartmentTitle: 'Удалить подразделение?',
   deleteDepartmentLead: 'Подразделение будет удалено без возможности восстановления.',
   deleteDepartmentMovesOne: 'перейдёт в',

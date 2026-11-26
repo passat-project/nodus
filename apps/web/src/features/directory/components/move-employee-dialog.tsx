@@ -1,4 +1,4 @@
-import { Check, Search, TriangleAlert } from 'lucide-react';
+import { ArrowRightLeft, Check, Search, TriangleAlert } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DepartmentNode, UserListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -21,6 +21,9 @@ import { useTransferEmployee } from '../api/department-actions-api.js';
  * поиск, смена фильтра и пустой результат не меняют габарит окна (канон
  * пикеров 24.09.2026). В строке — аватар, имя, должность и ТЕКУЩЕЕ
  * подразделение: куда человек переезжает, видно до выбора, без второго шага.
+ * После выбора внизу — строка-источник в грамматике окна правки подразделения
+ * («будет переведён из подразделения «…»»): видно, ОТКУДА человек уходит, и
+ * выбранный не теряется, даже если поиск скрыл его строку.
  */
 export function MoveEmployeeDialog({
   open,
@@ -70,11 +73,23 @@ export function MoveEmployeeDialog({
       users
         .filter((user) => user.status === 'active' && user.departmentId !== department.id)
         .map((user) => {
-          const current = user.departmentId
-            ? (departmentNameById.get(user.departmentId) ?? user.departmentName ?? '')
-            : ui.employees.transferEmployeeNoDepartment;
-          const secondary = [user.positionName, current].filter(Boolean).join(' · ');
-          return { user, secondary, haystack: `${user.displayName} ${secondary}`.toLowerCase() };
+          // Источник — название текущего подразделения (null — нигде не состоит):
+          // одна и та же величина в строке списка и в строке-источнике внизу.
+          const sourceName = user.departmentId
+            ? (departmentNameById.get(user.departmentId) ?? user.departmentName ?? null)
+            : null;
+          const secondary = [
+            user.positionName,
+            sourceName ?? ui.employees.transferEmployeeNoDepartment,
+          ]
+            .filter(Boolean)
+            .join(' · ');
+          return {
+            user,
+            sourceName,
+            secondary,
+            haystack: `${user.displayName} ${secondary}`.toLowerCase(),
+          };
         }),
     [users, department.id, departmentNameById],
   );
@@ -82,8 +97,9 @@ export function MoveEmployeeDialog({
   const visible = needle
     ? candidates.filter((candidate) => candidate.haystack.includes(needle))
     : candidates;
-  const selectedName = candidates.find((candidate) => candidate.user.id === userId)?.user
-    .displayName;
+  const selected = userId
+    ? candidates.find((candidate) => candidate.user.id === userId)
+    : undefined;
   const leaderElsewhere = userId !== null && leaderIds.has(userId);
 
   // Предупреждение о снятии роли появляется уже ПОСЛЕ выбора и сужает список —
@@ -188,6 +204,20 @@ export function MoveEmployeeDialog({
           )}
         </ul>
 
+        {/* Строка-источник: ОТКУДА человек уходит — внизу, как в окне правки
+            подразделения при выборе руководителя/зама. Живёт и при поиске,
+            скрывшем выбранную строку: активная «Перевести» не действует вслепую. */}
+        {selected ? (
+          <p role="status" className="flex items-start gap-1.5 text-xs text-muted-foreground">
+            <ArrowRightLeft className="mt-px size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+            <span className="min-w-0">
+              {selected.user.displayName} —{' '}
+              {selected.sourceName
+                ? `${ui.employees.leaderTransferFromOne} «${selected.sourceName}»`
+                : ui.employees.transferEmployeeNoDepartmentInline}
+            </span>
+          </p>
+        ) : null}
         {leaderElsewhere ? (
           <p className="flex items-start gap-1.5 text-xs text-warning">
             <TriangleAlert className="mt-px size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
@@ -195,11 +225,6 @@ export function MoveEmployeeDialog({
           </p>
         ) : null}
         <DialogFooter className="items-center">
-          {/* Выбранный виден и при поиске, скрывшем его строку: иначе активная
-              «Перевести» действовала бы «вслепую» (кого — не видно в списке). */}
-          <span className="mr-auto min-w-0 truncate text-xs text-muted-foreground">
-            {selectedName ? `${ui.employees.transferEmployeeSelected}: ${selectedName}` : ''}
-          </span>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {ui.common.cancel}
           </Button>

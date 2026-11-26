@@ -1,4 +1,4 @@
-import { Building2, MoreHorizontal, Search } from 'lucide-react';
+import { Building2, IdCard, MoreHorizontal, Search } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { DepartmentNode, UserListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -25,7 +25,9 @@ import { StructureSidePanel } from './structure-side-panel.js';
  * (она осталась в карточке сотрудника). Руководитель/зам не дублируются в
  * «Подчинённых»; уволенные в структуре не показываются. Действия — только
  * администратору: общее меню `DepartmentActionsMenu` (#881), главная карточка
- * компании не удаляется.
+ * компании не удаляется. На тесной ширине «Список должностей» дублируется в
+ * шапке панели (страница передаёт `showPositionsToggle` и обработчик): панель
+ * видна всегда, поэтому управление не может «пропасть» под ней.
  */
 export function DepartmentPanel({
   mainCard,
@@ -38,6 +40,8 @@ export function DepartmentPanel({
   onEdit,
   onTransfer,
   onDelete,
+  showPositionsToggle = false,
+  onTogglePositions,
   canManage,
 }: {
   /** Первый корень дерева — главная карточка компании. */
@@ -54,6 +58,9 @@ export function DepartmentPanel({
   onTransfer: (node: DepartmentNode) => void;
   /** Удаление подразделения с переносом (#881). */
   onDelete: (node: DepartmentNode) => void;
+  /** Тесная шапка: «Список должностей» переезжает в шапку панели (#881). */
+  showPositionsToggle?: boolean;
+  onTogglePositions?: () => void;
   /** Право `directory.manage`: админ-действия панели (без права — просмотр). */
   canManage: boolean;
 }) {
@@ -141,28 +148,44 @@ export function DepartmentPanel({
             ) : undefined
           }
           actions={
-            canManage ? (
-              <DepartmentActionsMenu
-                node={node}
-                mainCard={mainCard}
-                canDelete={node.parentId !== null}
-                side="bottom"
-                align="end"
-                onEdit={onEdit}
-                onInvite={(target) => onInvite(target.id)}
-                onTransfer={onTransfer}
-                onDelete={onDelete}
-                trigger={
+            canManage || (showPositionsToggle && onTogglePositions) ? (
+              <div className="flex items-center gap-1">
+                {showPositionsToggle && onTogglePositions ? (
                   <Button
                     variant="ghost"
                     size="icon-sm"
                     className="text-muted-foreground hover:text-foreground"
-                    aria-label={ui.employees.departmentActions}
+                    aria-label={ui.employees.positionsList}
+                    title={ui.employees.positionsList}
+                    onClick={onTogglePositions}
                   >
-                    <MoreHorizontal className="size-4" />
+                    <IdCard className="size-4" strokeWidth={1.5} />
                   </Button>
-                }
-              />
+                ) : null}
+                {canManage ? (
+                  <DepartmentActionsMenu
+                    node={node}
+                    mainCard={mainCard}
+                    canDelete={node.parentId !== null}
+                    side="bottom"
+                    align="end"
+                    onEdit={onEdit}
+                    onInvite={(target) => onInvite(target.id)}
+                    onTransfer={onTransfer}
+                    onDelete={onDelete}
+                    trigger={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="text-muted-foreground hover:text-foreground"
+                        aria-label={ui.employees.departmentActions}
+                      >
+                        <MoreHorizontal className="size-4" />
+                      </Button>
+                    }
+                  />
+                ) : null}
+              </div>
             ) : undefined
           }
         />
