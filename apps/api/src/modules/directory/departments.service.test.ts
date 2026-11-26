@@ -307,5 +307,4 @@ describe('DepartmentsService', () => {
       expect(departments.update).not.toHaveBeenCalled();
     });
   });
-
 });

@@ -106,5 +106,4 @@ describe('DepartmentsService: отзыв доступа при изменени�
       expect.objectContaining({ actorId: 'admin-1', aggregateType: 'role' }),
     );
   });
-
 });

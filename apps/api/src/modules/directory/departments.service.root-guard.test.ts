@@ -205,5 +205,4 @@ describe('DepartmentsService: корень управленческой стру
       ),
     ).resolves.toMatchObject({ id: 'root' });
   });
-
 });
