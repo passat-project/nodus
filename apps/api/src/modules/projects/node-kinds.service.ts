@@ -48,10 +48,43 @@ export class NodeKindsService {
 
   async create(dto: NodeKindCreateBody, actorId: string): Promise<NodeKind> {
     return this.txRunner.run(async (tx) => {
+      // Основа копии (#857): только живой вид — как у типов процессов
+      // (архивный сначала восстанавливают, 404 без спецкода).
+      const source = dto.base?.kind === 'copy' ? await this.liveBase(tx, dto.base.kindId) : null;
+      if (source) {
+        // Реестр атрибутов → формы видов (#646): копия пишет слоты основы в
+        // привязки — лок как при правке формы.
+        await this.registry.lockRegistry(tx);
+      }
       await this.kinds.lockForms(tx);
       if (await this.kinds.nameTaken(dto.name, null, tx)) throw nameTaken(dto.name);
-      const created = await this.kinds.create(tx, dto);
-      await this.emit(tx, created.id, 'created', ['name', 'icon', 'color'], actorId);
+      if (source) await this.assertForm(tx, source.form);
+      const created = await this.kinds.create(tx, {
+        name: dto.name,
+        icon: dto.icon,
+        color: dto.color,
+        // Копия работает как оригинал: форма и возможности едут вместе
+        // (#857); возможности уже нормализованы чтением DTO.
+        ...(source
+          ? {
+              config: {
+                form: structuredClone(source.form),
+                capabilities: [...source.capabilities],
+              },
+            }
+          : {}),
+      });
+      if (source) {
+        const slots = formSlots(source.form).map((slot) => slot.fieldId);
+        await this.registry.syncPlaceBindings({ kind: 'node_kind', id: created.id }, slots, [], tx);
+      }
+      await this.emit(
+        tx,
+        created.id,
+        'created',
+        source ? ['name', 'icon', 'color', 'form', 'capabilities'] : ['name', 'icon', 'color'],
+        actorId,
+      );
       return created;
     });
   }
@@ -119,6 +152,14 @@ export class NodeKindsService {
       await this.emit(tx, id, archived ? 'archived' : 'restored', ['archivedAt'], actorId);
       return updated;
     });
+  }
+
+  /** Основа копии (#857): живой вид; отсутствующий или архивный — 404
+   *  (зеркало `copyBase` типов процессов). */
+  private async liveBase(tx: TransactionClient, kindId: string): Promise<NodeKind> {
+    const base = await this.kinds.findById(kindId, tx);
+    if (!base || base.archivedAt) throw DomainException.notFound('Base node kind not found');
+    return base;
   }
 
   /** Слоты формы — существующие определения (глобального hidden нет, О2

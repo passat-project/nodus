@@ -143,11 +143,16 @@ export class NodeKindsRepository {
 
   async create(
     tx: TransactionClient,
-    data: { name: string; icon: string; color: string },
+    data: { name: string; icon: string; color: string; config?: NodeKindConfig },
   ): Promise<NodeKind> {
+    const { config, ...rest } = data;
     const row = await tx.nodeKind.create({
       select: kindSelect,
-      data: { id: randomUUID(), ...data },
+      data: {
+        id: randomUUID(),
+        ...rest,
+        ...(config ? { config: config as Prisma.InputJsonValue } : {}),
+      },
     });
     return this.toDto(row);
   }

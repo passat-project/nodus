@@ -8,6 +8,7 @@ import { TasksPortsModule } from '../tasks/tasks-ports.module.js';
 import { ProjectsPortsModule } from '../projects/projects-ports.module.js';
 import { WorkflowPublishedHandler } from './events/workflow-published.handler.js';
 import { ProcessTypeCreationCleanupHandler } from './events/process-type-creation-cleanup.handler.js';
+import { ProjectTypeCopiedScopeHandler } from './events/project-type-copied-scope.handler.js';
 import { ProcessTypesController } from './types/process-types.controller.js';
 import { ProcessTypesService } from './types/process-types.service.js';
 import { WorkflowEditorController } from './workflow/editor/workflow-editor.controller.js';
@@ -48,6 +49,8 @@ import { CustomFieldsPortsModule } from '../custom-fields/custom-fields-ports.mo
     WorkflowPublishedHandler,
     // Страховка уборки формы создания при удалении атрибута (#646).
     ProcessTypeCreationCleanupHandler,
+    // Копия типа проекта наследует исключения «где создаётся» (#857, #665).
+    ProjectTypeCopiedScopeHandler,
   ],
 })
 export class WorkflowsModule {}

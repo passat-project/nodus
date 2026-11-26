@@ -48,14 +48,14 @@ function makeService(definitions: CustomFieldDefinition[] = []) {
   const kinds = {
     list: vi.fn(async () => [KIND]),
     nameTaken: vi.fn(async () => false),
-    create: vi.fn(async () => ({
+    create: vi.fn<(tx: unknown, data: Record<string, unknown>) => Promise<NodeKind>>(async () => ({
       ...KIND,
       id: 'kind-new',
       name: 'Новый',
       icon: 'folder',
       color: 'green',
     })),
-    findById: vi.fn(async () => KIND),
+    findById: vi.fn<(id: string, tx?: unknown) => Promise<NodeKind | null>>(async () => KIND),
     update: vi.fn(async () => ({ ...KIND, name: 'Обновлённый' })),
     setArchived: vi.fn(async (_tx: unknown, _id: string, archived: boolean) => ({
       ...KIND,
@@ -99,6 +99,72 @@ describe('NodeKindsService (#556 Р7, #631)', () => {
     await expect(
       service.create({ name: 'Комплект', icon: 'folder', color: 'blue' }, 'user-1'),
     ).rejects.toMatchObject({ code: ErrorCode.PROJECT_NODE_KIND_NAME_TAKEN });
+  });
+
+  it('создание копией (#857): форма и возможности основы, слоты → привязки вида', async () => {
+    const { service, kinds, registry, eventBus } = makeService([definition({})]);
+    const base: NodeKind = {
+      ...KIND,
+      form: { fields: [{ fieldId: MARK, state: 'required' }] },
+      capabilities: ['pulse_row', 'document_changes'],
+    };
+    kinds.findById.mockResolvedValue(base);
+    await service.create(
+      { name: 'Копия', icon: 'folder', color: 'green', base: { kind: 'copy', kindId: KIND.id } },
+      'user-1',
+    );
+    // Копия работает как оригинал: конфигурация — глубокая копия основы.
+    expect(kinds.create).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({
+        name: 'Копия',
+        icon: 'folder',
+        color: 'green',
+        config: {
+          form: { fields: [{ fieldId: MARK, state: 'required' }] },
+          capabilities: ['pulse_row', 'document_changes'],
+        },
+      }),
+    );
+    const created = kinds.create.mock.calls[0]![1] as { config: { form: unknown } };
+    expect(created.config.form).not.toBe(base.form);
+    // Слот — привязка: копия пишет привязки вида под локом реестра (#646).
+    expect(registry.lockRegistry).toHaveBeenCalled();
+    expect(registry.syncPlaceBindings).toHaveBeenCalledWith(
+      { kind: 'node_kind', id: 'kind-new' },
+      [MARK],
+      [],
+      {},
+    );
+    expect(eventBus.emit).toHaveBeenCalledWith(
+      {},
+      PROJECT_EVENTS.NODE_KIND_CHANGED,
+      {
+        kindId: 'kind-new',
+        change: 'created',
+        fields: ['name', 'icon', 'color', 'form', 'capabilities'],
+      },
+      { actorId: 'user-1', aggregateType: 'node_kind', aggregateId: 'kind-new' },
+    );
+  });
+
+  it('создание копией (#857): архивная или отсутствующая основа — 404', async () => {
+    const { service, kinds } = makeService();
+    kinds.findById.mockResolvedValue({ ...KIND, archivedAt: '2026-11-20T00:00:00.000Z' });
+    await expect(
+      service.create(
+        { name: 'Копия', icon: 'folder', color: 'green', base: { kind: 'copy', kindId: KIND.id } },
+        'user-1',
+      ),
+    ).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND });
+    kinds.findById.mockResolvedValue(null);
+    await expect(
+      service.create(
+        { name: 'Копия', icon: 'folder', color: 'green', base: { kind: 'copy', kindId: KIND.id } },
+        'user-1',
+      ),
+    ).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND });
+    expect(kinds.create).not.toHaveBeenCalled();
   });
 
   it('правка формы: неизвестный атрибут — 422 unknown_field', async () => {

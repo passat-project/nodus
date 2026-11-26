@@ -12,7 +12,7 @@ import { DomainException } from '../../core/errors/domain-exception.js';
 import type { EventBus } from '../../core/events/event-bus.js';
 import type { CustomFieldRegistry } from '../custom-fields/ports/custom-field-registry.port.js';
 import type { NodeKindsRepository } from './project-node-kinds.repository.js';
-import { emitProjectTypeChanged } from './project-type-events.js';
+import { emitProjectTypeChanged, emitProjectTypeCopied } from './project-type-events.js';
 import type { ProjectTypesRepository } from './project-types.repository.js';
 
 /** Слоты формы типа — существующие атрибуты записей (Р10 #631): глобальные
@@ -57,7 +57,9 @@ export function syncProjectTypeForm(
 }
 
 /** Создание типа проекта (Р10): имя уникально, форма валидна и становится
- *  привязками, каталожное событие — в той же транзакции. */
+ *  привязками, каталожное событие — в той же транзакции. С `base.kind='copy'`
+ *  (#857) форма и допустимые виды папок — глубокая копия живой основы:
+ *  слоты — те же атрибуты, привязки копии создаёт `syncProjectTypeForm`. */
 export async function createProjectType(
   deps: { types: ProjectTypesRepository; registry: CustomFieldRegistry; eventBus: EventBus },
   tx: TransactionClient,
@@ -72,13 +74,47 @@ export async function createProjectType(
   if (await deps.types.nameTaken(dto.name, undefined, tx)) {
     throw DomainException.conflict('Project type name is already taken');
   }
-  if (dto.form !== undefined) await assertProjectTypeForm(deps.registry, tx, dto.form);
-  const created = await deps.types.create(tx, dto);
-  if (dto.form !== undefined) {
-    await syncProjectTypeForm(deps.registry, tx, created.id, dto.form);
+  // Основа — только живой тип, как у типов процессов: архивный вне
+  // употребления, его сначала восстанавливают (404, без спецкода).
+  const source =
+    dto.base?.kind === 'copy' ? await liveBaseOf(deps.types, tx, dto.base.typeId) : null;
+  const form = dto.form ?? (source ? structuredClone(source.form) : undefined);
+  if (form !== undefined) await assertProjectTypeForm(deps.registry, tx, form);
+  const input = {
+    name: dto.name,
+    ...(dto.icon !== undefined ? { icon: dto.icon } : {}),
+    ...(dto.color !== undefined ? { color: dto.color } : {}),
+    ...(form !== undefined ? { form } : {}),
+    ...(source ? { kindIds: source.kindIds === null ? null : [...source.kindIds] } : {}),
+  };
+  const created = await deps.types.create(tx, input);
+  if (form !== undefined) {
+    await syncProjectTypeForm(deps.registry, tx, created.id, form);
   }
-  await emitProjectTypeChanged(deps.eventBus, tx, created.id, 'created', Object.keys(dto), actorId);
+  await emitProjectTypeChanged(
+    deps.eventBus,
+    tx,
+    created.id,
+    'created',
+    Object.keys(input),
+    actorId,
+  );
+  if (source) {
+    await emitProjectTypeCopied(deps.eventBus, tx, created.id, source.id, actorId);
+  }
   return created;
+}
+
+/** Основа копии (#857): живой тип; отсутствующий или архивный — 404
+ *  (зеркало `copyBase` типов процессов). */
+async function liveBaseOf(
+  types: ProjectTypesRepository,
+  tx: TransactionClient,
+  typeId: string,
+): Promise<ProjectType> {
+  const base = await types.findById(typeId, tx);
+  if (!base || base.archivedAt) throw DomainException.notFound('Base project type not found');
+  return base;
 }
 
 /** Правка типа проекта: имя, форма (слоты → привязки), допустимые виды.

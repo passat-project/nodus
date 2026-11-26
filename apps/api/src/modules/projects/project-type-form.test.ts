@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ErrorCode, type CustomFieldDefinition } from '@nodus/contracts';
+import {
+  ErrorCode,
+  PROJECT_EVENTS,
+  type CustomFieldDefinition,
+  type ProjectType,
+} from '@nodus/contracts';
 
 import { createProjectType, updateProjectType } from './project-type-form.js';
 
@@ -36,36 +41,23 @@ function definition(id: string, isCompany = false): CustomFieldDefinition {
 
 function makeDeps(definitions: CustomFieldDefinition[]) {
   const order: string[] = [];
+  const row = (): ProjectType => ({
+    id: 'type-1',
+    name: 'Тендер',
+    icon: 'flag',
+    color: 'blue',
+    form: { fields: [] },
+    kindIds: null,
+    archivedAt: null,
+  });
   const types = {
     lockForms: vi.fn(async () => void order.push('lockForms')),
     nameTaken: vi.fn(async () => false),
-    create: vi.fn(async () => ({
-      id: 'type-1',
-      name: 'Тендер',
-      icon: 'folder',
-      color: 'blue',
-      form: { fields: [] },
-      kindIds: null,
-      archivedAt: null,
-    })),
-    findById: vi.fn(async () => ({
-      id: 'type-1',
-      name: 'Тендер',
-      icon: 'folder',
-      color: 'blue',
-      form: { fields: [] },
-      kindIds: null,
-      archivedAt: null,
-    })),
-    update: vi.fn(async () => ({
-      id: 'type-1',
-      name: 'Тендер',
-      icon: 'folder',
-      color: 'blue',
-      form: { fields: [] },
-      kindIds: null,
-      archivedAt: null,
-    })),
+    create: vi.fn<(tx: unknown, data: Record<string, unknown>) => Promise<ProjectType>>(async () =>
+      row(),
+    ),
+    findById: vi.fn<(id: string, tx?: unknown) => Promise<ProjectType | null>>(async () => row()),
+    update: vi.fn(async (): Promise<ProjectType | null> => row()),
   };
   const registry = {
     lockRegistry: vi.fn(async () => void order.push('lockRegistry')),
@@ -115,5 +107,100 @@ describe('форма типа проекта (#631, #646)', () => {
     const deps = makeDeps([definition(FIELD)]);
     await updateProjectType(deps as never, {} as never, 'type-1', { name: 'Новый' }, 'user-1');
     expect(deps.order).toEqual(['lockRegistry', 'lockForms']);
+  });
+});
+
+describe('создание типа проекта копией (#857)', () => {
+  const source = (overrides: Partial<ProjectType>): ProjectType => ({
+    id: 'source-1',
+    name: 'Основа',
+    icon: 'flag',
+    color: 'blue',
+    form: { fields: [{ fieldId: FIELD, state: 'required' }] },
+    kindIds: ['kind-a', 'kind-b'],
+    archivedAt: null,
+    ...overrides,
+  });
+
+  it('форма и kindIds — глубокая копия основы; привязки и оба события', async () => {
+    const deps = makeDeps([definition(FIELD)]);
+    const base = source({});
+    deps.types.findById.mockResolvedValue(base);
+    await createProjectType(
+      deps as never,
+      {} as never,
+      { name: 'Копия', base: { kind: 'copy', typeId: 'source-1' } },
+      'user-1',
+    );
+    const input = deps.types.create.mock.calls[0]![1]!;
+    expect(input).toMatchObject({
+      name: 'Копия',
+      form: { fields: [{ fieldId: FIELD, state: 'required' }] },
+      kindIds: ['kind-a', 'kind-b'],
+    });
+    // Глубокая копия: слоты основы не разделяются с новым типом.
+    expect(input.form).not.toBe(base.form);
+    expect(input.kindIds).not.toBe(base.kindIds);
+    expect(deps.registry.syncPlaceBindings).toHaveBeenCalledWith(
+      { kind: 'project_type', id: 'type-1' },
+      [FIELD],
+      [],
+      {},
+    );
+    expect(deps.eventBus.emit).toHaveBeenCalledTimes(2);
+    expect(deps.eventBus.emit).toHaveBeenNthCalledWith(
+      1,
+      {},
+      PROJECT_EVENTS.TYPE_CHANGED,
+      { typeId: 'type-1', change: 'created', fields: ['name', 'form', 'kindIds'] },
+      { actorId: 'user-1', aggregateType: 'project_type', aggregateId: 'type-1' },
+    );
+    expect(deps.eventBus.emit).toHaveBeenNthCalledWith(
+      2,
+      {},
+      PROJECT_EVENTS.TYPE_COPIED,
+      { typeId: 'type-1', sourceTypeId: 'source-1' },
+      { actorId: 'user-1', aggregateType: 'project_type', aggregateId: 'type-1' },
+    );
+  });
+
+  it('kindIds null основы — «все папки» у копии; simple не пишет kindIds вовсе', async () => {
+    const copy = makeDeps([definition(FIELD)]);
+    copy.types.findById.mockResolvedValue(source({ kindIds: null }));
+    await createProjectType(
+      copy as never,
+      {} as never,
+      { name: 'Копия', base: { kind: 'copy', typeId: 'source-1' } },
+      'user-1',
+    );
+    expect(copy.types.create.mock.calls[0]![1]).toMatchObject({ kindIds: null });
+
+    const simple = makeDeps([]);
+    await createProjectType(simple as never, {} as never, { name: 'Простой' }, 'user-1');
+    expect(simple.types.create.mock.calls[0]![1]).not.toHaveProperty('kindIds');
+    expect(simple.eventBus.emit).toHaveBeenCalledTimes(1);
+  });
+
+  it('архивная или отсутствующая основа — 404, создания нет', async () => {
+    const deps = makeDeps([]);
+    deps.types.findById.mockResolvedValue(source({ archivedAt: '2026-11-20T00:00:00.000Z' }));
+    await expect(
+      createProjectType(
+        deps as never,
+        {} as never,
+        { name: 'Копия', base: { kind: 'copy', typeId: 'source-1' } },
+        'user-1',
+      ),
+    ).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND });
+    deps.types.findById.mockResolvedValue(null);
+    await expect(
+      createProjectType(
+        deps as never,
+        {} as never,
+        { name: 'Копия', base: { kind: 'copy', typeId: 'source-1' } },
+        'user-1',
+      ),
+    ).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND });
+    expect(deps.types.create).not.toHaveBeenCalled();
   });
 });

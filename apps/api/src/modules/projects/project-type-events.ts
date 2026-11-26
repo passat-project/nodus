@@ -21,3 +21,20 @@ export function emitProjectTypeChanged(
     { actorId, aggregateType: 'project_type', aggregateId: typeId },
   );
 }
+
+/** Событие копии типа (#857): rides рядом с обычным `created` — подписчик
+ *  «Процессов» повторяет для копии исключения создания основы (#665). */
+export function emitProjectTypeCopied(
+  eventBus: EventBus,
+  tx: TransactionClient,
+  typeId: string,
+  sourceTypeId: string,
+  actorId: string | null,
+): Promise<void> {
+  return eventBus.emit(
+    tx,
+    PROJECT_EVENTS.TYPE_COPIED,
+    { typeId, sourceTypeId },
+    { actorId, aggregateType: 'project_type', aggregateId: typeId },
+  );
+}

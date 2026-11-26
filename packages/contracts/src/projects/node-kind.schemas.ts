@@ -143,11 +143,21 @@ export type NodeKind = z.infer<typeof nodeKindSchema>;
 export const nodeKindListSchema = z.array(nodeKindSchema);
 export type NodeKindList = z.infer<typeof nodeKindListSchema>;
 
+/** Основа при создании вида (#857): копия живого вида (форма и возможности
+ *  едут вместе) или «с нуля» — зеркало `projectTypeBaseSchema`. */
+export const nodeKindBaseSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('copy'), kindId: z.uuid() }),
+  z.object({ kind: z.literal('simple') }),
+]);
+export type NodeKindBase = z.infer<typeof nodeKindBaseSchema>;
+
 /** Название вида уникально без учёта регистра и пробелов (lower(btrim(name))). */
 export const nodeKindCreateBodySchema = z.object({
   name: z.string().trim().min(1).max(120),
   icon: nodeKindIconSchema,
   color: projectColorSchema,
+  /** Основа копии (#857): без `base` — то же, что `simple`. */
+  base: nodeKindBaseSchema.optional(),
 });
 export type NodeKindCreateBody = z.infer<typeof nodeKindCreateBodySchema>;
 

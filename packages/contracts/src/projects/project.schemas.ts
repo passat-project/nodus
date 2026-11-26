@@ -559,13 +559,27 @@ export const projectTypeSchema = z.object({
 
 export type ProjectType = z.infer<typeof projectTypeSchema>;
 
-export const projectTypeCreateBodySchema = z.object({
-  name: z.string().trim().min(1).max(120),
-  icon: processTypeIconSchema.optional(),
-  color: projectColorSchema.optional(),
-  /** Слоты атрибутов нового типа (Р10). */
-  form: projectTypeFormSchema.optional(),
-});
+/** Основа при создании типа (#857): копия живого типа (форма и допустимые
+ *  виды папок едут вместе — зеркало `processTypeBaseSchema`) или «с нуля». */
+export const projectTypeBaseSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('copy'), typeId: z.uuid() }),
+  z.object({ kind: z.literal('simple') }),
+]);
+export type ProjectTypeBase = z.infer<typeof projectTypeBaseSchema>;
+
+export const projectTypeCreateBodySchema = z
+  .object({
+    name: z.string().trim().min(1).max(120),
+    icon: processTypeIconSchema.optional(),
+    color: projectColorSchema.optional(),
+    /** Слоты атрибутов нового типа (Р10); при копировании — форма основы. */
+    form: projectTypeFormSchema.optional(),
+    /** Основа копии (#857): без `base` — то же, что `simple`. */
+    base: projectTypeBaseSchema.optional(),
+  })
+  .refine((v) => !(v.base?.kind === 'copy' && v.form !== undefined), {
+    message: 'form is copied from the base type',
+  });
 
 export type ProjectTypeCreateBody = z.infer<typeof projectTypeCreateBodySchema>;
 

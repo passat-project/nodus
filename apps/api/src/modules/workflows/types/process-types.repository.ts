@@ -100,6 +100,19 @@ export class ProcessTypesRepository {
     });
   }
 
+  /** Типы записей, исключившие тип проекта из мест создания (#665): копия
+   *  типа проекта наследует исключения основы (#857). Обе категории — задача
+   *  и письмо; конфиг нормализует подписчик. */
+  async listExcludingProjectType(
+    projectTypeId: string,
+  ): Promise<{ id: string; config: unknown }[]> {
+    return this.prisma.$queryRaw<{ id: string; config: unknown }[]>(Prisma.sql`
+      SELECT id, config FROM process_types
+      WHERE config->'creation'->'excludedProjectTypeIds'
+        @> jsonb_build_array(${projectTypeId}::text)
+    `);
+  }
+
   async maxSortOrder(): Promise<number> {
     const last = await this.prisma.processType.findFirst({
       orderBy: { sortOrder: 'desc' },

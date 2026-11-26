@@ -41,6 +41,10 @@ export const PROJECT_EVENTS = {
   /** Каталог типов проектов (#631, Р10): форма типа (слоты атрибутов),
    *  название, значок, цвет, архив. Каталожное — рассылается всем. */
   TYPE_CHANGED: 'project.type_changed',
+  /** Тип проекта создан копией другого типа (#857): форма и допустимые виды
+   *  папок унаследованы; «Процессы» повторяют для копии исключения основы
+   *  («где создаётся», #665). Каталожное — рассылается всем. */
+  TYPE_COPIED: 'project.type_copied',
 } as const;
 
 export type ProjectEventType = (typeof PROJECT_EVENTS)[keyof typeof PROJECT_EVENTS];
@@ -51,6 +55,7 @@ export type ProjectEventType = (typeof PROJECT_EVENTS)[keyof typeof PROJECT_EVEN
 export const PROJECT_CATALOG_EVENTS = [
   PROJECT_EVENTS.NODE_KIND_CHANGED,
   PROJECT_EVENTS.TYPE_CHANGED,
+  PROJECT_EVENTS.TYPE_COPIED,
 ] as const;
 
 export type ProjectCatalogEventType = (typeof PROJECT_CATALOG_EVENTS)[number];
@@ -220,3 +225,11 @@ export const projectTypeChangedPayloadSchema = z.object({
   fields: z.array(z.string()),
 });
 export type ProjectTypeChangedPayload = z.infer<typeof projectTypeChangedPayloadSchema>;
+
+/** Тип проекта создан копией (#857): подписчик «Процессов» повторяет для
+ *  нового типа исключения основы (`config.creation`, #665). */
+export const projectTypeCopiedPayloadSchema = z.object({
+  typeId: z.uuid(),
+  sourceTypeId: z.uuid(),
+});
+export type ProjectTypeCopiedPayload = z.infer<typeof projectTypeCopiedPayloadSchema>;

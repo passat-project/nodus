@@ -78,18 +78,32 @@ export class ProjectTypesRepository {
 
   async create(
     tx: TransactionClient,
-    data: { name: string; icon?: string; color?: string; form?: ProjectTypeForm },
+    data: {
+      name: string;
+      icon?: string;
+      color?: string;
+      form?: ProjectTypeForm;
+      /** Допустимые виды папок (#857 — копия основы; null — все виды).
+       *  Валидность id видов — контроллер каталога (копия не перепроверяет:
+       *  работает как оригинал). */
+      kindIds?: string[] | null;
+    },
   ): Promise<ProjectType> {
     // Форма — JSONB; AST формул (#632) несёт optional-поля, которые Prisma
     // JSON-тип не выражает: на границе БД это обычный JSON (undefined не
     // сериализуется), поэтому явный каст к InputJsonValue.
-    const { form, ...rest } = data;
+    const { form, kindIds, ...rest } = data;
     const row = await tx.projectType.create({
       select: typeSelect,
       data: {
         id: randomUUID(),
         ...rest,
         ...(form ? { form: form as unknown as Prisma.InputJsonValue } : {}),
+        ...(kindIds !== undefined
+          ? {
+              kindIds: kindIds === null ? Prisma.JsonNull : (kindIds as Prisma.InputJsonValue),
+            }
+          : {}),
       },
     });
     return this.toDto(row);

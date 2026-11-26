@@ -70,6 +70,8 @@
 
 `workflow.type_created` (с `category`) / `type_updated` (поля — имена свойств и разделов `config.*`) / `type_archived` / `published` (с `category`, `moves`, `restates`) / `layout_changed` — **без audience**: gateway рассылает их всем авторизованным сокетам (комната presence), клиенты инвалидируют каталоги. Прежние `task.type_*` / `task.workflow_*` зарезервированы и не эмитятся (#428); история задач читает старые записи event log.
 
+Подписка на чужие события: `project.type_copied` (#857) — `events/project-type-copied-scope.handler.ts` дописывает копию типа проекта в `config.creation.excludedProjectTypeIds` каждого типа записи (задача и письмо), исключавшего основу, тем же путём, что окно типа (#665: без `customizedAt`, событие `workflow.type_updated {fields:['config.creation']}`); не исключавшие основу не трогаются, повторная доставка — no-op.
+
 ## Границы
 
 - Движок не пишет таблицы сущностей и не знает их прав/ролей — только через адаптер.
