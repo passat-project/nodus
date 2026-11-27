@@ -1,8 +1,13 @@
 import { Module } from '@nestjs/common';
 
+import { UserProfileProvider } from '../../core/ports/user-profile.provider.js';
+import { USER_PROFILE_READER } from '../../core/ports/user-profile.port.js';
 import { ProjectsPortsModule } from '../projects/projects-ports.module.js';
+import { LETTER_LIST_EXPORT_SOURCE } from '../views/list-export-source.port.js';
 
 import { LettersRepository } from './letters/letters.repository.js';
+import { LettersExtRepository } from './letters/letters-ext.repository.js';
+import { LetterListExportSource } from './ports/letter-list-export-source.provider.js';
 import { LetterChatReaderProvider } from './ports/letter-chat-reader.provider.js';
 import { LETTER_CHAT_READER } from './ports/letter-chat-reader.port.js';
 import { LetterFieldValuesProvider } from './ports/letter-field-values.provider.js';
@@ -27,7 +32,13 @@ import { LETTER_VISIBILITY_READER } from './ports/letter-visibility.port.js';
 @Module({
   imports: [ProjectsPortsModule],
   providers: [
+    UserProfileProvider,
+    { provide: USER_PROFILE_READER, useClass: UserProfileProvider },
     LettersRepository,
+    // Ext-выгрузка писем (#435): строки CSV — тот же ext-конвейер списков.
+    LettersExtRepository,
+    LetterListExportSource,
+    { provide: LETTER_LIST_EXPORT_SOURCE, useExisting: LetterListExportSource },
     LetterChatReaderProvider,
     { provide: LETTER_CHAT_READER, useExisting: LetterChatReaderProvider },
     LetterFieldValuesProvider,
@@ -44,6 +55,7 @@ import { LETTER_VISIBILITY_READER } from './ports/letter-visibility.port.js';
     { provide: LETTER_FORMULA_VALUES, useExisting: LetterFormulaValuesProvider },
   ],
   exports: [
+    LETTER_LIST_EXPORT_SOURCE,
     LETTER_CHAT_READER,
     LETTER_FIELD_VALUES_READER,
     LETTER_VISIBILITY_READER,

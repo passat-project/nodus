@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
 
+import { FOLDER_LIST_EXPORT_SOURCE } from '../views/list-export-source.port.js';
+import { FolderListExportSource } from './ports/folder-list-export-source.provider.js';
+import { ProjectFoldersRepository } from './project-folders.repository.js';
 import { NodeKindsRepository } from './project-node-kinds.repository.js';
 import { ProjectGroupsRepository } from './project-groups.repository.js';
 import { ProjectParticipantsRepository } from './project-participants.repository.js';
@@ -42,6 +45,10 @@ import {
     ProjectNodesRepository,
     NodeKindsRepository,
     ProjectTypesRepository,
+    // Ext-список и выгрузка папок проекта (#435).
+    ProjectFoldersRepository,
+    FolderListExportSource,
+    { provide: FOLDER_LIST_EXPORT_SOURCE, useExisting: FolderListExportSource },
     ProjectReaderProvider,
     { provide: PROJECT_READER, useExisting: ProjectReaderProvider },
     // Источник поисковой проекции «проект» (#952): маркер searchSourceType,
@@ -74,6 +81,7 @@ import {
     ProjectRosterSyncedScopeHandler,
   ],
   exports: [
+    FOLDER_LIST_EXPORT_SOURCE,
     PROJECT_READER,
     PROJECT_CHAT_READER,
     PROJECT_FIELD_USAGE_READER,

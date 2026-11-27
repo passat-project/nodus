@@ -190,6 +190,10 @@ export const createSavedViewBodySchema = z.object({
   name: z.string().trim().min(1).max(100),
   entity: listEntitySchema,
   scope: listViewScopeSchema,
+  /** Уровень настройки: в журнале — только личная, у типа — только
+   * type_default, в проекте — личная или общая проектная (умолчание при
+   * неуказанном — личная: безопаснее правами). */
+  level: listViewLevelSchema.optional(),
   filter: listFilterSchema,
   sort: z.array(listSortSchema).max(LIST_VIEW_LIMITS.sort).default([]),
   group: listGroupSchema.optional(),

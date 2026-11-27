@@ -25,6 +25,10 @@ import { TaskViewerProvider } from './ports/task-viewer.provider.js';
 import { TaskSearchSourceProvider } from './ports/task-search-source.provider.js';
 import { TASK_FORMULA_VALUES } from './ports/task-formula-values.port.js';
 import { TaskFormulaValuesProvider } from './ports/task-formula-values.provider.js';
+import { TASK_LIST_EXPORT_SOURCE } from '../views/list-export-source.port.js';
+import { TaskListExportSource } from './ports/task-list-export-source.provider.js';
+import { TaskDtoMapper } from './tasks/task-dto.mapper.js';
+import { TasksExtRepository } from './tasks/tasks-ext.repository.js';
 import { TasksQueryRepository } from './tasks/tasks-query.repository.js';
 import { TasksRepository } from './tasks/tasks.repository.js';
 import { TaskNumberHostProvider } from './ports/number-host.provider.js';
@@ -58,6 +62,11 @@ import { WorkflowPressRoundsProvider } from './ports/workflow-press-rounds.provi
     TaskDeciders,
     TasksQueryRepository,
     TasksRepository,
+    // Ext-выгрузка задач (#435): строки CSV — тот же ext-конвейер списков.
+    TaskDtoMapper,
+    TasksExtRepository,
+    TaskListExportSource,
+    { provide: TASK_LIST_EXPORT_SOURCE, useExisting: TaskListExportSource },
     // Носитель номеров «задача» (#630): DiscoveryService.
     TaskNumberHostProvider,
     TaskChatReaderProvider,
@@ -82,6 +91,7 @@ import { WorkflowPressRoundsProvider } from './ports/workflow-press-rounds.provi
     { provide: TASK_FORMULA_VALUES, useExisting: TaskFormulaValuesProvider },
   ],
   exports: [
+    TASK_LIST_EXPORT_SOURCE,
     TASK_CHAT_READER,
     CUSTOM_FIELD_VALUES_READER,
     TASK_PROJECT_READER,

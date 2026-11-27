@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import {
   type AuthUser,
+  type ListFilter,
   type ListGroupBucket,
   type ListResult,
   type ListSort,
@@ -121,6 +122,35 @@ export class TasksExtService {
         }))
       : undefined;
     return { items, nextCursor, ...(groups ? { groups } : {}), ...(totals ? { totals } : {}) };
+  }
+
+  /** WHERE выгрузки CSV (#435): та же видимость (журнал — «всё видимое
+   * мне», scope all) + неснимаемая рамка проекта + фильтр вида. */
+  async exportWhere(
+    user: AuthUser,
+    scope:
+      | { kind: 'journal' }
+      | { kind: 'project'; projectId: string }
+      | { kind: 'type_default'; typeId: string },
+    filter: ListFilter,
+  ): Promise<{ where: Prisma.Sql; ctx: ListSqlContext }> {
+    const viewer = await this.viewers.resolve(user);
+    const [defs, stageFlags] = await Promise.all([
+      this.customFields.definitions(),
+      this.catalog.liveStageFlags('task'),
+    ]);
+    const ctx = taskListSqlContext(new Map(defs.map((d) => [d.id, d])));
+    const stages = buildStageFlagIndex(stageFlags);
+    const parts: Prisma.Sql[] = [visibleTasksSql(viewer, 'all')];
+    if (scope.kind === 'project') {
+      parts.push(Prisma.sql`t.project_id = ${scope.projectId}::uuid`);
+    }
+    if (scope.kind === 'type_default') {
+      // Список типа по умолчанию — записи этого типа (рамка типа).
+      parts.push(Prisma.sql`t.type_id = ${scope.typeId}::uuid`);
+    }
+    if (filter.length > 0) parts.push(filterSql(filter, ctx, stages));
+    return { where: Prisma.join(parts, ' AND '), ctx };
   }
 
   /** Поле запроса применимо к задачам (опечатка/чужая сущность — 422). */

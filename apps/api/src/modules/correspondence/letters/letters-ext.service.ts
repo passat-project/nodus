@@ -4,6 +4,7 @@ import {
   ErrorCode,
   type AuthUser,
   type LetterListItem,
+  type ListFilter,
   type ListGroupBucket,
   type ListLettersQuery,
   type ListResult,
@@ -127,6 +128,37 @@ export class LettersExtService {
         }))
       : undefined;
     return { items, nextCursor, ...(groups ? { groups } : {}), ...(totals ? { totals } : {}) };
+  }
+
+  /** WHERE выгрузки CSV (#435): та же видимость (без box — зарегистрированные
+   * обоих направлений, как общий список) + неснимаемая рамка + фильтр. */
+  async exportWhere(
+    user: AuthUser,
+    scope:
+      | { kind: 'journal' }
+      | { kind: 'project'; projectId: string }
+      | { kind: 'type_default'; typeId: string },
+    filter: ListFilter,
+  ): Promise<{ where: Prisma.Sql; ctx: ListSqlContext }> {
+    const [defs, stageFlags] = await Promise.all([
+      this.customFields.definitions(),
+      this.catalog.liveStageFlags('letter'),
+    ]);
+    const ctx = letterListSqlContext(new Map(defs.map((d) => [d.id, d])));
+    const stages = buildStageFlagIndex(stageFlags);
+    const parts: Prisma.Sql[] = this.ext.frameSql(
+      {} as ListLettersQuery,
+      user.id,
+      canViewConfidential(user),
+    );
+    if (scope.kind === 'project') {
+      parts.push(Prisma.sql`l.project_id = ${scope.projectId}::uuid`);
+    }
+    if (scope.kind === 'type_default') {
+      parts.push(Prisma.sql`l.type_id = ${scope.typeId}::uuid`);
+    }
+    if (filter.length > 0) parts.push(filterSql(filter, ctx, stages));
+    return { where: Prisma.join(parts, ' AND '), ctx };
   }
 
   private assertFields(ext: ReturnType<typeof toListQueryExt>, ctx: ListSqlContext): void {

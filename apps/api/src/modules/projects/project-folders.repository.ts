@@ -140,6 +140,73 @@ export class ProjectFoldersRepository {
       },
     });
   }
+
+  /** Счёт папок той же выборкой (выгрузка CSV, #435). */
+  async count(projectId: string, filter: Prisma.Sql): Promise<number> {
+    const rows = await this.prisma.$queryRaw<{ count: number }[]>`
+      SELECT count(*)::int AS count FROM project_nodes n
+      WHERE n.project_id = ${projectId}::uuid AND ${filter}`;
+    return Number(rows[0]?.count ?? 0);
+  }
+
+  /** Страница выгрузки CSV (#435): сырые колонки + значения сортировок. */
+  async exportPage(
+    projectId: string,
+    sorts: readonly ListSort[],
+    cursor: ListExtCursor | undefined,
+    limit: number,
+    ctx: ListSqlContext,
+    filter: Prisma.Sql,
+  ): Promise<{
+    rows: {
+      id: string;
+      kindId: string;
+      name: string;
+      code: string | null;
+      customFields: unknown;
+      createdAt: Date;
+    }[];
+    next: ListExtCursor | null;
+  }> {
+    const order = orderSql(sorts, ctx);
+    const keyset = cursor ? keysetAfterSql(cursor, sorts, ctx) : null;
+    const rows = await this.prisma.$queryRaw<Record<string, unknown>[]>`
+      SELECT n.id AS id, n.kind_id AS "kindId", n.name AS name, n.code AS code,
+        n.custom_fields AS "customFields", n.created_at AS "createdAt"${
+          sorts.length > 0
+            ? Prisma.sql`, ${Prisma.join(
+                sorts.map(
+                  (sort, i) =>
+                    Prisma.sql`(${fieldSql(sort.field, ctx).expr}) AS s${Prisma.raw(String(i))}`,
+                ),
+                ', ',
+              )}`
+            : Prisma.empty
+        }
+      FROM project_nodes n
+      WHERE n.project_id = ${projectId}::uuid AND ${filter}${
+        keyset ? Prisma.sql` AND ${keyset}` : Prisma.empty
+      }
+      ORDER BY ${order}
+      LIMIT ${limit + 1}::int`;
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const lastRow = page[page.length - 1];
+    return {
+      rows: page.map((row) => ({
+        id: String(row.id),
+        kindId: String(row.kindId),
+        name: String(row.name),
+        code: row.code === null ? null : String(row.code),
+        customFields: row.customFields,
+        createdAt: row.createdAt instanceof Date ? row.createdAt : new Date(String(row.createdAt)),
+      })),
+      next:
+        hasMore && lastRow
+          ? { o: sorts.map((_, i) => normalize(lastRow[`s${i}`])), id: String(lastRow.id) }
+          : null,
+    };
+  }
 }
 
 /** Сырая строка папки (createdAt — Date, customFields — JsonValue): DTO

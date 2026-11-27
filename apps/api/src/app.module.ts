@@ -30,6 +30,7 @@ import { PortalSettingsModule } from './modules/portal-settings/portal-settings.
 import { ProjectsModule } from './modules/projects/projects.module.js';
 import { SearchModule } from './modules/search/search.module.js';
 import { DesktopModule } from './modules/desktop/desktop.module.js';
+import { ViewsModule } from './modules/views/views.module.js';
 import { HomeModule } from './modules/home/home.module.js';
 import { TasksModule } from './modules/tasks/tasks.module.js';
 import { WorkflowsModule } from './modules/workflows/workflows.module.js';
@@ -87,6 +88,8 @@ import { WorkflowsModule } from './modules/workflows/workflows.module.js';
     SearchModule,
     // Десктоп-оболочка (#254): публичный конфиг для тонкого клиента.
     DesktopModule,
+    // Виды списков и выгрузка CSV (#435): платформенная механика, ядро.
+    ViewsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: DomainExceptionFilter },

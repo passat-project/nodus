@@ -165,3 +165,18 @@
 - Вложения задачи: `TaskDeciderFileAccess` (маркер контекста `chat`) даёт
   решающему `canView: true, canEdit: false`; чат задачи открывается через
   `TASK_CHAT_READER.isDecider` без добавления в состав беседы.
+
+## Списки с расширением (#435)
+
+`GET /tasks` принимает `?filter=&sort=&group=&totals=` (JSON в
+query-параметрах, транспорт `jsonQueryParam` контракта): фильтр — предикаты
+общей выборки #635, сортировка по любой колонке (включая атрибуты JSONB —
+сырой SQL с кастом по типу атрибута, NULLS LAST + id tie-break), группы и
+итоги по всей видимой выборке. Конвейер — `TasksExtService`/
+`TasksExtRepository` (`tasks-ext.*`), видимость — SQL-эквивалент
+`visibleTasksWhere` (`visibleTasksSql`, эквивалентность держат тесты);
+колонки «кто решил/когда» — последнее решение человека из общего журнала
+переходов (LATERAL по `transition_records`). Строки выгрузки CSV —
+`ports/task-list-export-source.provider.ts` (порт views). Неизвестное поле
+фильтра/сортировки — 422 `LIST_FIELD_INVALID`. Сохранённые настройки видов —
+модуль `views`.

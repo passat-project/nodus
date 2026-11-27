@@ -2781,3 +2781,66 @@ model SearchQuery {
   @@map("search_queries")
 }
 
+
+// ===== Модуль views (#435): сохранённые настройки списков и выгрузка CSV =====
+
+/// Сохранённая настройка списка (#435): расширенный фильтр — условия общей
+/// выборки #635, колонки, группировка, итоги, сортировка. «Вид» — настройка,
+/// не сущность данных: события не эмитируются (потребителей нет, I13),
+/// мутации — в аудит; удаление физическое (мягкой пометки не нужно).
+/// Рамка scope («снять нельзя») дублируется колонками для индексов;
+/// projectId/typeId/ownerId — plain UUID без FK (сущности в своих модулях, I3).
+model SavedView {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  /// task | letter | folder (listEntitySchema, CHECK в миграции).
+  entity String
+  /// personal | project | type_default (listViewLevelSchema, CHECK).
+  level String
+  /// Рамка: journal | project | type_default (listViewScopeSchema).
+  scopeKind String @map("scope_kind")
+  /// Полная рамка контракта (JSONB: kind + projectId/typeId).
+  scopeJson Json @map("scope_json")
+  /// Настройка: filter/sort/group/totals/columns (контракт #435).
+  configJson Json @map("config_json")
+  /// Владелец личной настройки; null у project/type_default.
+  ownerId String? @map("owner_id") @db.Uuid
+  /// Проект рамки (scope.kind=project); null иначе.
+  projectId String? @map("project_id") @db.Uuid
+  /// Тип рамки (scope.kind=type_default — «список типа по умолчанию»); null иначе.
+  typeId String? @map("type_id") @db.Uuid
+  createdBy String @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@index([projectId, level], map: "saved_views_project_level_idx")
+  @@index([ownerId], map: "saved_views_owner_idx")
+  @@index([typeId], map: "saved_views_type_idx")
+  @@map("saved_views")
+}
+
+/// Фоновая выгрузка списка CSV (#435): >1000 строк — очередь views-export,
+/// ≤1000 — файл сразу (строки статуса не пишет: ответ синхронный). Параметры
+/// хранятся для повтора/диагностики; fileId — готовый файл модуля files.
+model ListExport {
+  id String @id @default(uuid()) @db.Uuid
+  entity String
+  scopeJson Json @map("scope_json")
+  filterJson Json @default("[]") @map("filter_json")
+  sortJson Json @default("[]") @map("sort_json")
+  columnsJson Json @default("[]") @map("columns_json")
+  /// Снимок прав автора на момент заказа: фоновая выгрузка считает видимость
+  /// «как на экране» запроса, а не текущие права воркера.
+  actorJson Json @default("[]") @map("actor_json")
+  /// queued | running | done | failed (CHECK в миграции).
+  status String
+  fileId String? @map("file_id") @db.Uuid
+  error String?
+  rowCount Int? @map("row_count")
+  requestedBy String @map("requested_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@index([requestedBy, createdAt(sort: Desc)], map: "list_exports_requester_idx")
+  @@map("list_exports")
+}

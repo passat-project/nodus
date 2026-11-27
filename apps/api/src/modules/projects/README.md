@@ -315,3 +315,12 @@ ports/                          PROJECT_READER / PROJECT_CHAT_READER / PROJECT_F
 узлы — контракты NODE_LIMITS (1000/10/100/50). Дальнейшие ступени (#49):
 мастер создания #468, пульс #469, схемы типов и стартовые формы — модуль
 «Автоматизация».
+
+## Список папок проекта с расширением (#435)
+
+`GET /projects/:id/folders` — папки как вкладка-список: `?filter=&sort=&group=&totals=`
+(JSON), курсор, атрибуты вида папки. Видимость — как у структуры (проект
+виден → папки видны; секретный не-участнику — 404), рамка projectId не
+снимается. Реализация — `project-folders.{controller,service,repository}.ts`;
+строки выгрузки CSV — `ports/folder-list-export-source.provider.ts` (порт
+views). Сохранённые настройки видов — модуль `views`.

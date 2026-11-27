@@ -220,3 +220,13 @@ resume). Секреты — только `.env` владельца/песочн�
 #56 — приём почты (`source='mail'`, `source`-вложения, HTML в UTF-8),
 #463 — резолюция и поручения, #464 — исходящие и их нумерация,
 #465 — реестры и счётчики, #462 — архивы, #453 — граф связей на холсте.
+
+## Списки с расширением (#435)
+
+`GET /letters` принимает `?filter=&sort=&group=&totals=` (JSON): тот же
+ext-конвейер, что у задач — `LettersExtService`/`LettersExtRepository`,
+видимость ящика и конфиденциальности — SQL-эквивалент `boxWhere` +
+`confidentialityWhere`. Системное поле `sentAt` писем — дата документа
+корреспондента (`their_date`). Строки выгрузки CSV —
+`ports/letter-list-export-source.provider.ts` (порт views). Сохранённые
+настройки видов — модуль `views`.

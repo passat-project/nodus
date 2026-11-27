@@ -210,6 +210,90 @@ export class TasksExtRepository {
       include: taskListInclude(viewerId),
     });
   }
+
+  /** Страница выгрузки CSV (#435): сырые колонки строки + значения
+   * сортировок для курсора; та же видимость/фильтр/сортировка, что у списка. */
+  async exportPage(
+    where: Prisma.Sql,
+    sorts: readonly ListSort[],
+    cursor: ListExtCursor | undefined,
+    limit: number,
+    ctx: ListSqlContext,
+  ): Promise<{
+    rows: {
+      id: string;
+      number: number;
+      title: string;
+      stageId: string;
+      deadline: Date | null;
+      createdAt: Date;
+      assigneeId: string;
+      typeId: string;
+      projectId: string | null;
+      nodeId: string | null;
+      customFields: unknown;
+      decidedBy: string | null;
+      decidedAt: Date | null;
+    }[];
+    next: ListExtCursor | null;
+  }> {
+    const order = orderSql(sorts, ctx);
+    const keyset = cursor ? keysetAfterSql(cursor, sorts, ctx) : null;
+    const rows = await this.prisma.$queryRaw<Record<string, unknown>[]>`
+      SELECT t.id AS id, t.number AS number, t.title AS title, t.stage_id AS "stageId",
+        t.deadline AS deadline, t.created_at AS "createdAt", t.assignee_id AS "assigneeId",
+        t.type_id AS "typeId", t.project_id AS "projectId", t.node_id AS "nodeId",
+        t.custom_fields AS "customFields", d.decided_by AS "decidedBy", d.decided_at AS "decidedAt"${
+          sorts.length > 0
+            ? Prisma.sql`, ${Prisma.join(
+                sorts.map(
+                  (sort, i) =>
+                    Prisma.sql`(${fieldSql(sort.field, ctx).expr}) AS s${Prisma.raw(String(i))}`,
+                ),
+                ', ',
+              )}`
+            : Prisma.empty
+        }
+      FROM tasks t
+      ${DECIDED_JOIN}
+      WHERE ${where}${keyset ? Prisma.sql` AND ${keyset}` : Prisma.empty}
+      ORDER BY ${order}
+      LIMIT ${limit + 1}::int`;
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const lastRow = page[page.length - 1];
+    return {
+      rows: page.map((row) => ({
+        id: String(row.id),
+        number: Number(row.number),
+        title: String(row.title),
+        stageId: String(row.stageId),
+        deadline: row.deadline instanceof Date ? row.deadline : null,
+        createdAt: row.createdAt instanceof Date ? row.createdAt : new Date(String(row.createdAt)),
+        assigneeId: String(row.assigneeId),
+        typeId: String(row.typeId),
+        projectId: row.projectId === null ? null : String(row.projectId),
+        nodeId: row.nodeId === null ? null : String(row.nodeId),
+        customFields: row.customFields,
+        decidedBy: row.decidedBy === null ? null : String(row.decidedBy),
+        decidedAt: row.decidedAt instanceof Date ? row.decidedAt : null,
+      })),
+      next:
+        hasMore && lastRow
+          ? {
+              o: sorts.map((_, i) => normalizeSortValue(lastRow[`s${i}`])),
+              id: String(lastRow.id),
+            }
+          : null,
+    };
+  }
+
+  /** Счёт строк той же выборкой (выбор синхронной/фоновой выгрузки, #435). */
+  async count(where: Prisma.Sql): Promise<number> {
+    const rows = await this.prisma.$queryRaw<{ count: number }[]>`
+      SELECT count(*)::int AS count FROM tasks t WHERE ${where}`;
+    return Number(rows[0]?.count ?? 0);
+  }
 }
 
 function aliasAs(expr: Prisma.Sql, alias: string): Prisma.Sql {

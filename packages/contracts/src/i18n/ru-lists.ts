@@ -49,4 +49,13 @@ export const LIST_VIEW_LEVEL_LABELS: Record<ListViewLevel, string> = {
 
 export const listsStrings = {
   listViewLevelLabels: LIST_VIEW_LEVEL_LABELS,
+  /** Ячейки логических атрибутов в CSV-выгрузке. */
+  boolLabels: { true: 'да', false: 'нет' } as Record<'true' | 'false', string>,
+  /** Заголовок колонки удалённого атрибута (список не ломается, #435). */
+  removedFieldLabel: 'Удалённый атрибут',
+  /** Имена сущностей списков (имя файла выгрузки, подписи). */
+  listEntityLabels: { task: 'Задачи', letter: 'Письма', folder: 'Папки' } as Record<
+    ListEntity,
+    string
+  >,
 };

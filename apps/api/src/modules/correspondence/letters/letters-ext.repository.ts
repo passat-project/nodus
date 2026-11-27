@@ -183,6 +183,79 @@ export class LettersExtRepository {
       totals: totals.map((_, i) => row[`t${i}`] ?? null),
     }));
   }
+
+  /** Счёт строк той же выборкой (выбор синхронной/фоновой выгрузки, #435). */
+  async count(where: Prisma.Sql): Promise<number> {
+    const rows = await this.prisma.$queryRaw<{ count: number }[]>`
+      SELECT count(*)::int AS count FROM letters l WHERE ${where}`;
+    return Number(rows[0]?.count ?? 0);
+  }
+
+  /** Страница выгрузки CSV (#435): сырые колонки + значения сортировок. */
+  async exportPage(
+    where: Prisma.Sql,
+    sorts: readonly ListSort[],
+    cursor: ListExtCursor | undefined,
+    limit: number,
+    ctx: ListSqlContext,
+  ): Promise<{
+    rows: {
+      id: string;
+      regNumber: string | null;
+      counterpartyId: string | null;
+      theirDate: Date | null;
+      createdAt: Date;
+      addresseeId: string | null;
+      typeId: string;
+      projectId: string | null;
+      stageId: string;
+      customFields: unknown;
+    }[];
+    next: ListExtCursor | null;
+  }> {
+    const order = orderSql(sorts, ctx);
+    const keyset = cursor ? keysetAfterSql(cursor, sorts, ctx) : null;
+    const rows = await this.prisma.$queryRaw<Record<string, unknown>[]>`
+      SELECT l.id AS id, l.reg_number AS "regNumber", l.counterparty_id AS "counterpartyId",
+        l.their_date AS "theirDate", l.created_at AS "createdAt", l.addressee_id AS "addresseeId",
+        l.type_id AS "typeId", l.project_id AS "projectId", l.stage_id AS "stageId",
+        l.custom_fields AS "customFields"${
+          sorts.length > 0
+            ? Prisma.sql`, ${Prisma.join(
+                sorts.map(
+                  (sort, i) =>
+                    Prisma.sql`(${fieldSql(sort.field, ctx).expr}) AS s${Prisma.raw(String(i))}`,
+                ),
+                ', ',
+              )}`
+            : Prisma.empty
+        }
+      FROM letters l
+      WHERE ${where}${keyset ? Prisma.sql` AND ${keyset}` : Prisma.empty}
+      ORDER BY ${order}
+      LIMIT ${limit + 1}::int`;
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const lastRow = page[page.length - 1];
+    return {
+      rows: page.map((row) => ({
+        id: String(row.id),
+        regNumber: row.regNumber === null ? null : String(row.regNumber),
+        counterpartyId: row.counterpartyId === null ? null : String(row.counterpartyId),
+        theirDate: row.theirDate instanceof Date ? row.theirDate : null,
+        createdAt: row.createdAt instanceof Date ? row.createdAt : new Date(String(row.createdAt)),
+        addresseeId: row.addresseeId === null ? null : String(row.addresseeId),
+        typeId: String(row.typeId),
+        projectId: row.projectId === null ? null : String(row.projectId),
+        stageId: String(row.stageId),
+        customFields: row.customFields,
+      })),
+      next:
+        hasMore && lastRow
+          ? { o: sorts.map((_, i) => normalize(lastRow[`s${i}`])), id: String(lastRow.id) }
+          : null,
+    };
+  }
 }
 
 function normalize(value: unknown): string | number | null {
