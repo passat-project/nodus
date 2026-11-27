@@ -187,6 +187,11 @@ export function gateFixableBy(
     case 'decider_vacant':
       // Вакансия решающего (#433): окно не чинит — нужен обход с причиной.
       return null;
+    case 'records':
+    case 'formula':
+      // Проверка общей выборки (#635): чинится снаружи окна — принять записи
+      // или обойти с причиной.
+      return null;
   }
 }
 

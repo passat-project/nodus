@@ -42,6 +42,10 @@ export const workflowDraftStageSchema = z.object({
   color: stageColorSchema,
   systemState: taskSystemStateSchema,
   outcome: stageOutcomeSchema.nullable(),
+  /** «Результат выдан» (#635, §11): с этого статуса результат считается
+   *  выданным, хотя работа ещё не закрыта. Без единой отметки в маршруте
+   *  «выдана» значит «закрыта успешно». */
+  resultIssued: z.boolean().default(false),
   isInitial: z.boolean(),
   sortOrder: z.number().int().min(0),
 });

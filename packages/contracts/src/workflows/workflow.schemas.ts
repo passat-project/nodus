@@ -7,6 +7,14 @@ import {
   customFieldValueSchema,
 } from '../custom-fields/custom-field-values.js';
 import { deciderSourceSchema } from './decider.js';
+import {
+  CONDITION_LIMITS,
+  conditionQuerySchema,
+  conditionRecordRefSchema,
+  DEFAULT_GATE_OVERRIDE,
+  gateOverridePolicySchema,
+} from './condition-query.js';
+import { formulaNodeSchema } from '../custom-fields/formula.js';
 import type { ProcessCategory } from './process-type.schemas.js';
 import { transitionFormInputSchema, transitionFormSchema } from './transition-form.schemas.js';
 import {
@@ -69,6 +77,11 @@ export const workflowConditionSchema = z.discriminatedUnion('kind', [
   // поле «Сотрудник(и)», роль в проекте. Одно условие — один источник;
   // несколько источников = «любой из» (условия уже ИЛИ).
   z.object({ kind: z.literal('decider_in'), source: deciderSourceSchema }),
+  /** Условие по записям (#635): кнопка видна, только когда выборка истинна.
+   *  Считается сервером по живым данным; в обход интерфейса — те же условия. */
+  z.object({ kind: z.literal('records'), query: conditionQuerySchema }),
+  /** Режим «формула» для редких случаев: формула возвращает истину/ложь. */
+  z.object({ kind: z.literal('formula'), formula: formulaNodeSchema }),
 ]);
 export type WorkflowCondition = z.infer<typeof workflowConditionSchema>;
 
@@ -89,6 +102,25 @@ export const workflowValidatorSchema = z.discriminatedUnion('kind', [
   /** Приложены файлы итога (#380): у текущей ревизии итога не меньше `min`
    *  живых вложений (kind image|file; стикеры не считаются). */
   z.object({ kind: z.literal('result_files'), min: z.number().int().min(1).max(5) }),
+  /** Проверка по общей выборке (#635): кнопка видна, но не пускает, пока
+   *  выборка не истинна; причина — `title` настройщика со ссылками на
+   *  записи-нарушители (видимые актору; невидимые — счётчиком). Шесть прежних
+   *  видов остаются заготовками конструктора — опубликованные маршруты
+   *  работают как раньше. */
+  z.object({
+    kind: z.literal('records'),
+    title: z.string().trim().min(1).max(CONDITION_LIMITS.titleLength),
+    query: conditionQuerySchema,
+    override: gateOverridePolicySchema.default(DEFAULT_GATE_OVERRIDE),
+  }),
+  /** Режим «формула» (#635): формула должна вернуть истину; ошибка формулы
+   *  видна настройщику при публикации. */
+  z.object({
+    kind: z.literal('formula'),
+    title: z.string().trim().min(1).max(CONDITION_LIMITS.titleLength),
+    formula: formulaNodeSchema,
+    override: gateOverridePolicySchema.default(DEFAULT_GATE_OVERRIDE),
+  }),
 ]);
 export type WorkflowValidator = z.infer<typeof workflowValidatorSchema>;
 export type WorkflowValidatorKind = WorkflowValidator['kind'];
@@ -131,8 +163,9 @@ export const WORKFLOW_POST_FUNCTIONS_BY_CATEGORY = {
   letter: ['assign_number'],
 } as const satisfies Record<ProcessCategory, readonly WorkflowPostFunction['kind'][]>;
 
-/** Гейты, допустимые в маршруте категории: у писем в #55 гейтов нет —
- *  задачные факты (подзадачи, чек-лист, время, итог) у письма не считаются. */
+/** Гейты, допустимые в маршруте категории: у писем задачные факты (подзадачи,
+ *  чек-лист, время, итог) не считаются — но проверки общей выборки (#635)
+ *  доступны обеим категориям. */
 export const WORKFLOW_VALIDATORS_BY_CATEGORY = {
   task: [
     'no_open_subtasks',
@@ -141,8 +174,10 @@ export const WORKFLOW_VALIDATORS_BY_CATEGORY = {
     'time_logged',
     'result_present',
     'result_files',
+    'records',
+    'formula',
   ],
-  letter: [],
+  letter: ['records', 'formula'],
 } as const satisfies Record<ProcessCategory, readonly WorkflowValidator['kind'][]>;
 
 export const workflowTransitionRulesSchema = z.object({
@@ -165,6 +200,11 @@ export const transitionBlockReasonSchema = z.object({
     /** Ни один источник решающих не резолвится в живого человека (#433):
      *  переход виден только обладателю права обхода и требует причину. */
     'decider_vacant',
+    /** Проверка общей выборки не пройдена (#635): подпись настройщика + до
+     *  CONDITION_LIMITS.reasonRecords записей-нарушителей, видимых актору. */
+    'records',
+    /** Формула-проверка вернула ложь/ошибку (#635). */
+    'formula',
   ]),
   /** Для fields_required — какие поля не заполнены (системные и `cf.<id>`). */
   fields: z.array(workflowFieldKeySchema).optional(),
@@ -173,6 +213,11 @@ export const transitionBlockReasonSchema = z.object({
   count: z.number().int().min(0).optional(),
   /** Для result_files — сколько файлов итога есть (нужно `min`). */
   min: z.number().int().min(1).max(5).optional(),
+  /** Для records — подпись настройки + записи-нарушители и счётчик невидимых
+   *  («и ещё N записей, к которым у вас нет доступа» — видимость одна). */
+  title: z.string().optional(),
+  records: z.array(conditionRecordRefSchema).max(CONDITION_LIMITS.reasonRecords).optional(),
+  hiddenCount: z.number().int().min(0).optional(),
 });
 export type TransitionBlockReason = z.infer<typeof transitionBlockReasonSchema>;
 
