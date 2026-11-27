@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ui } from '@nodus/contracts';
 
 const h = vi.hoisted(() => ({
@@ -86,8 +86,10 @@ beforeEach(() => {
     width: 420,
   });
   vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+  // Системное «уменьшить движение» включено, но портал его игнорирует
+  // (#1035): контент монтируется по тому же таймеру, что и в оболочке.
   vi.stubGlobal('matchMedia', () => ({
-    matches: true, // prefers-reduced-motion: контент готов сразу
+    matches: true,
     media: '',
     onchange: null,
     addEventListener() {},
@@ -131,13 +133,15 @@ describe('AssistantPanel: монтирование', () => {
     expect(screen.queryByTitle(ui.assistant.resizeHint)).toBeNull();
   });
 
-  it('открытое окно: контент смонтирован, ширина клампится снизу при узкой раме', () => {
+  it('открытое окно: контент монтируется после кадра ширины, ширина клампится', async () => {
     useAssistantStore.setState({ open: true, width: 420 });
     const { container } = renderPanel();
     const root = pane(container);
 
     expect(root.getAttribute('aria-hidden')).toBeNull();
-    expect(screen.getByTestId('assistant-body')).toBeTruthy();
+    // Монтаж контента — после 210 мс кадра ширины, независимо от системной
+    // настройки движения (#1035: reduced-motion портал не гасит).
+    await waitFor(() => expect(screen.getByTestId('assistant-body')).toBeTruthy());
     expect(screen.getByTitle(ui.assistant.resizeHint)).toBeTruthy();
     // Рама нулевой ширины: живые пределы ужимают окно до читаемого минимума.
     expect(root.style.width).toBe(`${assistantLiveBounds(0).min}px`);

@@ -157,9 +157,10 @@ beforeEach(() => {
     if (i >= 0) RAF_QUEUE.splice(i, 1);
   });
   vi.stubGlobal('ResizeObserver', ResizeObserverStub);
-  // Вспышка рисуется только без prefers-reduced-motion.
+  // Системное «уменьшить движение» включено: вспышка контура всё равно
+  // рисуется (#1035 — портал ведёт себя как десктопная оболочка).
   vi.stubGlobal('matchMedia', () => ({
-    matches: false,
+    matches: true,
     addEventListener() {},
     removeEventListener() {},
   }));

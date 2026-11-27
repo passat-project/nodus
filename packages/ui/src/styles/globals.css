@@ -725,22 +725,14 @@
   [data-topbar] nav::-webkit-scrollbar {
     display: none;
   }
-  @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-    }
-  }
 }
 
 /* Вспышка сообщения при прыжке к нему (клик по цитате/закрепу/«Переслано
    от» — A2/A3/A7, #87): мгновенная подсветка + затухание ~2 с (research-канон:
    css-tricks yellow-flash, Discord blurple-оверлей; Telegram — highlight цели).
-   Плоская заливка на токене info, без теней; prefers-reduced-motion —
-   статичная подсветка (класс снимает JS по таймеру FLASH_MS). */
+   Плоская заливка на токене info, без теней; класс снимает JS по таймеру
+   FLASH_MS. Движение включено ВСЕГДА (#1035): системное «уменьшить движение»
+   портал не гасит — веб ведёт себя как десктопная оболочка. */
 @utility message-flash {
   animation: message-flash 2s ease-out forwards;
   border-radius: var(--radius);
@@ -753,13 +745,6 @@
     background-color: transparent;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .message-flash {
-    animation: none;
-    background-color: color-mix(in srgb, var(--info) 12%, transparent);
-  }
-}
-
 /* Эмодзи шрифтом Noto Color Emoji (Google, OFL; self-host, #130): единые
    «гугловские» эмодзи на любом устройстве вместо системных (Segoe Fluent на
    Windows — «скайп 2010» по вердикту владельца 28.09; на Windows 10 системный
@@ -809,20 +794,13 @@
     opacity: 1;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .reaction-pop {
-    animation: none;
-  }
-}
-
 /* Pill просмотров своего последнего сообщения (раунд 3 чата → раунд 4:
    flow-элемент ленты, прикреплён к низу последнего пузыря, модель Битрикс24).
    Появление — ТОЛЬКО fade: mount-выезд снизу (translate 6px), унаследованный
    от оверлейной версии раунда 3, в flow читался как «вся лента оседает на
    1-2px после открытия» (вердикт владельца раунда 4): метка поднималась в
    своё место за 200ms, зазор над ней в начале анимации был больше итогового.
-   Mount-анимация через @starting-style (Baseline 2024); reduced-motion —
-   без анимации. */
+   Mount-анимация через @starting-style (Baseline 2024). */
 @utility views-pill {
   opacity: 1;
   transition: opacity 200ms ease-out;
@@ -832,12 +810,6 @@
     opacity: 0;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .views-pill {
-    transition: none;
-  }
-}
-
 /* Появление контента островка композера после морфа селекта (#132 р.9–10,
    вердикт владельца «резкая смена текста»): при расширении узкого
    батч-островка (288px→100%) новый контент монтируется ПРОЗРАЧНЫМ и
@@ -881,7 +853,7 @@
    удалены (выглядели артефактом-«ховерами» при первом входе после
    перезагрузки); пустая лента → контент мягко проявляется (тот же паттерн
    @starting-style). Тело ленты кеится по беседе — фейд срабатывает на
-   каждом открытии, 160мс, prefers-reduced-motion — без анимации. */
+   каждом открытии, 160мс. */
 @utility feed-reveal {
   opacity: 1;
   transition: opacity 160ms ease-out;
@@ -891,15 +863,6 @@
     opacity: 0;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .composer-reveal,
-  .composer-hide,
-  .composer-panel-rise,
-  .feed-reveal {
-    transition: none;
-  }
-}
-
 /* Мультиселект сообщений/постов (#132 р.3–5, модель Telegram): выбранные —
    СПЛОШНАЯ замена заливки ОДНОЙ формулой color-mix(поверхность, info 22%)
    для пузыря И хвоста сразу — никаких полупрозрачных слоёв поверх (раунд 4

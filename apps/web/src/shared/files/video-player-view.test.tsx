@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ui } from '@nodus/contracts';
 
@@ -12,6 +12,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   cleanup();
 });
@@ -30,8 +31,8 @@ describe('VideoPlayerView — кинозал видео (#787)', () => {
     expect(dialog.parentElement).toBe(document.body);
     expect(dialog.className).toContain('fixed');
     expect(dialog.className).toContain('inset-0');
-    // Фон — сплошное затемнение всего экрана, без светлой полосы сверху.
-    expect(dialog.className).toContain('bg-black/75');
+    // Фон — полупрозрачное затемнение всего экрана (#790), без светлой полосы.
+    expect(dialog.className).toContain('bg-neutral-900/80');
 
     const video = document.querySelector('video');
     expect(video).not.toBeNull();
@@ -44,10 +45,9 @@ describe('VideoPlayerView — кинозал видео (#787)', () => {
     expect(video?.tabIndex).toBe(0);
     expect(document.activeElement).toBe(video);
     expect(video?.className).toContain('min-h-0');
+    expect(video?.className).toContain('max-h-full');
     expect(video?.className).toContain('max-w-full');
     expect(video?.className).toContain('object-contain');
-    // Высоту держит блок «кадр + полоса», кадр ужимается внутри (#1054).
-    expect(video?.parentElement?.className).toContain('max-h-full');
     expect(video?.getAttribute('aria-label')).toBe('ролик.mp4');
 
     expect(screen.getByText('ролик.mp4')).toBeTruthy();
@@ -58,19 +58,86 @@ describe('VideoPlayerView — кинозал видео (#787)', () => {
     // впритык к кнопкам окна (замечание владельца 24.11.2026).
     const close = screen.getByRole('button', { name: ui.files.close });
     expect(close.className).toContain('size-9');
-    expect(close.className).toContain('border-white/25');
+    expect(close.className).toContain('border-white/15');
     expect(close.className).not.toContain('rounded-full');
   });
 
-  it('полоса управления — ПОД кадром, вплотную: кадр не перекрыт даже при наведении', () => {
+  it('кнопки полного экрана нет — зал и так раскрыт на всё окно', () => {
+    render(<VideoPlayerView url="/files/roll.mp4" name="ролик.mp4" onClose={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: ui.files.fullscreen })).toBeNull();
+  });
+
+  it('панель — сразу под кадром, по центру, а не на кромке экрана', () => {
     render(<VideoPlayerView url="/files/roll.mp4" name="ролик.mp4" onClose={vi.fn()} />);
 
     const video = document.querySelector('video')!;
     const bar = screen.getByRole('toolbar', { name: ui.files.videoControls });
-    // Управление живёт отдельной строкой зала, а не слоем поверх картинки.
+    const barLayer = bar.parentElement!;
+    // Кадр и панель — один блок: панель сразу под кадром, по центру.
     expect(bar.contains(video)).toBe(false);
-    // Приклеена к нижней кромке кадра: следующий элемент того же блока.
-    expect(video.nextElementSibling).toBe(bar);
+    expect(video.nextElementSibling).toBe(barLayer);
+    expect(barLayer.className).toContain('justify-center');
+    expect(bar.className).toContain('rounded-xl');
+    expect(bar.className).toContain('bg-neutral-700/95');
+    expect(bar.className).toContain('max-w-[24rem]');
+  });
+
+  it('Telegram: полоса прячется через 2,5 с игры, возвращается на движение/паузу/конец', () => {
+    vi.useFakeTimers();
+    render(<VideoPlayerView url="/files/roll.mp4" name="ролик.mp4" onClose={vi.fn()} />);
+
+    const video = document.querySelector('video')!;
+    const barLayer = screen.getByRole('toolbar', { name: ui.files.videoControls }).parentElement!;
+    expect(barLayer.className).toContain('opacity-100');
+
+    act(() => {
+      video.dispatchEvent(new Event('play'));
+    });
+    act(() => {
+      vi.advanceTimersByTime(2600);
+    });
+    expect(barLayer.className).toContain('opacity-0');
+    expect(barLayer.className).toContain('pointer-events-none');
+
+    act(() => {
+      fireEvent.mouseMove(screen.getByRole('dialog'));
+    });
+    expect(barLayer.className).toContain('opacity-100');
+
+    // Пауза и конец — команды должны быть на виду.
+    act(() => {
+      video.dispatchEvent(new Event('pause'));
+    });
+    expect(barLayer.className).toContain('opacity-100');
+
+    act(() => {
+      video.dispatchEvent(new Event('play'));
+    });
+    act(() => {
+      vi.advanceTimersByTime(2600);
+    });
+    expect(barLayer.className).toContain('opacity-0');
+    act(() => {
+      video.dispatchEvent(new Event('ended'));
+    });
+    expect(barLayer.className).toContain('opacity-100');
+  });
+
+  it('ошибка воспроизведения — табличка со скачиванием вместо кадра, без полосы', () => {
+    render(<VideoPlayerView url="/files/roll.mp4" name="ролик.mp4" onClose={vi.fn()} />);
+
+    fireEvent.error(document.querySelector('video') as HTMLVideoElement);
+
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toContain(ui.chat.videoUnsupported);
+    const download = alert.querySelector('a');
+    expect(download?.getAttribute('href')).toBe('/files/roll.mp4');
+    expect(download?.hasAttribute('download')).toBe(true);
+    expect(screen.queryByRole('toolbar')).toBeNull();
+    // Крестик остаётся: из таблички всегда можно выйти.
+    expect(screen.getByRole('button', { name: ui.files.close })).toBeTruthy();
+    expect(document.activeElement).toBe(download);
   });
 
   it('закрывает по кнопке и по заднику, но не по клику на плеер', () => {

@@ -313,9 +313,8 @@ describe('scrollMessageIntoView — плавный режим', () => {
     h.restore();
   });
 
-  it('системное «меньше движения» — мгновенно даже на коротком прыжке', () => {
-    const mq = vi.fn().mockReturnValue({ matches: true });
-    vi.stubGlobal('matchMedia', mq);
+  it('системное «меньше движения» не гасит плавный прыжок (#1035)', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
     const container = makeContainer({
       rect: CONTAINER_RECT,
       scrollTop: 0,
@@ -324,9 +323,15 @@ describe('scrollMessageIntoView — плавный режим', () => {
     });
     const message = makeElement();
     liveStub(message, container, 1200, 80);
+    const h = harness(container, 3000);
     scrollMessageIntoView(message, container, { align: 'start', margin: 48, behavior: 'smooth' });
+    h.flush(50);
+    // Первый кадр — часть пути: перелёт видимый, а не мгновенный.
+    expect(container.scrollTop).toBeGreaterThan(0);
+    expect(container.scrollTop).toBeLessThan(1152);
+    h.flush(400);
     expect(container.scrollTop).toBe(1152);
-    expect(mq).toHaveBeenCalledWith('(prefers-reduced-motion: reduce)');
+    h.restore();
     vi.unstubAllGlobals();
   });
 });

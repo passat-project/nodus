@@ -65,6 +65,9 @@ export function AttachmentViewer({ stripW = 0 }: { stripW?: number }) {
 
   const closeOnEsc = useCallback(
     (event: KeyboardEvent) => {
+      // Верхний слой (Radix-поповер/меню) уже погасил Esc — его ход первый:
+      // иначе один Esc закрывал бы и меню, и весь просмотр.
+      if (event.defaultPrevented) return;
       if (event.key === 'Escape') {
         // Полноэкранный режим гасит сначала сам браузер: Esc там — его
         // действие, страница может получить нажатие раньше. Закрывать
@@ -101,7 +104,16 @@ export function AttachmentViewer({ stripW = 0 }: { stripW?: number }) {
   // Видео — кинозал (#787): без карточки файла; без ссылки на контент
   // падать в тело с карточкой скачивания (как раньше).
   if (target.mime.startsWith('video/') && target.url) {
-    return <VideoPlayerView url={target.url} name={target.name} onClose={closeWithInvalidate} />;
+    // key: смена файла перезапускает зал вместе с подписками плеера (иначе
+    // после ошибки/нового кадра полоса могла остаться на старом элементе).
+    return (
+      <VideoPlayerView
+        key={target.fileId}
+        url={target.url}
+        name={target.name}
+        onClose={closeWithInvalidate}
+      />
+    );
   }
 
   const session = sessionQuery.data ?? null;

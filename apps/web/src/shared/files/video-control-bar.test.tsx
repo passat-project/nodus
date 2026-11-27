@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ui } from '@nodus/contracts';
 
 import { VideoPlayerView } from './video-player-view.js';
 
 /**
- * Своя полоса управления кинозала (#1054): кнопки ПОД кадром командуют
- * нативным `<video>`; поверх кадра не появляется ничего. Состояние полосы
- * читается из событий элемента — здесь они воспроизводятся руками, потому
- * что jsdom не проигрывает медиа.
+ * Своя панель кинозала (#1054): кнопки командуют нативным `<video>`; панель
+ * стоит сразу под кадром и прячется во время игры (Telegram). Состояние
+ * панели читается из событий элемента — здесь они воспроизводятся руками,
+ * потому что jsdom не проигрывает медиа.
  */
 
 let paused = true;
@@ -41,9 +41,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   cleanup();
-  Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: null });
 });
 
 /** Рендер зала с управляемым медиаэлементом (paused/duration/currentTime). */
@@ -66,7 +66,7 @@ function setup() {
   return { video, onClose };
 }
 
-describe('VideoControlBar — своя полоса под кадром (#1054)', () => {
+describe('VideoControlBar — полоса кинозала (#1054)', () => {
   it('пуск и пауза: кнопка меняет имя по состоянию кадра', () => {
     const { video } = setup();
 
@@ -92,20 +92,22 @@ describe('VideoControlBar — своя полоса под кадром (#1054)'
     expect(currentTime).toBe(0);
   });
 
-  it('время и перемотка: «0:05 / 0:09» и ползунок с aria-valuetext', () => {
+  it('время и перемотка: текущее/остаток и ползунок с aria-valuetext', () => {
     const { video } = setup();
 
     duration = 9;
     act(() => {
       video.dispatchEvent(new Event('durationchange'));
     });
-    expect(screen.getByText('0:00 / 0:09')).toBeTruthy();
+    expect(screen.getByText('0:00')).toBeTruthy();
+    expect(screen.getByText('-0:09')).toBeTruthy();
 
     currentTime = 5;
     act(() => {
       video.dispatchEvent(new Event('timeupdate'));
     });
-    expect(screen.getByText('0:05 / 0:09')).toBeTruthy();
+    expect(screen.getByText('0:05')).toBeTruthy();
+    expect(screen.getByText('-0:04')).toBeTruthy();
 
     const seek = screen.getByRole('slider', { name: ui.files.seek });
     expect(seek.getAttribute('aria-valuetext')).toBe(`0:05 ${ui.files.timeOf} 0:09`);
@@ -170,61 +172,88 @@ describe('VideoControlBar — своя полоса под кадром (#1054)'
     expect(screen.getByRole('button', { name: ui.files.mute })).toBeTruthy();
   });
 
-  it('весь экран: разворачивается слой зала, кнопка ведёт обратно', () => {
-    const request = vi.fn(() => Promise.resolve());
-    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', {
-      configurable: true,
-      value: request,
-    });
-    const exit = vi.fn(() => Promise.resolve());
-    Object.defineProperty(document, 'exitFullscreen', { configurable: true, value: exit });
+  it('открытое меню скорости держит панель на экране', () => {
+    vi.useFakeTimers();
+    const { video } = setup();
+    const layer = screen.getByRole('toolbar', { name: ui.files.videoControls }).parentElement!;
 
-    setup();
-    fireEvent.click(screen.getByRole('button', { name: ui.files.fullscreen }));
-    expect(request).toHaveBeenCalled();
-
-    // Браузер вошёл в полный экран: событие + состояние документа.
-    Object.defineProperty(document, 'fullscreenElement', {
-      configurable: true,
-      get: () => screen.getByRole('dialog'),
-    });
     act(() => {
-      document.dispatchEvent(new Event('fullscreenchange'));
+      video.dispatchEvent(new Event('play'));
     });
-    expect(screen.getByRole('button', { name: ui.files.exitFullscreen })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: ui.files.playbackSpeed }));
+    act(() => {
+      vi.advanceTimersByTime(2600);
+    });
 
-    fireEvent.click(screen.getByRole('button', { name: ui.files.exitFullscreen }));
-    expect(exit).toHaveBeenCalled();
-    delete (HTMLElement.prototype as { requestFullscreen?: unknown }).requestFullscreen;
+    expect(layer.className).toContain('opacity-100');
   });
 
-  it('клавиатура у кадра: пробел, M, F и стрелки ±5 с', () => {
+  it('скорость: шестерёнка открывает меню, пресет 1.5× меняет playbackRate', async () => {
+    const { video } = setup();
+    fireEvent.click(screen.getByRole('button', { name: ui.files.playbackSpeed }));
+
+    const fast = await screen.findByRole('button', { name: /1\.5x/ });
+    fireEvent.click(fast);
+    expect(video.playbackRate).toBe(1.5);
+    await waitFor(() => expect(screen.queryByRole('button', { name: /1\.5x/ })).toBeNull());
+  });
+
+  it('стрелки перематывают и после паузы кнопкой — фокус на кнопке, а не на кадре', () => {
     const { video } = setup();
     duration = 9;
-    const request = vi.fn(() => Promise.resolve());
-    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', {
-      configurable: true,
-      value: request,
-    });
+
+    const play = screen.getByRole('button', { name: ui.files.play });
+    play.focus();
+    fireEvent.keyDown(play, { key: 'ArrowRight' });
+    expect(currentTime).toBe(5);
+
+    fireEvent.keyDown(play, { key: 'ArrowLeft' });
+    expect(currentTime).toBe(0);
+    expect(video.duration).toBe(9);
+  });
+
+  it('стрелки на ползунке перемотки не перехватываются — шаг принадлежит input', () => {
+    const { video } = setup();
+    duration = 9;
+
+    const seek = screen.getByRole('slider', { name: ui.files.seek });
+    fireEvent.keyDown(seek, { key: 'ArrowRight' });
+
+    // Гейт arrowsBelongToControl: зал не делает ±5 с, событие остаётся input.
+    expect(currentTime).toBe(0);
+    expect(video.duration).toBe(9);
+  });
+
+  it('↑/↓ меняют громкость и после паузы кнопкой', () => {
+    const { video } = setup();
+
+    const play = screen.getByRole('button', { name: ui.files.play });
+    play.focus();
+    fireEvent.keyDown(play, { key: 'ArrowDown' });
+    expect(video.volume).toBeCloseTo(0.95);
+
+    fireEvent.keyDown(play, { key: 'ArrowUp' });
+    expect(video.volume).toBeCloseTo(1);
+  });
+
+  it('клавиатура у кадра: пробел, M, ↑/↓ и стрелки ±5 с', () => {
+    const { video } = setup();
+    duration = 9;
 
     fireEvent.keyDown(video, { key: ' ' });
     expect(playSpy).toHaveBeenCalled();
 
+    fireEvent.keyDown(video, { key: 'ArrowDown' });
+    expect(video.volume).toBeCloseTo(0.95);
+    fireEvent.keyDown(video, { key: 'ArrowUp' });
+    expect(video.volume).toBeCloseTo(1);
+
     fireEvent.keyDown(video, { key: 'm', code: 'KeyM' });
     expect(video.muted).toBe(true);
-
-    fireEvent.keyDown(video, { key: 'f', code: 'KeyF' });
-    expect(request).toHaveBeenCalled();
 
     fireEvent.keyDown(video, { key: 'ArrowRight' });
     expect(currentTime).toBe(5);
     fireEvent.keyDown(video, { key: 'ArrowLeft' });
     expect(currentTime).toBe(0);
-
-    // Модификаторы не перехватываем: Ctrl+F — поиск браузера, не полный экран.
-    request.mockClear();
-    fireEvent.keyDown(video, { key: 'f', code: 'KeyF', ctrlKey: true });
-    expect(request).not.toHaveBeenCalled();
-    delete (HTMLElement.prototype as { requestFullscreen?: unknown }).requestFullscreen;
   });
 });

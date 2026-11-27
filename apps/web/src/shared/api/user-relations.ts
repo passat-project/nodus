@@ -13,10 +13,14 @@ import { api } from '../api-client.js';
 /** Ключи без поиска — канонические (их читают бейджи вкладок); с поиском —
  *  отдельная ветка под тем же префиксом (#956). */
 export const userRelationsKeys = {
+  /** Префикс ВСЕХ списков задач «от человека», включая search-варианты:
+   *  единая точка инвалидации вкладки и бейджа (#1036) — создание/событие
+   *  задачи обновляют их так же, как общий журнал. */
+  tasksAll: () => ['tasks', 'assignee'] as const,
   tasks: (userId: string, search?: string) =>
     search
-      ? ([...['tasks', 'assignee', userId], { search }] as const)
-      : (['tasks', 'assignee', userId] as const),
+      ? ([...userRelationsKeys.tasksAll(), userId, { search }] as const)
+      : ([...userRelationsKeys.tasksAll(), userId] as const),
   projects: (userId: string, search?: string) =>
     search
       ? ([...['projects', 'member', userId], { search }] as const)

@@ -121,8 +121,8 @@ describe('Язычок «Ответить» (#729): вид и доступнос
     // Канон hover-действий: невидимое по умолчанию обязано открываться фокусом.
     expect(button.className).toContain('focus-visible:opacity-100');
     expect(button.className).toContain('group-hover/bubble:opacity-100');
-    // prefers-reduced-motion — без перехода прозрачности.
-    expect(button.className).toContain('motion-reduce:transition-none');
+    // Системное «уменьшить движение» переход не гасит (#1035).
+    expect(button.className).not.toContain('motion-reduce');
   });
 
   it('своё сообщение: язычка нет вовсе — отвечать на себя нечего', () => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { cn } from '#lib/utils';
 
 export interface NodeEdgePoint {
@@ -71,21 +71,6 @@ export function edgeDurations(
   };
 }
 
-function useReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(
-    () =>
-      typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const onChange = () => setReduced(mq.matches);
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
-  return reduced;
-}
-
 /**
  * Ортогональное ребро «инструмента» (реф node-based UI): сегменты под прямыми
  * углами, порты-точки на концах, опциональные отрисовка при появлении (drawOn)
@@ -122,12 +107,13 @@ function NodeEdge({
 }) {
   const d = useMemo(() => orthPath(points, elbow), [points, elbow]);
   const len = useMemo(() => pathLength(points), [points]);
-  const reduced = useReducedMotion();
   if (points.length < 2) return null;
   const start = points[0];
   const end = points[points.length - 1];
   if (!start || !end) return null;
-  const animate = drawOn && !reduced;
+  // Движение включено ВСЕГДА (#1035): системное «уменьшить движение» не
+  // гасит контур портала — веб ведёт себя как десктопная оболочка.
+  const animate = drawOn;
   // Длительности — из edgeDurations: скорость вспышки одинакова на всех
   // путях; caps — исключение для сверхдлинных маршрутов (широкоформатный
   // монитор: импульс быстрее, но не «теряется»).
@@ -159,7 +145,7 @@ function NodeEdge({
         (ports === 'both' ? [start, end] : [end]).map((p, i) => (
           <circle key={i} cx={p.x} cy={p.y} r={3} fill="var(--port)" />
         ))}
-      {pulse && !reduced && (
+      {pulse && (
         <circle r={2.5} fill="var(--port)" opacity={0}>
           {/* fill=freeze — после пробега кружок остаётся в конце пути, иначе
               SMIL возвращает его в (0,0): «светящийся пиксель» в левом верхнем

@@ -23,7 +23,8 @@ import { cn } from '@nodus/ui/lib/utils';
  * открываться фокусом — WCAG 2.1.1). Ярлык — часть DOM пузыря
  * (`group/bubble`), поэтому курсор, ушедший с пузыря на ярлык, ховер не
  * рвёт; невидимый ярлык не перехватывает клики (`pointer-events-none`).
- * Движение — только `opacity`, `motion-reduce` его снимает.
+ * Движение — только `opacity` (системное «уменьшить движение» портал не
+ * гасит, #1035).
  */
 
 /** Действие ярлыка: то же, что пункт меню, уже связанное с `runMenuItem`. */
@@ -108,7 +109,7 @@ export function MessageReplyButton({ mine }: { mine: boolean }) {
           // cursor: pointer; клавиатурный фокус виден рингом. Ширина по тексту,
           // на узком пузыре — max-w-full с усечением и паддингами px-2.
           'pointer-events-none max-w-full cursor-pointer truncate rounded-md bg-bubble-in px-2 py-px text-xs leading-none whitespace-nowrap text-bubble-in-foreground',
-          'opacity-0 transition-opacity duration-150 motion-reduce:transition-none',
+          'opacity-0 transition-opacity duration-150',
           'group-hover/bubble:pointer-events-auto group-hover/bubble:opacity-100',
           'focus-visible:pointer-events-auto focus-visible:ring-1 focus-visible:ring-ring/30 focus-visible:opacity-100 focus-visible:outline-none',
         )}

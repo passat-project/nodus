@@ -30,12 +30,12 @@ const video = (overrides: Partial<MessageAttachment> = {}): MessageAttachment =>
 });
 
 /**
- * #250: видео-плитка — постер, play по центру, бейдж длительности; play
- * играет на месте, клик по плитке открывает большой плеер, ошибка кодека —
- * вежливая карточка со скачиванием (без сломанного плеера).
+ * #250, модель Telegram (уточнение владельца 26.11.2026): видео-плитка —
+ * постер, play по центру, бейдж длительности; В ЛЕНТЕ видео не играет —
+ * и play, и клик по плитке открывают большой кинозал.
  */
 describe('AttachmentGallery — видео-плитка (#250)', () => {
-  it('постер, play и длительность; клик по плитке открывает плеер', () => {
+  it('постер, play и длительность; клик по плитке открывает кинозал', () => {
     const { container } = render(<AttachmentGallery media={[video()]} />);
 
     expect(container.querySelector('img')?.getAttribute('src')).toBe(
@@ -48,28 +48,40 @@ describe('AttachmentGallery — видео-плитка (#250)', () => {
     expect(useViewerStore.getState().target?.fileId).toBe('00000000-0000-4000-8000-0000000000a1');
   });
 
-  it('play запускает ролик на месте; ошибка кодека — карточка «скачайте файл»', () => {
+  it('play открывает тот же кинозал; маленького видео в ленте нет', () => {
     const { container } = render(<AttachmentGallery media={[video()]} />);
+
     fireEvent.click(screen.getByRole('button', { name: ui.chat.videoPlay }));
+    expect(useViewerStore.getState().target?.fileId).toBe('00000000-0000-4000-8000-0000000000a1');
+    // В сообщении не появляется ни плеера, ни кнопок браузера: только постер.
+    expect(container.querySelector('video')).toBeNull();
+    expect(screen.queryByRole('button', { name: ui.files.fullscreen })).toBeNull();
 
-    const inline = container.querySelector('video');
-    expect(inline).not.toBeNull();
-    expect(inline?.hasAttribute('controls')).toBe(true);
-
-    fireEvent.error(inline!);
-    expect(screen.getByText(ui.chat.videoUnsupported, { exact: false })).toBeTruthy();
-    const download = screen.getByRole('link', { name: ui.files.download });
-    // Клик по «скачать» не всплывает до плитки (иначе открылся бы плеер).
-    fireEvent.click(download);
-    expect(useViewerStore.getState().target).toBeNull();
+    // Второй триггер ведёт туда же.
+    useViewerStore.setState({ target: null });
+    fireEvent.click(screen.getByRole('button', { name: 'ролик.mp4' }));
+    expect(useViewerStore.getState().target?.fileId).toBe('00000000-0000-4000-8000-0000000000a1');
   });
 
-  it('без постера — заглушка, без бейджа (длительность неизвестна)', () => {
+  it('без серверного постера — кадр из самого ролика, без управления', () => {
     const { container } = render(
       <AttachmentGallery media={[video({ thumbnailUrl: null, durationMs: null })]} />,
     );
     expect(container.querySelector('img')).toBeNull();
     expect(screen.queryByText('1:05')).toBeNull();
+    const preview = container.querySelector('video')!;
+    expect(preview.getAttribute('src')).toBe('/api/v1/files/video-1/content#t=0.1');
+    expect(preview.hasAttribute('controls')).toBe(false);
+    expect(preview.muted).toBe(true);
+    expect(preview.tabIndex).toBe(-1);
     expect(screen.getByRole('button', { name: ui.chat.videoPlay })).toBeTruthy();
+  });
+
+  it('длительность — в левом нижнем углу: не спорит с временем сообщения', () => {
+    const { container } = render(<AttachmentGallery media={[video()]} />);
+    const badge = screen.getByText('1:05');
+    expect(badge.className).toContain('left-2');
+    expect(badge.className).not.toContain('right-2');
+    expect(container.querySelector('video')).toBeNull();
   });
 });
