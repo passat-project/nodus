@@ -4,6 +4,7 @@ import type { Paginated, TaskListItem } from '@nodus/contracts';
 
 import { projectsKeys } from '../api/projects-list.js';
 import { tasksKeys } from '../api/tasks-keys.js';
+import { userRelationsKeys } from '../api/user-relations.js';
 import { kanbanColumnKey } from '../lib/board/kanban-column-key.js';
 import type { EchoAwareBatcher, PushOptions } from './echo-batcher.js';
 import type { InvalidationTier } from './invalidation-batcher.js';
@@ -71,6 +72,9 @@ describe('pushTaskKeys (#311, #317)', () => {
     expect(has(keys, tasksKeys.transitions('t-fresh'))).toBe(true);
     expect(has(keys, tasksKeys.actions('t-fresh'))).toBe(true);
     expect(has(keys, tasksKeys.listPages())).toBe(true);
+    // Вкладка «Задачи» карточки сотрудника — тот же журнал «от человека»
+    // (#1036): событие накрывает её строки и счётчик без перезахода.
+    expect(has(keys, userRelationsKeys.tasksAll())).toBe(true);
   });
 
   it('формульная запись перечитывает деталь даже у автора (пересчёт после ответа)', () => {

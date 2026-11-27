@@ -68,12 +68,30 @@ describe('EmployeeCardWorkTabs — рабочая зона карточки со
     fireEvent.click(screen.getByRole('tab', { name: /Задачи/ }));
     expect(screen.getByText('журнал задач')).not.toBeNull();
     // Чат не размонтирован: живёт в скрытой панели (invisible + inert) —
-    // скролл и черновик не теряются.
+    // скролл и черновик не теряются. `opacity-0` гасит панель в кадре
+    // переключения: `visibility` с `transition-all` кнопок догоняло её на
+    // ~150 мс (#1037, тот же механизм, что закрыт общим слоем в #959).
     const chatPanel = screen.getByText('лента диалога').closest('[role="tabpanel"]');
     expect(chatPanel).not.toBeNull();
     expect(chatPanel?.className).toContain('invisible');
+    expect(chatPanel?.className).toContain('opacity-0');
+    expect(chatPanel?.className).toContain('pointer-events-none');
     expect(chatPanel?.hasAttribute('inert')).toBe(true);
     expect(screen.getByRole('tab', { name: /Задачи/ }).getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('переключение не ремаунтит панель: узел чата переживает уход и возврат', () => {
+    render(<Harness />);
+    const before = screen.getByText('лента диалога').closest('[role="tabpanel"]');
+    fireEvent.click(screen.getByRole('tab', { name: /Задачи/ }));
+    expect(screen.getByText('журнал задач').closest('[role="tabpanel"]')?.className).not.toContain(
+      'opacity-0',
+    );
+    fireEvent.click(screen.getByRole('tab', { name: 'Чат' }));
+    const after = screen.getByText('лента диалога').closest('[role="tabpanel"]');
+    expect(after).toBe(before);
+    expect(after?.className).not.toContain('opacity-0');
+    expect(after?.hasAttribute('inert')).toBe(false);
   });
 
   it('тоггл панели беседы — только у чата; уход на журнал его убирает', () => {

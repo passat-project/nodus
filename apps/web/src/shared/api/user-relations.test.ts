@@ -26,7 +26,15 @@ describe('адреса вкладок карточки сотрудника (#86
   });
 });
 
-describe('ключи вкладок карточки сотрудника (#956)', () => {
+describe('ключи вкладок карточки сотрудника (#956, #1036)', () => {
+  it('префикс накрывает канонический ключ и search-вариант', () => {
+    const prefix = userRelationsKeys.tasksAll();
+    expect(prefix).toEqual(['tasks', 'assignee']);
+    for (const key of [userRelationsKeys.tasks('u-1'), userRelationsKeys.tasks('u-1', 'Смета')]) {
+      expect(key.slice(0, prefix.length)).toEqual([...prefix]);
+    }
+  });
+
   it('без поиска — канонический ключ, с поиском — отдельная ветка', () => {
     expect(userRelationsKeys.tasks('u-1')).toEqual(['tasks', 'assignee', 'u-1']);
     expect(userRelationsKeys.tasks('u-1', 'Смета')).toEqual([

@@ -3,6 +3,7 @@ import { TASK_EVENTS, type Paginated, type TaskListItem } from '@nodus/contracts
 
 import { projectsKeys } from '../api/projects-list.js';
 import { tasksKeys } from '../api/tasks-keys.js';
+import { userRelationsKeys } from '../api/user-relations.js';
 import { stageIdOfColumnKey } from '../lib/board/kanban-column-key.js';
 import type { KeyBatcher } from './invalidation-batcher.js';
 import type { EchoAwareBatcher } from './echo-batcher.js';
@@ -178,5 +179,9 @@ export function pushTaskKeys(
   }
   // Журнал и навигатор веток рефечатся, только если смонтированы (active).
   batcher.push(tasksKeys.listPages(), 'list');
+  // Вкладка «Задачи» открытой карточки сотрудника (#1036) — тот же журнал
+  // «от человека»: переназначение/удаление/переход задачи с другого клиента
+  // обновляют её строки и счётчик тем же событием, без перезахода.
+  batcher.push(userRelationsKeys.tasksAll(), 'list');
   batcher.push(tasksKeys.branchAll(), 'list');
 }

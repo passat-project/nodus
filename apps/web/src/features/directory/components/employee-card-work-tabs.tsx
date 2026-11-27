@@ -19,7 +19,11 @@ const TAB_IDS: readonly EmployeeWorkTab[] = ['chat', 'tasks', 'projects'];
  * полоса вкладок карточек (`CardTabStrip`) — «Чат» (своя карточка —
  * «Избранное»), «Задачи», «Проекты»; меню/тоггл панели беседы — в правом
  * слоте. Содержимое вкладки монтируется при ПЕРВОМ показе и живёт скрытым
- * (`invisible` + `inert`), как в карточке задачи: скролл, фильтры журналов и
+ * (`pointer-events-none invisible opacity-0` + `inert`), как общий слой
+ * панелей вкладок карточек (#959): `opacity` — композиторное свойство, гасит
+ * панель в кадре переключения (иначе `visibility` с `transition-all` кнопок
+ * догоняло её на ~150 мс, #1037), `visibility` оставлен — он не отменяет
+ * IntersectionObserver (#770). Скролл, фильтры журналов и
  * черновик чата не сбрасываются. Тоггл панели — только у чата, ушедшая
  * панель не сбрасывает своё состояние (решает хост).
  */
@@ -128,7 +132,10 @@ export function EmployeeCardWorkTabs({
               id={`${domId(tab)}-panel`}
               aria-labelledby={`${domId(tab)}-tab`}
               inert={!isActive}
-              className={cn('absolute inset-0', !isActive && 'invisible')}
+              className={cn(
+                'absolute inset-0',
+                !isActive && 'pointer-events-none invisible opacity-0',
+              )}
             >
               {panel(tab)}
             </div>
