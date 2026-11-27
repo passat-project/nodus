@@ -1,4 +1,8 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
+
+import { CustomFieldsPortsModule } from '../custom-fields/custom-fields-ports.module.js';
+import { WorkflowsPortsModule } from '../workflows/workflows-ports.module.js';
+import { CrmPortsModule } from '../crm/crm-ports.module.js';
 
 import { UserProfileProvider } from '../../core/ports/user-profile.provider.js';
 import { USER_PROFILE_READER } from '../../core/ports/user-profile.port.js';
@@ -30,7 +34,12 @@ import { LETTER_VISIBILITY_READER } from './ports/letter-visibility.port.js';
  * импорта; доменные сервисы наружу не экспортируются.
  */
 @Module({
-  imports: [ProjectsPortsModule],
+  imports: [
+    forwardRef(() => ProjectsPortsModule),
+    forwardRef(() => CustomFieldsPortsModule),
+    forwardRef(() => WorkflowsPortsModule),
+    CrmPortsModule,
+  ],
   providers: [
     UserProfileProvider,
     { provide: USER_PROFILE_READER, useClass: UserProfileProvider },

@@ -1,4 +1,6 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
+
+import { CustomFieldsPortsModule } from '../custom-fields/custom-fields-ports.module.js';
 
 import { FOLDER_LIST_EXPORT_SOURCE } from '../views/list-export-source.port.js';
 import { FolderListExportSource } from './ports/folder-list-export-source.provider.js';
@@ -38,6 +40,9 @@ import {
  * импорта; доменные сервисы и контроллеры наружу не экспортируются.
  */
 @Module({
+  // Реестр атрибутов (источники выгрузки папок, #435): цикл с custom-fields
+  // разорван forwardRef (там — ProjectsPortsModule).
+  imports: [forwardRef(() => CustomFieldsPortsModule)],
   providers: [
     ProjectsRepository,
     ProjectGroupsRepository,

@@ -202,7 +202,21 @@ export const createSavedViewBodySchema = z.object({
 });
 export type CreateSavedViewBody = z.infer<typeof createSavedViewBodySchema>;
 
-export const updateSavedViewBodySchema = createSavedViewBodySchema.partial();
+/** Правка настройки: частичная замена разделов. Явные опциональные поля БЕЗ
+ * `.default()` (gotcha Zod 4: умолчания в partial-схеме заполняли бы
+ * непереданное и затирали хранимое — filter/columns «обнулялись» правкой
+ * одного имени). */
+export const updateSavedViewBodySchema = z.object({
+  name: z.string().trim().min(1).max(100).optional(),
+  entity: listEntitySchema.optional(),
+  scope: listViewScopeSchema.optional(),
+  level: listViewLevelSchema.optional(),
+  filter: listFilterSchema.optional(),
+  sort: z.array(listSortSchema).max(LIST_VIEW_LIMITS.sort).optional(),
+  group: listGroupSchema.optional(),
+  totals: z.array(listTotalSchema).max(LIST_VIEW_LIMITS.totals).optional(),
+  columns: z.array(listViewColumnSchema).max(LIST_VIEW_LIMITS.columns).optional(),
+});
 export type UpdateSavedViewBody = z.infer<typeof updateSavedViewBodySchema>;
 
 /** Выгрузка CSV текущей выборки и колонок (#435): до csvSyncRows — файл

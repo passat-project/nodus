@@ -26,12 +26,13 @@ ALTER TABLE "saved_views"
     ADD CONSTRAINT "saved_views_level_check" CHECK ("level" IN ('personal', 'project', 'type_default')),
     ADD CONSTRAINT "saved_views_scope_kind_check" CHECK ("scope_kind" IN ('journal', 'project', 'type_default')),
     ADD CONSTRAINT "saved_views_entity_check" CHECK ("entity" IN ('task', 'letter', 'folder')),
-    -- Рамка и уровень согласованы: проектная настройка знает проект и не
-    -- имеет владельца-личности; личная — владельца; у типа — typeId.
+    -- Уровень согласован с рамкой: личная — с владельцем (журнал или
+    -- проект); общая проектная — с проектом и без владельца; списка типа —
+    -- с typeId и без владельца.
     ADD CONSTRAINT "saved_views_scope_level_check" CHECK (
-        ("scope_kind" = 'journal')
-        OR ("scope_kind" = 'project' AND "project_id" IS NOT NULL AND "owner_id" IS NULL)
-        OR ("scope_kind" = 'type_default' AND "type_id" IS NOT NULL AND "owner_id" IS NULL)
+        ("level" = 'personal' AND "owner_id" IS NOT NULL)
+        OR ("level" = 'project' AND "scope_kind" = 'project' AND "project_id" IS NOT NULL AND "owner_id" IS NULL)
+        OR ("level" = 'type_default' AND "scope_kind" = 'type_default' AND "type_id" IS NOT NULL AND "owner_id" IS NULL)
     );
 
 CREATE INDEX "saved_views_project_level_idx" ON "saved_views"("project_id", "level");

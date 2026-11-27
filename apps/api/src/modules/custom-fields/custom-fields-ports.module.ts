@@ -55,9 +55,9 @@ import { FormulaValuesService } from './formulas/formula-values.service.js';
     DiscoveryModule,
     DictionariesPortsModule,
     CrmPortsModule,
-    ProjectsPortsModule,
+    forwardRef(() => ProjectsPortsModule),
     forwardRef(() => TasksPortsModule),
-    CorrespondencePortsModule,
+    forwardRef(() => CorrespondencePortsModule),
     forwardRef(() => WorkflowsPortsModule),
   ],
   providers: [

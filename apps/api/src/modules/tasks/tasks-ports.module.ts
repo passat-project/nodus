@@ -43,7 +43,11 @@ import { WorkflowPressRoundsProvider } from './ports/workflow-press-rounds.provi
  * импорта; доменные сервисы задач не экспортируются.
  */
 @Module({
-  imports: [ProjectsPortsModule, forwardRef(() => CustomFieldsPortsModule), WorkflowsPortsModule],
+  imports: [
+    forwardRef(() => ProjectsPortsModule),
+    forwardRef(() => CustomFieldsPortsModule),
+    WorkflowsPortsModule,
+  ],
   providers: [
     OrgStructureProvider,
     { provide: ORG_STRUCTURE_READER, useClass: OrgStructureProvider },

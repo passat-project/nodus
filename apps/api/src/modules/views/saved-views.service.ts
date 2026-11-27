@@ -51,6 +51,7 @@ export class SavedViewsService {
         ErrorCode.VALIDATION_FAILED,
         'View level does not match its scope',
         { scope: body.scope.kind, level: body.level },
+        422,
       );
     }
     await this.assertCanWrite(user, body, level);

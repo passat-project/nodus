@@ -64,10 +64,8 @@ export class ListExportService {
       throw new DomainException(
         ErrorCode.VALIDATION_FAILED,
         'Folder export requires project scope',
-        {
-          entity: body.entity,
-          scope: body.scope.kind,
-        },
+        { entity: body.entity, scope: body.scope.kind },
+        422,
       );
     }
     this.assertColumns(body);
