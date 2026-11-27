@@ -276,16 +276,13 @@ describe('PostCard — атрибуция пересылки (#1072)', () => {
     },
   });
 
-  it('пересланный пост: пометка «Переслано от» с именем источника', () => {
-    const { container } = renderCard(<PostCard {...base} message={forwarded} />);
-    const card = container.querySelector('[data-slot="post-surface"]')!;
-    expect(card.textContent).toContain('Переслано от');
-    expect(card.textContent).toContain('Анна Смирнова');
-  });
-
-  it('обычный пост: пометки нет', () => {
-    const { container } = renderCard(<PostCard {...base} message={message()} />);
-    expect(container.querySelector('[data-slot="post-surface"]')!.textContent).not.toContain(
+  it('пересланный пост несёт «Переслано от»; обычный — нет', () => {
+    const fwd = renderCard(<PostCard {...base} message={forwarded} />);
+    expect(fwd.container.querySelector('[data-slot="post-surface"]')!.textContent).toContain(
+      'Переслано от',
+    );
+    const plain = renderCard(<PostCard {...base} message={message()} />);
+    expect(plain.container.querySelector('[data-slot="post-surface"]')!.textContent).not.toContain(
       'Переслано от',
     );
   });
@@ -296,9 +293,7 @@ describe('PostCard — атрибуция пересылки (#1072)', () => {
     const source = [...card.querySelectorAll('button')].find((b) =>
       b.textContent!.includes('Анна Смирнова'),
     ) as HTMLElement;
-    expect(source).toBeTruthy();
     fireEvent.click(source);
-    // jump-запрос переживает навигацию к беседе-источнику (jump-store)
     expect(useJumpStore.getState().target).toMatchObject({
       conversationId: 'conv-src',
       messageId: 'src-msg',
