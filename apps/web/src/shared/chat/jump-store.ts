@@ -44,6 +44,22 @@ export const useJumpStore = create<JumpState>((set) => ({
   consume: (nonce) => set((s) => (s.target?.nonce === nonce ? { target: null } : s)),
 }));
 
+/** Прыжок к сообщению-причине уведомления (#1072): id попапа/снапшота —
+ *  «edit:<uuid>» у правок (префикс снимаем), произвольные id (notificationId
+ *  повторов срочного) не uuid — прыжка нет, молча: цели в ленте не бывает,
+ *  «не найдено»-тост тут шум. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function requestMessageJump(
+  conversationId: string,
+  rawMessageId: string | null | undefined,
+  threadRootId?: string | null,
+): void {
+  const id = rawMessageId?.startsWith('edit:') ? rawMessageId.slice('edit:'.length) : rawMessageId;
+  if (!id || !UUID_RE.test(id)) return;
+  useJumpStore.getState().request(conversationId, id, threadRootId ?? null);
+}
+
 /** Длительность вспышки — канон research: мгновенная подсветка + затухание ~2 с
  *  (css-tricks yellow flash, Discord blurple); CSS — .animate-message-flash. */
 export const FLASH_MS = 2000;

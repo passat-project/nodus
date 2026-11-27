@@ -8,6 +8,7 @@ const AUTHOR = '11111111-1111-1111-1111-111111111111';
 const ME = '22222222-2222-2222-2222-222222222222';
 const CONV = '33333333-3333-3333-3333-333333333333';
 const CONV2 = '44444444-4444-4444-4444-444444444444';
+const THREAD = '55555555-5555-5555-5555-555555555555';
 
 function notif(n: number, overrides: Partial<Notification> = {}): Notification {
   return {
@@ -51,6 +52,7 @@ function snapshot(overrides: Partial<NotificationSnapshot> = {}): NotificationSn
 const NO_FLAGS = {
   viewerId: ME,
   openConversationId: null,
+  openThread: null,
   muted: new Set<string>(),
   snoozed: new Set<string>(),
   dnd: { enabled: false, start: '22:00', end: '08:00' },
@@ -139,6 +141,32 @@ describe('shouldToast (подавления B-кейсов)', () => {
     expect(shouldToast(snapshot({ conversationId: CONV2 }), 0, ctx)).toBe('personal');
     // пользователь отошёл (нет ввода/фокуса) — тост возвращается (#770)
     expect(shouldToast(snapshot(), 0, { ...ctx, userActive: false })).toBe('personal');
+  });
+
+  it('B6-тред (#1072): ответ в треде гасится только открытым окном ЭТОГО треда', () => {
+    const reply = snapshot({ kind: 'chat.thread_reply', threadRootId: THREAD });
+    const inChannel = { ...NO_FLAGS, openConversationId: CONV };
+    // панель треда скрыта: нахожусь в канале, но ответов треда в ленте нет —
+    // тост приходит (раньше глушился «открытой беседой»)
+    expect(shouldToast(reply, 0, inChannel)).toBe('personal');
+    // открыто окно именно этого треда — тишина
+    const inThread = {
+      ...NO_FLAGS,
+      openConversationId: CONV,
+      openThread: { conversationId: CONV, threadRootId: THREAD },
+    };
+    expect(shouldToast(reply, 0, inThread)).toBeNull();
+    // открыто окно ДРУГОГО треда — тост приходит
+    const inOtherThread = {
+      ...NO_FLAGS,
+      openConversationId: CONV,
+      openThread: { conversationId: CONV, threadRootId: '00000000-0000-4000-8000-0000000000b1' },
+    };
+    expect(shouldToast(reply, 0, inOtherThread)).toBe('personal');
+    // срочное пробивает и открытый тред
+    expect(shouldToast(snapshot({ priority: 'urgent', threadRootId: THREAD }), 0, inThread)).toBe(
+      'personal',
+    );
   });
 
   it('B6-регресс: действие без беседы не гасится нулевым открытым чатом (null===null)', () => {

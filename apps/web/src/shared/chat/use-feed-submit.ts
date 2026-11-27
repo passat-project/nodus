@@ -7,16 +7,23 @@ import { startMessageEdit, toEditVars } from './message-edit.js';
 import { useSendChatMessage, type SendChatVars } from './send-message.js';
 import { registerScopeSubmit } from './submit-registry.js';
 
-/** Последнее своё сообщение для ↑-правки: живое, не пересланное (#111) и
- *  подтверждённое сервером — летящий темп (seq=0) серверных команд не
- *  принимает (#243, как дизейбл «Редактировать» в меню). */
+/** Последнее своё сообщение для ↑-правки: живое, подтверждённое сервером
+ *  (летящий темп seq=0 серверных команд не принимает, #243); пересланная
+ *  копия — только своего текста (#1072: чужие слова не правятся, сервер
+ *  держит то же правило). */
 export function findLastMine(
   items: readonly ChatMessage[],
   meId: string | undefined,
 ): ChatMessage | undefined {
   return [...items]
     .reverse()
-    .find((m) => m.author.id === meId && !m.deletedAt && !m.forwardedFrom && m.seq > 0);
+    .find(
+      (m) =>
+        m.author.id === meId &&
+        !m.deletedAt &&
+        (!m.forwardedFrom || m.forwardedFrom.author.id === m.author.id) &&
+        m.seq > 0,
+    );
 }
 
 /**

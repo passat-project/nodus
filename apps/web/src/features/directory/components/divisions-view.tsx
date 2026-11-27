@@ -62,6 +62,8 @@ export function DivisionsView({
   onCreateChild,
   onInvite,
   onEdit,
+  onTransfer,
+  onDelete,
   onLocateMe,
 }: {
   roots: DepartmentNode[];
@@ -78,8 +80,12 @@ export function DivisionsView({
   onCreateChild: (parentId: string) => void;
   /** «⋯» карточки: приглашение в Nodus с предвыбранным подразделением (#101). */
   onInvite: (node: DepartmentNode) => void;
-  /** «⋯» карточки: правка отдела (полное меню действий — #881). */
+  /** «⋯» карточки: правка подразделения. */
   onEdit: (node: DepartmentNode) => void;
+  /** «⋯» карточки: перевод сотрудника в подразделение (#881). */
+  onTransfer: (node: DepartmentNode) => void;
+  /** «⋯» карточки: удаление с переносом (#881). */
+  onDelete: (node: DepartmentNode) => void;
   /** «Найти меня»: выбор себя через поиск (нет обработчика — нет кнопки). */
   onLocateMe?: () => void;
 }) {
@@ -240,6 +246,8 @@ export function DivisionsView({
                 onCreateChild={onCreateChild}
                 onInvite={onInvite}
                 onEdit={onEdit}
+                onTransfer={onTransfer}
+                onDelete={onDelete}
               />
             ))}
           </div>

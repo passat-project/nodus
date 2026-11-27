@@ -26,7 +26,7 @@
 ```
 # Реализованные (эмитятся кодом; payload-схемы — packages/contracts/src/**/*events*.ts)
 directory.user.created / updated / deactivated  # deactivated — gateway рвёт WS-сокеты пользователя
-directory.department.created / updated / archived
+directory.department.created / updated / deleted  # deleted {departmentId, name, parentId, childDepartmentIds, userIds}; archived — историческое, с #881 не эмитится
 directory.position.created / updated / archived
 directory.role.created / updated / deleted  # updated — ТОЛЬКО name/description (состав прав несёт permissions_changed)
 directory.role.permissions_changed  # {roleId, permission, granted} — любое реальное изменение состава прав роли, по событию на право; аудит пишется на каждый вызов, событие — только при изменении (#379, ADR-0034)

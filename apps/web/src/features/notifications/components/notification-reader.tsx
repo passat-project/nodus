@@ -142,7 +142,7 @@ function PlainBody({ item, onClose }: { item: Notification; onClose: () => void 
               onClick={() => {
                 onClose();
                 // Уведомление об ответе в трэде — источник с окном трэда (#300).
-                openSourceCard(openCard, source, item.threadRootId);
+                openSourceCard(openCard, source, item.threadRootId, undefined, item.messageId);
               }}
             >
               {ui.notifications.detailOpenSource}

@@ -66,8 +66,20 @@ export class SearchIndexRunner {
 
       case DIRECTORY_EVENTS.DEPARTMENT_UPDATED:
       case DIRECTORY_EVENTS.DEPARTMENT_ARCHIVED: {
+        // Архивное событие — историческое (после #881 архив не эмитится), но
+        // в outbox могут быть записи прошлых периодов: обработчик остаётся.
         const departmentId = text(payload['departmentId']);
         if (departmentId) await this.index.indexByDepartment(departmentId);
+        return;
+      }
+
+      case DIRECTORY_EVENTS.DEPARTMENT_DELETED: {
+        // Строка подразделения исчезла: переиндексируем прямых сотрудников,
+        // переехавших к родителю (уволенные дадут tombstone).
+        const userIds = Array.isArray(payload['userIds'])
+          ? payload['userIds'].filter((id): id is string => typeof id === 'string')
+          : [];
+        if (userIds.length > 0) await this.index.indexIds('employee', userIds);
         return;
       }
 
@@ -167,6 +179,7 @@ export const SearchIndexDirectoryHandler = handlerFor('SearchIndexDirectoryHandl
   DIRECTORY_EVENTS.USER_DELETED,
   DIRECTORY_EVENTS.DEPARTMENT_UPDATED,
   DIRECTORY_EVENTS.DEPARTMENT_ARCHIVED,
+  DIRECTORY_EVENTS.DEPARTMENT_DELETED,
   DIRECTORY_EVENTS.POSITION_UPDATED,
   DIRECTORY_EVENTS.POSITION_DELETED,
 ]);

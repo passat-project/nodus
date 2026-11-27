@@ -150,6 +150,26 @@ export class DepartmentsRepository {
     return chain;
   }
 
+  /** Прямые дети узла (для удаления #881): порядок детерминирован, как в дереве. */
+  async findDirectChildIds(id: string, tx?: TransactionClient): Promise<string[]> {
+    const rows = await (tx ?? this.prisma).department.findMany({
+      where: { parentId: id },
+      select: { id: true },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map((row) => row.id);
+  }
+
+  /** Дети удаляемого узла поднимаются на ступень выше (#881). */
+  async reparentChildren(id: string, parentId: string, tx: TransactionClient): Promise<void> {
+    await tx.department.updateMany({ where: { parentId: id }, data: { parentId } });
+  }
+
+  /** Жёсткое удаление подразделения (#881); роли/замы уходят каскадом FK. */
+  async deleteById(id: string, tx: TransactionClient): Promise<void> {
+    await tx.department.delete({ where: { id } });
+  }
+
   /** Поддерево: сам узел и все потомки (BFS по уровням; bind #490 —
    *  затронутые переносом подразделения). */
   async findSubtreeIds(id: string, tx?: TransactionClient): Promise<string[]> {
@@ -175,14 +195,6 @@ export class DepartmentsRepository {
     return (tx ?? this.prisma).department.findUnique({
       where: { id },
       select: { id: true, kind: true, isActive: true },
-    });
-  }
-
-  /** Активные дочерние узлы (#441): непустое подразделение не архивируется —
-   *  активные дети archived-родителя выпали бы из дерева вида. */
-  async countActiveChildren(id: string, tx?: TransactionClient): Promise<number> {
-    return (tx ?? this.prisma).department.count({
-      where: { parentId: id, isActive: true },
     });
   }
 

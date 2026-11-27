@@ -227,6 +227,8 @@ export function PopupView() {
     void invoke('popup_open', {
       conversationId: data.conversationId,
       threadRootId: data.threadRootId ?? null,
+      // Сообщение-причина клика (#1072): портал прыгает к нему.
+      messageId: data.id ?? null,
     }).then(close);
   }
 

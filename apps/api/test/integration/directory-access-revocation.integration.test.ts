@@ -14,7 +14,7 @@ import { managementParentId, type DirectoryApi } from './departments-fixtures.js
 
 /**
  * Отзыв access-токенов при изменении оргструктуры (#866, замечание
- * валидатора): архивация подразделения и перенос меняют действующие роли
+ * валидатора): удаление подразделения и перенос меняют действующие роли
  * сотрудников — выданные ранее токены не должны жить до истечения TTL.
  * Событие `directory.role.access_changed` доставляется детерминированно.
  */
@@ -98,10 +98,15 @@ describe('Отзыв токенов при изменении оргструкт
     }
   });
 
-  it('архивация подразделения с привязанной ролью отзывает токен сотрудника', async () => {
-    const department = await createDepartment({
-      name: `Орг-отзыв архива ${f.runId}`,
+  it('удаление подразделения с привязанной ролью отзывает токен сотрудника', async () => {
+    const parent = await createDepartment({
+      name: `Орг-отзыв родитель ${f.runId}`,
       kind: 'management',
+    });
+    const department = await createDepartment({
+      name: `Орг-отзыв удаления ${f.runId}`,
+      kind: 'management',
+      parentId: parent.id,
     });
     const roleId = await f.createRole('Роль-архив', [Permission.CUSTOM_FIELD_MANAGE]);
     await bindRoleToDepartment(roleId, department.id);
@@ -116,13 +121,13 @@ describe('Отзыв токенов при изменении оргструкт
     };
     expect(before.permissions).toContain(Permission.CUSTOM_FIELD_MANAGE);
 
-    const archived = await f.api(
+    const removed = await f.api(
       f.users.directory,
-      'POST',
-      `/directory/departments/${department.id}/archive`,
+      'DELETE',
+      `/directory/departments/${department.id}`,
       { key: randomUUID() },
     );
-    expect(archived.status).toBe(204);
+    expect(removed.status).toBe(204);
 
     await deliverAccessChanged(roleId);
     expect((await f.api(employeeWith(token), 'GET', '/auth/me')).status).toBe(401);

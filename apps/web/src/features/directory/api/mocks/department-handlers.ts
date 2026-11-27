@@ -121,6 +121,50 @@ export function departmentHandlers(state: DepartmentMockState) {
       applyLeaders(department.headId, department.deputyIds, department);
       return HttpResponse.json(department, { status: 201 });
     }),
+    http.delete('/api/v1/directory/departments/:id', ({ params }) => {
+      const current = state.getDepartments().find((d) => d.id === params.id);
+      if (!current)
+        return HttpResponse.json(
+          { code: 'NOT_FOUND', message: 'Department not found' },
+          { status: 404 },
+        );
+      if (current.kind === 'legal')
+        return HttpResponse.json(
+          {
+            code: ErrorCode.DIRECTORY_DEPARTMENT_LEGAL_FORBIDDEN,
+            message: 'Legal department cannot be deleted',
+          },
+          { status: 409 },
+        );
+      if (current.parentId === null)
+        return HttpResponse.json(
+          {
+            code: ErrorCode.DIRECTORY_DEPARTMENT_ROOT_FORBIDDEN,
+            message: 'Management department root cannot be deleted',
+          },
+          { status: 409 },
+        );
+      const parentId = current.parentId;
+      state.setDepartments(
+        state
+          .getDepartments()
+          .filter((department) => department.id !== current.id)
+          .map((department) =>
+            department.parentId === current.id ? { ...department, parentId } : department,
+          ),
+      );
+      state.setUsers(
+        state
+          .getUsers()
+          .map((user) =>
+            user.departmentId === current.id ? { ...user, departmentId: parentId } : user,
+          ),
+      );
+      for (const card of demoUserCards) {
+        if (card.departmentId === current.id) card.departmentId = parentId;
+      }
+      return new HttpResponse(null, { status: 204 });
+    }),
     http.patch('/api/v1/directory/departments/:id', async ({ params, request }) => {
       const parsed = updateDepartmentSchema.safeParse(await request.json());
       if (!parsed.success)

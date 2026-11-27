@@ -45,6 +45,7 @@ import { MessagesWriteRepository } from './messages-write.repository.js';
 import { MessagesLifecycleRepository } from './messages-lifecycle.repository.js';
 import { MessagesReadStateRepository } from './messages-read-state.repository.js';
 import {
+  applyRootPostAuthorWatch,
   applyThreadReplyEffects,
   loadReplyQuote,
   resolveSendSticker,
@@ -385,6 +386,16 @@ export class MessagesService {
       await this.memberships.revealHidden(conversationId, tx);
       if (threadRootId === null) {
         await this.writes.touchLastMessageAt(conversationId, tx);
+        // Корневой пост канала — автор наблюдатель своего треда с публикации
+        // (#1072): без строки участия уведомления об ответах приходили
+        // только после первого собственного ответа автора в треде.
+        if (conversation.type === 'project_channel') {
+          await applyRootPostAuthorWatch(
+            this.threadParticipants,
+            { rootId: inserted.id, userId },
+            tx,
+          );
+        }
       } else {
         await applyThreadReplyEffects(
           { repo: this.repo, threadParticipants: this.threadParticipants, eventBus: this.eventBus },
@@ -459,10 +470,11 @@ export class MessagesService {
       if (message.authorId !== userId) {
         throw DomainException.forbidden('Only author can modify this message');
       }
-      // Пересланную копию не правит даже переславший (#111, I8): текст под
-      // атрибуцией «Переслано от» принадлежит оригинальному автору — правка
-      // позволила бы исказить чужие слова (модель Telegram: только удаление).
-      if (message.fwdMessageId) {
+      // Пересланную копию правит только владелец исходного текста (#1072,
+      // ревизия #111): копия ЧУЖИХ слов неизменна — правка позволила бы
+      // исказить чужие под атрибуцией «Переслано от»; СВОЙ текст автор
+      // пересылки вправе поправить (оригинал при этом не меняется).
+      if (message.fwdMessageId && message.fwdAuthorId !== userId) {
         throw DomainException.forbidden('Forwarded messages cannot be edited');
       }
       // Состав вложений правки — messages-edit-attachments.ts (#188, I5).

@@ -7,6 +7,7 @@ import { isUserActive } from '../attention/attention-store.js';
 import { isModalLayerOpen } from '../attention/modal-layers.js';
 import { chatKeys } from '../chat/chat-keys.js';
 import { getOpenConversation } from '../chat/open-conversation.js';
+import { isOpenThreadMatch } from '../chat/open-thread.js';
 import { desktopFlashTaskbar, desktopShowPopup, isDesktopShell } from './desktop-bridge.js';
 import { notifyDesktopLetter } from './letter-popup.js';
 
@@ -51,17 +52,24 @@ export function notifyDesktopJournal(
 }
 
 /** Попап о правке: заголовок — вид события, превью — кто и новый текст.
- * Трэд-гейт наблюдателей (threadNotifyAllowed) здесь НЕ применяется — это
- * осознанно: правки сервер шлёт всем участникам беседы с thread_root_id=null
- * (notification-builders.buildInsertsFromEditedEvent, канон #189, уровень
- * беседы), снапшот не несёт трэд-источник. Попап согласован с журналом/
- * колокольчиком (там правка тоже видна всем); гейт наблюдателей — только для
- * НОВЫХ сообщений треда (живой путь notifyDesktopMessage). Правила тишины
- * «смотрю в беседу»/mute/snooze — применяются. */
+ *  Трэд-гейт наблюдателей (threadNotifyAllowed) здесь НЕ применяется — это
+ *  осознанно: аудитория правки решена сервером (#974: правка в обсуждении —
+ *  только наблюдателям треда, правка ленты — всем членам), попап согласован
+ *  с журналом/колокольчиком. Правила тишины «смотрю в беседу»/mute/snooze —
+ *  применяются; правка ответа в треде (#1072) гасится только открытым окном
+ *  ЭТОГО треда, как у живого пути. */
 function showEditPopup(snapshot: NotificationSnapshot, queryClient: QueryClient): void {
   const conversationId = snapshot.conversationId;
   if (!conversationId) return;
-  if (isUserActive() && !isModalLayerOpen() && getOpenConversation() === conversationId) return;
+  if (
+    isUserActive() &&
+    !isModalLayerOpen() &&
+    (snapshot.threadRootId !== null
+      ? isOpenThreadMatch({ conversationId, threadRootId: snapshot.threadRootId })
+      : getOpenConversation() === conversationId)
+  ) {
+    return;
+  }
   const flags = conversationFlags(queryClient, conversationId);
   if (flags?.muted || flags?.snoozed) return;
   const text = (snapshot.preview ?? '').slice(0, 200);

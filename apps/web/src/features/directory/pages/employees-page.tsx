@@ -17,11 +17,13 @@ import type { ActiveListFilter } from '../../../shared/views/list-filters.js';
 import { useFilteredList, useListToolbar } from '../../../shared/views/use-list-toolbar.js';
 import { useDepartmentTree, useUsersList } from '../api/directory-api.js';
 import { flattenDepartments } from '../../../shared/api/departments-list.js';
+import { DepartmentActionDialogs } from '../components/department-action-dialogs.js';
 import { DepartmentDialog } from '../components/department-dialog.js';
 import { DepartmentPanel } from '../components/department-panel.js';
 import type { StructureFocus } from '../components/divisions-view.js';
 import { EmployeesPageHeader } from '../components/employees-page-header.js';
 import { EmployeesStructureCanvas } from '../components/employees-structure-canvas.js';
+import { PANEL_RESERVE, PANEL_TOGGLE_BELOW } from '../lib/structure-header-geometry.js';
 import { InviteDialog } from '../components/invite-dialog.js';
 import { PositionsPanel } from '../components/positions-panel.js';
 import { buildDepartmentCardStats } from '../lib/department-card-stats.js';
@@ -62,6 +64,8 @@ export function EmployeesPage() {
   const [highlightUserId, setHighlightUserId] = useState<string | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteDepartmentId, setInviteDepartmentId] = useState<string | null>(null);
+  const [transferNode, setTransferNode] = useState<DepartmentNode | null>(null);
+  const [deleteNode, setDeleteNode] = useState<DepartmentNode | null>(null);
   const canManage = useCanManageDirectory();
   const focusToken = useRef(0);
   const enteredStructure = useRef(false);
@@ -102,6 +106,7 @@ export function EmployeesPage() {
   const roots = useMemo(() => tree.data ?? [], [tree.data]);
   const activeIds = useMemo(() => activeDepartmentIds(roots), [roots]);
   const mainId = useMemo(() => mainDepartmentId(roots), [roots]);
+  const departmentOptions = useMemo(() => flattenDepartments(roots), [roots]);
   // Карточки структуры (руководитель/замы/подчинённые/чип) — ОДИН расчёт на
   // страницу из уже загруженного справочника (план 16.11.2026, §2).
   const cardStats = useMemo(
@@ -111,6 +116,10 @@ export function EmployeesPage() {
   const selectedNode = selectedDeptId ? findDepartment(roots, selectedDeptId) : null;
   const positionsOpen = tab === 'structure' && rightPanel === 'positions';
   const deptOpen = tab === 'structure' && !positionsOpen && selectedNode !== null;
+  // Тесная шапка: «Список должностей» из неё уезжает под панель — тот же
+  // переключатель дублируется в шапке самой панели (она видна всегда).
+  const headerAvailable = rowWidth > 0 ? rowWidth - PANEL_RESERVE : 0;
+  const showPanelPositionsToggle = rowWidth > 0 && headerAvailable < PANEL_TOGGLE_BELOW;
   // Бейдж «Ваше подразделение»: свой активный отдел, иначе главная карточка —
   // сотрудник без подразделения (или с архивным) показан там, и бейдж видят все
   // (вердикт 17.11.2026). Нет дерева/меня — бейджа нет.
@@ -150,6 +159,11 @@ export function EmployeesPage() {
   function centerOn(id: string | null) {
     focusToken.current += 1;
     setFocus({ id, token: focusToken.current });
+  }
+
+  /** «Должности»: подменить содержимое постоянной панели и вернуть обратно. */
+  function togglePositions() {
+    setRightPanel((prev) => (prev === 'positions' ? 'dept' : 'positions'));
   }
 
   /** Клик по карточке только выбирает отдел: панель постоянна и не
@@ -197,9 +211,7 @@ export function EmployeesPage() {
           setInviteDepartmentId(null);
           setInviteOpen(true);
         }}
-        onTogglePositions={() =>
-          setRightPanel((prev) => (prev === 'positions' ? 'dept' : 'positions'))
-        }
+        onTogglePositions={togglePositions}
         onPickDepartment={pickDepartment}
         onPickEmployee={pickEmployee}
       />
@@ -240,6 +252,8 @@ export function EmployeesPage() {
               setInviteOpen(true);
             }}
             onEdit={(node) => setDeptDialog({ open: true, parentId: null, editing: node })}
+            onTransfer={setTransferNode}
+            onDelete={setDeleteNode}
             onLocateMe={meItem ? () => pickEmployee(meItem) : undefined}
           />
         )}
@@ -252,15 +266,15 @@ export function EmployeesPage() {
           activeDepartmentIds={activeIds}
           highlightUserId={highlightUserId}
           topShift={topShift}
-          onArchived={(node) => {
-            setSelectedDeptId(node.parentId ?? mainId ?? null);
-            setHighlightUserId(null);
-          }}
           onInvite={(departmentId) => {
             setInviteDepartmentId(departmentId);
             setInviteOpen(true);
           }}
           onEdit={(node) => setDeptDialog({ open: true, parentId: null, editing: node })}
+          onTransfer={setTransferNode}
+          onDelete={setDeleteNode}
+          showPositionsToggle={showPanelPositionsToggle}
+          onTogglePositions={togglePositions}
           canManage={canManage}
         />
       ) : null}
@@ -277,6 +291,32 @@ export function EmployeesPage() {
         onOpenChange={setInviteOpen}
         initialDepartmentId={inviteDepartmentId}
       />
+      <DepartmentActionDialogs
+        transferNode={transferNode}
+        deleteNode={deleteNode}
+        roots={roots}
+        users={items}
+        departmentOptions={departmentOptions}
+        onTransferOpenChange={(open) => {
+          if (!open) setTransferNode(null);
+        }}
+        onDeleteOpenChange={(open) => {
+          if (!open) setDeleteNode(null);
+        }}
+        onMoved={(node, userId) => {
+          setSelectedDeptId(node.id);
+          setRightPanel('dept');
+          setHighlightUserId(userId);
+          centerOn(node.id);
+        }}
+        onDeleted={(parentId) => {
+          setSelectedDeptId(parentId);
+          setRightPanel('dept');
+          setHighlightUserId(null);
+          centerOn(parentId);
+          setDeleteNode(null);
+        }}
+      />
       <DepartmentDialog
         open={deptDialog.open}
         onOpenChange={(open) => setDeptDialog((prev) => ({ ...prev, open }))}
@@ -284,7 +324,7 @@ export function EmployeesPage() {
         parentId={deptDialog.parentId}
         editing={deptDialog.editing}
         users={items}
-        departmentOptions={flattenDepartments(roots)}
+        departmentOptions={departmentOptions}
       />
     </div>
   );

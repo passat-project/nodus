@@ -52,6 +52,8 @@ const CODE_TO_STATUS: Record<ErrorCode, number> = {
   // Открепить управленческое подразделение в корень нельзя (#982): значение
   // parentId технически корректно, но состояние структуры такое не допускает.
   [ErrorCode.DIRECTORY_DEPARTMENT_ROOT_FORBIDDEN]: HttpStatus.CONFLICT,
+  // Удаление юридического подразделения запрещено (#881) — конфликт состояния.
+  [ErrorCode.DIRECTORY_DEPARTMENT_LEGAL_FORBIDDEN]: HttpStatus.CONFLICT,
   // Удаление единственной личной стадии «Моего плана» — конфликт состояния.
   [ErrorCode.TASK_LAST_STAGE]: HttpStatus.CONFLICT,
   // Маршрут задачи (ADR-0020): переход недоступен / гейт не пройден — конфликт

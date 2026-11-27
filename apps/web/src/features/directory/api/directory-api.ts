@@ -313,22 +313,6 @@ export function useReassignPosition(kind: OrgUnitKind) {
   });
 }
 
-/** Архивация отдела (#441, I15: не удаление): дерево вида рефечится —
- *  поддерево уходит из структуры, история и привязки ролей сохраняются. */
-export function useArchiveDepartment(kind: OrgUnitKind) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) =>
-      api<void>(`/directory/departments/${id}/archive`, { method: 'POST' }),
-    onError: (error) => toastApiError(error),
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: directoryKeys.departments(kind) });
-      // Список сотрудников несёт денормализованный departmentName.
-      void queryClient.invalidateQueries({ queryKey: directoryKeys.users() });
-    },
-  });
-}
-
 /** Аватар СВОЕГО профиля (#186): multipart (квадратизация на сервере),
  *  чужие карточки — только просмотр. Инвалидация — вся ветка directory
  *  (карточка + списки/пикеры, где аватар тоже виден) И кэш чата (#726:

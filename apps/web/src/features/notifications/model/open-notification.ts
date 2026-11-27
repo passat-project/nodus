@@ -4,6 +4,7 @@ import type { Notification } from '@nodus/contracts';
 import { router } from '../../../app/router.js';
 import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import type { SourceRect } from '../../../app/shell/slider-panel.js';
+import { requestMessageJump } from '../../../shared/chat/jump-store.js';
 import {
   stageMessengerConversation,
   stageMessengerThread,
@@ -15,8 +16,10 @@ import { useNotificationDetailStore } from './detail-store.js';
  * ОТКРЫТЬ источник — карточку сущности с выбранной беседой/задачей, где видно
  * оригинал изменения; чтение источника гасит уведомление (message_read на
  * сервере). Уведомление об ответе в трэде открывает беседу с раскрытым окном
- * этого трэда (#300). Карточка просмотра — для срочных (лист ознакомления:
- * текст + «Ознакомлен») и записей без источника; она живёт на Главной поверх
+ * этого трэда (#300); сообщение-причина получает прыжок с подсветкой (#1072)
+ * — без него чат оставался на прежней позиции и счётчик не гасился.
+ * Карточка просмотра — для срочных (лист ознакомления: текст +
+ * «Ознакомлен») и записей без источника; она живёт на Главной поверх
  * колонки ленты, поэтому открытие из другого раздела сначала ведёт на Главную.
  */
 export function useOpenNotification(): (item: Notification, sourceRect?: SourceRect) => void {
@@ -24,7 +27,7 @@ export function useOpenNotification(): (item: Notification, sourceRect?: SourceR
   return (item, sourceRect) => {
     const card = item.priority === 'urgent' ? null : sourceCardOf(item);
     if (card) {
-      openSourceCard(openCard, card, item.threadRootId, sourceRect);
+      openSourceCard(openCard, card, item.threadRootId, sourceRect, item.messageId);
       return;
     }
     openNotificationReader(item.id);
@@ -32,7 +35,8 @@ export function useOpenNotification(): (item: Notification, sourceRect?: SourceR
 }
 
 /** Открыть карточку мессенджер-источника; трэд уведомления пристаивается
- * к карточке (messenger-nav) и раскрывается окном трэда (#300). */
+ * к карточке (messenger-nav) и раскрывается окном трэда (#300); прыжок к
+ * сообщению-причине — jump-резидентом ленты/треда (#1072). */
 export function openSourceCard(
   openCard: (
     ref: { kind: 'messenger' | 'task' | 'letter'; id: string },
@@ -41,6 +45,7 @@ export function openSourceCard(
   card: { kind: 'messenger' | 'task' | 'letter'; id: string },
   threadRootId: string | null,
   sourceRect?: SourceRect,
+  messageId?: string | null,
 ): void {
   // Внешнее открытие беседы (уведомление): карточка обязана сразу встать на
   // вкладку по типу беседы — чат задачи/письма в списке «Чатов» отсутствует
@@ -48,6 +53,7 @@ export function openSourceCard(
   if (card.kind === 'messenger') {
     stageMessengerConversation(card.id);
     if (threadRootId) stageMessengerThread(card.id, threadRootId);
+    if (messageId) requestMessageJump(card.id, messageId, threadRootId);
   }
   openCard(card, sourceRect);
 }
