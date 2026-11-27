@@ -127,6 +127,7 @@ describe('EmployeeCard — анатомия #750', () => {
     expect(screen.getByText('журнал задач')).not.toBeNull();
     const chatPanel = screen.getByText('лента диалога').closest('[role="tabpanel"]');
     expect(chatPanel?.className).toContain('invisible');
+    expect(chatPanel?.className).toContain('opacity-0');
     expect(chatPanel?.hasAttribute('inert')).toBe(true);
   });
 
