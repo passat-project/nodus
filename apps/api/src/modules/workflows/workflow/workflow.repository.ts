@@ -16,6 +16,8 @@ export interface StageRow extends StageDef {
   sortOrder: number;
   isInitial: boolean;
   outcome: string | null;
+  /** «Результат выдан» (#635, §11). */
+  resultIssued: boolean;
 }
 
 export interface LoadedWorkflow {

@@ -1,6 +1,7 @@
 import type {
   FormLock,
   NumberHostKind,
+  ProjectRole,
   TransitionFormInput,
   WorkflowDeciderFacts,
 } from '@nodus/contracts';
@@ -82,6 +83,10 @@ export interface WorkflowActorSubject {
    *  показывается независимо от условий «кто» — источник сбора сам определяет
    *  участников; выполнить её напрямую движок не даст (pressCompletion). */
   pressTransitionIds?: ReadonlySet<string>;
+  /** Роли актора в проекте записи (#635): политика обхода проверок «руководство
+   *  проекта» (руководитель/помощники) и «роль в проекте». Запись без проекта
+   *  (или модуль проектов выключен) — пусто/нет. */
+  projectRoles?: ReadonlySet<ProjectRole>;
   /** Есть ли у сущности открытый раунд сбора (#434): false — источники не
    *  дали участников, коллективная кнопка работает как обычная (fallback). */
   pressRoundExists?: boolean;

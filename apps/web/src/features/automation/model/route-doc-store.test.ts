@@ -23,6 +23,7 @@ const stage = (
   color,
   systemState,
   outcome: systemState === 'closed' ? ('success' as const) : null,
+  resultIssued: false,
   isInitial: n === 1,
   sortOrder: 0,
 });

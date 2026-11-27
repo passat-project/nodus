@@ -4,6 +4,7 @@ import {
   Permission,
   TASK_EVENTS,
   type FormLock,
+  type ProjectRole,
   type TransitionFormInput,
 } from '@nodus/contracts';
 
@@ -119,6 +120,11 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
     );
     const pressTransitionIds = await this.press.submittableTransitionIds(tx, taskId, actor.id);
     const pressRoundExists = await this.press.hasOpenRound(tx, taskId);
+    // Роли актора в проекте записи (#635): политика обхода проверок «руководство
+    // проекта» и «роль в проекте». Личная задача — ролей нет.
+    const projectRoles = task.projectId
+      ? new Set((await this.projects.rolesIn(actor.id, [task.projectId], tx))[task.projectId] ?? [])
+      : new Set<ProjectRole>();
     return {
       workflowId: task.workflowId,
       typeId: task.typeId,
@@ -135,6 +141,7 @@ export class TaskWorkflowAdapter implements WorkflowEntityAdapter {
         : {}),
       ...(pressTransitionIds.size > 0 ? { pressTransitionIds } : {}),
       pressRoundExists,
+      projectRoles,
       facts: {
         ...gateFacts,
         activeCustomFieldIds: new Set(definitions.map((definition) => definition.id)),

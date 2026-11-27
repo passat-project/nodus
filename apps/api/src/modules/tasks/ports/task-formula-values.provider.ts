@@ -16,6 +16,7 @@ import {
 } from '../../workflows/ports/process-catalog-reader.port.js';
 import type { ProjectActor } from '../../projects/ports/project-reader.port.js';
 import { visibleTasksWhere, ViewerResolver } from '../access/task-visibility.js';
+import type { ConditionRecordData } from '../../custom-fields/ports/condition-records.port.js';
 import type {
   FormulaRecordData,
   RecordReadOptions,
@@ -179,6 +180,112 @@ export class TaskFormulaValuesProvider implements TaskFormulaValues {
       take: FORMULA_LIMITS.selection + 1,
     });
     return this.toRecords(rows);
+  }
+
+  async conditionTasks(
+    query: Parameters<TaskFormulaValues['conditionTasks']>[0],
+    tx?: TransactionClient,
+  ): Promise<ConditionRecordData[]> {
+    const db = tx ?? this.prisma;
+    // Полная выборка (#635): конфиденциальные и невидимые входят — квантор
+    // «все выполнены» не должен врать; причина фильтрует видимость отдельно.
+    // Мягко удалённые исключены всегда.
+    let rows: TaskRow[];
+    switch (query.kind) {
+      case 'one':
+        rows = await db.task.findMany({
+          where: { id: query.id, deletedAt: null },
+          select: taskSelect,
+        });
+        break;
+      case 'subtasks_of':
+        rows = await db.task.findMany({
+          where: { parentId: query.taskId, deletedAt: null },
+          select: taskSelect,
+          orderBy: [{ number: 'asc' }],
+        });
+        break;
+      case 'related_of': {
+        const links = await db.taskRelation.findMany({
+          where: {
+            kind: query.relation,
+            ...(query.direction === 'out'
+              ? { fromTaskId: query.taskId }
+              : query.direction === 'in'
+                ? { toTaskId: query.taskId }
+                : { OR: [{ fromTaskId: query.taskId }, { toTaskId: query.taskId }] }),
+          },
+          select: { fromTaskId: true, toTaskId: true },
+        });
+        const ids = [
+          ...new Set(
+            links.map((link) =>
+              link.fromTaskId === query.taskId ? link.toTaskId : link.fromTaskId,
+            ),
+          ),
+        ];
+        rows =
+          ids.length === 0
+            ? []
+            : await db.task.findMany({
+                where: { id: { in: ids }, deletedAt: null },
+                select: taskSelect,
+                orderBy: [{ number: 'asc' }],
+              });
+        break;
+      }
+      case 'node_tasks':
+        // Папка без проекта (аномалия данных) выборки не имеет — A7-2.
+        if (query.projectId === null) return [];
+        rows = await db.task.findMany({
+          where: { nodeId: query.nodeId, projectId: query.projectId, deletedAt: null },
+          select: taskSelect,
+          orderBy: [{ number: 'asc' }],
+        });
+        break;
+      case 'project_tasks':
+        rows = await db.task.findMany({
+          where: { projectId: query.projectId, deletedAt: null },
+          select: taskSelect,
+          orderBy: [{ number: 'asc' }],
+        });
+        break;
+      case 'ids':
+        rows =
+          query.ids.length === 0
+            ? []
+            : await db.task.findMany({
+                where: { id: { in: [...query.ids] }, deletedAt: null },
+                select: taskSelect,
+                orderBy: [{ number: 'asc' }],
+              });
+        break;
+    }
+    return rows.map((row) => ({
+      kind: 'task' as const,
+      id: row.id,
+      name: row.title,
+      typeId: row.typeId,
+      stageId: row.stageId,
+      values: (row.customFields ?? {}) as CustomFieldValues,
+      projectId: row.projectId,
+      parentId: row.parentId,
+      nodeId: row.nodeId,
+    }));
+  }
+
+  async visibleTaskIds(
+    ids: readonly string[],
+    actor: ProjectActor,
+    tx?: TransactionClient,
+  ): Promise<ReadonlySet<string>> {
+    if (ids.length === 0) return new Set();
+    const viewer = await this.viewers.resolve(actor);
+    const rows = await (tx ?? this.prisma).task.findMany({
+      where: { id: { in: [...ids] }, deletedAt: null, AND: visibleTasksWhere(viewer, 'all') },
+      select: { id: true },
+    });
+    return new Set(rows.map((row) => row.id));
   }
 
   /**

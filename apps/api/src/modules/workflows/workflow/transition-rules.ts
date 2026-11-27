@@ -9,11 +9,13 @@ import {
   type TransitionBlockReason,
   type TransitionDisplay,
   type TransitionForm,
+  type WorkflowCondition,
   type WorkflowDeciderFacts,
   type WorkflowFieldKey,
   type WorkflowRequirableField,
   type WorkflowTransitionIntent,
   type WorkflowTransitionRules,
+  type WorkflowValidator,
 } from '@nodus/contracts';
 import type {
   WorkflowActorSubject,
@@ -69,15 +71,29 @@ export function parsePress(raw: unknown): PressConfig | null {
   return pressConfigSchema.parse(raw);
 }
 
+/** Условия records/formula (#635) асинхронны: движок вычисляет их ДО окна и
+ *  подает сюда готовые ответы; чистые вызовы без коллбэка считают их ложными
+ *  (кнопка без вычисленного условия не показывается — fail-closed). */
+export type AsyncConditionPass = (
+  condition: Extract<WorkflowCondition, { kind: 'records' | 'formula' }>,
+) => boolean;
+
+/** Причины records/formula-валидаторов (#635): вычислены движком по живым
+ *  данным; null — проверка пройдена. */
+export type AsyncValidatorReason = (
+  validator: Extract<WorkflowValidator, { kind: 'records' | 'formula' }>,
+) => TransitionBlockReason | null | undefined;
+
 /** Может ли актор нажать кнопку (условия «кто»). Флаги «проходит всегда» и
- *  «пустые условия = постановщик/ответственный» даёт адаптер сущности —
- *  движок прав и ролей категории не знает (ADR-0024). */
+ * «пустые условия = постановщик/ответственный» даёт адаптер сущности —
+ * движок прав и ролей категории не знает (ADR-0024). */
 export function passesConditions(
   rules: WorkflowTransitionRules,
   subject: Pick<WorkflowActorSubject, 'roles' | 'bypassConditions' | 'actsWithoutConditions'> & {
     permissions: readonly string[];
     deciderFacts?: WorkflowDeciderFacts;
   },
+  asyncPass?: AsyncConditionPass,
 ): boolean {
   if (subject.bypassConditions) return true;
   if (rules.conditions.length === 0) return subject.actsWithoutConditions;
@@ -91,6 +107,10 @@ export function passesConditions(
       // письма и старые вызовы ведут себя как раньше.
       case 'decider_in':
         return subject.deciderFacts ? matchesDecider(c.source, subject.deciderFacts) : false;
+      // Общая выборка и формула (#635): ответ вычислен заранее (асинхронно).
+      case 'records':
+      case 'formula':
+        return asyncPass?.(c) ?? false;
     }
   });
 }
@@ -118,10 +138,14 @@ function missingFields(fields: WorkflowFieldKey[], facts: WorkflowGateFacts): Wo
   });
 }
 
-/** Гейты DoR/DoD: список невыполненных (пусто — переход разрешён). */
+/** Гейты DoR/DoD: список невыполненных (пусто — переход разрешён).
+ *  Причины records/formula (#635) вычисляет движок асинхронно и подаёт
+ *  через `asyncReason`; без коллбэка такие проверки не блокируют (чистые
+ *  вызовы без новых видов). */
 export function evaluateValidators(
   rules: WorkflowTransitionRules,
   facts: WorkflowGateFacts,
+  asyncReason?: AsyncValidatorReason,
 ): TransitionBlockReason[] {
   const reasons: TransitionBlockReason[] = [];
   for (const v of rules.validators) {
@@ -149,6 +173,13 @@ export function evaluateValidators(
         if (facts.resultFileCount < v.min)
           reasons.push({ kind: v.kind, count: facts.resultFileCount, min: v.min });
         break;
+      // Общая выборка и формула (#635): причина — из вычисления движка.
+      case 'records':
+      case 'formula': {
+        const reason = asyncReason?.(v);
+        if (reason) reasons.push(reason);
+        break;
+      }
     }
   }
   return reasons;

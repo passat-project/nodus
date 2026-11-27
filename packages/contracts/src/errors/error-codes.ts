@@ -80,6 +80,9 @@ export const ErrorCode = {
   WORKFLOW_TRANSITION_FORM_INVALID: 'WORKFLOW_TRANSITION_FORM_INVALID',
   /** Обход гейта без причины или без права task.override_gate. */
   WORKFLOW_OVERRIDE_REASON_REQUIRED: 'WORKFLOW_OVERRIDE_REASON_REQUIRED',
+  /** Обход проверки запрещён настройкой (#635): mode=forbidden не пускает
+   *  никого, даже обладателей task.override_gate. */
+  WORKFLOW_GATE_OVERRIDE_FORBIDDEN: 'WORKFLOW_GATE_OVERRIDE_FORBIDDEN',
   /** Пост-действие «Присвоить номер», а у типа нет серии номеров (#55, Р2). */
   WORKFLOW_NUMBERING_NOT_CONFIGURED: 'WORKFLOW_NUMBERING_NOT_CONFIGURED',
   /** Родитель задачи образует цикл (задача — предок самой себя). */

@@ -26,6 +26,7 @@ const loaded = (): LoadedWorkflow => ({
       isInitial: true,
       workflowId: WF,
       archivedAt: null,
+      resultIssued: false,
     },
     {
       id: S2,
@@ -38,6 +39,7 @@ const loaded = (): LoadedWorkflow => ({
       isInitial: false,
       workflowId: WF,
       archivedAt: null,
+      resultIssued: false,
     },
   ],
   transitions: [],
@@ -67,6 +69,7 @@ const document = (partial: Record<string, unknown>) =>
         outcome: null,
         isInitial: true,
         sortOrder: 0,
+        resultIssued: false,
       },
       {
         id: S2,
@@ -77,6 +80,7 @@ const document = (partial: Record<string, unknown>) =>
         outcome: 'success',
         isInitial: false,
         sortOrder: 1,
+        resultIssued: false,
       },
     ],
     transitions: [],

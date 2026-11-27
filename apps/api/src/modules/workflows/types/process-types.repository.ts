@@ -192,6 +192,8 @@ export class ProcessTypesRepository {
           sortOrder: stage.sortOrder,
           systemState: stage.systemState,
           outcome: stage.outcome,
+          // «Результат выдан» (#635): копия типа работает как оригинал.
+          resultIssued: stage.resultIssued,
           isInitial: stage.isInitial,
         },
       });
@@ -300,6 +302,7 @@ const SIMPLE_WORKFLOW: LoadedWorkflow = {
       sortOrder: 0,
       isInitial: true,
       outcome: null,
+      resultIssued: false,
     },
     {
       id: 's-wip',
@@ -312,6 +315,7 @@ const SIMPLE_WORKFLOW: LoadedWorkflow = {
       sortOrder: 1,
       isInitial: false,
       outcome: null,
+      resultIssued: false,
     },
     {
       id: 's-done',
@@ -324,6 +328,7 @@ const SIMPLE_WORKFLOW: LoadedWorkflow = {
       sortOrder: 2,
       isInitial: false,
       outcome: 'success',
+      resultIssued: false,
     },
   ],
   transitions: [

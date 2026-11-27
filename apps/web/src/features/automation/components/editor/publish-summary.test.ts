@@ -11,6 +11,7 @@ const stage = (overrides: Partial<WorkflowDraftDocument['stages'][number]> = {})
   systemState: 'active' as const,
   outcome: null,
   isInitial: true,
+  resultIssued: false,
   sortOrder: 0,
   ...overrides,
 });

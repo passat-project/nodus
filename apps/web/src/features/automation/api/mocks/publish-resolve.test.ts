@@ -17,6 +17,7 @@ describe('resolvePublishedDocument — мок публикации как сер
           systemState: 'active',
           outcome: null,
           isInitial: true,
+          resultIssued: false,
           sortOrder: 0,
         },
         {
@@ -27,6 +28,7 @@ describe('resolvePublishedDocument — мок публикации как сер
           systemState: 'closed',
           outcome: 'success',
           isInitial: false,
+          resultIssued: false,
           sortOrder: 0,
         },
       ],

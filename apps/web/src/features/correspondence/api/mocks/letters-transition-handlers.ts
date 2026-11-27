@@ -65,6 +65,11 @@ function passes(condition: WorkflowCondition, letter: DemoLetter, actor: LetterA
     // запрещает, в демо-маршрутах их нет.
     case 'decider_in':
       return false;
+    // Общая выборка/формула (#635): демо-моки их не считают — сервер
+    // считает по живым данным; в демо-маршрутах таких условий нет.
+    case 'records':
+    case 'formula':
+      return false;
   }
 }
 

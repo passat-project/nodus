@@ -39,12 +39,15 @@ import {
   type TargetContext,
   type TransitionDef,
 } from '../transition-rules.js';
+import { ConditionEvaluator } from '../conditions/evaluator.service.js';
 import { approverContext } from './approver-context.js';
+import { assertGateOverride, precomputeGates } from './gate-runtime.js';
 import {
   canShow,
   actionOptions,
   transitionOptions,
   vacancyReasons,
+  type GateRuntime,
 } from './transition-availability.js';
 import * as exec from './transition-execution-helpers.js';
 import { checkFormInput, windowOf } from '../transition-form.js';
@@ -71,6 +74,7 @@ export class WorkflowEngine implements WorkflowEnginePort {
     private readonly adapters: WorkflowEntityRegistry,
     private readonly records: TransitionRecordsRepository,
     private readonly numbers: NumberSeriesService,
+    private readonly conditions: ConditionEvaluator,
     @Inject(NUMBER_ISSUE) private readonly numberIssue: NumberIssue,
   ) {}
 
@@ -81,11 +85,12 @@ export class WorkflowEngine implements WorkflowEnginePort {
     actor: WorkflowActor,
   ): Promise<WorkflowTransition[]> {
     const { workflow, subject } = await this.context(tx, entityId, category, actor);
-    return this.options(workflow, subject, approverContext(workflow, subject));
+    const gates = await this.gates(tx, workflow, subject, entityId, category, actor, true);
+    return this.options(workflow, subject, approverContext(workflow, subject), gates);
   }
 
   /** Действия текущего статуса для панели карточки (#633): видимые актору,
-   *  свои раньше «из любого»; окно — если включено. */
+   *  свои раньше «из любого», окно — если включено. */
   async availableActions(
     tx: TransactionClient,
     entityId: string,
@@ -93,7 +98,8 @@ export class WorkflowEngine implements WorkflowEnginePort {
     actor: WorkflowActor,
   ): Promise<WorkflowAction[]> {
     const { workflow, subject } = await this.context(tx, entityId, category, actor);
-    return actionOptions(workflow, subject);
+    const gates = await this.gates(tx, workflow, subject, entityId, category, actor, true);
+    return actionOptions(workflow, subject, gates);
   }
 
   async execute(
@@ -115,6 +121,17 @@ export class WorkflowEngine implements WorkflowEnginePort {
     const subject0 = await this.subjectWithPermissions(tx, entityId, category, actor);
     const workflow = await this.workflows.load(subject0.workflowId, tx);
     const targetCtx = approverContext(workflow, subject0);
+    // Условия records/formula (#635) — ДО окна, по состоянию до него (как
+    // условия «кто»): кнопку с ложным условием актор даже не выбирает.
+    const conditionGates = await this.gates(
+      tx,
+      workflow,
+      subject0,
+      entityId,
+      category,
+      actor,
+      false,
+    );
     const candidates = outgoingTransitions(
       workflow.transitions,
       subject0.facts,
@@ -123,7 +140,7 @@ export class WorkflowEngine implements WorkflowEnginePort {
     )
       .filter(
         (t) =>
-          canShow(t, subject0) ||
+          canShow(t, subject0, conditionGates.conditionsPass) ||
           // Кворум сбора (#434): коллективная кнопка исполняется движком
           // ровно один раз, даже если обычные условия «кто» не про актора.
           (opts.pressCompletion === true && t.press !== null && t.press !== undefined),
@@ -181,12 +198,21 @@ export class WorkflowEngine implements WorkflowEnginePort {
     // Выбранная кнопка — первой: DnD предпочёл кандидата без обязательного
     // окна, и гейты не должны «переиграть» выбор на другую кнопку.
     const ordered = [picked, ...candidates.filter((t) => t.id !== picked.id)];
+    // Причины records/formula (#635) — ПОСЛЕ окна по живым данным: окно могло
+    // закрыть условие (итог, время, поля). Свежий рантайм — кэш выбора
+    // рантайма до окна протух после записи окна.
+    const liveGates = await this.gates(tx, workflow, subject1, entityId, category, actor, true);
     const scored = ordered.map((t) => ({
       t,
-      reasons: [...evaluateValidators(t.rules, subject1.facts), ...vacancyReasons(t, subject1)],
+      reasons: [
+        ...evaluateValidators(t.rules, subject1.facts, liveGates.validatorReason),
+        ...vacancyReasons(t, subject1, conditionGates.conditionsPass),
+      ],
     }));
     const pick = scored.find((s) => s.reasons.length === 0) ?? scored[0]!;
-    if (pick.reasons.length > 0) this.assertOverride(pick.reasons, subject1, opts);
+    if (pick.reasons.length > 0) {
+      assertGateOverride(pick.reasons, subject1, actor.id, pick.t.rules.validators, opts);
+    }
     // Заменная кнопка DnD (#866, AUD-008): окно и замки — той кнопки, чьи
     // гейты прошли. Окно уже применено для picked; запасная кнопка с
     // обязательным окном не исполняется без формы (жест её не открывает).
@@ -311,6 +337,16 @@ export class WorkflowEngine implements WorkflowEnginePort {
     await adapter.lock(tx, entityId);
     const subject = await this.subjectWithPermissions(tx, entityId, category, actor);
     const workflow = await this.workflows.load(subject.workflowId, tx);
+    // Условия records/formula (#635) — до окна, как у перехода.
+    const conditionGates = await this.gates(
+      tx,
+      workflow,
+      subject,
+      entityId,
+      category,
+      actor,
+      false,
+    );
     // «В любом статусе» не работает в закрытой записи (решение 16.11):
     // действие, привязанное к её статусу явно, — работает.
     const currentStage = this.stage(workflow, subject.stageId);
@@ -321,7 +357,7 @@ export class WorkflowEngine implements WorkflowEnginePort {
           ? !isFinalState(currentStage.systemState)
           : a.stageId === subject.stageId),
     );
-    if (!action || !canShow(action, subject)) {
+    if (!action || !canShow(action, subject, conditionGates.conditionsPass)) {
       throw new DomainException(ErrorCode.WORKFLOW_TRANSITION_NOT_ALLOWED, 'Action not allowed');
     }
     if ((action.steps as unknown[]).length > 0) {
@@ -346,10 +382,17 @@ export class WorkflowEngine implements WorkflowEnginePort {
     // (итог, время, поля), пишет само окно. Перечитываем субъект в той же
     // транзакции; отказ откатит окно вместе с записью.
     const subjectAfter = await this.subjectWithPermissions(tx, entityId, category, actor);
-    const gateReasons = evaluateValidators(action.rules, subjectAfter.facts);
+    const liveGates = await this.gates(tx, workflow, subjectAfter, entityId, category, actor, true);
+    const gateReasons = evaluateValidators(
+      action.rules,
+      subjectAfter.facts,
+      liveGates.validatorReason,
+    );
     // Обход гейта с причиной — как у перехода (#635, единая модель): право
     // task.override_gate + непустая причина. Без обхода — 409 с причинами.
-    if (gateReasons.length > 0) this.assertOverride(gateReasons, subjectAfter, opts);
+    if (gateReasons.length > 0) {
+      assertGateOverride(gateReasons, subjectAfter, actor.id, action.rules.validators, opts);
+    }
     if (action.form.enabled && action.form.locks?.length) {
       await adapter.applyLocks?.(tx, entityId, actor.id, action.form.locks, {
         transitionId: action.id,
@@ -471,29 +514,26 @@ export class WorkflowEngine implements WorkflowEnginePort {
     };
   }
 
-  private assertOverride(
-    reasons: { kind: string }[],
-    subject: WorkflowActorSubject,
-    opts: { override?: boolean; reason?: string },
-  ): void {
-    if (!opts.override) {
-      throw new DomainException(
-        ErrorCode.WORKFLOW_TRANSITION_BLOCKED,
-        'Transition gates not passed',
-        {
-          reasons,
-        },
-      );
-    }
-    if (!subject.canOverrideGates) {
-      throw DomainException.forbidden('Gate override requires task.override_gate');
-    }
-    if (!opts.reason?.trim()) {
-      throw new DomainException(
-        ErrorCode.WORKFLOW_OVERRIDE_REASON_REQUIRED,
-        'Override reason required',
-      );
-    }
+  /** Обёртка precomputeGates (#635): движок всегда передаёт себя и хост. */
+  private gates(
+    tx: TransactionClient,
+    workflow: LoadedWorkflow,
+    subject: EngineSubject,
+    entityId: string,
+    category: ProcessCategory,
+    actor: WorkflowActor,
+    withValidators: boolean,
+  ): Promise<GateRuntime> {
+    return precomputeGates({
+      evaluator: this.conditions,
+      tx,
+      workflow,
+      subject,
+      entityId,
+      category,
+      actor,
+      withValidators,
+    });
   }
 
   private matches(
@@ -512,8 +552,9 @@ export class WorkflowEngine implements WorkflowEnginePort {
     workflow: LoadedWorkflow,
     subject: EngineSubject,
     ctx: TargetContext,
+    gates?: GateRuntime,
   ): WorkflowTransition[] {
-    return transitionOptions(workflow, subject, ctx, (id) => this.stage(workflow, id));
+    return transitionOptions(workflow, subject, ctx, (id) => this.stage(workflow, id), gates);
   }
 
   /** Условия «кто» без обхода, вакансия и видимость кнопки — в

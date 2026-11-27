@@ -25,6 +25,7 @@ export function documentOf(
       color: s.color as WorkflowDocument['stages'][number]['color'],
       systemState: s.systemState as WorkflowDocument['stages'][number]['systemState'],
       outcome: (s.outcome as WorkflowDocument['stages'][number]['outcome']) ?? null,
+      resultIssued: s.resultIssued,
       isInitial: s.isInitial,
       sortOrder: s.sortOrder,
     })),

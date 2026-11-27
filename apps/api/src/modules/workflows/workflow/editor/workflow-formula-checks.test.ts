@@ -73,6 +73,7 @@ function baseDocument(): WorkflowDocument {
         outcome: null,
         isInitial: true,
         sortOrder: 0,
+        resultIssued: false,
       },
       {
         id: 's2',
@@ -83,6 +84,7 @@ function baseDocument(): WorkflowDocument {
         outcome: null,
         isInitial: false,
         sortOrder: 1,
+        resultIssued: false,
       },
       {
         id: 's5',
@@ -93,6 +95,7 @@ function baseDocument(): WorkflowDocument {
         outcome: 'success',
         isInitial: false,
         sortOrder: 2,
+        resultIssued: false,
       },
     ],
     transitions: [
@@ -240,6 +243,10 @@ function depsOf(definitions: readonly CustomFieldDefinition[] = DEFINITIONS) {
     deps: {
       registry: { definitions: definitionsMock } as unknown as CustomFieldRegistry,
       profiles: { filterActiveUserIds: vi.fn(async () => []) } as unknown as UserProfileReader,
+      // Факты общей выборки (#635): тесты формул условий их не касаются.
+      types: { list: vi.fn(async () => []), workflowIdOf: vi.fn(async () => null) } as never,
+      workflows: { findStages: vi.fn(async () => []) } as never,
+      nodeKinds: { nodeKinds: vi.fn(async () => []) } as never,
     },
   };
 }
@@ -324,5 +331,54 @@ describe('checkDocumentForPublish: формулы слотов (#632, A8-1)', ()
     expect(withFormulas.calls.definitions.mock.calls.length).toBe(
       plain.calls.definitions.mock.calls.length + 1,
     );
+  });
+});
+
+describe('checkWorkflowFormulas: формулы-условия и проверки (#635)', () => {
+  const boolFormula = (): FormulaNode => ({
+    kind: 'op',
+    op: 'gt',
+    args: [
+      { kind: 'field', source: { kind: 'self' }, number: 2 },
+      { kind: 'literal', value: 10 },
+    ],
+  });
+
+  it('формула-условие с результатом-числом — ошибка формулы', () => {
+    const doc = baseDocument();
+    doc.transitions[1]!.rules = {
+      conditions: [
+        { kind: 'role_in', roles: ['assignee'] },
+        { kind: 'formula', formula: numberFormula() },
+      ],
+      validators: [],
+      postFunctions: [],
+    } as never;
+    const [problem] = problemsOf(doc);
+    expect(problem).toMatchObject({
+      code: 'formula_invalid',
+      severity: 'error',
+      transitionId: 't-accept',
+    });
+  });
+
+  it('булева формула-условие и булева формула-проверка — без проблем', () => {
+    const doc = baseDocument();
+    doc.transitions[1]!.rules = {
+      conditions: [
+        { kind: 'role_in', roles: ['assignee'] },
+        { kind: 'formula', formula: boolFormula() },
+      ],
+      validators: [
+        {
+          kind: 'formula',
+          title: 'Коэффициент больше 10',
+          formula: boolFormula(),
+          override: { mode: 'default', extraUserIds: [] },
+        },
+      ],
+      postFunctions: [],
+    } as never;
+    expect(problemsOf(doc)).toEqual([]);
   });
 });

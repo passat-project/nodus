@@ -24,6 +24,8 @@ import { FORMULA_ENGINE } from './ports/formula-engine.port.js';
 import { FORMULA_CELLS } from './ports/formula-cells.port.js';
 import { RECORD_VALUES_READER } from './ports/record-values.port.js';
 import { RecordValuesProvider } from './ports/record-values.provider.js';
+import { CONDITION_RECORDS_READER } from './ports/condition-records.port.js';
+import { ConditionRecordsProvider } from './ports/condition-records.provider.js';
 import { DefinitionMapper } from './definitions/definition.mapper.js';
 import { DefinitionsRepository } from './definitions/definitions.repository.js';
 import { CustomFieldDefaults } from './values/defaults.js';
@@ -82,6 +84,9 @@ import { FormulaValuesService } from './formulas/formula-values.service.js';
     { provide: FORMULA_ENGINE, useExisting: FormulaEngineProvider },
     RecordValuesProvider,
     { provide: RECORD_VALUES_READER, useExisting: RecordValuesProvider },
+    // Общая выборка #635: композиция владельцев в один читатель множеств.
+    ConditionRecordsProvider,
+    { provide: CONDITION_RECORDS_READER, useExisting: ConditionRecordsProvider },
     FormulaCellsRepository,
     FormulaMetaService,
     FormulaValuesService,
@@ -98,6 +103,7 @@ import { FormulaValuesService } from './formulas/formula-values.service.js';
     FORMULA_ENGINE,
     FORMULA_CELLS,
     RECORD_VALUES_READER,
+    CONDITION_RECORDS_READER,
     // Репозиторий ячеек нужен usage-агрегату «В формулах» (F1): сервис
     // определений живёт в CustomFieldsModule, провайдер — здесь (иначе DI
     // не находит FormulaCellsRepository в контексте определения).

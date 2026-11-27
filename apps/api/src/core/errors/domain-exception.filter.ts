@@ -61,6 +61,8 @@ const CODE_TO_STATUS: Record<ErrorCode, number> = {
   // Окно перехода (#380): состав введённого не совпал с настройкой — 422.
   [ErrorCode.WORKFLOW_TRANSITION_FORM_INVALID]: HttpStatus.UNPROCESSABLE_ENTITY,
   [ErrorCode.WORKFLOW_OVERRIDE_REASON_REQUIRED]: HttpStatus.BAD_REQUEST,
+  // Обход запрещён настройкой проверки (#635) — права не помогут: 403.
+  [ErrorCode.WORKFLOW_GATE_OVERRIDE_FORBIDDEN]: HttpStatus.FORBIDDEN,
   // Нумерация (#55, Р2): у типа нет серии — конфликт конфигурации.
   [ErrorCode.WORKFLOW_NUMBERING_NOT_CONFIGURED]: HttpStatus.CONFLICT,
   [ErrorCode.TASK_PARENT_CYCLE]: HttpStatus.CONFLICT,

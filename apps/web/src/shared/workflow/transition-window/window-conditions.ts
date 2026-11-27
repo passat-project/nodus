@@ -107,6 +107,15 @@ export function windowConditionLines({
           ok: attachmentCount >= validator.min,
           fixable: context.access.canCheck,
         };
+      // Общая выборка и формула (#635): окно их не чинит (чинится снаружи —
+      // принять записи или обойти с причиной), состояние — из blockedBy.
+      case 'records':
+      case 'formula':
+        return {
+          validator,
+          ok: reasonOf(transition, validator.kind) === undefined,
+          fixable: false,
+        };
     }
   });
 }

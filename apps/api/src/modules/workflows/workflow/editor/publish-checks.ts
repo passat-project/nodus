@@ -1,6 +1,8 @@
 import {
   checkWorkflowDocument,
   ErrorCode,
+  hasConditionFormulas,
+  hasConditionRules,
   type ProcessCategory,
   type WorkflowDocument,
   type WorkflowMigration,
@@ -10,11 +12,15 @@ import type { TransactionClient } from '../../../../core/database/transaction-ru
 import { DomainException } from '../../../../core/errors/domain-exception.js';
 import type { UserProfileReader } from '../../../../core/ports/user-profile.port.js';
 import type { CustomFieldRegistry } from '../../../custom-fields/ports/custom-field-registry.port.js';
+import type { FieldBindingTargetReader } from '../../../projects/ports/field-binding-targets.port.js';
 import { creationFactsOf } from './creation-facts.js';
 import { customFieldFactsOf } from './custom-field-facts.js';
 import { checkWorkflowFormulas, hasSlotFormulas } from './workflow-formula-checks.js';
+import { conditionFactsOf } from './condition-facts.js';
 import { publishRejectionMessage } from './publish-rejection.js';
+import { ProcessTypesRepository } from '../../types/process-types.repository.js';
 import type { LoadedWorkflow } from '../workflow.repository.js';
+import { WorkflowRepository } from '../workflow.repository.js';
 
 /**
  * Серверные проверки публикации (#378, security-чекпоинты ревью): uuid-элементы
@@ -102,6 +108,10 @@ export async function checkDocumentForPublish(
   deps: {
     registry: CustomFieldRegistry;
     profiles: UserProfileReader;
+    /** Факты общей выборки (#635): живые типы/стадии/виды папок. */
+    types: ProcessTypesRepository;
+    workflows: WorkflowRepository;
+    nodeKinds: FieldBindingTargetReader;
   },
   ctx: {
     document: WorkflowDocument;
@@ -135,6 +145,14 @@ export async function checkDocumentForPublish(
     ctx.document.creation,
     ctx.tx,
   );
+  // Факты общей выборки (#635): живые типы, стадии маршрутов типов, виды папок.
+  const conditionFacts = hasConditionRules(ctx.document)
+    ? await conditionFactsOf(
+        { types: deps.types, workflows: deps.workflows, nodeKinds: deps.nodeKinds },
+        ctx.document,
+        ctx.tx,
+      )
+    : undefined;
   const problems = checkWorkflowDocument(ctx.document, {
     customFields,
     category: ctx.category,
@@ -146,11 +164,13 @@ export async function checkDocumentForPublish(
     numberingConfigured: ctx.numberingConfigured ?? true,
     ...(customFieldIds ? { customFieldIds } : {}),
     ...(counterFieldIds ? { counterFieldIds } : {}),
+    ...(conditionFacts ?? {}),
   });
   // Формулы слотов (#632, Р12; A8-1): форма AST проверена общей грамматикой,
   // типы и совместимость с типом поля выводит движок — для этого нужен реестр
   // атрибутов (номер → тип). Без формул лишнего чтения реестра нет.
-  if (hasSlotFormulas(ctx.document)) {
+  // Формулы-условия/проверки (#635) проверяет тот же движок (результат — истина).
+  if (hasSlotFormulas(ctx.document) || hasConditionFormulas(ctx.document)) {
     const definitions = await deps.registry.definitions({}, ctx.tx);
     problems.push(...checkWorkflowFormulas(ctx.document, { category: ctx.category, definitions }));
   }

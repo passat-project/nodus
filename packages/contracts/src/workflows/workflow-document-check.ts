@@ -7,6 +7,7 @@ import { checkCategoryDictionary } from './workflow-document-category-check.js';
 import { checkDeciderRules } from './workflow-document-deciders.js';
 import { checkExtraRules } from './workflow-document-extra-checks.js';
 import { checkPressRules } from './workflow-document-press-check.js';
+import { checkConditionRules } from './workflow-document-condition-check.js';
 import { checkFormulaSlots } from './workflow-document-formula-check.js';
 import { windowFieldKeys } from './transition-form.schemas.js';
 import { checkWindowLayoutAndLocks } from './workflow-document-window-check.js';
@@ -67,6 +68,14 @@ export interface WorkflowCheckOptions {
   }[];
   /** Ограничить проверку имён новыми/переименованными стадиями (#430). */
   stageNameStageIds?: ReadonlySet<string>;
+  /** Живые типы процессов (#635): предикат type_is на удалённый тип — ошибка.
+   *  Без факта проверка пропускается. */
+  conditionTypeFacts?: ReadonlySet<string>;
+  /** Живые стадии маршрутов по типу (#635): stage_is на удалённый статус —
+   *  ошибка. Ключ — typeId из предиката type_is той же выборки. */
+  conditionStageFacts?: ReadonlyMap<string, ReadonlySet<string>>;
+  /** Живые виды папок (#635): folderTypeId на удалённый/архивный вид — ошибка. */
+  conditionNodeKindFacts?: ReadonlySet<string>;
 }
 
 function error(
@@ -238,6 +247,10 @@ export function checkWorkflowDocument(
       definitions: opts.definitions,
     }),
   );
+
+  // --- Общая выборка (#635): субъекты, ссылки, операторы -------------------
+
+  checkConditionRules(doc, opts, problems);
 
   // --- Кастомные поля в окне и гейтах (#431, Р7) ---------------------------
 

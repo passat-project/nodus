@@ -197,6 +197,7 @@ export function createRouteDocStore(workflowId: string) {
           color: 'neutral',
           systemState: band,
           outcome: band === 'closed' ? 'success' : null,
+          resultIssued: false,
           isInitial: doc.stages.every((st) => !st.isInitial) && band === 'backlog',
           sortOrder: 0,
         };

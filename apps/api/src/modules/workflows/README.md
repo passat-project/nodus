@@ -131,3 +131,65 @@
   миграцией `20261125130000_remove_position_deciders` переписаны на текущих
   активных держателей (`employees`); архивная должность сохраняет держателей,
   вакантная даёт пустой список. Replay — `scripts/audit/806-migration-replay/`.
+
+## Общая выборка — один вход вычисления (#635)
+
+«Какие записи → условие → сколько» описывается ОДНИМ способом
+(`@nodus/contracts` `workflows/condition-query.ts`: субъект → предикаты И →
+квантор all/any/none), и вычисляется в ОДНОМ месте —
+`workflow/conditions/` (unified-model §7 «Одна выборка на всё»).
+Проверки и условия кнопок (#635) работают сейчас; условия шагов (#634),
+правила и ветки (#448, #38), показатели папки (#865) и расширенный фильтр
+списков (#435) подключаются к ЭТОМУ входу и своего языка не заводят.
+
+- **Что входит**: `ConditionEvaluator` (`evaluator.service.ts`) — рантайм на
+  один вызов движка (кэш выборок/стадий/определений); чистая логика
+  предикатов и кванторов — `condition-logic.ts` (unit-тестируется без БД);
+  политика обхода — `override-policy.ts`. Множества записей читает порт
+  `CONDITION_RECORDS_READER` (`custom-fields/ports/condition-records.port.ts`):
+  композиция портов владельцев (tasks/correspondence/projects) мапит субъекты
+  на выборки (`folder_type_tasks` досчитывается папками проекта → задачи
+  папок), `project_tasks` — расширенный метод владельцев. Формулы (kind
+  formula) — существующий `FORMULA_CELLS.evaluate` (истина = проходит).
+- **Кто вызывает**: `WorkflowEngine` — условия `records`/`formula` в
+  `canShow` ДО окна (кнопка с ложным условием скрыта, в обход интерфейса —
+  те же проверки); причины валидаторов — ПОСЛЕ окна по живым данным
+  (`blockedBy` в DTO до нажатия, 409 `WORKFLOW_TRANSITION_BLOCKED`
+  `details.reasons` при нажатии). Предвычисление —
+  `engine/gate-runtime.ts` (`precomputeGates`): без новых видов правил —
+  ни одного запроса.
+- **Два закона выборки**: квантор честный — полная выборка считает ВСЕ живые
+  записи, включая невидимые актору (мягко удалённые исключены всегда);
+  видимость одна — причина называет только видимые нажавшему записи (до 5 +
+  `hiddenCount` «и ещё N без доступа»), фильтр — та же функция видимости,
+  что у списков (порты владельцев `visibleTaskIds`/`visibleLetterIds`/
+  `refsFor`).
+- **Предикаты**: `type_is` (живой тип), `field` (операторы eq/ne/gt/gte/lt/
+  lte/contains/not_contains/in_any/filled/not_filled; совместимость с типом
+  атрибута — матрица `CONDITION_FIELD_OPS_BY_TYPE` в contracts), `stage_is`
+  (стадия маршрута типа записи), `system_state`, `outcome`, `result_issued`
+  («результат выдан»: стадия записи отмечена в маршруте её типа; нет отметок
+  в маршруте — выдана = закрыта успешно). Отметка — колонка
+  `workflow_stages.result_issued` (expand-миграция
+  `20261127132111_workflow_stage_result_issued`), пишется публикацией и
+  читается документом/копией типа.
+- **Обход**: политика каждой непройденной проверки (`gateOverridePolicy`):
+  `forbidden` — не пускает никого (403 `WORKFLOW_GATE_OVERRIDE_FORBIDDEN`);
+  `default` — руководство проекта записи (руководитель/помощники — факты
+  `WorkflowActorSubject.projectRoles` собирают адаптеры) ∪ `task.override_gate`
+  ∪ доп. сотрудники ∪ роль в проекте. Причина обязательна всегда;
+  `overriddenGates`+`overrideReason` едут в историю (`stage_changed` meta и
+  `transition_records`).
+- **Как добавлять субъекты**: расширить `conditionSubjectSchema` и
+  `CONDITION_SUBJECTS_BY_CATEGORY` (contracts) → метод чтения у
+  владельца данных (порт) → маппинг субъекта в
+  `custom-fields/ports/condition-records.provider.ts` → предикаты не трогать
+  (они по записи, не по субъекту). Новые предикаты — в
+  `condition-logic.ts` + матрица операторов + проверки публикации
+  (`workflow-document-condition-check.ts`, факты — `editor/condition-facts.ts`).
+- **Публикация**: чистые проверки `workflow-document-condition-check.ts`
+  (субъект вне категории, удалённые тип/стадия/вид папки/атрибут, stage_is
+  без type_is, несовместимый оператор — ошибки; `project_tasks`/
+  `folder_type_tasks` без фильтра — предупреждение `condition_query_unfiltered`);
+  АСТ формул-условий проверяет движок формул (`workflow-formula-checks.ts`,
+  результат обязан быть bool).

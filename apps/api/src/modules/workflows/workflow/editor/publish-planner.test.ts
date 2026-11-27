@@ -29,6 +29,7 @@ function snapshot(overrides: Partial<PlannerSnapshot> = {}): PlannerSnapshot {
         outcome: null,
         isInitial: true,
         sortOrder: 0,
+        resultIssued: false,
       },
       {
         id: S2,
@@ -38,6 +39,7 @@ function snapshot(overrides: Partial<PlannerSnapshot> = {}): PlannerSnapshot {
         outcome: null,
         isInitial: false,
         sortOrder: 1,
+        resultIssued: false,
       },
       {
         id: S3,
@@ -47,6 +49,7 @@ function snapshot(overrides: Partial<PlannerSnapshot> = {}): PlannerSnapshot {
         outcome: 'success',
         isInitial: false,
         sortOrder: 2,
+        resultIssued: false,
       },
     ],
     transitions: [
@@ -88,7 +91,13 @@ function doc(
     press?: unknown;
   }[] = [],
 ) {
-  const stageBase = { code: null, color: 'neutral', outcome: null, isInitial: false };
+  const stageBase = {
+    code: null,
+    color: 'neutral',
+    outcome: null,
+    resultIssued: false,
+    isInitial: false,
+  };
   const transitionBase = {
     code: null,
     display: 'button' as const,

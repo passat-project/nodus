@@ -24,6 +24,7 @@ const detail = (): WorkflowDetail => ({
         systemState: 'backlog',
         outcome: null,
         isInitial: true,
+        resultIssued: false,
         sortOrder: 0,
       },
       {
@@ -34,6 +35,7 @@ const detail = (): WorkflowDetail => ({
         systemState: 'active',
         outcome: null,
         isInitial: false,
+        resultIssued: false,
         sortOrder: 1,
       },
     ],

@@ -29,6 +29,7 @@ export const stage = (id: string, name: string, systemState: string) => ({
   sortOrder: 0,
   isInitial: false,
   outcome: systemState === 'closed' ? 'success' : null,
+  resultIssued: false,
 });
 
 export const facts = gateFacts({ assigneeId: 'bob' });
@@ -103,6 +104,11 @@ export function setup(
     { get: () => adapter } as never,
     records as never,
     { nextForType: vi.fn() } as never,
+    {
+      // Общая выборка (#635): у тестовых правил records/formula нет — движок
+      // рантайм не создаёт; заглушка для сигнатуры.
+      runtime: vi.fn(),
+    } as never,
     { plan: vi.fn(async () => ({ ok: true, issue: async () => ({}) })) } as never,
   );
   return { engine, adapter, records, order, wasApplied: () => applied };

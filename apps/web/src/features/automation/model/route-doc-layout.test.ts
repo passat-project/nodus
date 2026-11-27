@@ -25,6 +25,7 @@ const stage = (id: string, name: string, isInitial = false) => ({
   color: 'neutral' as const,
   systemState: 'active' as const,
   outcome: null,
+  resultIssued: false,
   isInitial,
   sortOrder: 0,
 });

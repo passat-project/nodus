@@ -139,7 +139,8 @@ export function TransitionGateDetails({
             <span className="flex items-start gap-2">
               <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-warning" />
               <span>
-                {ui.tasks.gate[reason.kind]}
+                {/* #635: records/formula несут подпись настройщика. */}
+                {reason.title ?? ui.tasks.gate[reason.kind]}
                 {detail ? ` · ${detail}` : ''}
               </span>
             </span>

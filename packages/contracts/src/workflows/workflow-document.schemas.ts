@@ -321,6 +321,18 @@ export const workflowProblemCodeSchema = z.enum([
   'form_decor_empty',
   'form_lock_key_invalid',
   'form_lock_field_not_in_type',
+  /** Общая выборка (#635): субъект не имеет смысла у категории маршрута;
+   *  предикат type_is на удалённый тип; stage_is без type_is или на статус
+   *  вне активного маршрута типа; folderTypeId на удалённый/архивный вид;
+   *  оператор несовместим с типом атрибута; большое множество без фильтра —
+   *  предупреждение. */
+  'condition_subject_not_in_category',
+  'condition_type_unknown',
+  'condition_stage_without_type',
+  'condition_stage_unknown',
+  'condition_folder_type_unknown',
+  'condition_field_op_incompatible',
+  'condition_query_unfiltered',
 ]);
 export type WorkflowProblemCode = z.infer<typeof workflowProblemCodeSchema>;
 

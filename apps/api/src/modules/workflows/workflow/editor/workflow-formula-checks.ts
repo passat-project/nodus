@@ -103,7 +103,7 @@ export function checkWorkflowFormulas(
   const check = (
     ast: FormulaNode,
     target: SlotTarget,
-    refs: Pick<WorkflowProblem, 'transitionId' | 'creationField'>,
+    refs: Pick<WorkflowProblem, 'transitionId' | 'actionId' | 'creationField'>,
   ): void => {
     const validation = validateFormula(ast, {
       hostKind,
@@ -155,6 +155,45 @@ export function checkWorkflowFormulas(
       },
       { creationField: slot.key },
     );
+  }
+  // Формулы-условия и проверки общей выборки (#635): кнопка существует, число
+  // записей — существующее, поэтому related разрешён (typeDefault: false);
+  // результат обязан быть истиной/ложью (тип bool).
+  for (const t of doc.transitions) {
+    for (const condition of t.rules.conditions) {
+      if (condition.kind !== 'formula') continue;
+      check(
+        condition.formula,
+        { label: t.name, type: 'bool', typeDefault: false },
+        { transitionId: t.id },
+      );
+    }
+    for (const validator of t.rules.validators) {
+      if (validator.kind !== 'formula') continue;
+      check(
+        validator.formula,
+        { label: validator.title, type: 'bool', typeDefault: false },
+        { transitionId: t.id },
+      );
+    }
+  }
+  for (const a of doc.actions ?? []) {
+    for (const condition of a.rules.conditions) {
+      if (condition.kind !== 'formula') continue;
+      check(
+        condition.formula,
+        { label: a.name, type: 'bool', typeDefault: false },
+        { actionId: a.id },
+      );
+    }
+    for (const validator of a.rules.validators) {
+      if (validator.kind !== 'formula') continue;
+      check(
+        validator.formula,
+        { label: validator.title, type: 'bool', typeDefault: false },
+        { actionId: a.id },
+      );
+    }
   }
   return problems;
 }

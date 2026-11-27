@@ -22,6 +22,7 @@ export async function publishSnapshot(
       color: s.color,
       systemState: s.systemState,
       outcome: s.outcome,
+      resultIssued: s.resultIssued,
       isInitial: s.isInitial,
       sortOrder: s.sortOrder,
     })),

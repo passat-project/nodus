@@ -81,19 +81,34 @@ const reason = { kind: 'comment', label: 'Причина', required: true } as c
 
 export const incomingLetterDocument: WorkflowDocument = {
   stages: [
-    { ...letterStages.new, code: 'new', outcome: null, isInitial: true, sortOrder: 0 },
+    {
+      ...letterStages.new,
+      code: 'new',
+      outcome: null,
+      isInitial: true,
+      resultIssued: false,
+      sortOrder: 0,
+    },
     {
       ...letterStages.onResolution,
       code: 'on_resolution',
       outcome: null,
       isInitial: false,
+      resultIssued: false,
       sortOrder: 0,
     },
-    { ...letterStages.notRegistered, code: 'not_registered', isInitial: false, sortOrder: 0 },
+    {
+      ...letterStages.notRegistered,
+      code: 'not_registered',
+      isInitial: false,
+      resultIssued: false,
+      sortOrder: 0,
+    },
     {
       ...letterStages.registeredByMistake,
       code: 'registered_by_mistake',
       isInitial: false,
+      resultIssued: false,
       sortOrder: 1,
     },
   ],
@@ -143,8 +158,21 @@ export const incomingLetterDocument: WorkflowDocument = {
 
 export const outgoingLetterDocument: WorkflowDocument = {
   stages: [
-    { ...letterStages.draft, code: 'draft', outcome: null, isInitial: true, sortOrder: 0 },
-    { ...letterStages.cancelled, code: 'cancelled', isInitial: false, sortOrder: 0 },
+    {
+      ...letterStages.draft,
+      code: 'draft',
+      outcome: null,
+      isInitial: true,
+      resultIssued: false,
+      sortOrder: 0,
+    },
+    {
+      ...letterStages.cancelled,
+      code: 'cancelled',
+      isInitial: false,
+      resultIssued: false,
+      sortOrder: 0,
+    },
   ],
   transitions: [
     {

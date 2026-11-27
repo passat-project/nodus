@@ -62,6 +62,7 @@ function snapshot(press: PressConfig | null = null): PlannerSnapshot {
     stages: stages.map((stage, sortOrder) => ({
       ...stage,
       outcome: stage.outcome ?? null,
+      resultIssued: false,
       sortOrder,
     })),
     transitions: [

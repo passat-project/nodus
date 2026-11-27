@@ -3,10 +3,12 @@ import type { CustomFieldValues } from '@nodus/contracts';
 import type { FormulaValue } from '@nodus/formula-engine';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
+import type { ConditionRecordData } from '../../custom-fields/ports/condition-records.port.js';
 import type {
   FormulaRecordData,
   RecordReadOptions,
 } from '../../custom-fields/ports/record-values.port.js';
+import type { ProjectActor } from '../../projects/ports/project-reader.port.js';
 import { canViewLetter } from '../access/letter-access.js';
 import type { LetterDetailRow } from '../letters/letter-row.js';
 import { LettersRepository } from '../letters/letters.repository.js';
@@ -44,6 +46,45 @@ const isoDate = (value: Date | null): string | null =>
 @Injectable()
 export class LetterFormulaValuesProvider implements LetterFormulaValues {
   constructor(private readonly letters: LettersRepository) {}
+
+  /** Письмо полной выборки условий (#635): без фильтра видимости — квантор
+   *  «все» не врёт из-за невидимых записей; видимость фильтрует причина. */
+  async conditionLetter(id: string, tx?: TransactionClient): Promise<ConditionRecordData | null> {
+    const row = await this.letters.findDetailById(id, tx);
+    if (!row || row.deletedAt !== null) return null;
+    return {
+      kind: 'letter',
+      id: row.id,
+      // Тема письма необязательна — у безымянного причина покажет рег. номер.
+      name: row.subject ?? `№ ${row.regNumber ?? row.id}`,
+      typeId: row.typeId,
+      stageId: row.stageId,
+      values: (row.customFields ?? {}) as CustomFieldValues,
+      projectId: row.projectId,
+      // Письмо не живёт в дереве: родителя и узла у него нет.
+      parentId: null,
+      nodeId: null,
+    };
+  }
+
+  /** Видимость писем — та же функция, что у карточки и реестра (#635):
+   *  состав обсуждения читается только для конфиденциальных. */
+  async visibleLetterIds(
+    ids: readonly string[],
+    actor: ProjectActor,
+    tx?: TransactionClient,
+  ): Promise<ReadonlySet<string>> {
+    const visible = new Set<string>();
+    for (const id of ids) {
+      const row = await this.letters.findDetailById(id, tx);
+      if (!row || row.deletedAt !== null) continue;
+      const members = row.confidential
+        ? new Set((await this.letters.participants(id, tx)).map((p) => p.userId))
+        : undefined;
+      if (canViewLetter(actor, row, members)) visible.add(id);
+    }
+    return visible;
+  }
 
   async record(
     id: string,

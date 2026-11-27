@@ -3,6 +3,7 @@ import type { CustomFieldValues } from '@nodus/contracts';
 import type { FormulaValue } from '@nodus/formula-engine';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
+import type { ConditionRecordData } from '../../custom-fields/ports/condition-records.port.js';
 import type { FormulaRecordData } from '../../custom-fields/ports/record-values.port.js';
 import { NodeKindsRepository } from '../project-node-kinds.repository.js';
 import { ProjectNodesRepository, type ProjectNodeRow } from '../project-nodes.repository.js';
@@ -58,6 +59,72 @@ export class ProjectFormulaValuesProvider implements ProjectFormulaValues {
     );
     return rows.map((row) => toNodeRecord(row, kindNames.get(row.kindId) ?? null));
   }
+
+  /** Проект полной выборки условий (#635): без фильтра видимости — квантор
+   *  «все» не врёт; причину фильтрует visibleOf по рефам проектов. */
+  async conditionProject(
+    projectId: string,
+    tx?: TransactionClient,
+  ): Promise<ConditionRecordData | null> {
+    const row = await this.projects.findById(projectId, tx);
+    return row ? toConditionProject(row) : null;
+  }
+
+  /** Все папки проекта полной выборки (#635): вид — в typeId записи. */
+  async conditionNodes(projectId: string, tx?: TransactionClient): Promise<ConditionRecordData[]> {
+    const rows = await this.nodes.listByProject(projectId, tx);
+    return rows.map((row) => toConditionNode(row));
+  }
+
+  /** Проекты/папки по ссылкам (#635, ref_field): несуществующие пропускаются. */
+  async conditionRecords(
+    kind: 'project' | 'node',
+    ids: readonly string[],
+    tx?: TransactionClient,
+  ): Promise<ConditionRecordData[]> {
+    const result: ConditionRecordData[] = [];
+    for (const id of ids) {
+      if (kind === 'project') {
+        const row = await this.projects.findById(id, tx);
+        if (row) result.push(toConditionProject(row));
+      } else {
+        const row = await this.nodes.findById(id, tx);
+        if (row) result.push(toConditionNode(row));
+      }
+    }
+    return result;
+  }
+}
+
+/** Проект записи общей выборки (#635). */
+function toConditionProject(row: ProjectRow): ConditionRecordData {
+  return {
+    kind: 'project',
+    id: row.id,
+    name: row.name,
+    typeId: row.typeId,
+    // Статусов у проекта пока нет (#856): предикаты этапа/итога/«выдан» ложны.
+    stageId: null,
+    values: (row.customFields ?? {}) as CustomFieldValues,
+    projectId: row.id,
+    parentId: null,
+    nodeId: null,
+  };
+}
+
+/** Папка записи общей выборки (#635). */
+function toConditionNode(row: ProjectNodeRow): ConditionRecordData {
+  return {
+    kind: 'node',
+    id: row.id,
+    name: row.name,
+    typeId: row.kindId,
+    stageId: null,
+    values: (row.customFields ?? {}) as CustomFieldValues,
+    projectId: row.projectId,
+    parentId: row.parentId,
+    nodeId: null,
+  };
 }
 
 /** Проект-источник: системные поля в типах языка формул (Р2). */

@@ -26,6 +26,7 @@ function snapshot(actions: PlannerSnapshot['actions'] = []): PlannerSnapshot {
       ...stage,
       outcome: stage.outcome ?? null,
       isInitial: stage.isInitial ?? false,
+      resultIssued: false,
       sortOrder: index,
     })),
     transitions: [],

@@ -10,6 +10,7 @@ import { NUMBER_SERIES_STORE } from './ports/number-series.port.js';
 import { WorkflowEntityRegistry } from './workflow/engine/entity-adapter.registry.js';
 import { TransitionRecordsRepository } from './workflow/engine/transition-records.repository.js';
 import { WorkflowEngine } from './workflow/engine/workflow-engine.js';
+import { ConditionEvaluator } from './workflow/conditions/evaluator.service.js';
 import { WorkflowRepository } from './workflow/workflow.repository.js';
 import { ProcessCatalogReaderProvider } from './ports/process-catalog-reader.provider.js';
 import { PROCESS_CATALOG_READER } from './ports/process-catalog-reader.port.js';
@@ -57,6 +58,8 @@ import { ProcessTypesRepository } from './types/process-types.repository.js';
     NumberSeriesStoreProvider,
     { provide: NUMBER_SERIES_STORE, useExisting: NumberSeriesStoreProvider },
     WorkflowEngine,
+    // Общая выборка #635: единственный вход вычисления условий и проверок.
+    ConditionEvaluator,
     ProcessCatalogReaderProvider,
     { provide: WORKFLOW_ENGINE, useExisting: WorkflowEngine },
     { provide: PROCESS_CATALOG_READER, useExisting: ProcessCatalogReaderProvider },

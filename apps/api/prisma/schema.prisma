@@ -1143,6 +1143,10 @@ model WorkflowStage {
   /// Итог закрытой стадии (#378, #430): success | cancelled | rejected;
   /// только у этапа «Итог» (CHECK в миграции: (system_state = 'closed') = (outcome NOT NULL)).
   outcome     String?
+  /// «Результат выдан» (#635, §11): с этого статуса результат работы считается
+  /// выданным, хотя работа ещё не закрыта. Ни одной отметки в маршруте —
+  /// «выдана» значит «закрыта успешно».
+  resultIssued Boolean  @default(false) @map("result_issued")
   /// Начальная стадия маршрута (новые задачи без колонки).
   isInitial   Boolean   @default(false) @map("is_initial")
   archivedAt  DateTime? @map("archived_at") @db.Timestamptz()

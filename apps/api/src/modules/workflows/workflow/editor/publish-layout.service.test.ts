@@ -49,6 +49,7 @@ function makeService(opts: { kind?: string; layout?: unknown } = {}) {
     { effectiveRoles: vi.fn(async () => []) } as never,
     { findByIds: vi.fn(async () => []) } as never,
     { openTransitionIds: vi.fn(async () => new Set<string>()) } as never,
+    { nodeKinds: vi.fn(async () => []) } as never,
   );
   return { service, calls };
 }

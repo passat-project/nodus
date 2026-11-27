@@ -34,13 +34,55 @@ const noOpenSubtasks: WorkflowValidator = { kind: 'no_open_subtasks' };
  *  «из любого», в меню, у постановщика (решения владельца 4–6). */
 export const standardDocument: WorkflowDocument = {
   stages: [
-    { ...stageNew, code: 'new', outcome: null, isInitial: true, sortOrder: 0 },
-    { ...stageInProgress, code: 'in_progress', outcome: null, isInitial: false, sortOrder: 0 },
-    { ...stagePaused, code: 'paused', outcome: null, isInitial: false, sortOrder: 0 },
-    { ...stagePostponed, code: 'postponed', outcome: null, isInitial: false, sortOrder: 1 },
-    { ...stageOnControl, code: 'on_control', outcome: null, isInitial: false, sortOrder: 0 },
-    { ...stageDone, code: 'done', outcome: 'success', isInitial: false, sortOrder: 0 },
-    { ...stageCancelled, code: 'cancelled', outcome: 'cancelled', isInitial: false, sortOrder: 1 },
+    { ...stageNew, code: 'new', outcome: null, isInitial: true, resultIssued: false, sortOrder: 0 },
+    {
+      ...stageInProgress,
+      code: 'in_progress',
+      outcome: null,
+      isInitial: false,
+      resultIssued: false,
+      sortOrder: 0,
+    },
+    {
+      ...stagePaused,
+      code: 'paused',
+      outcome: null,
+      isInitial: false,
+      resultIssued: false,
+      sortOrder: 0,
+    },
+    {
+      ...stagePostponed,
+      code: 'postponed',
+      outcome: null,
+      isInitial: false,
+      resultIssued: false,
+      sortOrder: 1,
+    },
+    {
+      ...stageOnControl,
+      code: 'on_control',
+      outcome: null,
+      isInitial: false,
+      resultIssued: false,
+      sortOrder: 0,
+    },
+    {
+      ...stageDone,
+      code: 'done',
+      outcome: 'success',
+      isInitial: false,
+      resultIssued: false,
+      sortOrder: 0,
+    },
+    {
+      ...stageCancelled,
+      code: 'cancelled',
+      outcome: 'cancelled',
+      isInitial: false,
+      resultIssued: false,
+      sortOrder: 1,
+    },
   ],
   /** Действие без смены статуса (#633): демо на мок-контуре и в веб-тестах. */
   actions: [
@@ -258,9 +300,23 @@ export const quickDocument: WorkflowDocument = {
 /** Простой документ архивного демо-типа: Ожидает → В работе → Завершена. */
 export const simpleDocument: WorkflowDocument = {
   stages: [
-    { ...stageNew, code: 'new', outcome: null, isInitial: true, sortOrder: 0 },
-    { ...stageInProgress, code: 'in_progress', outcome: null, isInitial: false, sortOrder: 0 },
-    { ...stageDone, code: 'done', outcome: 'success', isInitial: false, sortOrder: 0 },
+    { ...stageNew, code: 'new', outcome: null, isInitial: true, resultIssued: false, sortOrder: 0 },
+    {
+      ...stageInProgress,
+      code: 'in_progress',
+      outcome: null,
+      isInitial: false,
+      resultIssued: false,
+      sortOrder: 0,
+    },
+    {
+      ...stageDone,
+      code: 'done',
+      outcome: 'success',
+      isInitial: false,
+      resultIssued: false,
+      sortOrder: 0,
+    },
   ],
   transitions: [
     {

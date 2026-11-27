@@ -34,6 +34,10 @@ import {
   type CustomFieldRegistry,
 } from '../../../custom-fields/ports/custom-field-registry.port.js';
 import {
+  FIELD_BINDING_TARGET_READER,
+  type FieldBindingTargetReader,
+} from '../../../projects/ports/field-binding-targets.port.js';
+import {
   WORKFLOW_PRESS_ROUNDS_READER,
   type WorkflowPressRoundsReader,
 } from '../../ports/workflow-press-rounds.port.js';
@@ -81,6 +85,7 @@ export class WorkflowEditorService {
     @Inject(ROLE_MEMBERSHIP_READER) private readonly membership: RoleMembershipReader,
     private readonly types: ProcessTypesRepository,
     @Inject(WORKFLOW_PRESS_ROUNDS_READER) private readonly pressRounds: WorkflowPressRoundsReader,
+    @Inject(FIELD_BINDING_TARGET_READER) private readonly nodeKinds: FieldBindingTargetReader,
   ) {}
 
   /** GET /workflows/:id — документ живого маршрута + счётчики. Маршрут
@@ -151,7 +156,13 @@ export class WorkflowEditorService {
         typeRows.length > 0 &&
         typeRows.every((row) => Boolean(normalizeTypeConfig(row.config).numbering));
       const loaded = await assertPublishable(
-        { registry: this.customFields, profiles: this.profiles },
+        {
+          registry: this.customFields,
+          profiles: this.profiles,
+          types: this.types,
+          workflows: this.workflows,
+          nodeKinds: this.nodeKinds,
+        },
         {
           document: body.document,
           category,

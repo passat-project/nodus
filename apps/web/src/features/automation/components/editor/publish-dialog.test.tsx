@@ -35,6 +35,7 @@ const stage = (id: string, name: string, systemState: 'active' | 'closed' = 'act
   systemState,
   outcome: systemState === 'closed' ? ('success' as const) : null,
   isInitial: false,
+  resultIssued: false,
   sortOrder: 0,
 });
 

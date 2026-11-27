@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { CustomFieldValues } from '@nodus/contracts';
+import type { CustomFieldValues, ProjectRole } from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import { TransactionRunner } from '../../../core/database/transaction-runner.js';
@@ -70,6 +70,13 @@ export class LetterWorkflowAdapter implements WorkflowEntityAdapter {
       { target: { kind: 'process_type', id: letter.typeId } },
       tx,
     );
+    // Роли актора в проекте письма (#635): политика обхода проверок. Письмо
+    // без проекта (обычный случай) — ролей нет.
+    const projectRoles = letter.projectId
+      ? new Set(
+          (await this.projects.rolesIn(actor.id, [letter.projectId], tx))[letter.projectId] ?? [],
+        )
+      : new Set<ProjectRole>();
     return {
       workflowId: letter.workflowId,
       typeId: letter.typeId,
@@ -78,6 +85,7 @@ export class LetterWorkflowAdapter implements WorkflowEntityAdapter {
       bypassConditions: false,
       canOverrideGates: false,
       actsWithoutConditions: false,
+      projectRoles,
       facts: this.factsOf(
         letter.stageId,
         letter.customFields,

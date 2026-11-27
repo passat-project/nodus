@@ -2,10 +2,12 @@ import type { InjectionToken } from '@nestjs/common';
 import type { FormulaRelationDirection, FormulaRelationKind } from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
+import type { ConditionRecordData } from '../../custom-fields/ports/condition-records.port.js';
 import type {
   FormulaRecordData,
   RecordReadOptions,
 } from '../../custom-fields/ports/record-values.port.js';
+import type { ProjectActor } from '../../projects/ports/project-reader.port.js';
 
 /**
  * Read-порт задач как источников формул (#632, Р7/Р11). Реализация живёт
@@ -48,4 +50,32 @@ export interface TaskFormulaValues {
     projectId: string | null,
     tx?: TransactionClient,
   ): Promise<FormulaRecordData[]>;
+
+  /** Полная выборка условий (#635): ВСЕ живые задачи множества — включая
+   *  конфиденциальные и невидимые актору (квантор «все» не врёт; причина
+   *  фильтрует видимость отдельно, `visibleTaskIds`). Мягко удалённые
+   *  исключены всегда; видимость НЕ фильтруется. */
+  conditionTasks(
+    query:
+      | { kind: 'one'; id: string }
+      | { kind: 'subtasks_of'; taskId: string }
+      | {
+          kind: 'related_of';
+          taskId: string;
+          relation: FormulaRelationKind;
+          direction: FormulaRelationDirection;
+        }
+      | { kind: 'node_tasks'; nodeId: string; projectId: string | null }
+      | { kind: 'project_tasks'; projectId: string }
+      | { kind: 'ids'; ids: readonly string[] },
+    tx?: TransactionClient,
+  ): Promise<ConditionRecordData[]>;
+
+  /** Видимые актору задачи из ids (#635, «видимость одна») — та же функция,
+   *  что у списка задач. */
+  visibleTaskIds(
+    ids: readonly string[],
+    actor: ProjectActor,
+    tx?: TransactionClient,
+  ): Promise<ReadonlySet<string>>;
 }

@@ -75,6 +75,7 @@ function document(): WorkflowDocument {
         outcome: null,
         isInitial: true,
         sortOrder: 0,
+        resultIssued: false,
       },
       {
         id: 'new:ctrl',
@@ -85,6 +86,7 @@ function document(): WorkflowDocument {
         outcome: null,
         isInitial: false,
         sortOrder: 1,
+        resultIssued: false,
       },
       {
         id: 'new:done',
@@ -95,6 +97,7 @@ function document(): WorkflowDocument {
         outcome: 'success',
         isInitial: false,
         sortOrder: 2,
+        resultIssued: false,
       },
     ],
     transitions: [
@@ -196,6 +199,7 @@ function makeService(
     { effectiveRoles: vi.fn(async () => []) } as never,
     { findByIds: vi.fn(async () => []) } as never,
     pressRounds as never,
+    { nodeKinds: vi.fn(async () => []) } as never,
   );
   return { service, calls, pressRounds };
 }

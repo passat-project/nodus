@@ -17,6 +17,7 @@ export const requestDocument: WorkflowDocument = {
       code: 'review',
       outcome: null,
       isInitial: true,
+      resultIssued: false,
       sortOrder: 0,
     },
     {
@@ -24,6 +25,7 @@ export const requestDocument: WorkflowDocument = {
       code: 'done',
       outcome: 'success',
       isInitial: false,
+      resultIssued: false,
       sortOrder: 0,
     },
     {
@@ -31,6 +33,7 @@ export const requestDocument: WorkflowDocument = {
       code: 'cancelled',
       outcome: 'cancelled',
       isInitial: false,
+      resultIssued: false,
       sortOrder: 1,
     },
   ],

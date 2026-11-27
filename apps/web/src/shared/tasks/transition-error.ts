@@ -6,7 +6,8 @@ import { numberingErrorText } from '../custom-fields/number-confirm.js';
 
 /** Причины гейтов строкой для тоста (общий текст отказа). */
 export function gateReasonsText(reasons: readonly TransitionBlockReason[]): string {
-  return reasons.map((r) => ui.tasks.gate[r.kind]).join('; ');
+  // records/formula (#635): точная подпись — та, что написал настройщик.
+  return reasons.map((r) => r.title ?? ui.tasks.gate[r.kind]).join('; ');
 }
 
 /** Текст ошибки перехода/переноса: гейты — с причинами; «из какого статуса

@@ -58,6 +58,7 @@ export class WorkflowPublishRepository {
         color: update.color,
         systemState: update.systemState,
         outcome: update.outcome,
+        resultIssued: update.resultIssued,
         isInitial: update.isInitial,
         sortOrder: update.sortOrder,
       },

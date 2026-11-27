@@ -18,6 +18,8 @@ export interface PlannerStage {
   color: string;
   systemState: string;
   outcome: string | null;
+  /** «Результат выдан» (#635, §11). */
+  resultIssued: boolean;
   isInitial: boolean;
   sortOrder: number;
 }
@@ -67,6 +69,8 @@ export interface StageCreate {
   color: string;
   systemState: string;
   outcome: string | null;
+  /** «Результат выдан» (#635, §11). */
+  resultIssued: boolean;
   isInitial: boolean;
   sortOrder: number;
 }
@@ -77,6 +81,8 @@ export interface StageUpdate {
   color: string;
   systemState: string;
   outcome: string | null;
+  /** «Результат выдан» (#635, §11). */
+  resultIssued: boolean;
   isInitial: boolean;
   sortOrder: number;
   /** Сменился этап — денормализация задач («Мой план» обновится). */
@@ -152,6 +158,7 @@ export function planWorkflowPublish(
       color: stage.color,
       systemState: stage.systemState,
       outcome: stage.outcome,
+      resultIssued: stage.resultIssued,
       isInitial: stage.isInitial,
       sortOrder: stage.sortOrder,
     };
@@ -166,6 +173,7 @@ export function planWorkflowPublish(
       existing.color === fields.color &&
       existing.systemState === fields.systemState &&
       existing.outcome === fields.outcome &&
+      existing.resultIssued === fields.resultIssued &&
       existing.isInitial === fields.isInitial &&
       existing.sortOrder === fields.sortOrder;
     if (!unchanged) stageUpdates.push({ stageId: stage.id, ...fields, restated });

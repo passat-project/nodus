@@ -20,6 +20,7 @@ const doc = (layout?: WorkflowDraftDocument['layout']): WorkflowDraftDocument =>
       systemState: 'backlog',
       outcome: null,
       isInitial: true,
+      resultIssued: false,
       sortOrder: 0,
     },
     {
@@ -30,6 +31,7 @@ const doc = (layout?: WorkflowDraftDocument['layout']): WorkflowDraftDocument =>
       systemState: 'active',
       outcome: null,
       isInitial: false,
+      resultIssued: false,
       sortOrder: 0,
     },
     {
@@ -40,6 +42,7 @@ const doc = (layout?: WorkflowDraftDocument['layout']): WorkflowDraftDocument =>
       systemState: 'closed',
       outcome: 'cancelled',
       isInitial: false,
+      resultIssued: false,
       sortOrder: 0,
     },
   ],

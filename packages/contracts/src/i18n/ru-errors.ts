@@ -38,6 +38,7 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.WORKFLOW_TRANSITION_BLOCKED]: 'Переход заблокирован: не выполнены условия',
   [ErrorCode.WORKFLOW_TRANSITION_FORM_INVALID]: 'Заполните окно перехода',
   [ErrorCode.WORKFLOW_OVERRIDE_REASON_REQUIRED]: 'Чтобы обойти условие, укажите причину',
+  [ErrorCode.WORKFLOW_GATE_OVERRIDE_FORBIDDEN]: 'Обход этой проверки запрещён настройкой процесса',
   [ErrorCode.WORKFLOW_NUMBERING_NOT_CONFIGURED]:
     'У типа не настроена нумерация — номер присвоить нельзя, обратитесь к администратору',
   [ErrorCode.TASK_PARENT_CYCLE]: 'Задачу нельзя сделать подзадачей её же подзадачи',
