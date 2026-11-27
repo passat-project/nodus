@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ProcessType } from '@nodus/contracts';
 import { normalizeTypeConfig, ui } from '@nodus/contracts';
@@ -14,10 +14,18 @@ vi.stubGlobal(
   },
 );
 
+const openCardSpy = vi.hoisted(() => vi.fn());
+// Стек карточек: проверяем, КАКАЯ карточка ложится поверх с каким прямоугольником.
+vi.mock('../../../../app/shell/use-card-stack.js', () => ({
+  useOpenCard: () => openCardSpy,
+}));
+
 import {
   useLiveProcessTypes,
   useUpdateTypeCreation,
 } from '../../../../shared/api/process-types-api.js';
+import { useTypeSettingsStore } from '../../../../shared/ui/type-settings-store.js';
+import { openRowMenu, rowOf, withRowRect } from '../../../../test/journal-row.js';
 
 vi.mock('../../../../shared/api/process-types-api.js', () => ({
   useLiveProcessTypes: vi.fn(),
@@ -65,6 +73,8 @@ const TASK = (id: string, withoutProject: boolean, patch: Partial<ProcessType> =
 
 function setup(tasks: ProcessType[], canManage = true) {
   const mutate = vi.fn();
+  openCardSpy.mockClear();
+  useTypeSettingsStore.setState({ target: null });
   vi.mocked(useLiveProcessTypes).mockReturnValue({ data: tasks } as never);
   vi.mocked(useUpdateTypeCreation).mockReturnValue({ mutate, isPending: false } as never);
   render(<WithoutProjectPage canManage={canManage} />);
@@ -141,35 +151,57 @@ describe('страница «Без проекта» (#857)', () => {
     expect(mutate).not.toHaveBeenCalled();
   });
 
-  it('пакетная правка островком: выбранные типы включаются и выключаются', () => {
+  it('список без чекбоксов: пакетных команд «над выбранными» нет, правка — тумблером строки', () => {
     const { mutate } = setup([
       TASK('t6', false, { name: 'Быстрая' }),
       TASK('t7', true, { name: 'Медленная' }),
     ]);
-    const first = screen.getByText('Быстрая').closest('[role="row"]')!;
-    const second = screen.getByText('Медленная').closest('[role="row"]')!;
-    fireEvent.click(first.querySelector('button[role="checkbox"]')!);
-    fireEvent.click(second.querySelector('button[role="checkbox"]')!);
-
-    fireEvent.click(screen.getByRole('button', { name: ui.automation.entry.noProjectEnable }));
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+    // Кнопок «Включить выбранные»/«Выключить выбранные» и островка нет.
+    expect(screen.queryByRole('button', { name: /выбранн/ })).toBeNull();
+    // Сводка «Включено: N из M» — тихим текстом в тулбаре.
+    expect(
+      screen.getByText(
+        ui.automation.entry.noProjectSummary.replace('{enabled}', '1').replace('{total}', '2'),
+      ),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('switch', { name: /Быстрая/ }));
+    expect(mutate).toHaveBeenCalledTimes(1);
     expect(mutate).toHaveBeenCalledWith({
       typeId: 't6',
       creation: expect.objectContaining({ withoutProject: true }),
-    });
-    expect(mutate).toHaveBeenCalledWith({
-      typeId: 't7',
-      creation: expect.objectContaining({ withoutProject: true }),
-    });
-
-    mutate.mockClear();
-    fireEvent.click(screen.getByRole('button', { name: ui.automation.entry.noProjectDisable }));
-    expect(mutate).toHaveBeenCalledWith({
-      typeId: 't6',
-      creation: expect.objectContaining({ withoutProject: false }),
     });
   });
 
-  it('журнал сортируется по имени и описанию; клик по строке карточку не открывает', () => {
+  it('клик по строке кладёт карточку типа задачи ПОВЕРХ с прямоугольником строки', () => {
+    setup([TASK('t8', true, { name: 'Быстрая' })]);
+    const row = rowOf('Быстрая');
+    const rect = withRowRect(row);
+    fireEvent.click(row);
+    expect(openCardSpy).toHaveBeenCalledTimes(1);
+    expect(openCardSpy.mock.calls).toEqual([[{ kind: 'process-type', id: 't8' }, rect]]);
+    // Клик по тумблеру строки — правка связки, карточку не открывает.
+    fireEvent.click(screen.getByRole('switch', { name: /Быстрая/ }));
+    expect(openCardSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('«⋯» строки: «Открыть» — карточка в стек, «Настройки типа…» — общий стор настроек', async () => {
+    setup([TASK('t9', false, { name: 'Медленная' })]);
+    const menu = await openRowMenu('Медленная');
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual([ui.common.open, ui.automation.menuSettingsType]);
+    fireEvent.click(within(menu).getByRole('menuitem', { name: ui.automation.menuSettingsType }));
+    expect(useTypeSettingsStore.getState().target).toEqual({ kind: 'process-type', id: 't9' });
+    expect(openCardSpy).not.toHaveBeenCalled();
+    const second = await openRowMenu('Медленная');
+    fireEvent.click(within(second).getByRole('menuitem', { name: ui.common.open }));
+    expect(openCardSpy.mock.calls).toEqual([[{ kind: 'process-type', id: 't9' }]]);
+  });
+
+  it('журнал сортируется по имени и описанию; клик по строке открывает карточку типа задачи', () => {
     setup([
       TASK('t8', true, { name: 'Быстрая', description: 'Для мелочей' }),
       TASK('t9', false, { name: 'Медленная', description: '' }),
@@ -187,8 +219,7 @@ describe('страница «Без проекта» (#857)', () => {
     fireEvent.keyDown(descriptionHeader, { key: 'Enter' });
     expect(descriptionHeader.getAttribute('aria-sort')).toBe('ascending');
 
-    // onOpenRow — пустышка канона: страница настройки карточку не открывает.
     fireEvent.click(screen.getByText('Быстрая'));
-    expect(screen.queryByTestId('task-create-dialog')).toBeNull();
+    expect(openCardSpy.mock.calls[0]![0]).toEqual({ kind: 'process-type', id: 't8' });
   });
 });

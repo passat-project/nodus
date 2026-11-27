@@ -9,7 +9,6 @@ import { ui } from '@nodus/contracts';
 
 import { useRouteDocStore, type SelectionRef } from '../../../model/route-doc-store.js';
 import { ActionPanel } from './action-panel.js';
-import { CreationPanel } from './creation-panel.js';
 import { SidePanel } from '../../../../../shared/ui/panel/side-panel.js';
 import { StageActionsSection } from './stage-actions-section.js';
 import { StageButtonsSection } from './stage-buttons-section.js';
@@ -91,9 +90,7 @@ export function EditorPanel({
     shown?.kind === 'transition' ? (doc.transitions.find((t) => t.id === shown.id) ?? null) : null;
   const action =
     shown?.kind === 'action' ? ((doc.actions ?? []).find((a) => a.id === shown.id) ?? null) : null;
-  const creation = shown?.kind === 'creation';
-  const open =
-    selection !== null && (stage !== null || transition !== null || action !== null || creation);
+  const open = selection !== null && (stage !== null || transition !== null || action !== null);
 
   const close = useCallback(() => useRouteDocStore.getState().select(null), []);
   const back = useCallback(() => setSection('root'), []);
@@ -105,17 +102,14 @@ export function EditorPanel({
     ? action && section === 'window'
       ? ui.automation.panel.actionWindow
       : SECTION_TITLE[section as Exclude<PanelSection, 'root'>]
-    : creation
-      ? ui.automation.creation.title
-      : stage
-        ? ui.automation.panel.kindStage
-        : action
-          ? ui.automation.panel.kindAction
-          : ui.automation.panel.kindTransition;
+    : stage
+      ? ui.automation.panel.kindStage
+      : action
+        ? ui.automation.panel.kindAction
+        : ui.automation.panel.kindTransition;
 
   return (
     <SidePanel open={open} title={title} onClose={close} onBack={inSection ? back : undefined}>
-      {creation ? <CreationPanel workflow={workflow} type={type} readOnly={readOnly} /> : null}
       {stage && section === 'root' ? (
         <StagePanel
           key={stage.id}

@@ -1,4 +1,3 @@
-import { createElement, type ComponentType, type FunctionComponent } from 'react';
 import {
   createRootRoute,
   createRoute,
@@ -7,7 +6,7 @@ import {
   redirect,
 } from '@tanstack/react-router';
 
-import { markChunkLoaded, reloadOnceOnChunkError } from './chunk-reload.js';
+import { pageLoader, type PreloadablePage } from './page-loader.js';
 import { AppShell } from './shell/app-shell.js';
 import { automationBeforeLoad } from './legacy-automation-search.js';
 import { PAGE_IMPORTS, preloadPage } from './page-imports.js';
@@ -22,73 +21,14 @@ import { queryClient } from '../shared/lib/query-client.js';
 import { browserAllowsWarmup } from './shell/module-warmup.js';
 
 /**
- * Страница раздела отвечает на `preload()` (#1051): роутер зовёт его при
- * наведении и фокусе на ссылку раздела (`defaultPreload: 'intent'`) — чанк
- * грузится до клика. Предзагрузка guard НЕ включает: после выкатки устаревший
- * чанк перезагружал бы страницу по одному наведению, с потерей несохранённого
- * ввода.
- *
- * Страница — НЕ `React.lazy`: тот при первом рендере всегда приостанавливается,
- * даже когда код давно загружен, а React после приостановки держит контент ещё
- * 300 мс (`FALLBACK_THROTTLE_MS`; react.dev, `<Suspense>`: «reveals suspended
- * content at most once every 300ms»). Прогретый раздел простаивал треть
- * секунды прежде, чем начать грузить данные (#1051, замер: раздел монтировался
- * через 360 мс после клика). Здесь код, полученный предзагрузкой, рендерится
- * сразу; ждёт импорта только раздел, которого на руках нет.
- *
- * Guard гибели чанка после деплоя (репорт владельца 24.09, #88) включён только
- * реальным входом; семантика — общая в `chunk-reload.ts`.
+ * Страницы разделов и куски вне страниц собирает `pageLoader`
+ * (`./page-loader.ts`) — НЕ `React.lazy`: почему — в его комментарии.
+ * Определение живёт в листовом модуле, а не здесь: файл роутера импортирует
+ * шелл (`AppShell`), а шелку загрузчик нужен сам (каркас карточки типа,
+ * `shell/card-type-entry.tsx`) — импорт из этого файла давал бы цикл
+ * router ↔ shell. Ниже — реэкспорт для прежних импортов.
  */
-type PageModule = { default: ComponentType };
-export type PreloadablePage = FunctionComponent & { preload: () => Promise<void> };
-
-export function pageLoader(loader: () => Promise<PageModule>): PreloadablePage {
-  let pending: Promise<PageModule> | undefined;
-  /** Код раздела на руках — признак ставится раньше, чем разрешится промис. */
-  let loaded: ComponentType | undefined;
-  let reloading = false;
-  /** Один импорт на все пути; отказ не копится — следующая попытка пробует снова. */
-  const importPage = (): Promise<PageModule> => {
-    pending ??= loader().then(
-      (module) => {
-        loaded = module.default;
-        markChunkLoaded();
-        return module;
-      },
-      (error: unknown) => {
-        pending = undefined;
-        throw error;
-      },
-    );
-    return pending;
-  };
-  /** Реальный вход кода на руках не принёс: отказ включает guard. */
-  const enter = async (): Promise<PageModule> => {
-    try {
-      return await importPage();
-    } catch (error) {
-      // Запущенный reload не отменить: повторный рендер не должен «снимать»
-      // флаг и показывать ошибку поверх уходящей страницы.
-      if (reloading || reloadOnceOnChunkError()) {
-        reloading = true;
-        return new Promise<never>(() => {});
-      }
-      throw error;
-    }
-  };
-  const Page: PreloadablePage = function Page() {
-    if (!loaded) throw enter();
-    return createElement(loaded);
-  };
-  // Провал предзагрузки не рвёт страницу и не перезагружает её: вход повторит
-  // импорт сам — и уже его guard решает, перезагружать ли.
-  Page.preload = () =>
-    importPage().then(
-      () => undefined,
-      () => undefined,
-    );
-  return Page;
-}
+export { pageLoader, type PreloadablePage };
 
 const LoginPage = pageLoader(PAGE_IMPORTS.login);
 const InviteAcceptPage = pageLoader(PAGE_IMPORTS.inviteAccept);

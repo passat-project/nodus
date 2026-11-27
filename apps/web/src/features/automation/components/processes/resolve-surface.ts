@@ -2,9 +2,11 @@ import type { NodeKind, ProcessType, ProjectType } from '@nodus/contracts';
 
 /**
  * URL-модель единого входа «Процессы» (#857, единая модель §5) — чистый
- * разбор адреса в поверхность правой области. Приоритет: `ftype` (экран
- * типа папки на всю область) > `type` (редактор маршрута) > `ptype`
- * (рабочая область типа проекта) > `noproject` > умолчание. Идентификатор
+ * разбор адреса в поверхность правой области. Приоритет: `ftype` (карточка
+ * типа папки в раме) > `type` (редактор маршрута) > `ptype` (рабочая область
+ * типа проекта) > `noproject` > умолчание. Дорожки «тип открыт из типа
+ * проекта» нет (ревизия UI v3): связанная сущность открывается карточкой
+ * поверх стека, поэтому `ptype` при наличии `type` не влияет. Идентификатор
  * пропал (архив) — откат к умолчанию; без права `project.setup.manage`
  * проектные ссылки игнорируются (сервер — истина, I8).
  */
@@ -14,7 +16,7 @@ export interface ProcessesSearch {
   type?: string;
   /** Тип проекта — рабочая область (холст + страницы). */
   ptype?: string;
-  /** Тип папки — экран на всю рабочую область (колонка скрыта). */
+  /** Тип папки — карточка в раме (колонка стоит на месте). */
   ftype?: string;
   /** Страница «Без проекта». Тановский разбор адреса читает `1` как ЧИСЛО
    *  (JSON-семантика search-параметров), а `navigate` пишет строку —
@@ -24,7 +26,7 @@ export interface ProcessesSearch {
 
 export type ProcessesSurface =
   | { surface: 'folder'; kindId: string }
-  | { surface: 'type'; typeId: string; trailTypeId: string | null }
+  | { surface: 'type'; typeId: string }
   | { surface: 'project'; typeId: string }
   | { surface: 'no-project' }
   | { surface: 'empty' };
@@ -44,9 +46,7 @@ export function defaultProcessesSurface(data: ProcessesSurfaceData): ProcessesSu
     return { surface: 'project', typeId: aliveProjects[0]!.id };
   }
   const firstTask = data.processTypes.find((type) => !type.archivedAt && type.category === 'task');
-  return firstTask
-    ? { surface: 'type', typeId: firstTask.id, trailTypeId: null }
-    : { surface: 'empty' };
+  return firstTask ? { surface: 'type', typeId: firstTask.id } : { surface: 'empty' };
 }
 
 export function resolveProcessesSurface(
@@ -58,8 +58,8 @@ export function resolveProcessesSurface(
       ? (data.projectTypes.find((type) => type.id === id && type.archivedAt === null) ?? null)
       : null;
 
-  // Экран типа папки: архивный тип открывается (внизу «Вернуть»), чужой id —
-  // откат к умолчанию.
+  // Карточка типа папки: архивный тип открывается (внизу «Вернуть»), чужой
+  // id — откат к умолчанию.
   if (data.canSetup && search.ftype) {
     const kind = data.kinds.find((entry) => entry.id === search.ftype);
     if (kind) return { surface: 'folder', kindId: kind.id };
@@ -67,11 +67,7 @@ export function resolveProcessesSurface(
 
   if (search.type) {
     const type = data.processTypes.find((entry) => entry.id === search.type && !entry.archivedAt);
-    if (type) {
-      // Дорожка «Договор → Задание смежнику»: тип открыт из типа проекта.
-      const trail = aliveProject(search.ptype);
-      return { surface: 'type', typeId: type.id, trailTypeId: trail?.id ?? null };
-    }
+    if (type) return { surface: 'type', typeId: type.id };
   }
 
   const project = aliveProject(search.ptype);

@@ -20,21 +20,24 @@ export function RowMenuTrigger() {
   );
 }
 
+/** Пункт архива строки любого вида — одна подпись с действием окна настроек
+ *  («Архивировать тип» / «Вернуть тип»). */
 function ArchiveItem({
   archived,
-  restoreLabel,
-  archiveLabel,
   onToggle,
+  disabled,
+  lockedTitle,
 }: {
   archived: boolean;
-  restoreLabel: string;
-  archiveLabel: string;
   onToggle: () => void;
+  /** Системный тип в архив не убирается: пункт выключен, пояснение — в `title`. */
+  disabled?: boolean;
+  lockedTitle?: string;
 }) {
   return (
-    <DropdownMenuItem onSelect={onToggle}>
+    <DropdownMenuItem disabled={disabled} title={lockedTitle} onSelect={onToggle}>
       {archived ? <ArchiveRestore className="size-3.5" /> : <Archive className="size-3.5" />}
-      {archived ? restoreLabel : archiveLabel}
+      {archived ? ui.common.typeSettings.restore : ui.common.typeSettings.archive}
     </DropdownMenuItem>
   );
 }
@@ -77,14 +80,12 @@ export function ProcessRowMenu({
             <DropdownMenuSeparator />
           </>
         ) : null}
-        <DropdownMenuItem
+        <ArchiveItem
+          archived={archived}
+          onToggle={archived ? onRestore : onArchive}
           disabled={isSystem}
-          title={isSystem ? ui.automation.archiveSystemLocked : undefined}
-          onSelect={archived ? onRestore : onArchive}
-        >
-          {archived ? <ArchiveRestore className="size-3.5" /> : <Archive className="size-3.5" />}
-          {archived ? ui.automation.restoreFromArchive : ui.automation.menuArchive}
-        </DropdownMenuItem>
+          lockedTitle={isSystem ? ui.automation.archiveSystemLocked : undefined}
+        />
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -112,7 +113,7 @@ export function ProjectRowMenu({
           <>
             <DropdownMenuItem onSelect={onOpenSettings}>
               <Settings2 className="size-3.5" />
-              {ui.projects.schemasTypeSettings}
+              {ui.automation.menuSettingsType}
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={onCopy}>
               <Copy className="size-3.5" />
@@ -121,12 +122,7 @@ export function ProjectRowMenu({
             <DropdownMenuSeparator />
           </>
         ) : null}
-        <ArchiveItem
-          archived={archived}
-          restoreLabel={ui.projects.typesRestore}
-          archiveLabel={ui.projects.typesArchive}
-          onToggle={archived ? onRestore : onArchive}
-        />
+        <ArchiveItem archived={archived} onToggle={archived ? onRestore : onArchive} />
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -164,12 +160,7 @@ export function KindRowMenu({
             <DropdownMenuSeparator />
           </>
         ) : null}
-        <ArchiveItem
-          archived={archived}
-          restoreLabel={ui.nodeKinds.restore}
-          archiveLabel={ui.nodeKinds.panel.archive}
-          onToggle={archived ? onRestore : onArchive}
-        />
+        <ArchiveItem archived={archived} onToggle={archived ? onRestore : onArchive} />
       </DropdownMenuContent>
     </DropdownMenu>
   );

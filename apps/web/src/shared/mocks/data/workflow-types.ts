@@ -10,7 +10,7 @@ import { letterProcessTypes } from './letter-catalog.js';
 
 /** «Где создаётся» (#665): по умолчанию — везде и без проекта. */
 const DEMO_CREATION = DEFAULT_CREATION_SCOPE;
-/** Документные работы внутри проекта (комплект, изменение) — без проекта
+/** Документные задачи внутри проекта (комплект, изменение) — без проекта
  *  нельзя, а создаются только в папке вида «Комплект» (#665, ADR-0042 §11). */
 const DEMO_CREATION_NO_PROJECT = {
   ...DEFAULT_CREATION_SCOPE,

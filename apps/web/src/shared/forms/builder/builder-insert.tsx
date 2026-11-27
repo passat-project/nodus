@@ -109,13 +109,13 @@ function InsertMenu({
         <>
           {available.length === 0 ? (
             <>
-              <p className="px-2 pt-1 text-label-xs text-muted-foreground">{b.insertFields}</p>
+              <p className="px-2 pt-1 text-label-sm text-muted-foreground">{b.insertFields}</p>
               <p className="px-2 pb-1 text-xs text-muted-foreground">{b.insertEmpty}</p>
             </>
           ) : (
             fieldGroups(available).map((group) => (
               <div key={group.label ?? 'fields'} className="flex flex-col gap-0.5">
-                <p className="px-2 pt-1 text-label-xs text-muted-foreground">
+                <p className="px-2 pt-1 text-label-sm text-muted-foreground">
                   {group.label ?? b.insertFields}
                 </p>
                 <div className="flex max-h-56 flex-col overflow-y-auto">
@@ -132,7 +132,7 @@ function InsertMenu({
       )}
       {blocks.length > 0 ? (
         <>
-          <p className="px-2 pt-1 text-label-xs text-muted-foreground">{b.insertBlocks}</p>
+          <p className="px-2 pt-1 text-label-sm text-muted-foreground">{b.insertBlocks}</p>
           {blocks.map((option) => (
             <MenuButton key={option.block} onClick={() => onBlock(option.block)}>
               <span className="truncate">{option.label}</span>
@@ -142,7 +142,7 @@ function InsertMenu({
       ) : null}
       {decorAllowed ? (
         <>
-          <p className="px-2 pt-1 text-label-xs text-muted-foreground">{b.insertDecor}</p>
+          <p className="px-2 pt-1 text-label-sm text-muted-foreground">{b.insertDecor}</p>
           {decorFull ? (
             <p className="px-2 pb-1 text-xs text-muted-foreground">{b.decorLimit}</p>
           ) : (

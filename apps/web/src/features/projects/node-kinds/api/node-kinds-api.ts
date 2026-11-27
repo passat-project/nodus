@@ -82,7 +82,9 @@ export function useCreateNodeKind() {
   });
 }
 
-export function useUpdateNodeKind() {
+/** `quiet` — без всплывающих уведомлений: для автосохранения вкладки «Форма
+ *  создания» (#857), где состояние пишется тихой строкой в баре рамы. */
+export function useUpdateNodeKind({ quiet = false }: { quiet?: boolean } = {}) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (vars: { id: string } & NodeKindUpdateBody) => {
@@ -109,7 +111,7 @@ export function useUpdateNodeKind() {
     },
     onError: (error, _vars, context) => {
       restore(queryClient, context);
-      toastApiError(error);
+      if (!quiet) toastApiError(error);
     },
     onSettled: () => invalidate(queryClient),
   });

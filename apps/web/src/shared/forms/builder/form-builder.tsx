@@ -4,21 +4,24 @@ import { Button } from '@nodus/ui/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@nodus/ui/components/dialog';
 import { cn } from '@nodus/ui/lib/utils';
 
-import { BuilderCanvas } from './builder-canvas.js';
+import { FormBuilderBody } from './form-builder-body.js';
 import type { FormBuilderHost } from './builder-host.js';
 import { isBuilderField, type BuilderValue } from './builder-model.js';
-import { BuilderAlsoLocks, BuilderTray } from './builder-side.js';
 
 const b = ui.forms.builder;
 
 /**
- * Редактор окна ввода поверх экрана (#496, В8): окно в натуральную величину
- * — так его увидит сотрудник — с ручками, «+» между строками, лотком полей и
- * «Закрепить также». Черновик живёт здесь до «Готово» — одним шагом в
+ * Редактор окна ввода ПОВЕРХ экрана — оболочка-окно (#496, В8): тело
+ * `FormBuilderBody` (лист в натуральную величину, лоток полей, «Закрепить
+ * также») и черновик, который живёт здесь до «Готово» — одним шагом в
  * документ хоста; «Отмена» — без следа. С правками Esc окно не закрывает:
  * случайная клавиша не стирает работу. Без права — только просмотр.
- * `blockEmptyDecor` — хост сохраняет сразу (папка, проект): пустой
- * заголовок/пояснение не уйдёт на сервер; у маршрута его ловит публикация.
+ * `blockEmptyDecor` — хост сохраняет сразу: пустой заголовок/пояснение не
+ * уйдёт на сервер.
+ *
+ * Окном редактор остаётся только там, где он — логика ноды: окно перехода
+ * (#857, единая модель «Процессов»). Форма создания сущности настраивается
+ * тем же телом во вкладке «Форма создания», без черновика и «Готово».
  */
 export function FormBuilder<X>({
   open,
@@ -71,23 +74,13 @@ export function FormBuilder<X>({
           </p>
         </div>
         <div className="min-h-0 overflow-y-auto px-5 pb-2">
-          <div className="flex w-full min-w-0 flex-col gap-4">
-            <div className="flex w-full min-w-0 flex-col gap-3 rounded-xl bg-background py-4 pr-4 pl-8 ring-1 ring-foreground/10">
-              {host.fixedTop}
-              <BuilderCanvas
-                value={draft}
-                host={host}
-                readOnly={readOnly}
-                focusKey={focusKey}
-                onChange={setDraft}
-              />
-              {host.footer}
-            </div>
-            {readOnly ? null : <BuilderTray value={draft} host={host} onChange={setDraft} />}
-            {host.lockMode ? (
-              <BuilderAlsoLocks value={draft} host={host} readOnly={readOnly} onChange={setDraft} />
-            ) : null}
-          </div>
+          <FormBuilderBody
+            host={host}
+            value={draft}
+            onChange={setDraft}
+            readOnly={readOnly}
+            focusKey={focusKey}
+          />
         </div>
         <div className="flex h-12 shrink-0 items-center justify-end gap-2 px-5">
           {readOnly ? (

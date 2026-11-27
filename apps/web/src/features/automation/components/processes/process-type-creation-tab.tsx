@@ -4,21 +4,20 @@ import { allowedNodeKinds, typeConfigOf, ui, withProjectTypeAllowed } from '@nod
 import { Button } from '@nodus/ui/components/button';
 import { Switch } from '@nodus/ui/components/switch';
 import { cn } from '@nodus/ui/lib/utils';
-import { Check, Minus, Plus, RotateCcw } from 'lucide-react';
+import { Plus, RotateCcw } from 'lucide-react';
 
+import { useOpenCard } from '../../../../app/shell/use-card-stack.js';
 import { useNodeKinds } from '../../../../shared/api/node-kinds.js';
 import { useProjectTypes } from '../../../../shared/api/projects-list.js';
 import { useUpdateTypeCreation } from '../../../../shared/api/process-types-api.js';
 import { CardTabToolbar } from '../../../../shared/ui/entity-card/card-tab-toolbar.js';
 import { identityTone } from '../../../../shared/ui/identity-tone.js';
-import { PanelAction } from '../../../../shared/ui/panel/panel-kit.js';
+import { useTypeSettingsStore } from '../../../../shared/ui/type-settings-store.js';
 import { ProcessTypeGlyph } from '../../../../shared/workflow/process-type-icon.js';
-import { BulkIsland, bulkActionClass } from '../../../../shared/views/bulk-island.js';
 import { DataTable, type DataTableField } from '../../../../shared/views/data-table.js';
 import type { FilterFieldDef } from '../../../../shared/views/list-filters.js';
-import { ListToolbar } from '../../../../shared/views/list-toolbar.js';
+import { ListToolbar, ListToolbarSummary } from '../../../../shared/views/list-toolbar.js';
 import { useListToolbar } from '../../../../shared/views/use-list-toolbar.js';
-import { useRowSelection } from '../../../../shared/views/use-row-selection.js';
 import { ViewSettings } from '../../../../shared/views/view-settings.js';
 
 /** Ключ вида: колонки и ширины общие у всех типов (#857). */
@@ -26,10 +25,13 @@ const VIEW_KEY = 'processes.type-scope';
 
 /**
  * Вкладка «Где создаётся» типа задачи/письма (#665, ADR-0041 п.9; ревизия
- * вкладок 26.11.2026) — БОЛЬШАЯ поверхность: список типов проектов в
- * грамматике журналов портала на всю ширину вкладки. Тумблер — элемент
- * строки, «разрешён везде» снимает все исключения. Главная кнопка создаёт
- * тип проекта (он разрешает все типы по умолчанию — связка сразу).
+ * UI v3) — БОЛЬШАЯ поверхность: список типов проектов в грамматике журналов
+ * портала на всю ширину вкладки, без чекбоксов и островка массовых команд.
+ * Тумблер — элемент строки; «Разрешить во всех типах проектов» снимает все
+ * исключения — тихая команда справа в тулбаре, рядом со сводкой. Клик по
+ * строке открывает карточку типа проекта ПОВЕРХ с анимацией из строки.
+ * Главная кнопка создаёт тип проекта (он разрешает все типы по умолчанию —
+ * связка сразу).
  */
 export function ProcessTypeCreationTab({
   type,
@@ -49,6 +51,8 @@ export function ProcessTypeCreationTab({
   const kindsQuery = useNodeKinds();
   const update = useUpdateTypeCreation();
   const toolbar = useListToolbar(VIEW_KEY);
+  const openCard = useOpenCard();
+  const openSettings = useTypeSettingsStore((s) => s.openSettings);
   const [createOpen, setCreateOpen] = useState(false);
 
   const scope = typeConfigOf(type).creation;
@@ -90,25 +94,18 @@ export function ProcessTypeCreationTab({
     save(withProjectTypeAllowed(scope, projectTypeId, allowed).excludedProjectTypeIds);
   }
 
-  const rowKeys = useMemo(() => filtered.map((item) => item.id), [filtered]);
-  const selection = useRowSelection(rowKeys);
-  const selectedRows = useMemo(
-    () => filtered.filter((item) => selection.selected.has(item.id)),
-    [filtered, selection.selected],
-  );
-
-  function setAllowed(items: readonly ProjectType[], allowed: boolean) {
-    let next = [...scope.excludedProjectTypeIds];
-    for (const item of items) {
-      const allowedAfter = withProjectTypeAllowed(
-        { ...scope, excludedProjectTypeIds: next },
-        item.id,
-        allowed,
-      );
-      next = [...allowedAfter.excludedProjectTypeIds];
-    }
-    save(next);
-  }
+  /** Сводка тулбара: в скольких живых типах проектов тип разрешён. */
+  const allowedCount = rows.filter(
+    (item) => !scope.excludedProjectTypeIds.includes(item.id),
+  ).length;
+  const summary =
+    rows.length === 0
+      ? ui.automation.creationScope.projectSummaryNone
+      : allowedCount === rows.length
+        ? ui.automation.creationScope.projectSummaryAll
+        : ui.automation.creationScope.projectSummary
+            .replace('{allowed}', String(allowedCount))
+            .replace('{total}', String(rows.length));
 
   const defs = useMemo<DataTableField<ProjectType>[]>(
     () => [
@@ -153,7 +150,7 @@ export function ProcessTypeCreationTab({
   );
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col">
+    <div className="@container relative flex h-full min-h-0 flex-col">
       <CardTabToolbar>
         <ListToolbar
           className="min-w-0 flex-1 px-0"
@@ -167,27 +164,44 @@ export function ProcessTypeCreationTab({
               </Button>
             ) : undefined
           }
-          right={<ViewSettings viewKey={VIEW_KEY} defs={defs} />}
+          right={
+            <>
+              <ListToolbarSummary>{summary}</ListToolbarSummary>
+              {canSave && scope.excludedProjectTypeIds.length > 0 ? (
+                <Button variant="ghost" onClick={() => save([])}>
+                  <RotateCcw data-icon="inline-start" />
+                  {ui.automation.creationScope.allowAll}
+                </Button>
+              ) : null}
+              <ViewSettings viewKey={VIEW_KEY} defs={defs} />
+            </>
+          }
         />
       </CardTabToolbar>
-      {canSave && scope.excludedProjectTypeIds.length > 0 ? (
-        <div className="px-6 pb-2">
-          <PanelAction icon={RotateCcw} onClick={() => save([])}>
-            {ui.automation.creationScope.allowAll}
-          </PanelAction>
-        </div>
-      ) : null}
       <div className="min-h-0 flex-1">
         <DataTable
           viewKey={VIEW_KEY}
           defs={defs}
           rows={filtered}
           rowKey={(projectType) => projectType.id}
-          selection={selection}
+          selectable={false}
           label={ui.automation.creationScope.sectionTitle}
           emptyTitle={q ? ui.automation.entry.searchEmpty : ui.projects.typesEmpty}
-          onOpenRow={() => undefined}
-          rowMenu={() => []}
+          onOpenRow={(projectType, rowEl) =>
+            openCard({ kind: 'project-type', id: projectType.id }, rowEl.getBoundingClientRect())
+          }
+          rowMenu={(projectType) => [
+            {
+              id: 'open',
+              label: ui.common.open,
+              onSelect: () => openCard({ kind: 'project-type', id: projectType.id }),
+            },
+            {
+              id: 'settings',
+              label: ui.automation.menuSettingsType,
+              onSelect: () => openSettings({ kind: 'project-type', id: projectType.id }),
+            },
+          ]}
           actions={(projectType) => (
             <Switch
               checked={!scope.excludedProjectTypeIds.includes(projectType.id)}
@@ -198,31 +212,6 @@ export function ProcessTypeCreationTab({
           )}
         />
       </div>
-      <BulkIsland
-        visible={canSave && selectedRows.length > 0}
-        count={selectedRows.length}
-        ariaLabel={ui.automation.creationScope.sectionTitle}
-        onClear={selection.clear}
-      >
-        <button
-          type="button"
-          className={bulkActionClass}
-          tabIndex={canSave && selectedRows.length > 0 ? 0 : -1}
-          onClick={() => setAllowed(selectedRows, true)}
-        >
-          <Check className="size-4" strokeWidth={1.75} />
-          {ui.automation.creationScope.bulkAllow}
-        </button>
-        <button
-          type="button"
-          className={bulkActionClass}
-          tabIndex={canSave && selectedRows.length > 0 ? 0 : -1}
-          onClick={() => setAllowed(selectedRows, false)}
-        >
-          <Minus className="size-4" strokeWidth={1.75} />
-          {ui.automation.creationScope.bulkDeny}
-        </button>
-      </BulkIsland>
       {createOpen && renderProjectTypeCreate
         ? renderProjectTypeCreate({ onClose: () => setCreateOpen(false), onCreated })
         : null}

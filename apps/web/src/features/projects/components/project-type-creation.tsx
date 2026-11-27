@@ -4,48 +4,49 @@ import { typeConfigOf, ui, withProjectTypeAllowed } from '@nodus/contracts';
 import { NodeChip } from '@nodus/ui/components/node-chip';
 import { Button } from '@nodus/ui/components/button';
 import { Switch } from '@nodus/ui/components/switch';
-import { Check, Minus, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { cn } from '@nodus/ui/lib/utils';
 import { toast } from 'sonner';
 
+import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import {
   useLiveProcessTypes,
   useUpdateTypeCreation,
 } from '../../../shared/api/process-types-api.js';
 import { useCanManageWorkflows } from '../../../shared/api/use-can-manage-workflows.js';
-import { BulkIsland, bulkActionClass } from '../../../shared/views/bulk-island.js';
-import { useRowSelection } from '../../../shared/views/use-row-selection.js';
+import { useTypeSettingsStore } from '../../../shared/ui/type-settings-store.js';
 import { CardTabToolbar } from '../../../shared/ui/entity-card/card-tab-toolbar.js';
 import { PanelNote } from '../../../shared/ui/panel/panel-kit.js';
 import { DataTable, type DataTableField } from '../../../shared/views/data-table.js';
-import { ListToolbar } from '../../../shared/views/list-toolbar.js';
+import { ListToolbar, ListToolbarSummary } from '../../../shared/views/list-toolbar.js';
 import type { FilterFieldDef } from '../../../shared/views/list-filters.js';
 import { useListToolbar } from '../../../shared/views/use-list-toolbar.js';
 import { ViewSettings } from '../../../shared/views/view-settings.js';
 import { ProcessTypeGlyph } from '../../../shared/workflow/process-type-icon.js';
 import { typeToneOf } from '../../../shared/workflow/type-tone.js';
+import { creationSummary } from '../lib/project-type-summary.js';
 
 /** Ключ вида: колонки и ширины общие для всех типов проектов (#857). */
 const VIEW_KEY = 'processes.type-creation';
 
 /**
  * Вкладка «Что здесь можно создавать» (#665, ADR-0041 п.9) — СПИСОК в
- * грамматике журналов портала (вердикт владельца 26.11.2026): общий
- * `ListToolbar` (поиск стандарта журналов) и таблица `shared/views` на всю
- * ширину вкладки. Строка: значок+название, категория, описание, тумблер
- * разрешённости в ячейке действий. Тумблер снимает тип в этом типе проекта;
- * пишется в настройку САМОГО типа — вторая сторона («Где создаётся»)
- * показывает то же самое. Клик по строке открывает настройку типа справа.
+ * грамматике журналов портала (вердикт владельца 26.11.2026; ревизия UI v3):
+ * общий `ListToolbar` и таблица `shared/views` на всю ширину вкладки, БЕЗ
+ * чекбоксов и массовых команд — как остальные журналы. Строка: значок +
+ * название, категория, описание, тумблер разрешённости в ячейке действий
+ * (клик по тумблеру карточку не открывает). Клик по строке открывает карточку
+ * типа задачи ПОВЕРХ с анимацией из строки. Тумблер снимает тип в этом типе
+ * проекта; пишется в настройку САМОГО типа — вторая сторона («Где создаётся»)
+ * показывает то же самое.
  */
 export function ProjectTypeCreationTab({
   type,
   canSetup,
-  onOpenType,
   renderProcessTypeCreate,
 }: {
   type: ProjectType;
   canSetup: boolean;
-  onOpenType: (id: string) => void;
   /** Окно создания типа задачи (слот фичи automation, I6): создан — сразу
    *  разрешён в этом типе проекта. */
   renderProcessTypeCreate?: (slot: {
@@ -58,6 +59,8 @@ export function ProjectTypeCreationTab({
   const letters = useLiveProcessTypes('letter');
   const update = useUpdateTypeCreation();
   const toolbar = useListToolbar(VIEW_KEY);
+  const openCard = useOpenCard();
+  const openSettings = useTypeSettingsStore((s) => s.openSettings);
   // Запись связи требует `workflow.manage` (сервер — истина, I8): у настройщика
   // типов проектов без права процессов тумблеры неактивны, а не дают 403.
   const canManage = useCanManageWorkflows();
@@ -104,23 +107,6 @@ export function ProjectTypeCreationTab({
       ),
     [rows, q],
   );
-
-  const rowKeys = useMemo(() => filtered.map((item) => item.id), [filtered]);
-  const selection = useRowSelection(rowKeys);
-  const selectedRows = useMemo(
-    () => filtered.filter((item) => selection.selected.has(item.id)),
-    [filtered, selection.selected],
-  );
-
-  /** Пакетная правка: разрешить или запретить выбранные типы в этом типе проекта. */
-  function setAllowed(items: readonly ProcessType[], allowed: boolean) {
-    for (const item of items) {
-      update.mutate({
-        typeId: item.id,
-        creation: withProjectTypeAllowed(typeConfigOf(item).creation, type.id, allowed),
-      });
-    }
-  }
 
   const defs = useMemo<DataTableField<ProcessType>[]>(
     () => [
@@ -179,7 +165,7 @@ export function ProjectTypeCreationTab({
   );
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col">
+    <div className="@container relative flex h-full min-h-0 flex-col">
       <CardTabToolbar>
         <ListToolbar
           className="min-w-0 flex-1 px-0"
@@ -193,7 +179,12 @@ export function ProjectTypeCreationTab({
               </Button>
             ) : undefined
           }
-          right={<ViewSettings viewKey={VIEW_KEY} defs={defs} />}
+          right={
+            <>
+              <ListToolbarSummary>{creationSummary(type, rows)}</ListToolbarSummary>
+              <ViewSettings viewKey={VIEW_KEY} defs={defs} />
+            </>
+          }
         />
       </CardTabToolbar>
       {canSetup && !canSave ? (
@@ -207,12 +198,23 @@ export function ProjectTypeCreationTab({
           defs={defs}
           rows={filtered}
           rowKey={(item) => item.id}
-          selection={selection}
+          selectable={false}
           label={ui.projects.schemasCreationPage}
           emptyTitle={q ? ui.automation.entry.searchEmpty : ui.automation.creationScope.empty}
-          onOpenRow={(item) => onOpenType(item.id)}
+          onOpenRow={(item, rowEl) =>
+            openCard({ kind: 'process-type', id: item.id }, rowEl.getBoundingClientRect())
+          }
           rowMenu={(item) => [
-            { id: 'open', label: ui.common.open, onSelect: () => onOpenType(item.id) },
+            {
+              id: 'open',
+              label: ui.common.open,
+              onSelect: () => openCard({ kind: 'process-type', id: item.id }),
+            },
+            {
+              id: 'settings',
+              label: ui.automation.menuSettingsType,
+              onSelect: () => openSettings({ kind: 'process-type', id: item.id }),
+            },
           ]}
           actions={(item) => (
             <Switch
@@ -223,31 +225,6 @@ export function ProjectTypeCreationTab({
             />
           )}
         />
-        <BulkIsland
-          visible={canSave && selectedRows.length > 0}
-          count={selectedRows.length}
-          ariaLabel={ui.projects.schemasCreationPage}
-          onClear={selection.clear}
-        >
-          <button
-            type="button"
-            className={bulkActionClass}
-            tabIndex={canSave && selectedRows.length > 0 ? 0 : -1}
-            onClick={() => setAllowed(selectedRows, true)}
-          >
-            <Check className="size-4" strokeWidth={1.75} />
-            {ui.projects.schemasCreationAllow}
-          </button>
-          <button
-            type="button"
-            className={bulkActionClass}
-            tabIndex={canSave && selectedRows.length > 0 ? 0 : -1}
-            onClick={() => setAllowed(selectedRows, false)}
-          >
-            <Minus className="size-4" strokeWidth={1.75} />
-            {ui.projects.schemasCreationDeny}
-          </button>
-        </BulkIsland>
       </div>
       {createOpen && renderProcessTypeCreate
         ? renderProcessTypeCreate({

@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { NodeKind } from '@nodus/contracts';
+import type { NodeKind, ProjectType } from '@nodus/contracts';
 import { kindAllowedByType, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
-import { Empty, EmptyTitle } from '@nodus/ui/components/empty';
 import { Plus } from 'lucide-react';
 
+import { useOpenCard } from '../../../../app/shell/use-card-stack.js';
+import { useTypeSettingsStore } from '../../../../shared/ui/type-settings-store.js';
 import { useProjectTypes } from '../../../../shared/api/projects-list.js';
 import { useNodeKinds } from '../../../../shared/api/node-kinds.js';
 import { DataTable, type DataTableField } from '../../../../shared/views/data-table.js';
+import type { FilterFieldDef } from '../../../../shared/views/list-filters.js';
+import { ListToolbar, ListToolbarSummary } from '../../../../shared/views/list-toolbar.js';
+import { useListToolbar } from '../../../../shared/views/use-list-toolbar.js';
+import { ViewSettings } from '../../../../shared/views/view-settings.js';
 import { identityTone } from '../../../../shared/ui/identity-tone.js';
 import { ProcessTypeGlyph } from '../../../../shared/workflow/process-type-icon.js';
 import { cn } from '@nodus/ui/lib/utils';
@@ -19,20 +24,21 @@ import { CardTabToolbar } from '../../../../shared/ui/entity-card/card-tab-toolb
 const VIEW_KEY = 'processes.kind-usage';
 
 /**
- * Раздел «Где используется» карточки типа папки (#857) — СПИСОК в
- * грамматике журналов портала (вердикт владельца 26.11.2026): типы
- * проектов, где тип папки разрешён (`kindIds`; `null` — все типы папок
- * проекта), и состав папок типа проекта. Read-only: связь настраивается на
- * вкладке «Какие папки здесь бывают» типа проекта; клик по строке открывает
- * карточку этого типа проекта справа.
+ * Раздел «Где используется» карточки типа папки (#857; ревизия UI v3) — СПИСОК
+ * в грамматике журналов портала: типы проектов, где тип папки разрешён
+ * (`kindIds`; `null` — все типы папок проекта), и состав папок типа проекта.
+ * Read-only: связь настраивается на вкладке «Какие папки здесь бывают» типа
+ * проекта; клик по строке открывает карточку этого типа проекта ПОВЕРХ с
+ * анимацией из строки.
+ * Тулбар — единый с соседними вкладками-списками (`ListToolbar`): слева
+ * создание типа проекта и поиск (по названию типа проекта и сводке папок
+ * строки), справа сводка «Проекты · N» (до поиска) и настройка колонок.
  */
 export function NodeKindUsageSection({
   kind,
-  onOpenProjectType,
   renderProjectTypeCreate,
 }: {
   kind: NodeKind;
-  onOpenProjectType: (id: string) => void;
   /** Окно создания типа проекта (слот фичи projects, I6): создан — этот тип
    *  папки сразу разрешён в нём. */
   renderProjectTypeCreate?: (slot: {
@@ -44,6 +50,9 @@ export function NodeKindUsageSection({
   const typesQuery = useProjectTypes();
   const kindsQuery = useNodeKinds();
   const updateType = useUpdateProjectType();
+  const openCard = useOpenCard();
+  const openSettings = useTypeSettingsStore((s) => s.openSettings);
+  const toolbar = useListToolbar(VIEW_KEY);
   const kinds = useMemo(() => kindsQuery.data ?? [], [kindsQuery.data]);
   const types = (typesQuery.data ?? []).filter((type) => type.archivedAt === null);
   const allowed = types.filter((type) => kindAllowedByType(type.kindIds, kind.id));
@@ -61,6 +70,23 @@ export function NodeKindUsageSection({
     });
     setPendingId(null);
   }, [pending, aliveKinds, kind.id, updateType]);
+
+  // Поиск — по названию типа проекта и по сводке папок его строки (как у
+  // соседних вкладок-списков); сводка тулбара считает `allowed` — до поиска.
+  const q = toolbar.query.trim().toLowerCase();
+  const rows = allowed.filter(
+    (type) =>
+      !q ||
+      type.name.toLowerCase().includes(q) ||
+      kindsSummary(type, kinds).toLowerCase().includes(q),
+  );
+  // Пусто: поиск ничего не нашёл; иначе — как прежде: типов проектов нет
+  // вовсе, либо этот тип папки не назначен ни одному.
+  const emptyTitle = q
+    ? ui.automation.entry.searchEmpty
+    : types.length === 0
+      ? ui.automation.creationScope.projectTypesEmpty
+      : ui.nodeKinds.screen.usageEmpty;
 
   const defs = useMemo<DataTableField<(typeof allowed)[number]>[]>(
     () => [
@@ -107,39 +133,54 @@ export function NodeKindUsageSection({
   );
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col">
+    <div className="@container relative flex h-full min-h-0 flex-col">
       <CardTabToolbar>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus data-icon="inline-start" />
-          {ui.automation.entry.createProjectType}
-        </Button>
+        <ListToolbar
+          className="min-w-0 flex-1 px-0"
+          toolbar={toolbar}
+          defs={[] as FilterFieldDef<ProjectType>[]}
+          left={
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus data-icon="inline-start" />
+              {ui.automation.entry.createProjectType}
+            </Button>
+          }
+          right={
+            <>
+              <ListToolbarSummary>
+                {ui.nodeKinds.screen.usageSummary.replace('{count}', String(allowed.length))}
+              </ListToolbarSummary>
+              <ViewSettings viewKey={VIEW_KEY} defs={defs} />
+            </>
+          }
+        />
       </CardTabToolbar>
-      {types.length === 0 || allowed.length === 0 ? (
-        <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-          <Empty>
-            <EmptyTitle>
-              {types.length === 0
-                ? ui.automation.creationScope.projectTypesEmpty
-                : ui.nodeKinds.screen.usageEmpty}
-            </EmptyTitle>
-          </Empty>
-        </div>
-      ) : (
-        <div className="min-h-0 flex-1">
-          <DataTable
-            viewKey={VIEW_KEY}
-            defs={defs}
-            rows={allowed}
-            rowKey={(type) => type.id}
-            label={ui.nodeKinds.screen.usage}
-            selectable={false}
-            onOpenRow={(type) => onOpenProjectType(type.id)}
-            rowMenu={(type) => [
-              { id: 'open', label: ui.common.open, onSelect: () => onOpenProjectType(type.id) },
-            ]}
-          />
-        </div>
-      )}
+      <div className="min-h-0 flex-1">
+        <DataTable
+          viewKey={VIEW_KEY}
+          defs={defs}
+          rows={rows}
+          rowKey={(type) => type.id}
+          label={ui.nodeKinds.screen.usage}
+          selectable={false}
+          emptyTitle={emptyTitle}
+          onOpenRow={(type, rowEl) =>
+            openCard({ kind: 'project-type', id: type.id }, rowEl.getBoundingClientRect())
+          }
+          rowMenu={(type) => [
+            {
+              id: 'open',
+              label: ui.common.open,
+              onSelect: () => openCard({ kind: 'project-type', id: type.id }),
+            },
+            {
+              id: 'settings',
+              label: ui.automation.menuSettingsType,
+              onSelect: () => openSettings({ kind: 'project-type', id: type.id }),
+            },
+          ]}
+        />
+      </div>
       {createOpen && renderProjectTypeCreate
         ? renderProjectTypeCreate({
             onClose: () => setCreateOpen(false),

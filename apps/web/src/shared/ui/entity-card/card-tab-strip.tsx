@@ -1,6 +1,8 @@
 import { X } from 'lucide-react';
 import {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useRef,
   useState,
@@ -32,6 +34,11 @@ export interface CardTabDef {
  * (меню, «О задаче», «+» разделов, тоггл панели). Вкладки монтируются и
  * живут скрытыми у хоста — здесь только полоса.
  */
+/** Анимация появления полосы вкладок. По умолчанию есть (раскрытие карточки
+ *  стека); рабочая область «Процессов» ставит `false`: её рама перемонтируется
+ *  на каждом выборе колонки, и fade вкладок читался как мерцание. */
+export const CardTabStripAppearContext = createContext(true);
+
 export function CardTabStrip({
   label,
   tabs,
@@ -39,6 +46,7 @@ export function CardTabStrip({
   onActivate,
   onClose,
   trailing,
+  pinned,
   actions,
   hint,
   idPrefix,
@@ -58,6 +66,8 @@ export function CardTabStrip({
   onClose?: (id: string) => void;
   /** Действие сразу за вкладками (например, «+» разделов проекта). */
   trailing?: ReactNode;
+  /** Закреплено за вкладками, не скроллится с ними; зона вкладок — по содержимому. */
+  pinned?: ReactNode;
   /** Правый слот действий карточки (фиксирован, не скроллится с вкладками). */
   actions?: ReactNode;
   /** Подсказка derived-состояния ширины (#746) — в слоте хрома, НЕ поверх
@@ -117,6 +127,7 @@ export function CardTabStrip({
   }, []);
   /** Активная вкладка вышла за видимую часть полосы (ужали панель/слот) —
    *  подкручиваем БЕЗ анимации: это не смена вкладки, а коррекция ресайза. */
+  const appear = useContext(CardTabStripAppearContext);
   const revealActive = useCallback(() => {
     const el = listRef.current;
     const tab = tabRefs.current.get(activeRef.current);
@@ -179,7 +190,7 @@ export function CardTabStrip({
 
   return (
     <div className={cn('flex shrink-0 items-center', tall ? 'h-full' : 'h-10')}>
-      <div className={cn('relative min-w-0 flex-1', tall ? 'h-full' : 'h-10')}>
+      <div className={cn('relative min-w-0 h-full', pinned ? 'shrink' : 'flex-1')}>
         <div
           ref={(el) => {
             listRef.current = el;
@@ -193,7 +204,8 @@ export function CardTabStrip({
           data-group-id={groupId}
           style={maskImage ? { maskImage, WebkitMaskImage: maskImage } : undefined}
           className={cn(
-            'content-fade flex min-w-0 items-center overflow-x-auto overflow-y-hidden px-3',
+            appear && 'content-fade',
+            'flex min-w-0 items-center overflow-x-auto overflow-y-hidden px-3',
             tall ? 'h-full gap-0.5' : 'h-10 gap-1',
           )}
         >
@@ -233,7 +245,9 @@ export function CardTabStrip({
                     // Фокус — ИНСЕТНЫЙ outline: полоса вкладок скроллится по X
                     // (overflow-y-hidden), наружный outline обрезался бы снизу.
                     'flex h-full max-w-48 min-w-0 items-center gap-1.5 text-body-xs font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring/70',
-                    tab.closable ? 'pr-1 pl-2' : tall ? 'px-2' : 'px-2.5',
+                    // Полоса «Процессов» (tall) теснее: три-четыре вкладки с длинными
+                    // названиями делят бар с инструментами и действиями.
+                    tab.closable ? 'pr-1 pl-2' : tall ? 'px-1.5 @max-[800px]:px-1' : 'px-2.5',
                   )}
                 >
                   <span aria-hidden className="shrink-0 opacity-80">
@@ -285,6 +299,7 @@ export function CardTabStrip({
           </div>
         ) : null}
       </div>
+      {pinned ? <div className="mr-auto flex shrink-0 items-center">{pinned}</div> : null}
       {hint || actions ? (
         <div className={cn('flex shrink-0 items-center gap-1.5 pr-2', tall ? 'h-full' : 'h-10')}>
           {hint}

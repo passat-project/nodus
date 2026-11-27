@@ -9,7 +9,7 @@ import {
   type OnNodeDrag,
   type XYPosition,
 } from '@xyflow/react';
-import { Redo2, Undo2 } from 'lucide-react';
+import { LayoutGrid, Redo2, Undo2 } from 'lucide-react';
 import type { WorkflowDetail } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 
@@ -28,22 +28,41 @@ import { useRouteDocStore } from '../../model/route-doc-store.js';
  * раскладка), перетаскивание живёт локально и попадает в документ одним
  * шагом на отпускании; соединение точек, перенос концов стрелок, подписи
  * вдоль стрелок, удаление выделенного (Delete) и отмена/повтор (Ctrl+Z /
- * Ctrl+Y и кнопки слева внизу). Без права — только просмотр.
+ * Ctrl+Y и кнопки слева внизу). «Упорядочить» — там же, в наклонном стеку
+ * холста: это инструмент схемы, а не действие бара (ревизия UI v3, #857).
+ * Без права — только просмотр.
  */
+/** Перевод вида после «Упорядочить», мс: узлы уже на местах, вид доезжает. */
+const TIDY_VIEW_MS = 200;
+
 export function RouteCanvas({
   workflow,
   editable,
   problemStageIds,
+  onTidy,
+  onOpenCreation,
 }: {
   workflow: WorkflowDetail;
   editable: boolean;
   problemStageIds: ReadonlySet<string>;
+  /** «Упорядочить»: авторасстановка — решает редактор; вписывает холст. */
+  onTidy: () => void;
+  /** Узел «Создание» ведёт на вкладку «Форма создания» (единая модель, #857). */
+  onOpenCreation: () => void;
 }) {
   const doc = useRouteDocStore((s) => s.document);
+  // Ключ вписывания — из ТОГО же снапшота стора, что и граф. `workflow.id`
+  // приходит с пропсом на коммит раньше документа, и холст успевал вписать
+  // прежний граф под новый тип (#857, Д1).
+  const docWorkflowId = useRouteDocStore((s) => s.workflowId);
   const selection = useRouteDocStore((s) => s.selection);
   const canUndo = useRouteDocStore((s) => s.past.length > 0);
   const canRedo = useRouteDocStore((s) => s.future.length > 0);
   const [drag, setDrag] = useState<{ id: string; position: XYPosition } | null>(null);
+  // «Упорядочить»: узлы те же, раскладка новая — вписывание ведёт отдельный
+  // такт ключа (плавно); смена типа его сбрасывает.
+  const [tidy, setTidy] = useState({ key: docWorkflowId, n: 0 });
+  if (tidy.key !== docWorkflowId) setTidy({ key: docWorkflowId, n: 0 });
 
   const graph = useMemo(
     () =>
@@ -182,7 +201,8 @@ export function RouteCanvas({
     <FlowCanvas
       nodes={nodes}
       edges={graph.edges}
-      fitKey={workflow.id}
+      fitKey={tidy.n ? `${docWorkflowId}:${tidy.n}` : docWorkflowId}
+      fitDuration={tidy.n ? TIDY_VIEW_MS : 0}
       interactive={editable}
       onConnect={onConnect}
       onReconnect={onReconnect}
@@ -192,13 +212,14 @@ export function RouteCanvas({
       onNodeDragStop={onNodeDragStop}
       onNodeClick={(_event, node) => {
         // Любой узел холста открывает панель: статус — свою, метка «Любой
-        // статус» — панель своей кнопки, «Создание задачи» — панель «Окно
-        // создания» (#432, В1; начальный статус настраивается в своей панели).
+        // статус» — панель своей кнопки; узел «Создание задачи» — вкладку
+        // «Форма создания» (единая модель «Процессов», #857; начальный статус
+        // настраивается в своей панели).
         const store = useRouteDocStore.getState();
         const anyTransition = transitionOfAnyNode(node.id);
         if (anyTransition) store.select({ kind: 'transition', id: anyTransition });
         else if (node.type === 'status') store.select({ kind: 'stage', id: node.id });
-        else if (node.id === START_NODE_ID) store.select({ kind: 'creation', id: 'creation' });
+        else if (node.id === START_NODE_ID) onOpenCreation();
       }}
       onEdgeClick={(_event, edge) => {
         if (edge.id !== START_EDGE_ID) {
@@ -224,6 +245,16 @@ export function RouteCanvas({
               aria-label={ui.automation.redo}
             >
               <Redo2 strokeWidth={1.75} />
+            </ControlButton>
+            <ControlButton
+              onClick={() => {
+                onTidy();
+                setTidy((prev) => ({ key: prev.key, n: prev.n + 1 }));
+              }}
+              title={ui.automation.tidyUp}
+              aria-label={ui.automation.tidyUp}
+            >
+              <LayoutGrid strokeWidth={1.75} />
             </ControlButton>
           </>
         ) : null

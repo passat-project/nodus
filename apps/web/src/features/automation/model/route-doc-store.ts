@@ -155,7 +155,7 @@ export function createRouteDocStore(workflowId: string) {
     };
     const dropSelectionOf = (ids: ReadonlySet<string>) => {
       const selection = get().selection;
-      return selection && selection.kind !== 'creation' && ids.has(selection.id) ? null : selection;
+      return selection && ids.has(selection.id) ? null : selection;
     };
 
     return {

@@ -43,12 +43,24 @@ describe('URL-модель единого входа «Процессы» (#857)
     expect(resolveProcessesSurface({ type: 'task-1', ptype: 'proj-1' }, data())).toEqual({
       surface: 'type',
       typeId: 'task-1',
-      trailTypeId: 'proj-1',
     });
     expect(resolveProcessesSurface({ ptype: 'proj-1', noproject: '1' }, data()).surface).toBe(
       'project',
     );
     expect(resolveProcessesSurface({ noproject: '1' }, data()).surface).toBe('no-project');
+  });
+
+  it('дорожки «из типа проекта» нет: ptype при наличии type не влияет', () => {
+    // Ревизия UI v3: связанная сущность открывается карточкой поверх стека,
+    // поэтому поверхность типа не помнит, откуда пришли.
+    expect(resolveProcessesSurface({ type: 'task-1', ptype: 'proj-1' }, data())).toEqual({
+      surface: 'type',
+      typeId: 'task-1',
+    });
+    expect(
+      resolveProcessesSurface({ type: 'task-1', ptype: 'proj-x' }, data({ canSetup: false })),
+    ).toEqual({ surface: 'type', typeId: 'task-1' });
+    expect(resolveProcessesSurface({ type: 'task-1' }, data())).not.toHaveProperty('trailTypeId');
   });
 
   it('deep-link ?noproject=1: разбор адреса даёт ЧИСЛО 1, строка — из navigate', () => {
@@ -65,7 +77,6 @@ describe('URL-модель единого входа «Процессы» (#857)
     expect(defaultProcessesSurface(data({ canSetup: false }))).toEqual({
       surface: 'type',
       typeId: 'task-1',
-      trailTypeId: null,
     });
     expect(
       defaultProcessesSurface(
@@ -78,12 +89,10 @@ describe('URL-модель единого входа «Процессы» (#857)
     expect(resolveProcessesSurface({ ftype: 'kind-1' }, data({ canSetup: false }))).toEqual({
       surface: 'type',
       typeId: 'task-1',
-      trailTypeId: null,
     });
     expect(resolveProcessesSurface({ ptype: 'proj-1' }, data({ canSetup: false }))).toEqual({
       surface: 'type',
       typeId: 'task-1',
-      trailTypeId: null,
     });
   });
 
@@ -91,26 +100,25 @@ describe('URL-модель единого входа «Процессы» (#857)
     const archived = PT('proj-1', { archivedAt: new Date().toISOString() });
     expect(
       resolveProcessesSurface({ ptype: 'proj-1' }, data({ projectTypes: [archived] })),
-    ).toEqual({ surface: 'type', typeId: 'task-1', trailTypeId: null });
+    ).toEqual({ surface: 'type', typeId: 'task-1' });
     const archivedTask = T('task-1', { archivedAt: new Date().toISOString() });
     expect(
       resolveProcessesSurface({ type: 'task-1' }, data({ processTypes: [archivedTask] })),
     ).toEqual({ surface: 'project', typeId: 'proj-1' });
-    // Тип папки-архив открывается (внизу экрана «Вернуть»), чужой id — нет.
+    // Архивный тип папки открывается (в настройках «Вернуть из архива»),
+    // чужой id — откат к умолчанию.
     expect(resolveProcessesSurface({ ftype: 'kind-x' }, data())).toEqual({
       surface: 'project',
       typeId: 'proj-1',
     });
-  });
-
-  it('дорожка: ptype валиден только вместе с живым типом проекта', () => {
-    expect(resolveProcessesSurface({ type: 'task-1', ptype: 'proj-x' }, data())).toEqual({
-      surface: 'type',
-      typeId: 'task-1',
-      trailTypeId: null,
-    });
     expect(
-      resolveProcessesSurface({ type: 'task-1', ptype: 'proj-1' }, data({ canSetup: false })),
-    ).toEqual({ surface: 'type', typeId: 'task-1', trailTypeId: null });
+      resolveProcessesSurface(
+        { ftype: 'kind-1' },
+        data({ kinds: [K('kind-1', { archivedAt: new Date().toISOString() })] }),
+      ),
+    ).toEqual({
+      surface: 'folder',
+      kindId: 'kind-1',
+    });
   });
 });

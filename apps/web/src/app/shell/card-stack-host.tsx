@@ -17,6 +17,7 @@ import { ProjectTitle } from '../../features/projects/components/project-title.j
 import { TaskCard } from '../../features/tasks/components/task-card.js';
 import { TaskTitle } from '../../features/tasks/components/task-title.js';
 import type { CardRef } from './card-stack.js';
+import { TypeCardEntry } from './card-type-entry.js';
 import { SliderPanel, type SourceRect } from './slider-panel.js';
 import { useShellStore } from './shell-store.js';
 import { useCardStack, useCloseCard } from './use-card-stack.js';
@@ -31,6 +32,12 @@ import { useCardStack, useCloseCard } from './use-card-stack.js';
  * продукта и открывается из любого раздела, поэтому загрузка их кода платится
  * один раз на старте приложения, а открытие мгновенно у всех сущностей
  * (вердикт владельца: «как карточки задач — без прогрузки и фризов»).
+ *
+ * Исключение — карточки типов «Процессов»: хост грузится на каждой странице,
+ * а их тела тащат редактор маршрута, нужный только разделу «Автоматизация».
+ * Поэтому в стартовом пакете стоит один каркас записи (`card-type-entry.tsx`),
+ * а тела приходят ленивым куском — предзагруженным при входе в раздел, так что
+ * клик по строке и тут открывает карточку без ожидания.
  */
 
 interface EntryProps {
@@ -195,10 +202,12 @@ function MessengerEntry({ id, source, onClose, dormant }: EntryProps) {
 function CardStackEntry({
   cardRef,
   dormant,
+  top,
   onClose,
 }: {
   cardRef: CardRef;
   dormant: boolean;
+  top: boolean;
   onClose: () => void;
 }) {
   const [source] = useState(() => useShellStore.getState().lastSource ?? undefined);
@@ -221,6 +230,19 @@ function CardStackEntry({
       );
     case 'messenger':
       return <MessengerEntry id={cardRef.id} source={source} onClose={onClose} dormant={dormant} />;
+    case 'process-type':
+    case 'project-type':
+      // Каркас — в стартовом пакете, тела (редактор маршрута) — ленивым куском.
+      return (
+        <TypeCardEntry
+          kind={cardRef.kind}
+          id={cardRef.id}
+          source={source}
+          onClose={onClose}
+          dormant={dormant}
+          top={top}
+        />
+      );
   }
 }
 
@@ -245,6 +267,7 @@ export function CardStackHost() {
       key={`${index}:${cardRef.kind}`}
       cardRef={cardRef}
       dormant={index < revealFrom}
+      top={index === stack.length - 1}
       onClose={closeCard}
     />
   ));

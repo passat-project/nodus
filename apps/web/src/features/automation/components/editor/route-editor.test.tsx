@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ProcessType, WorkflowDetail } from '@nodus/contracts';
 
@@ -12,36 +13,67 @@ vi.mock('@xyflow/react', () => ({
     screenToFlowPosition: vi.fn(() => ({ x: 0, y: 0 })),
   }),
 }));
-vi.mock('./route-canvas.js', () => ({ RouteCanvas: () => <div data-testid="canvas" /> }));
-vi.mock('./route-toolbar.js', () => ({
-  RouteToolbarActions: (props: {
-    onPublish: () => void;
-    onAddStage: () => void;
-    onTidy: () => void;
-    onDiscard: () => void;
-    addTransition: (trigger: React.ReactNode) => React.ReactNode;
-  }) => (
-    <div>
-      <button type="button" onClick={props.onPublish}>
-        publish
+vi.mock('./route-canvas.js', () => ({
+  // Холст: «Упорядочить» и узел «Создание» (ведёт на вкладку «Форма создания»).
+  RouteCanvas: ({ onTidy, onOpenCreation }: { onTidy: () => void; onOpenCreation: () => void }) => (
+    <div data-testid="canvas">
+      <button type="button" onClick={onTidy}>
+        canvas-tidy
       </button>
-      <button type="button" onClick={props.onAddStage}>
-        add-stage
-      </button>
-      {props.addTransition(<span data-testid="transition-trigger" />)}
-      <button type="button" onClick={props.onTidy}>
-        tidy
-      </button>
-      <button type="button" onClick={props.onDiscard}>
-        discard
+      <button type="button" onClick={onOpenCreation}>
+        node-creation
       </button>
     </div>
   ),
 }));
+vi.mock('./route-toolbar.js', () => ({
+  RouteBarPortals: (props: {
+    hosts: { tools: HTMLElement; status: HTMLElement; primary: HTMLElement } | null;
+    onPublish: () => void;
+    onAddStage: () => void;
+    addTransition: (trigger: React.ReactNode) => React.ReactNode;
+    onProblemClick: (problem: { creationField?: string }) => void;
+  }) => {
+    // Как настоящий: порталом — кнопка живёт ВНУТРИ своего хоста бара.
+    return (
+      <>
+        {props.hosts?.status
+          ? createPortal(
+              <button type="button" onClick={() => props.onProblemClick({ creationField: 'f1' })}>
+                problem-form
+              </button>,
+              props.hosts.status,
+            )
+          : null}
+        {props.hosts?.tools && props.hosts.status && props.hosts.primary ? (
+          <>
+            {createPortal(
+              <>
+                <button type="button" onClick={props.onAddStage}>
+                  add-stage
+                </button>
+                {props.addTransition(<span data-testid="transition-trigger" />)}
+              </>,
+              props.hosts.tools,
+            )}
+            {createPortal(
+              <button type="button" onClick={props.onPublish}>
+                publish
+              </button>,
+              props.hosts.primary,
+            )}
+          </>
+        ) : null}
+      </>
+    );
+  },
+}));
 vi.mock('./add-transition-popover.js', () => ({
   AddTransitionPopover: ({ trigger }: { trigger: React.ReactNode }) => <>{trigger}</>,
 }));
-vi.mock('./panel/editor-panel.js', () => ({ EditorPanel: () => null }));
+vi.mock('./panel/editor-panel.js', () => ({
+  EditorPanel: () => <div data-testid="editor-panel" />,
+}));
 vi.mock('./editor-parts.js', () => ({
   CatalogLockBanner: () => null,
   DraftBanner: () => null,
@@ -131,34 +163,43 @@ const workflow = {
 } as WorkflowDetail;
 
 describe('RouteEditor: производные подсказки и публикация (#430)', () => {
-  /** Хост полосы вкладок карточки: туда редактор рисует свои действия. */
+  /** Три хоста единого бара рамы: инструменты, состояние и главная кнопка. */
   function Harness() {
-    const [host, setHost] = useState<HTMLDivElement | null>(null);
+    const [tools, setTools] = useState<HTMLDivElement | null>(null);
+    const [status, setStatus] = useState<HTMLDivElement | null>(null);
+    const [primary, setPrimary] = useState<HTMLDivElement | null>(null);
     return (
       <QueryClientProvider
         client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
       >
         <div>
-          <div data-testid="actions-host" ref={setHost} />
-          <RouteEditor type={type} workflow={workflow} actionsHost={host} />
+          <div data-testid="tools-host" ref={setTools} />
+          <div data-testid="status-host" ref={setStatus} />
+          <div data-testid="primary-host" ref={setPrimary} />
+          <RouteEditor type={type} workflow={workflow} barHosts={{ tools, status, primary }} />
         </div>
       </QueryClientProvider>
     );
   }
 
-  it('действия — порталом в полосу вкладок (actionsHost); публикация открывает диалог', () => {
+  it('действия — порталом в хосты бара; публикация открывает диалог', () => {
     render(<Harness />);
 
     expect(screen.getByTestId('canvas')).toBeTruthy();
-    // Отдельного бара над холстом нет: кнопка живёт ВНУТРИ хоста полосы.
-    const host = screen.getByTestId('actions-host');
+    // Отдельного бара над холстом нет: каждая группа живёт ВНУТРИ своего хоста.
+    expect(
+      screen.getByTestId('tools-host').contains(screen.getByTestId('transition-trigger')),
+    ).toBe(true);
+    expect(
+      screen.getByTestId('tools-host').contains(screen.getByRole('button', { name: 'add-stage' })),
+    ).toBe(true);
     const publish = screen.getByRole('button', { name: 'publish' });
-    expect(host.contains(publish)).toBe(true);
+    expect(screen.getByTestId('primary-host').contains(publish)).toBe(true);
     fireEvent.click(publish);
     expect(screen.getByTestId('publish-dialog')).toBeTruthy();
   });
 
-  it('без хоста действий бар не рисуется, холст занимает всю область', () => {
+  it('без хостов бар не рисуется, холст занимает всю область', () => {
     render(
       <QueryClientProvider
         client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
@@ -170,11 +211,11 @@ describe('RouteEditor: производные подсказки и публик
     expect(screen.queryByRole('button', { name: 'publish' })).toBeNull();
   });
 
-  it('действия бара управляют документом: переход, статус, упорядочить и сброс', () => {
+  it('инструменты бара управляют документом: статус и переход; «Упорядочить» — на холсте', () => {
     render(<Harness />);
     const store = useRouteDocStore.getState();
 
-    // «+ Переход» — поповер получает холст с документом и колбэк добавления.
+    // «Добавить переход» — поповер получает документ и колбэк добавления.
     expect(screen.getByTestId('transition-trigger')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'add-stage' }));
@@ -183,10 +224,61 @@ describe('RouteEditor: производные подсказки и публик
       expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) }),
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'tidy' }));
+    // «Упорядочить» переехал из бара в наклонный стек холста: редактор
+    // передаёт колбэк холсту, тот зовёт его своей кнопкой.
+    expect(screen.queryByRole('button', { name: 'tidy' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'canvas-tidy' }));
     expect(store.arrange).toHaveBeenCalledTimes(1);
+  });
+});
 
-    fireEvent.click(screen.getByRole('button', { name: 'discard' }));
-    expect(store.discard).toHaveBeenCalledTimes(1);
+describe('RouteEditor: вкладка «Форма создания» (#857, единая модель «Процессов»)', () => {
+  /** Редактор с хостом состояния (чип проблем) и, если задана, вкладкой формы. */
+  function FormHarness({
+    onOpenForm,
+    withForm,
+  }: {
+    onOpenForm: (field?: string) => void;
+    withForm: boolean;
+  }) {
+    const [status, setStatus] = useState<HTMLDivElement | null>(null);
+    return (
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <div data-testid="status-host" ref={setStatus} />
+        <RouteEditor
+          type={type}
+          workflow={workflow}
+          barHosts={{ tools: null, status, primary: null }}
+          onOpenForm={onOpenForm}
+          form={withForm ? <div data-testid="form-slot" /> : undefined}
+        />
+      </QueryClientProvider>
+    );
+  }
+
+  it('узел «Создание» на холсте ведёт на вкладку формы; холст и панель на месте', () => {
+    const onOpenForm = vi.fn();
+    render(<FormHarness onOpenForm={onOpenForm} withForm={false} />);
+    expect(screen.getByTestId('canvas')).toBeTruthy();
+    expect(screen.getByTestId('editor-panel')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'node-creation' }));
+    expect(onOpenForm.mock.calls).toEqual([[]]);
+  });
+
+  it('форма вместо холста и правой панели: та же рама, тот же чип проблем', async () => {
+    render(<FormHarness onOpenForm={vi.fn()} withForm />);
+    expect(screen.getByTestId('form-slot')).toBeTruthy();
+    expect(screen.queryByTestId('canvas')).toBeNull();
+    expect(screen.queryByTestId('editor-panel')).toBeNull();
+    expect(await screen.findByRole('button', { name: 'problem-form' })).toBeTruthy();
+  });
+
+  it('проблема формы в чипе ведёт на вкладку формы и раскрывает поле', async () => {
+    const onOpenForm = vi.fn();
+    render(<FormHarness onOpenForm={onOpenForm} withForm />);
+    fireEvent.click(await screen.findByRole('button', { name: 'problem-form' }));
+    expect(onOpenForm).toHaveBeenCalledWith('f1');
   });
 });

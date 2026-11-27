@@ -9,7 +9,7 @@ import { presetAllowed, requiredAllowed, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { NodeLabel } from '@nodus/ui/components/node-label';
 import { Popover, PopoverContent, PopoverTrigger } from '@nodus/ui/components/popover';
-import { Settings2 } from 'lucide-react';
+import { ListChecks, Settings2, Timer, type LucideIcon } from 'lucide-react';
 
 import { TypeFormulaControl } from '../../../../../shared/custom-fields/formula/type-formula-control.js';
 import type { PreviewKind } from '../../../../../shared/forms/builder/builder-host.js';
@@ -133,12 +133,22 @@ export function CreationFieldSettings({
   );
 }
 
-/** Превью чипа: тот же вид, что у сотрудника внизу окна. */
+/** Знак чипа — как у настоящего чипа окна создания (`task-create-chips`):
+ *  «Чек-лист» — список, «Планируемое время» — таймер. */
+const CHIP_ICON: Readonly<Record<CreationChip, LucideIcon>> = {
+  checklist: ListChecks,
+  planned: Timer,
+};
+
+/** Превью чипа: тот же вид, что у сотрудника внизу окна, — тихая кнопка
+ *  `h-8` со СПЛОШНОЙ рамкой (`border-input`) и знаком, а не пунктирный
+ *  «пустой» бокс: пунктир читался незаполненным обязательным полем. */
 export function ChipPreview({ block }: { block: BuilderBlock<CreationExtra> }) {
   const chip = block.block.replace('chip:', '') as CreationChip;
+  const Icon = CHIP_ICON[chip];
   return (
-    <div className="flex h-9 min-w-0 items-center gap-2 rounded-lg border border-dashed border-border px-2.5 text-sm text-muted-foreground">
-      <span className="size-3.5 rounded-sm border border-border" aria-hidden />
+    <div className="flex h-8 min-w-0 items-center gap-1.5 rounded-lg border border-input px-2.5 text-sm text-muted-foreground">
+      <Icon className="size-3.5" strokeWidth={1.75} />
       {CHIP_LABEL[chip]}
     </div>
   );

@@ -98,6 +98,24 @@ describe('page-imports: адрес раздела → его чанк (#1051)', 
     view.unmount();
   });
 
+  it('pageLoader передаёт пропсы загруженному компоненту (ленивые куски вне страниц)', async () => {
+    const importer = vi.fn(async () => ({ default: ({ label }: { label: string }) => label }));
+    const Part = pageLoader(importer);
+    const view = render(
+      createElement(Suspense, { fallback: 'скелет' }, createElement(Part, { label: 'карточка' })),
+    );
+    expect(view.getByText('скелет')).toBeTruthy();
+    await waitFor(() => expect(view.getByText('карточка')).toBeTruthy());
+    // Код на руках: новые пропсы рендерятся сразу, без ожидания и повторного импорта.
+    view.rerender(
+      createElement(Suspense, { fallback: 'скелет' }, createElement(Part, { label: 'вторая' })),
+    );
+    expect(view.getByText('вторая')).toBeTruthy();
+    expect(view.queryByText('скелет')).toBeNull();
+    expect(importer).toHaveBeenCalledTimes(1);
+    view.unmount();
+  });
+
   it('pageLoader: наведение и рендер ждут один импорт; провал предзагрузки не копится и НЕ перезагружает страницу', async () => {
     try {
       const importer = vi.fn(async () => ({ default: () => null }));

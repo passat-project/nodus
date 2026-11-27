@@ -1,138 +1,116 @@
+import { Archive, RotateCcw } from 'lucide-react';
 import type { NodeKind } from '@nodus/contracts';
 import { projectColorSchema, ui } from '@nodus/contracts';
-import { Button } from '@nodus/ui/components/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@nodus/ui/components/dialog';
-import { cn } from '@nodus/ui/lib/utils';
-import { Archive, Palette, RotateCcw, Shapes, Type as TypeIcon } from 'lucide-react';
 
 import { identityTone } from '../../../../shared/ui/identity-tone.js';
-import { IconPickGrid } from '../../../../shared/ui/icon-pick-grid.js';
 import { NODE_KIND_ICON_KEYS, NodeKindGlyph } from '../../../../shared/ui/node-kind-icon.js';
-import { CommitInput } from '../../../../shared/ui/panel/commit-field.js';
-import { PanelDanger } from '../../../../shared/ui/panel/panel-kit.js';
-import { SettingRow } from '../../../../shared/ui/setting-row.js';
+import { PanelDanger, PanelField } from '../../../../shared/ui/panel/panel-kit.js';
+import { SettingsCompactDialog } from '../../../../shared/ui/settings-compact-dialog.js';
+import { TypeIdentityFields } from '../../../../shared/ui/type-identity-fields.js';
 import { useArchiveNodeKind, useUpdateNodeKind } from '../api/node-kinds-api.js';
 import { NodeKindCapabilitiesSection } from './node-kind-capabilities-section.js';
 
+/** Варианты значка типа папки: ключи реестра с русскими именами. */
+const ICON_OPTIONS = NODE_KIND_ICON_KEYS.map((icon) => ({
+  value: icon,
+  label: ui.structure.iconNames[icon],
+  title: ui.structure.iconNames[icon],
+  glyph: <NodeKindGlyph icon={icon} className="size-4" />,
+}));
+
 /**
- * Окно настроек типа папки (#857, ревизия вкладок 26.11.2026): имя, значок,
- * цвет, возможности и архив — в компактном центрированном окне в стиле окна
- * настройки атрибута. Сама вкладка «Поля и форма» остаётся конструктором
- * формы, поэтому идентичность типа в ней больше не дублируется.
+ * Окно настроек типа папки (ревизия UI v3, #857) — КОМПАКТНОЕ: тип папки —
+ * незначимая сущность, большой карточки и окна с разделами ему не нужно
+ * (вердикт владельца). Одна колонка: название, значок, цвет, затем
+ * «Возможности»; настройки немного, навигация по разделам — лишняя ступень.
+ * Сами «Поля и форма» остаются вкладкой рамы. Открывается шестерёнкой бара,
+ * строкой и меню «⋯» вкладки «Какие папки здесь бывают» и «⋯ → Настройки
+ * типа…» строки колонки через общий стор (хост — `TypeSettingsHost` уровня
+ * app). Сохранение немедленное; без права — только чтение.
  */
 export function NodeKindSettingsDialog({
   kind,
   canSetup,
   onClose,
+  onArchived,
 }: {
   kind: NodeKind;
   canSetup: boolean;
   onClose: () => void;
+  /** Тип ушёл в архив из этого окна: хост закрывает и окно, и карточку типа. */
+  onArchived?: () => void;
 }) {
   const update = useUpdateNodeKind();
   const archive = useArchiveNodeKind();
   const archived = kind.archivedAt !== null;
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent
-        className="flex max-h-[92vh] max-w-[52rem] flex-col gap-5 overflow-hidden p-5 sm:max-w-[52rem]"
-        showCloseButton
-        onInteractOutside={(event) => event.preventDefault()}
-      >
-        <DialogHeader className="shrink-0">
-          <DialogTitle>{ui.nodeKinds.panel.settingsTitle}</DialogTitle>
-        </DialogHeader>
-
-        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-          <div className="flex flex-col gap-1">
-            <SettingRow icon={TypeIcon} label={ui.nodeKinds.panel.name}>
-              <CommitInput
-                value={kind.name}
-                required
-                disabled={!canSetup}
-                onCommit={(name) => update.mutate({ id: kind.id, name })}
-                className="h-9 max-w-md text-sm"
-              />
-            </SettingRow>
-
-            <SettingRow icon={Shapes} label={ui.nodeKinds.panel.icon}>
-              <IconPickGrid
-                value={kind.icon}
-                disabled={!canSetup}
-                onSelect={(icon) => update.mutate({ id: kind.id, icon })}
-                options={NODE_KIND_ICON_KEYS.map((icon) => ({
-                  value: icon,
-                  label: ui.structure.iconNames[icon],
-                  title: ui.structure.iconNames[icon],
-                  glyph: <NodeKindGlyph icon={icon} className="size-4" />,
-                }))}
-              />
-            </SettingRow>
-
-            <SettingRow icon={Palette} label={ui.nodeKinds.panel.color}>
-              <div className="flex flex-wrap items-center gap-2 py-2">
-                {projectColorSchema.options.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    disabled={!canSetup}
-                    onClick={() => update.mutate({ id: kind.id, color })}
-                    aria-label={ui.structure.colorNames[color]}
-                    title={ui.structure.colorNames[color]}
-                    aria-pressed={kind.color === color}
-                    className={cn(
-                      'size-6 rounded-full border-2 transition-colors disabled:cursor-default',
-                      identityTone[color].dot,
-                      kind.color === color ? 'border-foreground' : 'border-transparent',
-                    )}
-                  />
-                ))}
-              </div>
-            </SettingRow>
-          </div>
-
-          <div className="mt-4 border-t border-border pt-4">
-            <NodeKindCapabilitiesSection
-              kind={kind}
-              canSetup={canSetup}
-              onToggle={(capabilities) => update.mutate({ id: kind.id, capabilities })}
-            />
-          </div>
-
-          <div className="mt-5 flex items-center justify-between gap-3 border-t border-border pt-4">
-            {canSetup ? (
-              archived ? (
-                <PanelDanger
-                  icon={RotateCcw}
-                  onClick={() => archive.mutate({ id: kind.id, archived: false })}
-                >
-                  {ui.nodeKinds.panel.restore}
-                </PanelDanger>
-              ) : (
-                <PanelDanger
-                  icon={Archive}
-                  onClick={() =>
-                    archive.mutate(
-                      { id: kind.id, archived: true },
-                      // Архивация закрывает окно; экран типа остаётся — у
-                      // архивного внизу «Вернуть» (резолвер его открывает).
-                      { onSuccess: onClose },
-                    )
-                  }
-                >
-                  {ui.nodeKinds.panel.archive}
-                </PanelDanger>
-              )
-            ) : (
-              <span />
-            )}
-            <Button variant="ghost" onClick={onClose}>
-              {ui.common.close}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <SettingsCompactDialog
+      title={`${ui.common.typeSettings.title.folder} · ${kind.name}`}
+      onClose={onClose}
+      danger={
+        canSetup ? (
+          archived ? (
+            <PanelDanger
+              icon={RotateCcw}
+              onClick={() => archive.mutate({ id: kind.id, archived: false })}
+            >
+              {ui.common.typeSettings.restore}
+            </PanelDanger>
+          ) : (
+            <PanelDanger
+              icon={Archive}
+              onClick={() =>
+                archive.mutate(
+                  { id: kind.id, archived: true },
+                  {
+                    onSuccess: () => {
+                      onClose();
+                      onArchived?.();
+                    },
+                  },
+                )
+              }
+            >
+              {ui.common.typeSettings.archive}
+            </PanelDanger>
+          )
+        ) : undefined
+      }
+    >
+      <TypeIdentityFields
+        labels={{
+          name: ui.nodeKinds.panel.name,
+          icon: ui.nodeKinds.panel.icon,
+          color: ui.nodeKinds.panel.color,
+        }}
+        name={{
+          value: kind.name,
+          onChange: (name) => update.mutate({ id: kind.id, name }),
+          disabled: !canSetup,
+        }}
+        icon={{
+          value: kind.icon,
+          options: ICON_OPTIONS,
+          onChange: (icon) => update.mutate({ id: kind.id, icon }),
+          disabled: !canSetup,
+        }}
+        color={{
+          value: kind.color,
+          options: projectColorSchema.options as readonly NodeKind['color'][],
+          swatchOf: (color) => identityTone[color].dot,
+          nameOf: (color) => ui.structure.colorNames[color],
+          onChange: (color) => update.mutate({ id: kind.id, color }),
+          disabled: !canSetup,
+        }}
+      />
+      <PanelField label={ui.nodeKinds.panel.settingsSections.capabilities}>
+        <NodeKindCapabilitiesSection
+          kind={kind}
+          canSetup={canSetup}
+          onToggle={(capabilities) => update.mutate({ id: kind.id, capabilities })}
+        />
+      </PanelField>
+    </SettingsCompactDialog>
   );
 }

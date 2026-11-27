@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-import { StrictMode } from 'react';
+import { StrictMode, useRef } from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ui } from '@nodus/contracts';
 
-import { SliderPanel } from './slider-panel.js';
+import { SliderPanel, type SliderPanelHandle } from './slider-panel.js';
 
 // Видимость полосы читает роутер — вне RouterProvider подменяем (не предмет теста).
 vi.mock('./rail-visibility.js', () => ({ useRailHidden: () => false }));
@@ -234,6 +234,62 @@ describe('SliderPanel: Esc и popper-слои (#1021)', () => {
     appendWrapper('<div data-state="closed" role="menu">закрывается</div>');
     appendWrapper('<div data-state="open" role="tooltip">подсказка</div>');
     fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+/** Страж закрытия (#857): карточка с несохранёнными правками спрашивает
+ *  «Уйти?» ДО схлопывания — иначе после «Отмена» панель зависала бы закрытой,
+ *  но в стеке. Согласившись, владелец зовёт `close()` панели тем же путём. */
+describe('SliderPanel: страж закрытия и close() (#857)', () => {
+  afterEach(cleanup);
+
+  function Panel({ onClose, closeGuard }: { onClose: () => void; closeGuard: () => boolean }) {
+    const ref = useRef<SliderPanelHandle>(null);
+    return (
+      <>
+        <SliderPanel title="Карточка" onClose={onClose} closeGuard={closeGuard} ref={ref}>
+          <button type="button" onClick={() => ref.current?.close()}>
+            leave
+          </button>
+        </SliderPanel>
+      </>
+    );
+  }
+
+  it('страж вернул false — Esc не закрывает: панель не в режиме закрытия, onClose не зван', () => {
+    const onClose = vi.fn();
+    const closeGuard = vi.fn(() => false);
+    render(<Panel onClose={onClose} closeGuard={closeGuard} />);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(closeGuard).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+    // Панель не «залипла»: повторный Esc снова спрашивает стража.
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(closeGuard).toHaveBeenCalledTimes(2);
+  });
+
+  it('после согласия close() закрывает панель тем же путём, что Esc', async () => {
+    const onClose = vi.fn();
+    let allowed = false;
+    render(<Panel onClose={onClose} closeGuard={() => allowed} />);
+    // Контент панели монтируется после первого кадра (double rAF).
+    const leave = await screen.findByRole('button', { name: 'leave' });
+    fireEvent.click(leave);
+    expect(onClose).not.toHaveBeenCalled();
+    allowed = true;
+    fireEvent.click(leave);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('без стража поведение прежнее: X закрывает', () => {
+    const onClose = vi.fn();
+    render(
+      <SliderPanel title="Карточка" onClose={onClose}>
+        <div />
+      </SliderPanel>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: ui.common.close }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

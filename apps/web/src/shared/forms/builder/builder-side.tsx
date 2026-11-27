@@ -66,7 +66,7 @@ export function BuilderTray<X>({
               {/* Подпись группы — когда полей и блоков несколько категорий:
                   иначе лишний шум (вердикт владельца 08.11.2026). */}
               {group.label ? (
-                <p className="text-label-xs text-muted-foreground">{group.label}</p>
+                <p className="text-label-sm text-muted-foreground">{group.label}</p>
               ) : null}
               <div className="flex flex-wrap gap-1.5">
                 {group.options.map((option) => (
@@ -91,7 +91,7 @@ export function BuilderTray<X>({
           {blocks.length > 0 && host.makeBlock ? (
             <div className="flex flex-col gap-1.5">
               {available.length > 0 ? (
-                <p className="text-label-xs text-muted-foreground">{b.insertBlocks}</p>
+                <p className="text-label-sm text-muted-foreground">{b.insertBlocks}</p>
               ) : null}
               <div className="flex flex-wrap gap-1.5">
                 {blocks.map((option) => (

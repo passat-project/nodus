@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { bindingsOf, checkWorkflowDocument } from '@nodus/contracts';
@@ -24,16 +23,16 @@ import { EditorPanel } from './panel/editor-panel.js';
 import { SIDE_PANEL_WIDTH } from '../../../../shared/ui/panel/side-panel.js';
 import { PublishDialog } from './publish-dialog.js';
 import { RouteCanvas } from './route-canvas.js';
-import { RouteToolbarActions } from './route-toolbar.js';
+import { RouteBarPortals, type RouteBarHosts } from './route-toolbar.js';
 
 /**
  * Редактор маршрута (#378 ред. 2, реф Jira workflow editor / Трекер) —
- * окно-сплит как в мессенджере: колонка холста (верхний бар h-14 с линией —
- * добавление сверху, публикация не уезжает; холст `RouteCanvas` — общая
- * раскладка, точки подключения, подписи на стрелках, масштаб и отмена слева
- * внизу) и правые панели — полновысотные колонки, которые выезжают справа и
- * СУЖАЮТ холст (граф стоит, край обрезает). Живые проверки
- * `checkWorkflowDocument`, публикация.
+ * окно-сплит как в мессенджере: колонка холста (своего бара над холстом нет —
+ * действия живут в едином баре рамы: слева добавлять, справа завершать;
+ * холст `RouteCanvas` — общая раскладка, точки подключения, подписи на
+ * стрелках, масштаб, отмена и «Упорядочить» слева внизу) и правые панели —
+ * полновысотные колонки, которые выезжают справа и СУЖАЮТ холст (граф стоит,
+ * край обрезает). Живые проверки `checkWorkflowDocument`, публикация.
  */
 interface RouteEditorProps {
   type: ProcessType;
@@ -42,9 +41,13 @@ interface RouteEditorProps {
    *  открыта ли она сейчас — новый статус ставится в видимую часть холста. */
   settings?: React.ReactNode;
   settingsOpen?: boolean;
-  /** Куда рисовать действия редактора: правая часть единого бара вкладок
-   *  карточки (портал; бара над холстом больше нет). */
-  actionsHost?: HTMLElement | null;
+  /** Хосты единого бара рамы (портал); бара над холстом больше нет. */
+  barHosts?: RouteBarHosts | null;
+  /** Вкладка «Форма создания» вместо холста и правой панели (единая модель
+   *  «Процессов», #857): тот же стор, те же чип проблем и «Опубликовать». */
+  form?: React.ReactNode;
+  /** Узел «Создание» и проблемы формы ведут на вкладку «Форма создания». */
+  onOpenForm?: (field?: string) => void;
 }
 
 export function RouteEditor(props: RouteEditorProps) {
@@ -60,7 +63,9 @@ function RouteEditorInner({
   workflow,
   settings,
   settingsOpen = false,
-  actionsHost,
+  barHosts = null,
+  form,
+  onOpenForm,
 }: RouteEditorProps) {
   const doc = useRouteDocStore((s) => s.document);
   const baseline = useRouteDocStore((s) => s.baseline);
@@ -75,13 +80,15 @@ function RouteEditorInner({
   const canManage = useCanManageWorkflows() && !pendingReload && !locked;
   const publish = usePublishWorkflow(workflow.id);
   const queryClient = useQueryClient();
-  const { fitView, screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition } = useReactFlow();
   const canvasRef = useRef<HTMLDivElement>(null);
   const [publishOpen, setPublishOpen] = useState(false);
 
   // Загрузка/перезагрузка маршрута в стор (смена типа, своя или чужая
-  // публикация — новая версия сервера).
-  useEffect(() => {
+  // публикация — новая версия сервера). До первой отрисовки холста —
+  // `useLayoutEffect`, а не эффект: с ним кадр с графом ПРЕЖНЕГО типа под
+  // новым успевал попасть на экран (мерцание при каждом выборе).
+  useLayoutEffect(() => {
     useRouteDocStore.getState().sync(workflow);
   }, [workflow]);
   // Расстановка холста сохраняется сама — без черновика и новой версии.
@@ -182,9 +189,9 @@ function RouteEditorInner({
 
   const onProblemClick = (problem: WorkflowProblem) => {
     const store = useRouteDocStore.getState();
-    // Проблема формы создания (#432) — панель окна создания, слот подсвечен.
+    // Проблема формы создания (#432) — вкладка «Форма создания», поле подсвечено.
     if (problem.creationField) {
-      store.select({ kind: 'creation', id: 'creation', field: problem.creationField });
+      onOpenForm?.(problem.creationField);
       return;
     }
     if (problem.actionId) store.select({ kind: 'action', id: problem.actionId });
@@ -192,64 +199,80 @@ function RouteEditorInner({
     else if (problem.stageId) store.select({ kind: 'stage', id: problem.stageId });
   };
 
+  // Баннеры черновика и замка каталога — общие у «Маршрута» и «Формы
+  //  создания»: обе вкладки правят один черновик.
+  const banners = (
+    <>
+      {locked ? <CatalogLockBanner text={ui.automation.letterCatalogLocked} /> : null}
+      {dirty && draftSavedAt ? (
+        <DraftBanner savedAt={draftSavedAt} onReset={() => useRouteDocStore.getState().discard()} />
+      ) : null}
+      {staleDraftAt && !dirty ? (
+        <StaleDraftBanner onReset={() => useRouteDocStore.getState().discard()} />
+      ) : null}
+    </>
+  );
+  const bannerShown = Boolean(locked || (dirty && draftSavedAt) || (staleDraftAt && !dirty));
+
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1">
-      {actionsHost
-        ? createPortal(
-            <RouteToolbarActions
-              canManage={canManage}
-              dirty={dirty}
-              problems={problems}
-              publishBlocked={!dirty}
-              onAddStage={addStage}
-              addTransition={(trigger) => (
-                <AddTransitionPopover
-                  document={doc}
-                  onPick={(from, to) => useRouteDocStore.getState().addTransition(from, to)}
-                  trigger={trigger}
-                />
-              )}
-              onTidy={() => {
-                // «Упорядочить»: авторасстановка в общую раскладку и вписать.
-                useRouteDocStore.getState().arrange();
-                void fitView({ duration: 200, padding: 0.2, maxZoom: 1 });
-              }}
-              onProblemClick={onProblemClick}
-              onDiscard={() => useRouteDocStore.getState().discard()}
-              onPublish={() => {
-                // Счётчики предпросмотра — свежие: staleTime detail 30 с не
-                // должен решать, сколько задач «в полёте».
-                void queryClient.invalidateQueries({ queryKey: workflowKeys.detail(workflow.id) });
-                setPublishOpen(true);
-              }}
-            />,
-            actionsHost,
-          )
-        : null}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div ref={canvasRef} className="relative min-h-0 flex-1 overflow-hidden">
-          <RouteCanvas workflow={workflow} editable={canManage} problemStageIds={problemStageIds} />
-          {locked ? <CatalogLockBanner text={ui.automation.letterCatalogLocked} /> : null}
-          {dirty && draftSavedAt ? (
-            <DraftBanner
-              savedAt={draftSavedAt}
-              onReset={() => useRouteDocStore.getState().discard()}
-            />
-          ) : null}
-          {staleDraftAt && !dirty ? (
-            <StaleDraftBanner onReset={() => useRouteDocStore.getState().discard()} />
-          ) : null}
-        </div>
-      </div>
-
-      <EditorPanel
-        workflow={workflow}
-        type={type}
-        scope={type.category}
-        readOnly={!canManage}
-        stageNameSuggestions={stageNames}
-        stageNameLoading={stageNamesLoading}
+      {/* Единственный редактор на экран (стор глобальный): пока рама
+          приостановлена (`suspended` у ProcessTypeCard), этот компонент
+          не смонтирован — черновик читает `loadedState` из localStorage. */}
+      <RouteBarPortals
+        hosts={barHosts}
+        canManage={canManage}
+        dirty={dirty}
+        problems={problems}
+        onAddStage={addStage}
+        addTransition={(trigger) => (
+          <AddTransitionPopover
+            document={doc}
+            onPick={(from, to) => useRouteDocStore.getState().addTransition(from, to)}
+            trigger={trigger}
+          />
+        )}
+        onProblemClick={onProblemClick}
+        onPublish={() => {
+          // Счётчики предпросмотра — свежие: staleTime detail 30 с не
+          // должен решать, сколько задач «в полёте».
+          void queryClient.invalidateQueries({ queryKey: workflowKeys.detail(workflow.id) });
+          setPublishOpen(true);
+        }}
       />
+      {form !== undefined ? (
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {/* Полоса под плавающий баннер: над листом он не ложится на подводку. */}
+          {bannerShown ? <div className="relative h-10 shrink-0">{banners}</div> : null}
+          {form}
+        </div>
+      ) : (
+        <>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div ref={canvasRef} className="relative min-h-0 flex-1 overflow-hidden">
+              <RouteCanvas
+                workflow={workflow}
+                editable={canManage}
+                problemStageIds={problemStageIds}
+                onOpenCreation={() => onOpenForm?.()}
+                // «Упорядочить»: авторасстановка в общую раскладку; вписывает
+                // холст — тем же рабочим видом, что и после смены типа.
+                onTidy={() => useRouteDocStore.getState().arrange()}
+              />
+              {banners}
+            </div>
+          </div>
+
+          <EditorPanel
+            workflow={workflow}
+            type={type}
+            scope={type.category}
+            readOnly={!canManage}
+            stageNameSuggestions={stageNames}
+            stageNameLoading={stageNamesLoading}
+          />
+        </>
+      )}
       {settings}
       <NavigationGuard dirty={dirty} />
 

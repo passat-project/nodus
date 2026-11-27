@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, queryOptions, useQuery } from '@tanstack/react-query';
 import type { WorkflowDetail } from '@nodus/contracts';
 
 import { api } from '../api-client.js';
@@ -14,17 +14,30 @@ export const workflowKeys = {
     [...workflowKeys.all, 'stage-names', category, excludeWorkflowId] as const,
 };
 
-/** Загрузка одного маршрута (queryFn реестра и префетча меты списка типов). */
 export function fetchWorkflowDetail(workflowId: string): Promise<WorkflowDetail> {
   return api<WorkflowDetail>(`/workflows/${workflowId}`);
 }
 
-/** Документ маршрута типа процесса (редактор и «Схема маршрута»). */
-export function useWorkflowDetail(workflowId: string | null) {
-  return useQuery({
-    queryKey: workflowKeys.detail(workflowId ?? 'none'),
-    queryFn: () => fetchWorkflowDetail(workflowId!),
-    enabled: workflowId !== null,
+/** Маршрут одного процесса — ключ и загрузка. Один объект и для запроса
+ *  (`useWorkflowDetail`), и для предзагрузки: кэш общий, срок свежести — тот же. */
+export const workflowDetailOptions = (workflowId: string) =>
+  queryOptions({
+    queryKey: workflowKeys.detail(workflowId),
+    queryFn: () => fetchWorkflowDetail(workflowId),
     staleTime: 30_000,
+  });
+
+/** Документ маршрута типа процесса (редактор и «Схема маршрута»). */
+export function useWorkflowDetail(
+  workflowId: string | null,
+  { keepPrevious = false }: { keepPrevious?: boolean } = {},
+) {
+  return useQuery({
+    ...workflowDetailOptions(workflowId ?? 'none'),
+    enabled: workflowId !== null,
+    // Прежний маршрут остаётся на руках, пока грузится следующий: рама
+    // «Процессов» при смене типа не пустеет. Что показывать с прежними
+    // данными, решает вызывающий — сам запрос ничего не рисует.
+    placeholderData: keepPrevious ? keepPreviousData : undefined,
   });
 }

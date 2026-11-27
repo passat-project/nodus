@@ -62,25 +62,78 @@ export function StaleDraftBanner({ onReset }: { onReset: () => void }) {
   return <Banner tone="muted" text={ui.automation.draftStale} onReset={onReset} />;
 }
 
-/** Блокер навигации при несохранённых правках маршрута (#378, раздел 7 спеки):
- *  уход с раздела — с подтверждением (черновик в localStorage смягчает потерю,
- *  но осознанный вопрос честнее тихого «продолжится потом»). */
-export function NavigationGuard({ dirty }: { dirty: boolean }) {
-  const blocker = useBlocker({ shouldBlockFn: () => dirty, withResolver: true });
+/** Адрес один и тот же, меняется только стек карточек: сущность открылась или
+ *  закрылась ПОВЕРХ. Для редактора это не уход — стор и черновик на месте
+ *  (правило одного редактора, #857), и вопрос «Уйти без публикации?» здесь
+ *  ложная тревога. Закрытие КАРТОЧКИ с черновиком спрашивает её страж
+ *  закрытия (`closeGuard` у `SliderPanel` в `card-type-entries`). */
+export function isCardsOnlyChange(
+  current: { pathname: string; search: unknown },
+  next: { pathname: string; search: unknown },
+): boolean {
+  if (current.pathname !== next.pathname) return false;
+  if (!isRecord(current.search) || !isRecord(next.search)) return false;
+  const before = current.search as Record<string, unknown>;
+  const after = next.search as Record<string, unknown>;
+  for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    if (key === 'cards') continue;
+    if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) return false;
+  }
+  return JSON.stringify(before.cards) !== JSON.stringify(after.cards);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/** Вопрос «Уйти без публикации?»: «Отмена» остаётся, «Отменить изменения» —
+ *  уходит (черновик остаётся в localStorage). Один вид вопроса у блока ухода
+ *  с раздела (`NavigationGuard`) и у закрытия карточки стека с черновиком. */
+export function UnsavedDialog({
+  open,
+  onCancel,
+  onDiscard,
+  confirmLabel = ui.automation.discard,
+}: {
+  open: boolean;
+  onCancel: () => void;
+  onDiscard: () => void;
+  /** Подпись подтверждающей кнопки: «Уйти» при уходе с раздела, «Закрыть» —
+   *  когда закрывают карточку с черновиком (уходить никуда не приходится). */
+  confirmLabel?: string;
+}) {
   return (
-    <Dialog open={blocker.status === 'blocked'} onOpenChange={(open) => !open && blocker.reset?.()}>
+    <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>{ui.automation.unsavedTitle}</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">{ui.automation.unsavedBody}</p>
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => blocker.reset?.()}>
+          <Button variant="ghost" onClick={onCancel}>
             {ui.common.cancel}
           </Button>
-          <Button onClick={() => blocker.proceed?.()}>{ui.automation.discard}</Button>
+          <Button onClick={onDiscard}>{confirmLabel}</Button>
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Блокер навигации при несохранённых правках маршрута (#378, раздел 7 спеки):
+ *  уход с раздела — с подтверждением (черновик в localStorage смягчает потерю,
+ *  но осознанный вопрос честнее тихого «продолжится потом»). Карточки стека
+ *  поверх редактора — не уход: см. `isCardsOnlyChange`. */
+export function NavigationGuard({ dirty }: { dirty: boolean }) {
+  const blocker = useBlocker({
+    shouldBlockFn: ({ current, next }) => dirty && !isCardsOnlyChange(current, next),
+    withResolver: true,
+  });
+  return (
+    <UnsavedDialog
+      open={blocker.status === 'blocked'}
+      onCancel={() => blocker.reset?.()}
+      onDiscard={() => blocker.proceed?.()}
+    />
   );
 }

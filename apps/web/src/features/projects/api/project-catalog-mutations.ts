@@ -92,7 +92,9 @@ export function useCreateProjectType() {
 
 /** Правка типа проекта: имя, значок, цвет, форма атрибутов (слоты, замена
  *  целиком — Р10 #631), допустимые виды папок (#556). */
-export function useUpdateProjectType() {
+/** `quiet` — без всплывающих уведомлений: для автосохранения вкладки «Форма
+ *  создания» (#857), где состояние пишется тихой строкой в баре рамы. */
+export function useUpdateProjectType({ quiet = false }: { quiet?: boolean } = {}) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (vars: { id: string } & ProjectTypeUpdateBody) =>
@@ -128,9 +130,11 @@ export function useUpdateProjectType() {
     },
     onError: (error, _vars, context) => {
       for (const [key, data] of context?.snapshot ?? []) queryClient.setQueryData(key, data);
-      toastApiError(error);
+      if (!quiet) toastApiError(error);
     },
-    onSuccess: () => toast.success(ui.projects.savedDone),
+    onSuccess: () => {
+      if (!quiet) toast.success(ui.projects.savedDone);
+    },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: projectsKeys.types() });
     },

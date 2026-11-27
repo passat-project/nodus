@@ -19,32 +19,42 @@ const TYPE = {
 afterEach(cleanup);
 
 describe('канвас вкладки «Схема» типа проекта (#556, каркас #38)', () => {
-  it('постоянный узел «Создание проекта» открывает редактор окна создания', () => {
-    const onOpenWindow = vi.fn();
-    render(<ProjectSchemaCanvas type={TYPE} canSetup onOpenWindow={onOpenWindow} />);
+  it('постоянный узел «Создание проекта» включает вкладку «Форма создания» (#857)', () => {
+    const onOpenForm = vi.fn();
+    render(<ProjectSchemaCanvas type={TYPE} canSetup onOpenForm={onOpenForm} />);
 
     const node = screen.getByRole('button', { name: ui.projects.schemasCreationNode });
     expect(node.getAttribute('title')).toBe(ui.projects.schemasCreationNodeHint);
     fireEvent.click(node);
-    expect(onOpenWindow).toHaveBeenCalledTimes(1);
+    expect(onOpenForm).toHaveBeenCalledTimes(1);
     // Подсказка холста и имя типа для скринридера (карточка имени не дублирует).
     expect(screen.getByText(ui.projects.schemasCanvasHint)).toBeTruthy();
     expect(screen.getByText('Договор')).toBeTruthy();
   });
 
-  it('без права настройки узел не выглядит кликабельным, но открывает окно на просмотр', () => {
-    const onOpenWindow = vi.fn();
-    render(<ProjectSchemaCanvas type={TYPE} canSetup={false} onOpenWindow={onOpenWindow} />);
+  it('тихое действие под пояснением ведёт туда же, что узел: «Форма создания»', () => {
+    const onOpenForm = vi.fn();
+    render(<ProjectSchemaCanvas type={TYPE} canSetup onOpenForm={onOpenForm} />);
+
+    const action = screen.getByRole('button', { name: ui.projects.schemasOpenForm });
+    expect(action.textContent).toBe('Настроить форму создания');
+    fireEvent.click(action);
+    expect(onOpenForm).toHaveBeenCalledTimes(1);
+  });
+
+  it('без права настройки узел не выглядит кликабельным, но открывает форму на просмотр', () => {
+    const onOpenForm = vi.fn();
+    render(<ProjectSchemaCanvas type={TYPE} canSetup={false} onOpenForm={onOpenForm} />);
 
     const node = screen.getByRole('button', { name: ui.projects.schemasCreationNode });
     expect(node.className).toContain('cursor-default');
     expect(node.className).not.toContain('hover:border-input');
     fireEvent.click(node);
-    expect(onOpenWindow).toHaveBeenCalledTimes(1);
+    expect(onOpenForm).toHaveBeenCalledTimes(1);
   });
 
   it('с правом настройки узел подсвечивается по наведению', () => {
-    render(<ProjectSchemaCanvas type={TYPE} canSetup onOpenWindow={() => void 0} />);
+    render(<ProjectSchemaCanvas type={TYPE} canSetup onOpenForm={() => void 0} />);
     const node = screen.getByRole('button', { name: ui.projects.schemasCreationNode });
     expect(node.className).toContain('hover:border-input');
     expect(node.className).not.toContain('cursor-default');

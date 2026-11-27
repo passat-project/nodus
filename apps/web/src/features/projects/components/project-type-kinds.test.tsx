@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { NodeKind, ProjectType } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
@@ -45,6 +45,8 @@ vi.mock('../node-kinds/components/node-kind-create-dialog.js', () => ({
   ),
 }));
 
+import { useTypeSettingsStore } from '../../../shared/ui/type-settings-store.js';
+import { openRowMenu, rowOf } from '../../../test/journal-row.js';
 import { ProjectTypeKindsTab } from './project-type-kinds.js';
 
 const KIND_A = '70000000-0000-4000-8000-000000000001';
@@ -93,19 +95,12 @@ function setup(
 ) {
   const update = { mutate: vi.fn() };
   const updateScope = { mutate: vi.fn() };
-  const onOpenKind = vi.fn();
+  useTypeSettingsStore.setState({ target: null });
   vi.mocked(useUpdateProjectType).mockReturnValue(update as never);
   vi.mocked(useUpdateTypeCreation).mockReturnValue(updateScope as never);
   vi.mocked(useLiveProcessTypes).mockReturnValue({ data: tasks } as never);
-  render(
-    <ProjectTypeKindsTab
-      type={type(kindIds)}
-      kinds={pageKinds}
-      canSetup={canSetup}
-      onOpenKind={onOpenKind}
-    />,
-  );
-  return { update, updateScope, onOpenKind };
+  render(<ProjectTypeKindsTab type={type(kindIds)} kinds={pageKinds} canSetup={canSetup} />);
+  return { update, updateScope };
 }
 
 describe('вкладка «Какие папки здесь бывают» — журнальный список (#556, #857)', () => {
@@ -129,10 +124,36 @@ describe('вкладка «Какие папки здесь бывают» — �
     expect(update.mutate).toHaveBeenCalledWith({ id: P1, kindIds: null });
   });
 
-  it('клик по строке журнала открывает экран типа папки', () => {
-    const { onOpenKind } = setup();
-    fireEvent.click(screen.getByText('Комплект'));
-    expect(onOpenKind).toHaveBeenCalledWith(KIND_A);
+  it('клик по строке открывает компактное окно настроек типа папки — карточки у типа папки нет', () => {
+    const { update } = setup();
+    const row = rowOf('Комплект');
+    fireEvent.click(row);
+    expect(useTypeSettingsStore.getState().target).toEqual({ kind: 'node-kind', id: KIND_A });
+    // Клик по тумблеру другой строки — правка набора папок, окно не переоткрывает.
+    fireEvent.click(within(rowOf('Здание')).getByRole('switch', { name: /Здание/ }));
+    expect(update.mutate).toHaveBeenCalledWith({ id: P1, kindIds: [KIND_A] });
+    expect(useTypeSettingsStore.getState().target).toEqual({ kind: 'node-kind', id: KIND_A });
+  });
+
+  it('список без чекбоксов и островка массовых команд: правка — тумблером строки', () => {
+    setup([KIND_A], true, [], kindsThree);
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: /выбранн/ })).toBeNull();
+    // В тулбаре осталась одна команда «над всеми» — «Включить все типы папок».
+    const commands = screen.getAllByRole('button', { name: /^Включить|^Выключить/ });
+    expect(commands.map((button) => button.textContent)).toEqual([ui.projects.schemasResetKinds]);
+  });
+
+  it('«⋯» строки: только «Настройки типа…» — тот же стор, что и клик по строке', async () => {
+    setup();
+    const items = await openRowMenu('Здание');
+    expect(
+      within(items)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual([ui.automation.menuSettingsType]);
+    fireEvent.click(within(items).getByRole('menuitem', { name: ui.automation.menuSettingsType }));
+    expect(useTypeSettingsStore.getState().target).toEqual({ kind: 'node-kind', id: KIND_B });
   });
 
   it('без права настройки тумблеры недоступны и кнопки создания нет', () => {
@@ -183,7 +204,11 @@ describe('вкладка «Какие папки здесь бывают» — �
       },
     };
     const { updateScope } = setup([KIND_A], true, [boundTask]);
+    // Предложение — тихая плашка под списком с действием в строке, не островок
+    // массовых команд: чекбоксов и кнопок «над выбранными» нет.
     const action = screen.getByRole('button', { name: ui.projects.schemasSuggestWorks });
+    expect(screen.getByText(ui.projects.schemasSuggestWorksNote)).toBeTruthy();
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
     fireEvent.click(action);
     expect(updateScope.mutate).toHaveBeenCalledWith({
       typeId: 't1',
@@ -196,14 +221,5 @@ describe('вкладка «Какие папки здесь бывают» — �
     expect(screen.getByText(ui.projects.schemasKindArchived)).toBeTruthy();
     // Живой тип — без чипа: чип один на архивную строку.
     expect(screen.getAllByText(ui.projects.schemasKindArchived).length).toBe(1);
-  });
-
-  it('пакетная правка островком: выбранное включается одним списком', () => {
-    const { update } = setup([KIND_A], true, [], kindsThree);
-    // Чекбокс строки «Здание»: пакетное включение пишет явный список.
-    const row = screen.getByText('Здание').closest('[role="row"]')!;
-    fireEvent.click(row.querySelector('button[role="checkbox"]')!);
-    fireEvent.click(screen.getByRole('button', { name: ui.projects.schemasKindAllow }));
-    expect(update.mutate).toHaveBeenCalledWith({ id: P1, kindIds: [KIND_A, KIND_B] });
   });
 });

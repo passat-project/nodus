@@ -10,6 +10,7 @@ import { Workflow, X } from 'lucide-react';
 import { useAuthStore } from '../auth-store.js';
 import { FlowCanvas } from '../flow/flow-canvas.js';
 import { buildRouteGraph } from '../flow/route-graph.js';
+import { replaceProcessesSurface } from './processes-surface-search.js';
 import { useWorkflowDetail } from './workflow-api.js';
 
 /**
@@ -69,7 +70,8 @@ export function RouteViewDialog({
                   onClose();
                   void navigate({
                     to: '/automation',
-                    search: (prev) => ({ ...prev, tab: 'processes', type: typeId }),
+                    search: (prev) =>
+                      replaceProcessesSurface({ ...prev, tab: 'processes' }, { type: typeId }),
                   });
                 }}
               >

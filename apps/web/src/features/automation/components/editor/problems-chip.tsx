@@ -23,21 +23,25 @@ export function ProblemsChip({
           aria-label={label}
           title={label}
           className={cn(
-            // Строка инструментов сужается до ~286px: подпись уходит первой,
-            // затем счётчик — приоритет у имени типа и действий бара. Чип не
-            // прячется целиком: иначе заблокированная «Опубликовать» остаётся
-            // без объяснения (счётчик и имя — в title/aria-label).
-            'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors @max-[560px]:px-1',
+            // В баре уже 1120px (ниже полной ступени инструментов) подпись уходит
+            // первой, уже 680px — счётчик: приоритет у вкладок, инструментов
+            // и действий бара. Чип не прячется целиком: иначе заблокированная
+            // «Опубликовать» остаётся без объяснения (счётчик и имя — в
+            // title/aria-label). Порог счётчика 680, а не 800: на рабочей
+            // ширине владельца (1536 → рама 766px, с постоянным чипом)
+            // счётчик «1» должен читаться, и место под него есть — знаки
+            // инструментов бара занимают меньше подписей.
+            'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors @max-[800px]:px-1',
             errors > 0
               ? 'border-danger/40 bg-danger-soft/60 text-danger'
               : 'border-warning/40 bg-warning-soft/60 text-warning',
           )}
         >
           <CircleAlert className="size-3.5" strokeWidth={1.75} />
-          <span className="@max-[640px]:hidden">
+          <span className="@max-[1120px]:hidden">
             {ui.automation.problemsChip} · {problems.length}
           </span>
-          <span className="hidden @max-[640px]:inline @max-[560px]:hidden">{problems.length}</span>
+          <span className="inline @min-[1120px]:hidden @max-[680px]:hidden">{problems.length}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="nokey w-80 rounded-[14px] p-1.5">

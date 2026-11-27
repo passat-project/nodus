@@ -1,61 +1,65 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Permission, ui } from '@nodus/contracts';
+import type { NodeKind, ProjectType } from '@nodus/contracts';
 import { Empty, EmptyTitle } from '@nodus/ui/components/empty';
-import { Button } from '@nodus/ui/components/button';
 import { Skeleton } from '@nodus/ui/components/skeleton';
-import { ClipboardList, FolderTree, Settings2, Workflow } from 'lucide-react';
+import { ClipboardList, FilePenLine, FolderTree, Workflow } from 'lucide-react';
 
 import { useNodeKinds } from '../../../shared/api/node-kinds.js';
 import { useProjectTypes } from '../../../shared/api/projects-list.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { useCanManageFields } from '../../../shared/custom-fields/use-can-manage-fields.js';
 import type { CardTabDef } from '../../../shared/ui/entity-card/card-tab-strip.js';
-import { TypeCardFrame, TypeCardPanel } from '../../../shared/ui/type-card-frame.js';
-import { kindsSummary } from '../lib/project-type-summary.js';
+import {
+  FrameSettingsButton,
+  TypeCardFrame,
+  TypeCardPanel,
+} from '../../../shared/ui/type-card-frame.js';
+import { useTypeSettingsStore } from '../../../shared/ui/type-settings-store.js';
+import { FormSaveState } from '../../../shared/forms/builder/form-autosave.js';
 import type { RenderCreateField } from '../node-kinds/types.js';
 import { ProjectSchemaCanvas } from './project-schema-canvas.js';
 import { ProjectTypeCreationTab } from './project-type-creation.js';
+import { ProjectTypeFormTab, useProjectTypeForm } from './project-type-form-tab.js';
 import { ProjectTypeKindsTab } from './project-type-kinds.js';
-import { ProjectTypeSettingsDialog } from './project-type-settings-dialog.js';
-import { ProjectWindowBuilder } from './project-window-builder.js';
 
-type WorkspaceTab = 'schema' | 'creation' | 'kinds';
+type WorkspaceTab = 'schema' | 'form' | 'creation' | 'kinds';
+
+/** Окно создания типа задачи (слот фичи automation, I6) — из «Что здесь можно создавать». */
+interface ProcessTypeCreateSlot {
+  onClose: () => void;
+  onCreated: (id: string) => void;
+  baseId?: string;
+}
 
 /**
- * Тип проекта в разделе «Процессы» (#857) — окно настройки на всю правую
- * область в раме карточки проекта/письма (вердикт владельца 26.11.2026):
- * шапка с идентичностью типа и полоса вкладок `Схема` · `Настройки` · `Что
- * здесь можно создавать` · `Какие папки здесь бывают`. Холст — ПЕРВАЯ
- * вкладка (точечная сетка + узел «Создание проекта»), а не отдельный «центр
- * окна»: переключение вкладок меняет только содержимое рамы. Правых панелей
- * в потоке нет; окно создания проекта — окно поверх экрана (канон #496).
+ * Тип проекта в разделе «Процессы» (#857) — рабочая область в раме карточки
+ * (вердикт владельца 26.11.2026; ревизия UI v3): полоса вкладок `Схема` ·
+ * `Форма создания` · `Что здесь можно создавать` · `Какие папки здесь бывают`
+ * — одна схема на все сущности: схема → форма → связи → мелочь в окне
+ * настроек. Холст — ПЕРВАЯ вкладка (точечная сетка + узел «Создание проекта»),
+ * а не отдельный «центр окна»: переключение вкладок меняет только
+ * содержимое рамы. Бар — как у остальных карточек: вкладки, слева от
+ * шестерёнки тихая строка автосохранения формы, справа шестерёнка настроек.
+ * Связанные сущности (тип задачи, тип папки) открываются карточкой ПОВЕРХ
+ * стека прямо из строк списков — рама никуда не переезжает, крошек «назад»
+ * нет. Настройки типа рендерит общий хост уровня app (`TypeSettingsHost`) —
+ * открываются и из карточки этого типа.
  */
 export function ProjectTypeWorkspace({
   typeId,
-  settingsRequest,
-  onOpenType,
-  onOpenKind,
-  renderCreateField,
   renderProcessTypeCreate,
+  renderCreateField,
 }: {
   typeId: string;
-  /** Счётчик команд «⋯ → Настройки типа» строки проекта в колонке. */
-  settingsRequest: number;
-  onOpenType: (id: string) => void;
-  onOpenKind: (id: string) => void;
+  renderProcessTypeCreate?: (slot: ProcessTypeCreateSlot) => ReactNode;
+  /** Окно «Создать атрибут» из лотка формы (слот app, I6). */
   renderCreateField?: RenderCreateField;
-  /** Окно создания типа задачи (слот automation, I6) — из «Что здесь можно создавать». */
-  renderProcessTypeCreate?: (slot: {
-    onClose: () => void;
-    onCreated: (id: string) => void;
-    baseId?: string;
-  }) => ReactNode;
 }) {
   const typesQuery = useProjectTypes(true);
   const kindsQuery = useNodeKinds();
   const permissions = useAuthStore((s) => s.user?.permissions ?? []);
   const canSetup = permissions.includes(Permission.PROJECT_SETUP_MANAGE);
-  const canCreateField = useCanManageFields();
 
   const types = useMemo(() => typesQuery.data ?? [], [typesQuery.data]);
   const kinds = useMemo(() => kindsQuery.data ?? [], [kindsQuery.data]);
@@ -63,23 +67,6 @@ export function ProjectTypeWorkspace({
     () => types.find((entry) => entry.id === typeId && entry.archivedAt === null) ?? null,
     [types, typeId],
   );
-
-  const [tab, setTab] = useState<WorkspaceTab>('schema');
-  const [builderOpen, setBuilderOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  // Смена типа (выбор другой строки колонки) — с первой вкладки (derive-render).
-  const [shownId, setShownId] = useState(typeId);
-  if (typeId !== shownId) {
-    setShownId(typeId);
-    setTab('schema');
-    setBuilderOpen(false);
-    setSettingsOpen(false);
-  }
-
-  // «⋯ → Настройки типа…» строки проекта: окно настроек выбранного типа.
-  useEffect(() => {
-    if (settingsRequest > 0) setSettingsOpen(true);
-  }, [settingsRequest]);
 
   if (!type) {
     return (
@@ -101,12 +88,54 @@ export function ProjectTypeWorkspace({
     );
   }
 
+  // Смена типа (выбор другой строки колонки) — новая рама с первой вкладки:
+  // прежняя, размонтируясь, сразу сохраняет недавнюю правку формы.
+  return (
+    <ProjectTypeFrame
+      key={type.id}
+      type={type}
+      kinds={kinds}
+      canSetup={canSetup}
+      renderProcessTypeCreate={renderProcessTypeCreate}
+      renderCreateField={renderCreateField}
+    />
+  );
+}
+
+function ProjectTypeFrame({
+  type,
+  kinds,
+  canSetup,
+  renderProcessTypeCreate,
+  renderCreateField,
+}: {
+  type: ProjectType;
+  kinds: NodeKind[];
+  canSetup: boolean;
+  renderProcessTypeCreate?: (slot: ProcessTypeCreateSlot) => ReactNode;
+  renderCreateField?: RenderCreateField;
+}) {
+  const form = useProjectTypeForm(type);
+  const canCreateField = useCanManageFields();
+  const openSettings = useTypeSettingsStore((s) => s.openSettings);
+  const [tab, setTab] = useState<WorkspaceTab>('schema');
+  const activate = (id: string) => {
+    // Уходя с вкладки формы, сохраняем недавнюю правку сразу.
+    if (tab === 'form' && id !== 'form') form.flush();
+    setTab(id as WorkspaceTab);
+  };
+
   const idPrefix = `project-type-${type.id}`;
   const tabs: CardTabDef[] = [
     {
       id: 'schema',
       label: ui.projects.schemasTabSchema,
       icon: <Workflow className="size-3.5" strokeWidth={1.75} />,
+    },
+    {
+      id: 'form',
+      label: ui.automation.entry.formTab,
+      icon: <FilePenLine className="size-3.5" strokeWidth={1.75} />,
     },
     {
       id: 'creation',
@@ -121,88 +150,54 @@ export function ProjectTypeWorkspace({
   ];
 
   return (
-    <>
-      <TypeCardFrame
-        meta={kindsSummary(type, kinds)}
-        actions={
-          tab === 'schema' ? (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setBuilderOpen(true)}
-              aria-label={ui.projects.schemasWindowPanel}
-              title={ui.projects.schemasWindowPanel}
-            >
-              <Settings2 className="size-4" strokeWidth={1.75} />
-            </Button>
-          ) : undefined
-        }
-        settingsAction={
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => setSettingsOpen(true)}
-            aria-label={ui.automation.typeSettings.title}
-            title={ui.automation.typeSettings.title}
-          >
-            <Settings2 className="size-4" strokeWidth={1.75} />
-          </Button>
-        }
-        tabs={tabs}
-        activeTab={tab}
-        onActivateTab={(id) => setTab(id as WorkspaceTab)}
-        idPrefix={idPrefix}
-        tabsLabel={ui.projects.schemasTabsAria}
-      >
-        {tab === 'schema' ? (
-          <TypeCardPanel idPrefix={idPrefix} tab="schema">
-            <ProjectSchemaCanvas
-              type={type}
-              canSetup={canSetup}
-              onOpenWindow={() => setBuilderOpen(true)}
-            />
-          </TypeCardPanel>
-        ) : null}
-        {tab === 'creation' ? (
-          <TypeCardPanel idPrefix={idPrefix} tab="creation">
-            <ProjectTypeCreationTab
-              type={type}
-              canSetup={canSetup}
-              onOpenType={onOpenType}
-              renderProcessTypeCreate={renderProcessTypeCreate}
-            />
-          </TypeCardPanel>
-        ) : null}
-        {tab === 'kinds' ? (
-          <TypeCardPanel idPrefix={idPrefix} tab="kinds">
-            <ProjectTypeKindsTab
-              type={type}
-              kinds={kinds}
-              canSetup={canSetup}
-              onOpenKind={onOpenKind}
-            />
-          </TypeCardPanel>
-        ) : null}
-      </TypeCardFrame>
-      {settingsOpen ? (
-        <ProjectTypeSettingsDialog
-          type={type}
-          canSetup={canSetup}
-          onEditWindow={() => {
-            setSettingsOpen(false);
-            setBuilderOpen(true);
-          }}
-          onClose={() => setSettingsOpen(false)}
+    <TypeCardFrame
+      quiet={<FormSaveState state={form.state} onRetry={form.retry} />}
+      settingsAction={
+        <FrameSettingsButton
+          label={ui.automation.menuSettingsType}
+          onClick={() => openSettings({ kind: 'project-type', id: type.id })}
         />
+      }
+      tabs={tabs}
+      activeTab={tab}
+      onActivateTab={activate}
+      idPrefix={idPrefix}
+      tabsLabel={ui.projects.schemasTabsAria}
+    >
+      {tab === 'schema' ? (
+        <TypeCardPanel idPrefix={idPrefix} tab="schema">
+          <ProjectSchemaCanvas
+            type={type}
+            canSetup={canSetup}
+            onOpenForm={() => activate('form')}
+          />
+        </TypeCardPanel>
       ) : null}
-      <ProjectWindowBuilder
-        open={builderOpen}
-        type={type}
-        canSetup={canSetup}
-        canCreateField={canCreateField}
-        renderCreateField={renderCreateField}
-        onClose={() => setBuilderOpen(false)}
-      />
-    </>
+      {tab === 'form' ? (
+        <TypeCardPanel idPrefix={idPrefix} tab="form">
+          <ProjectTypeFormTab
+            type={type}
+            canSetup={canSetup}
+            canCreateField={canCreateField}
+            renderCreateField={renderCreateField}
+            form={form}
+          />
+        </TypeCardPanel>
+      ) : null}
+      {tab === 'creation' ? (
+        <TypeCardPanel idPrefix={idPrefix} tab="creation">
+          <ProjectTypeCreationTab
+            type={type}
+            canSetup={canSetup}
+            renderProcessTypeCreate={renderProcessTypeCreate}
+          />
+        </TypeCardPanel>
+      ) : null}
+      {tab === 'kinds' ? (
+        <TypeCardPanel idPrefix={idPrefix} tab="kinds">
+          <ProjectTypeKindsTab type={type} kinds={kinds} canSetup={canSetup} />
+        </TypeCardPanel>
+      ) : null}
+    </TypeCardFrame>
   );
 }

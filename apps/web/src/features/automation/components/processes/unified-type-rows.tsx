@@ -1,5 +1,6 @@
 import type { NodeKind, ProcessType, ProjectType } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
+import { NodeChip } from '@nodus/ui/components/node-chip';
 
 import { identityTone } from '../../../../shared/ui/identity-tone.js';
 import { NodeKindTile } from '../../../../shared/ui/node-kind-icon.js';
@@ -59,15 +60,18 @@ export function ProcessTypeRow({
               title={ui.automation.chipDraft}
             />
           ) : null}
+          {/* Чипы строки — общий примитив `NodeChip` (как в списках вкладок):
+              прежние рукописные 10px-плашки были мельче канона и разным
+              калибром («Системный» — с рамкой, «Скрыт» — голым текстом). */}
           {type.isSystem ? (
-            <span className="shrink-0 rounded border border-border px-1 text-[10px] leading-4 text-muted-foreground">
+            <NodeChip tone="muted" className="shrink-0">
               {ui.automation.badgeSystem}
-            </span>
+            </NodeChip>
           ) : null}
           {!type.creatable && !type.archivedAt ? (
-            <span className="shrink-0 text-[10px] leading-4 text-muted-foreground">
+            <NodeChip tone="muted" className="shrink-0">
               {ui.automation.badgeHidden}
-            </span>
+            </NodeChip>
           ) : null}
         </>
       }

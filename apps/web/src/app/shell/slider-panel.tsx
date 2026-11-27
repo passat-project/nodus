@@ -6,7 +6,16 @@
 // документация пропсов и канон-комментарии вердиктов владельца; публичное API
 // для фич (patterns.md) — этот файл, разнос дробил бы разрешённый путь.
 import { X } from 'lucide-react';
-import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+  type Ref,
+} from 'react';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { cn } from '@nodus/ui/lib/utils';
@@ -31,6 +40,12 @@ export interface SourceRect {
   y: number;
   width: number;
   height: number;
+}
+
+/** Закрытие панели извне — той же хореографией, что X и Esc (страж закрытия
+ *  срабатывает): для владельца, который сам спросил «Уйти?» и получил согласие. */
+export interface SliderPanelHandle {
+  close: () => void;
 }
 
 const CLOSE_MS = 200;
@@ -84,6 +99,8 @@ export function SliderPanel({
   fullscreen = false,
   dormant = false,
   onClose,
+  closeGuard,
+  ref,
   sourceRect,
   fadeContent = true,
   children,
@@ -118,6 +135,12 @@ export function SliderPanel({
    *  contents not focusable). */
   dormant?: boolean;
   onClose: () => void;
+  /** Страж закрытия: `false` — закрытие отменено ДО схлопывания (карточка с
+   *  несохранёнными правками сама спрашивает «Уйти?» и по согласию зовёт
+   *  `onClose`). Без стража — как прежде. */
+  closeGuard?: () => boolean;
+  /** `close()` — закрыть панель извне тем же путём, что X и Esc (со стражем). */
+  ref?: Ref<SliderPanelHandle>;
   sourceRect?: SourceRect;
   /** false — карточка сама управляет проявлением: её зональные фоны (тёмный
    * чат) рендерятся структурой с первого кадра роста, content-fade получают
@@ -141,6 +164,8 @@ export function SliderPanel({
   const closingRef = useRef(false);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  const closeGuardRef = useRef(closeGuard);
+  closeGuardRef.current = closeGuard;
   // Правый край карточки = правый край мягкой рамы = левый край служебной
   // полосы (план R4): полоса ЗА пределами рамы, карточка её не накрывает и
   // сужается синхронно с рамой при раскрытии полосы кнопкой (transition-[right] той
@@ -183,6 +208,9 @@ export function SliderPanel({
 
   function requestClose() {
     if (closingRef.current) return;
+    // Страж отклонил (несохранённые правки): панель не начинает схлопываться —
+    // иначе после «Отмена» вопроса она зависла бы закрытой, но в стеке.
+    if (closeGuardRef.current?.() === false) return;
     // Сигнал нижним карточкам и контуру шелла: верхняя пошла закрываться —
     // они просыпаются ДО схлопывания (issue #63: lower cards отрисовываются
     // в окне гашения контента, контур перемеряется под уходящей карточкой).
@@ -223,6 +251,7 @@ export function SliderPanel({
 
   const requestCloseRef = useRef(requestClose);
   requestCloseRef.current = requestClose;
+  useImperativeHandle(ref, () => ({ close: () => requestCloseRef.current() }), []);
 
   useEffect(() => {
     stack.push(id);

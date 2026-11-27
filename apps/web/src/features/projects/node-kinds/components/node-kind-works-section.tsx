@@ -3,14 +3,16 @@ import type { NodeKind, ProcessType } from '@nodus/contracts';
 import { typeConfigOf, ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { Switch } from '@nodus/ui/components/switch';
-import { Link2, Plus, Unlink } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Empty, EmptyTitle } from '@nodus/ui/components/empty';
 import { cn } from '@nodus/ui/lib/utils';
 
+import { useOpenCard } from '../../../../app/shell/use-card-stack.js';
 import {
   useLiveProcessTypes,
   useUpdateTypeCreation,
 } from '../../../../shared/api/process-types-api.js';
+import { useTypeSettingsStore } from '../../../../shared/ui/type-settings-store.js';
 import { PanelNote } from '../../../../shared/ui/panel/panel-kit.js';
 import { DataTable, type DataTableField } from '../../../../shared/views/data-table.js';
 import { useListToolbar } from '../../../../shared/views/use-list-toolbar.js';
@@ -20,30 +22,28 @@ import { typeToneOf } from '../../../../shared/workflow/type-tone.js';
 import type { FilterFieldDef } from '../../../../shared/views/list-filters.js';
 import { ListToolbar } from '../../../../shared/views/list-toolbar.js';
 import { CardTabToolbar } from '../../../../shared/ui/entity-card/card-tab-toolbar.js';
-import { BulkIsland, bulkActionClass } from '../../../../shared/views/bulk-island.js';
-import { useRowSelection } from '../../../../shared/views/use-row-selection.js';
 
 /** Ключ вида: колонки и ширины общие у всех типов папок (#857). */
 const VIEW_KEY = 'processes.kind-works';
 
 /**
- * Раздел «Работы в папке» карточки типа папки (#857, единая модель §11) —
- * СПИСОК в грамматике журналов портала (вердикт владельца 26.11.2026):
- * типы задач, привязанные к этому типу папки (`creation.folderKindId`, #665 —
- * вторая сторона «Где создаётся»). Строка: значок+название, описание,
- * тумблер привязки в ячейке действий. Запись требует `workflow.manage`; без
- * права — только просмотр с пояснением (сервер — истина, I8).
+ * Раздел «Типы задач в папке» карточки типа папки (#857, единая модель §11; ревизия
+ * UI v3) — СПИСОК в грамматике журналов портала, без чекбоксов и островка
+ * массовых команд: типы задач, привязанные к этому типу папки
+ * (`creation.folderKindId`, #665 — вторая сторона «Где создаётся»). Строка:
+ * значок + название, описание, тумблер привязки в ячейке действий. Клик по
+ * строке открывает карточку типа задачи ПОВЕРХ с анимацией из строки (её
+ * редактор маршрута — единственный на экран, рама приостанавливается).
+ * Запись требует `workflow.manage`; без права — только просмотр с пояснением
+ * (сервер — истина, I8).
  */
 export function NodeKindWorksSection({
   kind,
   canManage,
-  onOpenType,
   renderProcessTypeCreate,
 }: {
   kind: NodeKind;
   canManage: boolean;
-  /** Клик по строке — настройка маршрута этого типа (та же рама справа). */
-  onOpenType: (id: string) => void;
   /** Окно создания типа задачи (слот фичи automation, I6): создан — сразу
    *  привязан к этой папке (`creation.folderKindId`). */
   renderProcessTypeCreate?: (slot: {
@@ -55,6 +55,8 @@ export function NodeKindWorksSection({
   const tasks = useLiveProcessTypes('task');
   const update = useUpdateTypeCreation();
   const toolbar = useListToolbar(VIEW_KEY);
+  const openCard = useOpenCard();
+  const openSettings = useTypeSettingsStore((s) => s.openSettings);
   const all = useMemo(() => tasks.data ?? [], [tasks.data]);
   const [createOpen, setCreateOpen] = useState(false);
   // Созданный тип дожидаемся в живых данных: привязка сохраняет и остальную
@@ -79,24 +81,6 @@ export function NodeKindWorksSection({
       ),
     [all, q],
   );
-
-  const rowKeys = useMemo(() => rows.map((type) => type.id), [rows]);
-  const selection = useRowSelection(rowKeys);
-  const selectedRows = useMemo(
-    () => rows.filter((type) => selection.selected.has(type.id)),
-    [rows, selection.selected],
-  );
-
-  /** Пакетная привязка/отвязка: `folderKindId` — одна папка на тип работы. */
-  function setBound(items: readonly ProcessType[], bound: boolean) {
-    for (const type of items) {
-      const scope = typeConfigOf(type).creation;
-      update.mutate({
-        typeId: type.id,
-        creation: { ...scope, folderKindId: bound ? kind.id : null },
-      });
-    }
-  }
 
   const defs = useMemo<DataTableField<ProcessType>[]>(
     () => [
@@ -183,12 +167,23 @@ export function NodeKindWorksSection({
           defs={defs}
           rows={rows}
           rowKey={(type) => type.id}
-          selection={selection}
+          selectable={false}
           label={ui.nodeKinds.screen.works}
           emptyTitle={q ? ui.automation.entry.searchEmpty : ui.nodeKinds.screen.worksEmpty}
-          onOpenRow={(type) => onOpenType(type.id)}
+          onOpenRow={(type, rowEl) =>
+            openCard({ kind: 'process-type', id: type.id }, rowEl.getBoundingClientRect())
+          }
           rowMenu={(type) => [
-            { id: 'open', label: ui.common.open, onSelect: () => onOpenType(type.id) },
+            {
+              id: 'open',
+              label: ui.common.open,
+              onSelect: () => openCard({ kind: 'process-type', id: type.id }),
+            },
+            {
+              id: 'settings',
+              label: ui.automation.menuSettingsType,
+              onSelect: () => openSettings({ kind: 'process-type', id: type.id }),
+            },
           ]}
           actions={(type) => {
             const scope = typeConfigOf(type).creation;
@@ -207,31 +202,6 @@ export function NodeKindWorksSection({
             );
           }}
         />
-        <BulkIsland
-          visible={canManage && selectedRows.length > 0}
-          count={selectedRows.length}
-          ariaLabel={ui.nodeKinds.screen.works}
-          onClear={selection.clear}
-        >
-          <button
-            type="button"
-            className={bulkActionClass}
-            tabIndex={canManage && selectedRows.length > 0 ? 0 : -1}
-            onClick={() => setBound(selectedRows, true)}
-          >
-            <Link2 className="size-4" strokeWidth={1.75} />
-            {ui.nodeKinds.screen.worksBind}
-          </button>
-          <button
-            type="button"
-            className={bulkActionClass}
-            tabIndex={canManage && selectedRows.length > 0 ? 0 : -1}
-            onClick={() => setBound(selectedRows, false)}
-          >
-            <Unlink className="size-4" strokeWidth={1.75} />
-            {ui.nodeKinds.screen.worksUnbind}
-          </button>
-        </BulkIsland>
       </div>
       {createOpen && renderProcessTypeCreate
         ? renderProcessTypeCreate({

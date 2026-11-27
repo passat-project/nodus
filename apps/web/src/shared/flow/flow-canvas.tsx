@@ -8,8 +8,6 @@ import {
   ConnectionMode,
   Controls,
   ReactFlow,
-  useNodesInitialized,
-  useReactFlow,
   useStore,
   type AriaLabelConfig,
   type Dimensions,
@@ -29,11 +27,13 @@ import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { AnyNode } from './any-node.js';
+import { FlowAutoFit } from './flow-autofit.js';
 import { FlowMarkers } from './flow-markers.js';
 import { snapToGuides, type SnapGuide } from './snap-guides.js';
 import { StartNode } from './start-node.js';
 import { StatusNode } from './status-node.js';
 import { TransitionEdge } from './transition-edge.js';
+import { CANVAS_MIN_ZOOM, FIT } from './working-viewport.js';
 
 /**
  * Единый движок холста схем (ADR-0022): обёртка React Flow с нашими
@@ -41,6 +41,7 @@ import { TransitionEdge } from './transition-edge.js';
  * схема проектов) кормят готовые nodes/edges и обрабатывают события.
  * Масштаб, «вписать» и доп. кнопки потребителя (отмена/повтор) — слева
  * внизу, атрибуция — справа внизу с отступом. Просмотр — всё статично.
+ * Вид при появлении графа ставит `FlowAutoFit` (рабочий масштаб).
  */
 const nodeTypes: NodeTypes = {
   status: StatusNode,
@@ -49,7 +50,6 @@ const nodeTypes: NodeTypes = {
 };
 const edgeTypes: EdgeTypes = { transition: TransitionEdge };
 
-const FIT = { padding: 0.2, maxZoom: 1 } as const;
 const DELETE_KEYS = ['Delete', 'Backspace'];
 
 /** Подписи доступности React Flow — по-русски (I15). */
@@ -82,8 +82,12 @@ export interface FlowCanvasProps {
   interactive: boolean;
   /** Доп. кнопки панели масштаба (отмена/повтор редактора). */
   controls?: React.ReactNode;
-  /** Ключ схемы: сменился — вписать заново (смена типа в редакторе). */
+  /** Ключ схемы: сменился — вписать заново (смена типа в редакторе). Меняется
+   *  В ОДНОМ рендере с узлами — из того же снапшота их источника: ключ
+   *  «впереди» узлов вписывал прежний граф под новый тип (#857, Д1). */
   fitKey?: string;
+  /** Длительность перехода вида при смене `fitKey`, мс; без неё — сразу. */
+  fitDuration?: number;
   className?: string;
   children?: React.ReactNode;
 }
@@ -97,8 +101,19 @@ export interface FlowCanvasProps {
  * «узлы измерены» не наступало (холст не вписывался). Объект узла
  * пересоздаётся, только если сменился сам узел или его размер.
  */
-function useMeasuredNodes(nodes: Node[]): { nodes: Node[]; onNodesChange: OnNodesChange } {
+function useMeasuredNodes(
+  nodes: Node[],
+  graphKey: string,
+): { nodes: Node[]; onNodesChange: OnNodesChange } {
   const [measured, setMeasured] = useState<ReadonlyMap<string, Dimensions>>(() => new Map());
+  // Размеры живут в пределах одного графа. При смене графа узлы новые, кроме
+  // стартового с тем же id: с его кэшем узел «Создание» на кадр вставал один
+  // на прежнем виде, прежде чем новый граф вписывался (#857, Д1).
+  const [owner, setOwner] = useState(graphKey);
+  if (owner !== graphKey) {
+    setOwner(graphKey);
+    setMeasured(new Map());
+  }
   const cache = useRef(new WeakMap<Node, { size: Dimensions; node: Node }>());
 
   const onNodesChange: OnNodesChange = useCallback((changes) => {
@@ -234,26 +249,6 @@ function useSnapDrag(
   return { guides, zoomRef, onNodeDrag: drag, onNodeDragStop: stop };
 }
 
-/**
- * Вписывание — ОДИН раз, когда узлы измерены, и заново только при смене
- * схемы (`fitKey`). Смена размера холста (выезд правой панели, окно) вид НЕ
- * трогает: граф стоит, край холста его просто обрезает (вердикт владельца
- * 20.10 — «чтобы не дёргалось ничего лишний раз»). Добавление статуса вид
- * тоже не дёргает.
- */
-function AutoFit({ fitKey }: { fitKey: string }) {
-  const initialized = useNodesInitialized();
-  const sized = useStore((s) => s.width > 0 && s.height > 0);
-  const { fitView } = useReactFlow();
-  const fitted = useRef<string | null>(null);
-  useEffect(() => {
-    if (!initialized || !sized || fitted.current === fitKey) return;
-    fitted.current = fitKey;
-    void fitView(FIT);
-  }, [initialized, sized, fitKey, fitView]);
-  return null;
-}
-
 export function FlowCanvas({
   nodes,
   edges,
@@ -269,11 +264,12 @@ export function FlowCanvas({
   interactive,
   controls,
   fitKey = '',
+  fitDuration = 0,
   className,
   children,
 }: FlowCanvasProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const measured = useMeasuredNodes(nodes);
+  const measured = useMeasuredNodes(nodes, fitKey);
   const snap = useSnapDrag(measured.nodes, onNodeDrag, onNodeDragStop);
   return (
     <div ref={wrapperRef} className={cn('relative h-full w-full', className)}>
@@ -311,7 +307,9 @@ export function FlowCanvas({
         edgesFocusable={interactive}
         connectionMode={ConnectionMode.Loose}
         connectionRadius={24}
-        minZoom={0.3}
+        // Нижняя граница — только для кнопки «Вписать»: длинный маршрут виден
+        // целиком; рабочие виды не опускаются ниже `WORK_ZOOM_FLOOR`.
+        minZoom={CANVAS_MIN_ZOOM}
         maxZoom={1.6}
         attributionPosition="bottom-right"
         ariaLabelConfig={ARIA}
@@ -330,7 +328,7 @@ export function FlowCanvas({
         >
           {controls}
         </Controls>
-        <AutoFit fitKey={fitKey} />
+        <FlowAutoFit fitKey={fitKey} graph={measured.nodes} duration={fitDuration} />
         <ZoomProbe zoomRef={snap.zoomRef} />
         <SnapGuideLines guides={snap.guides} />
         {children}

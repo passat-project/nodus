@@ -2,12 +2,15 @@ import { chromium } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 
 /**
- * Кадры UI-чекпоинта #556 (#857 — единый вход «Процессы»): канвас типа
- * проекта, меню строки, настройки типа, страница «Какие папки здесь
- * бывают», экран типа папки, «Атрибуты → Папки», «Свойства папки», окно
- * «Создать папку». Обе темы.
+ * Кадры UI-чекпоинта #556 (#857 — единый вход «Процессы», единая модель
+ * «Форма создания»): канвас типа проекта, меню строки, настройки типа,
+ * вкладка «Форма создания» (узел «Создание проекта» включает её), страница
+ * «Какие папки здесь бывают», экран типа папки с его вкладками, «Атрибуты →
+ * Папки», «Свойства папки», окно «Создать папку». Обе темы.
  *   NODUS_BASE_URL=http://localhost:5173 node node-kinds-shots.mjs [outDir]
  * Мок-мир (`VITE_API_MOCK=true`): посевной «Комплект» и папка «ОВ1.1».
+ * Вкладки рам — `role=tab`; правки формы на вкладке сохраняются сами —
+ * кадров правок здесь нет, чтобы посевные формы не менялись.
  */
 const base = (process.env.NODUS_BASE_URL ?? 'http://localhost:5173').replace(/\/$/, '');
 const out = process.argv[2] ?? 'shots-556';
@@ -53,7 +56,13 @@ for (const theme of ['light', 'dark']) {
   await page.goto(`${base}/automation?tab=processes&ptype=${DOGOVOR}`);
   await shot('01-canvas');
 
-  // 2. Меню строки типа — «Настройки типа».
+  // 1b. Узел «Создание проекта» включает вкладку «Форма создания» (единая
+  // модель, #857): редактор окна целиком во вкладке, с автосохранением.
+  await page.getByRole('button', { name: 'Создание проекта' }).click();
+  await page.getByRole('tab', { name: 'Форма создания' }).waitFor();
+  await shot('01b-project-form-tab');
+
+  // 2. Меню строки типа — «Настройки типа» (компактное окно).
   await page
     .getByRole('button', { name: /Договор/ })
     .first()
@@ -62,25 +71,29 @@ for (const theme of ['light', 'dark']) {
   await shot('02-type-menu', 400);
   await page.getByRole('menuitem', { name: 'Настройки типа' }).click();
   await shot('03-type-settings');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(400);
 
   // 3. Страница «Какие папки здесь бывают» — на всю правую область (#857).
-  await page.getByRole('button', { name: /Какие папки здесь бывают/ }).click();
+  await page.getByRole('tab', { name: /Какие папки здесь бывают/ }).click();
   await shot('04-type-kinds');
 
-  // 4. Экран типа папки — из строки «Комплект» (вся рабочая область).
+  // 4. Экран типа папки — из строки «Комплект» (вся рабочая область):
+  //    первая вкладка — «Форма создания».
   await page
     .getByRole('button', { name: /Комплект/ })
     .first()
     .click();
+  await page.getByRole('tab', { name: 'Форма создания' }).waitFor();
   await shot('05-kind-screen');
 
-  // 5. Разделы экрана типа папки: «Работы в папке» и «Где используется».
-  await page.getByRole('button', { name: 'Работы в папке' }).click();
+  // 5. Вкладки экрана типа папки: «Типы задач в папке» и «Где используется».
+  await page.getByRole('tab', { name: 'Типы задач в папке' }).click();
   await shot('06-kind-works');
-  await page.getByRole('button', { name: 'Где используется' }).click();
+  await page.getByRole('tab', { name: 'Где используется' }).click();
   await shot('07-kind-usage');
 
-  // 6. Возврат «‹» — в тип проекта (дорожка).
+  // 6. В тип проекта — строкой колонки (крошек «назад» у рамы нет).
   await page
     .getByRole('button', { name: /Договор/ })
     .first()

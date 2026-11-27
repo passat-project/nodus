@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NodeKind, ProcessType, ProjectType } from '@nodus/contracts';
 import { normalizeTypeConfig, ui } from '@nodus/contracts';
@@ -15,6 +15,11 @@ vi.stubGlobal(
 );
 
 const api = vi.hoisted(() => ({ mutate: vi.fn() }));
+const openCardSpy = vi.hoisted(() => vi.fn());
+// Стек карточек: строка списка кладёт карточку ПОВЕРХ, рама не переезжает.
+vi.mock('../../../../app/shell/use-card-stack.js', () => ({
+  useOpenCard: () => openCardSpy,
+}));
 vi.mock('../../../../shared/api/process-types-api.js', () => ({
   useUpdateTypeCreation: vi.fn(),
 }));
@@ -28,6 +33,8 @@ vi.mock('../../../../shared/api/projects-list.js', () => ({
 import { useNodeKinds } from '../../../../shared/api/node-kinds.js';
 import { useProjectTypes } from '../../../../shared/api/projects-list.js';
 import { useUpdateTypeCreation } from '../../../../shared/api/process-types-api.js';
+import { useTypeSettingsStore } from '../../../../shared/ui/type-settings-store.js';
+import { openRowMenu, rowOf, withRowRect } from '../../../../test/journal-row.js';
 import { ProcessTypeCreationTab } from './process-type-creation-tab.js';
 
 const P1 = '11111111-1111-4111-8111-111111111111';
@@ -81,6 +88,11 @@ const type = (excluded: string[] = [], patch: Partial<ProcessType> = {}) =>
     ...patch,
   }) as unknown as ProcessType;
 
+const menuLabels = (menu: HTMLElement) =>
+  within(menu)
+    .getAllByRole('menuitem')
+    .map((item) => item.textContent);
+
 function setup(
   props: {
     excluded?: string[];
@@ -113,6 +125,8 @@ function setup(
 
 beforeEach(() => {
   api.mutate.mockClear();
+  openCardSpy.mockClear();
+  useTypeSettingsStore.setState({ target: null });
   vi.mocked(useUpdateTypeCreation).mockReturnValue({
     mutate: api.mutate,
     isPending: false,
@@ -232,29 +246,45 @@ describe('вкладка «Где создаётся» типа процесса
     expect(api.mutate).not.toHaveBeenCalled();
   });
 
-  it('пакетная правка островком: выбранные строки разрешаются/запрещаются списком', () => {
-    setup();
-    const rowDogovor = screen.getByText('Договор').closest('[role="row"]')!;
-    const rowTema = screen.getByText('Тема').closest('[role="row"]')!;
-    fireEvent.click(rowDogovor.querySelector('button[role="checkbox"]')!);
-    fireEvent.click(rowTema.querySelector('button[role="checkbox"]')!);
-
-    fireEvent.click(screen.getByRole('button', { name: ui.automation.creationScope.bulkDeny }));
-    expect(api.mutate).toHaveBeenCalledWith({
-      typeId: 't1',
-      creation: expect.objectContaining({ excludedProjectTypeIds: [P1, P2] }),
-    });
+  it('список без чекбоксов: массовых команд над выбранными строками нет', () => {
+    setup({ excluded: [P1, P2] });
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+    // В тулбаре осталась одна команда «над всеми» — «Разрешить во всех типах
+    // проектов»; кнопок «над выбранными строками» и островка нет.
+    const commands = screen.getAllByRole('button', { name: /^Разрешить|^Запретить/ });
+    expect(commands.map((button) => button.textContent)).toEqual([
+      ui.automation.creationScope.allowAll,
+    ]);
+    // Сводка связки — тихим текстом перед командами.
+    expect(screen.getByText('1 из 2')).toBeTruthy();
   });
 
-  it('пакетное разрешение снимает исключения выбранных строк', () => {
-    setup({ excluded: [P1] });
-    const row = screen.getByText('Договор').closest('[role="row"]')!;
-    fireEvent.click(row.querySelector('button[role="checkbox"]')!);
-    fireEvent.click(screen.getByRole('button', { name: ui.automation.creationScope.bulkAllow }));
+  it('клик по строке (не по тумблеру) кладёт карточку типа проекта ПОВЕРХ с прямоугольником строки', () => {
+    setup();
+    const rect = withRowRect(rowOf('Договор'));
+    fireEvent.click(rowOf('Договор'));
+    expect(openCardSpy.mock.calls).toEqual([[{ kind: 'project-type', id: P1 }, rect]]);
+    // Тумблер — элемент строки: его клик правит связку и не открывает карточку.
+    fireEvent.click(screen.getByRole('switch', { name: /Договор/ }));
     expect(api.mutate).toHaveBeenCalledWith({
       typeId: 't1',
-      creation: expect.objectContaining({ excludedProjectTypeIds: [] }),
+      creation: expect.objectContaining({ excludedProjectTypeIds: [P1] }),
     });
+    expect(openCardSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('«⋯» строки: «Открыть» — карточка в стек, «Настройки типа…» — общий стор настроек', async () => {
+    setup();
+    const menu = await openRowMenu('Тема');
+    expect(menuLabels(menu)).toEqual([ui.common.open, ui.automation.menuSettingsType]);
+    fireEvent.click(within(menu).getByRole('menuitem', { name: ui.automation.menuSettingsType }));
+    expect(useTypeSettingsStore.getState().target).toEqual({ kind: 'project-type', id: P2 });
+    expect(openCardSpy).not.toHaveBeenCalled();
+
+    const second = await openRowMenu('Договор');
+    fireEvent.click(within(second).getByRole('menuitem', { name: ui.common.open }));
+    // «Открыть» из меню — без прямоугольника источника (раскрытие из центра).
+    expect(openCardSpy.mock.calls).toEqual([[{ kind: 'project-type', id: P1 }]]);
   });
 
   it('просмотр без права: кнопки создания нет, тумблеры недоступны', () => {

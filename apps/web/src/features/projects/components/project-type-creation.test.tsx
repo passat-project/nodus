@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ProcessType, ProjectType } from '@nodus/contracts';
 import { normalizeTypeConfig, ui } from '@nodus/contracts';
@@ -15,11 +15,19 @@ vi.stubGlobal(
   },
 );
 
+const openCardSpy = vi.hoisted(() => vi.fn());
+// Стек карточек: строка списка кладёт карточку ПОВЕРХ, рама не переезжает.
+vi.mock('../../../app/shell/use-card-stack.js', () => ({
+  useOpenCard: () => openCardSpy,
+}));
+
 import {
   useLiveProcessTypes,
   useUpdateTypeCreation,
 } from '../../../shared/api/process-types-api.js';
 import { useCanManageWorkflows } from '../../../shared/api/use-can-manage-workflows.js';
+import { useTypeSettingsStore } from '../../../shared/ui/type-settings-store.js';
+import { openRowMenu, rowOf, withRowRect } from '../../../test/journal-row.js';
 import { ProjectTypeCreationTab } from './project-type-creation.js';
 
 vi.mock('../../../shared/api/process-types-api.js', () => ({
@@ -107,7 +115,8 @@ function setup(
   createSlot: ReturnType<typeof makeCreateSlot> | undefined = undefined,
 ) {
   const mutate = vi.fn();
-  const onOpenType = vi.fn();
+  openCardSpy.mockClear();
+  useTypeSettingsStore.setState({ target: null });
   vi.mocked(useCanManageWorkflows).mockReturnValue(manage);
   vi.mocked(useLiveProcessTypes).mockImplementation(
     (category) =>
@@ -120,11 +129,10 @@ function setup(
     <ProjectTypeCreationTab
       type={projectType}
       canSetup={canSetup}
-      onOpenType={onOpenType}
       renderProcessTypeCreate={createSlot?.render}
     />,
   );
-  return { mutate, onOpenType, view };
+  return { mutate, view };
 }
 
 describe('вкладка «Что здесь можно создавать» — журнальный список (#665, #857)', () => {
@@ -191,10 +199,45 @@ describe('вкладка «Что здесь можно создавать» —
     );
   });
 
-  it('клик по строке (не по тумблеру) открывает настройку этого типа', () => {
-    const { onOpenType } = setup();
-    fireEvent.click(screen.getByText('Комплект'));
-    expect(onOpenType).toHaveBeenCalledWith(TASK.id);
+  it('список без чекбоксов: массовых команд над выбранными строками нет, сводка — тихим текстом', () => {
+    setup();
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: /выбранн/ })).toBeNull();
+    // «Разрешено: 1 из 2» — сводка связки перед шестерёнкой вида.
+    expect(screen.getByText(/1 из 2/)).toBeTruthy();
+  });
+
+  it('клик по строке (не по тумблеру) кладёт карточку типа задачи ПОВЕРХ с прямоугольником строки', () => {
+    const { mutate } = setup();
+    const row = rowOf('Комплект');
+    const rect = withRowRect(row);
+    fireEvent.click(row);
+    expect(openCardSpy).toHaveBeenCalledTimes(1);
+    expect(openCardSpy.mock.calls).toEqual([[{ kind: 'process-type', id: TASK.id }, rect]]);
+    // Клик по тумблеру — правка связки, карточку не открывает.
+    fireEvent.click(screen.getByRole('switch', { name: /Комплект/ }));
+    expect(mutate).toHaveBeenCalledTimes(1);
+    expect(openCardSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('«⋯» строки: «Открыть» — карточка в стек, «Настройки типа…» — общий стор настроек', async () => {
+    setup();
+    const menu = await openRowMenu('Входящее письмо');
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual([ui.common.open, ui.automation.menuSettingsType]);
+    fireEvent.click(within(menu).getByRole('menuitem', { name: ui.automation.menuSettingsType }));
+    expect(useTypeSettingsStore.getState().target).toEqual({
+      kind: 'process-type',
+      id: LETTER.id,
+    });
+    expect(openCardSpy).not.toHaveBeenCalled();
+    const second = await openRowMenu('Входящее письмо');
+    fireEvent.click(within(second).getByRole('menuitem', { name: ui.common.open }));
+    // «Открыть» из меню — без прямоугольника источника (раскрытие из центра).
+    expect(openCardSpy.mock.calls).toEqual([[{ kind: 'process-type', id: LETTER.id }]]);
   });
 
   it('создать-и-связать: созданный тип дождётся живых данных и разрешится', () => {
@@ -223,7 +266,6 @@ describe('вкладка «Что здесь можно создавать» —
         <ProjectTypeCreationTab
           type={projectType}
           canSetup
-          onOpenType={vi.fn()}
           renderProcessTypeCreate={slot.render}
         />,
       );

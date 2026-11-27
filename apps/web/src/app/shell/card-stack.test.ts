@@ -106,3 +106,31 @@ describe('card-stack: (де)сериализация стека карточек
     expect(sameCard(a, { kind: 'letter', id: TASK })).toBe(false);
   });
 });
+
+describe('card-stack: типы «Процессов» — виды карточек стека (#857, ревизия UI v3)', () => {
+  it('тип процесса и тип проекта сериализуются и восстанавливаются (id — UUID)', () => {
+    const stack = parseCardStack(`process-type:${TASK},project-type:${PROJECT}`);
+    expect(stack).toEqual([
+      { kind: 'process-type', id: TASK },
+      { kind: 'project-type', id: PROJECT },
+    ]);
+    expect(serializeCardStack(stack)).toBe(`process-type:${TASK},project-type:${PROJECT}`);
+  });
+
+  it('тип папки — не карточка: вид node-kind из адреса отбрасывается, как неизвестный', () => {
+    // Тип папки — незначимая сущность (вердикт владельца): открывается
+    // компактным окном настроек; прежняя ссылка с такой карточкой ничего не раскрывает.
+    expect(parseCardStack(`task:${TASK},node-kind:${LETTER}`)).toEqual([
+      { kind: 'task', id: TASK },
+    ]);
+    const stale = [{ kind: 'node-kind', id: LETTER }] as unknown as Parameters<
+      typeof serializeCardStack
+    >[0];
+    expect(serializeCardStack(stale)).toBeUndefined();
+  });
+
+  it('как у остальных видов: не-UUID id в адрес не проходит', () => {
+    expect(parseCardStack('process-type:task-1')).toEqual([]);
+    expect(cardRefFromString('process-type:../workflows/types')).toBeNull();
+  });
+});

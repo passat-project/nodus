@@ -1,46 +1,52 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, type ReactNode } from 'react';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { Permission, ui } from '@nodus/contracts';
 import { Empty, EmptyTitle } from '@nodus/ui/components/empty';
 
+import { useCardStack } from '../../../../app/shell/use-card-stack.js';
 import { useProcessTypes } from '../../api/automation-api.js';
+import { usePrefetchRoutes } from '../../api/routes-prefetch.js';
 import { useCanManageWorkflows } from '../../../../shared/api/use-can-manage-workflows.js';
 import { useNodeKinds } from '../../../../shared/api/node-kinds.js';
 import { useProjectTypes } from '../../../../shared/api/projects-list.js';
 import { useAuthStore } from '../../../../shared/auth-store.js';
-import { useCanManageFields } from '../../../../shared/custom-fields/use-can-manage-fields.js';
-import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
+import { replaceProcessesSurface } from '../../../../shared/workflow/processes-surface-search.js';
 import { useWorkflowDetail } from '../../../../shared/workflow/workflow-api.js';
-import { FieldDialog } from '../fields/field-dialog.js';
 import { useRouteDocStore } from '../../model/route-doc-store.js';
+import { CardTabStripAppearContext } from '../../../../shared/ui/entity-card/card-tab-strip.js';
+import { useTypeSettingsStore } from '../../../../shared/ui/type-settings-store.js';
 import { ProcessTypeCard } from './process-type-card.js';
 import { resolveProcessesSurface, type ProcessesSearch } from './resolve-surface.js';
 import { UnifiedTypeList } from './unified-type-list.js';
 import { WithoutProjectPage } from './without-project-page.js';
 
-/** Слот «Создать атрибут…» (прецедент #556): окно атрибута с областью
- *  «Папка» — код фичи automation, вызывающие — projects (I6). */
-export interface CreateFieldSlot {
-  onClose: () => void;
-  onCreated: (id: string) => void;
-}
-export type RenderCreateField = (slot: CreateFieldSlot) => ReactNode;
-
-/** Слот рабочей области типа проекта (features/projects, #857). */
+/** Слот рабочей области типа проекта и карточки типа папки (features/projects,
+ *  #857): их собирает уровень app общими хостами `automation-hosts` — окна
+ *  создания и окно атрибута открываются и из карточек стека (I6). */
 export interface ProjectWorkspaceSlot {
   typeId: string;
-  /** Счётчик команд «⋯ → Настройки типа» строки проекта (открыть панель). */
-  settingsRequest: number;
-  onOpenType: (id: string) => void;
-  onOpenKind: (id: string) => void;
-  renderCreateField?: RenderCreateField;
-  /** Окна создания из списочных вкладок: тип задачи / тип проекта (I6). */
-  renderProcessTypeCreate?: RenderCreateDialog;
-  renderProjectTypeCreate?: RenderCreateDialog;
 }
-export type RenderProjectWorkspace = (slot: ProjectWorkspaceSlot) => ReactNode;
+export interface FolderCardSlot {
+  kindId: string;
+}
 
-/** Слот окна создания (тип проекта / тип папки — features/projects). */
+/** Рабочая область занята, но пуста: загружается то, что в ней появится. */
+const blankMain = <main className="flex min-w-0 flex-1 flex-col" aria-busy="true" />;
+
+/** Заглушка рабочей области — строка по центру. */
+function MainNotice({ children }: { children: ReactNode }) {
+  return (
+    <main className="flex min-w-0 flex-1 flex-col">
+      <div className="flex flex-1 items-center justify-center">
+        <Empty>
+          <EmptyTitle>{children}</EmptyTitle>
+        </Empty>
+      </div>
+    </main>
+  );
+}
+
+/** Слот окна создания типа (тип проекта / тип папки — features/projects). */
 export interface CreateDialogSlot {
   onClose: () => void;
   onCreated: (id: string) => void;
@@ -48,25 +54,9 @@ export interface CreateDialogSlot {
 }
 export type RenderCreateDialog = (slot: CreateDialogSlot) => ReactNode;
 
-/** Слот карточки типа папки (features/projects, I6): та же рама, что у типа
- *  проекта, — колонка слева остаётся, меняется только содержимое справа. */
-export interface FolderCardSlot {
-  kindId: string;
-  /** Имя типа проекта, из которого открыт тип папки (крошка «‹ Договор»). */
-  backLabel?: string;
-  /** Счётчик команд «⋯ → Настройки типа…» строки папки: открыть окно. */
-  settingsRequest?: number;
-  onBack: () => void;
-  onOpenProjectType: (id: string) => void;
-  /** Окна создания из списочных вкладок: тип задачи / тип проекта (I6). */
-  renderProcessTypeCreate?: RenderCreateDialog;
-  renderProjectTypeCreate?: RenderCreateDialog;
-}
-export type RenderFolderCard = (slot: FolderCardSlot) => ReactNode;
-
 export interface ProcessesScreenSlots {
-  renderProjectWorkspace?: RenderProjectWorkspace;
-  renderFolderCard?: RenderFolderCard;
+  renderProjectWorkspace?: (slot: ProjectWorkspaceSlot) => ReactNode;
+  renderFolderCard?: (slot: FolderCardSlot) => ReactNode;
   renderProjectTypeCreate?: RenderCreateDialog;
   renderProcessTypeCreate?: RenderCreateDialog;
   renderKindCreate?: RenderCreateDialog;
@@ -78,11 +68,17 @@ export interface ProcessesScreenSlots {
 /**
  * Вкладка «Процессы» — единый вход настройки процессов (#857, единая
  * модель §5): слева колонка из четырёх групп (Проекты с «Без проекта»,
- * Задачи, Письма, Папки), справа — по выбору: редактор маршрута (возможно,
- * с дорожкой из типа проекта), рабочая область типа проекта (слот фичи
- * projects), страница «Без проекта». `?ftype=` открывает экран типа папки
- * на всю область — его перехватывает `AutomationRoute` до этого экрана.
- * URL-модель и приоритеты — `resolve-surface.ts`.
+ * Задачи, Письма, Папки), справа — по выбору: редактор маршрута, рабочая
+ * область типа проекта (слот фичи projects), страница «Без проекта».
+ * Связанные сущности (тип задачи из типа проекта, тип папки из типа
+ * проекта) больше не переводят раму «внутрь» — строка списка открывает
+ * карточку в общем стеке, поэтому крошек «‹ назад» у рамы нет.
+ *
+ * Правило ОДНОГО редактора маршрута: стор `useRouteDocStore` глобальный,
+ * второй смонтированный редактор затирал бы первый. Когда в стеке лежит
+ * карточка типа процесса, её редактор — единственный: редактор рамы
+ * приостанавливается (`suspended`), черновик рамы читается из localStorage
+ * при возврате. URL-модель и приоритеты — `resolve-surface.ts`.
  */
 export function ProcessesScreen(slots: ProcessesScreenSlots) {
   const navigate = useNavigate();
@@ -103,63 +99,58 @@ export function ProcessesScreen(slots: ProcessesScreenSlots) {
     canSetup,
   });
 
-  // Настройки типа открываются ДЛЯ КОНКРЕТНОЙ строки (#409): boolean терял
-  // id, и панель всегда показывала selected. Выделение редактора не меняется.
-  const [processSettingsRequest, setProcessSettingsRequest] = useState(0);
-  const [projectSettingsRequest, setProjectSettingsRequest] = useState(0);
-  const [kindSettingsRequest, setKindSettingsRequest] = useState(0);
-
   const alive = useMemo(() => (types ?? []).filter((t) => !t.archivedAt), [types]);
+  usePrefetchRoutes(alive);
   const selected =
     surface.surface === 'type' ? (alive.find((t) => t.id === surface.typeId) ?? null) : null;
-  const workflowQuery = useWorkflowDetail(selected?.workflowId ?? null);
+  const workflowQuery = useWorkflowDetail(selected?.workflowId ?? null, { keepPrevious: true });
   const workflow = workflowQuery.data;
+  // Маршрут нового типа ещё грузится — на руках прежний: рама до готовности
+  // следующей держит СОГЛАСОВАННУЮ пару «тип + маршрут» прежнего выбора. Ни
+  // пустоты с «Создайте первый процесс» (мерцало при каждом выборе — вердикт
+  // владельца), ни чужого графа под новым типом: тип в раме — тот, чей маршрут
+  // на руках. Первое открытие типа (прежнего нет) — рабочая область ждёт
+  // маршрут (`renderMain`): рама появляется сразу с графом.
+  const shown =
+    workflow && workflow.id !== selected?.workflowId
+      ? (alive.find((t) => t.workflowId === workflow.id) ?? null)
+      : selected;
 
+  // Списки колонки ещё грузятся — адрес не разрешить (умолчание пустых списков
+  // «Создайте первый процесс»): рабочая область пуста, пока не пришли все три.
+  // Иначе перед рамой на пару кадров вспыхивала заглушка, а карточка папки
+  // приходила после рамы проекта (список папок грузится дольше).
+  const listsLoading = isLoading || projectTypesQuery.isLoading || kindsQuery.isLoading;
+
+  // Метка черновика — у строки ТОГО типа, чей маршрут сейчас в сторе редактора
+  // (по `workflowId`), независимо от того, какой тип выбран в раме: с черновиком
+  // в карточке стека рама может показывать другой тип.
   const editorDirty = useRouteDocStore((s) => s.dirty);
   const editorWorkflowId = useRouteDocStore((s) => s.workflowId);
   const dirtyTypeIds = useMemo(() => {
-    // Черновик редактора относится к одному маршруту — помечаем его строку.
-    if (!editorDirty || !workflow || editorWorkflowId !== workflow.id) return new Set<string>();
-    return new Set([selected?.id ?? '']);
-  }, [editorDirty, editorWorkflowId, workflow, selected?.id]);
+    if (!editorDirty) return new Set<string>();
+    const drafted = alive.find((t) => t.workflowId === editorWorkflowId);
+    return new Set(drafted ? [drafted.id] : []);
+  }, [editorDirty, editorWorkflowId, alive]);
 
+  // В стеке есть карточка типа процесса — её редактор единственный.
+  const stack = useCardStack();
+  const suspended = stack.some((card) => card.kind === 'process-type');
+
+  // Выбор в колонке заменяет поверхность ЦЕЛИКОМ (все четыре ключа), иначе
+  // тип папки — он в адресе главнее остальных — «заклинивал» колонку.
   const go = useCallback(
     (patch: Record<string, string | undefined>) =>
       void navigate({
         to: '/automation',
-        search: (prev) => ({ ...prev, ...patch }),
+        search: (prev) => replaceProcessesSurface(prev, patch),
       }),
     [navigate],
   );
 
-  // Слот «Создать атрибут…» для рабочей области типа проекта: окно
-  // атрибута — код этой фичи (прецедент renderCreateField, I6).
-  const definitions = useCustomFieldDefinitions();
-  const canCreateField = useCanManageFields();
-  const renderCreateField = useCallback(
-    (slot: CreateFieldSlot) => (
-      <FieldDialog
-        mode={{ kind: 'create' }}
-        definitions={definitions.data ?? []}
-        canManage={canCreateField}
-        onClose={slot.onClose}
-        onSaved={slot.onCreated}
-        onOpenDefinition={slot.onCreated}
-      />
-    ),
-    [definitions.data, canCreateField],
-  );
-
-  const trailType =
-    surface.surface === 'type' && surface.trailTypeId
-      ? (projectTypes.find((p) => p.id === surface.trailTypeId) ?? null)
-      : null;
-  // Крошка карточки типа папки: имя типа проекта, из которого он открыт
-  // (`?ftype=&ptype=`); без родителя крошки нет — «назад» не рисуется.
-  const folderTrail =
-    surface.surface === 'folder' && search.ptype
-      ? (projectTypes.find((p) => p.id === search.ptype && p.archivedAt === null) ?? null)
-      : null;
+  // «⋯ → Настройки типа…» строки колонки открывает окно настроек хоста:
+  // выбор рамы не меняется, рама никуда не переезжает.
+  const openSettings = useTypeSettingsStore((s) => s.openSettings);
 
   return (
     <div className="flex h-full min-h-0">
@@ -176,54 +167,43 @@ export function ProcessesScreen(slots: ProcessesScreenSlots) {
         selectedKindId={surface.surface === 'folder' ? surface.kindId : undefined}
         noProjectSelected={surface.surface === 'no-project'}
         onSelectProcessType={(id) => {
-          go({ type: id, ptype: undefined, noproject: undefined });
+          go({ type: id });
         }}
         onOpenProcessTypeSettings={(id) => {
           useRouteDocStore.getState().select(null);
-          go({ type: id, ptype: undefined, noproject: undefined });
-          setProcessSettingsRequest((count) => count + 1);
+          openSettings({ kind: 'process-type', id });
         }}
         onSelectProjectType={(id) => {
-          go({ ptype: id, type: undefined, noproject: undefined });
+          go({ ptype: id });
         }}
-        onOpenProjectSettings={(id) => {
-          go({ ptype: id, type: undefined, noproject: undefined });
-          setProjectSettingsRequest((count) => count + 1);
-        }}
+        onOpenProjectSettings={(id) => openSettings({ kind: 'project-type', id })}
         onSelectNoProject={() => {
-          go({ noproject: '1', ptype: undefined, type: undefined });
+          go({ noproject: '1' });
         }}
         onSelectKind={(id) => {
-          go({ ftype: id, ptype: undefined });
-        }}
-        onOpenKindSettings={(id) => {
           go({ ftype: id });
-          setKindSettingsRequest((count) => count + 1);
         }}
+        onOpenKindSettings={(id) => openSettings({ kind: 'node-kind', id })}
         onArchiveProject={slots.onArchiveProject}
         onArchiveNodeKind={slots.onArchiveNodeKind}
         renderProjectTypeCreate={slots.renderProjectTypeCreate}
         renderKindCreate={slots.renderKindCreate}
       />
 
-      {renderMain()}
+      {/* Рабочая область перемонтируется на каждом выборе колонки; анимация
+          появления полосы вкладок читалась здесь как мерцание — она остаётся
+          только у карточек стека (раскрытие). */}
+      <CardTabStripAppearContext value={false}>{renderMain()}</CardTabStripAppearContext>
     </div>
   );
 
   function renderMain(): ReactNode {
+    if (listsLoading) return blankMain;
     if (surface.surface === 'folder') {
       if (!slots.renderFolderCard) return null;
       return (
         <main className="flex min-w-0 flex-1 flex-col">
-          {slots.renderFolderCard({
-            kindId: surface.kindId,
-            backLabel: folderTrail?.name,
-            settingsRequest: kindSettingsRequest,
-            onBack: () => go({ ftype: undefined }),
-            onOpenProjectType: (id) => go({ ptype: id, ftype: undefined }),
-            renderProcessTypeCreate: slots.renderProcessTypeCreate,
-            renderProjectTypeCreate: slots.renderProjectTypeCreate,
-          })}
+          {slots.renderFolderCard({ kindId: surface.kindId })}
         </main>
       );
     }
@@ -234,47 +214,40 @@ export function ProcessesScreen(slots: ProcessesScreenSlots) {
         </main>
       );
     }
-    if (surface.surface === 'project' && slots.renderProjectWorkspace) {
+    if (surface.surface === 'project') {
+      if (!slots.renderProjectWorkspace) {
+        return <MainNotice>{ui.automation.workflowUnavailable}</MainNotice>;
+      }
       return (
         <main className="flex min-w-0 flex-1 flex-col">
-          {slots.renderProjectWorkspace({
-            typeId: surface.typeId,
-            settingsRequest: projectSettingsRequest,
-            onOpenType: (id) => go({ type: id, ptype: surface.typeId, noproject: undefined }),
-            onOpenKind: (id) => go({ ftype: id, ptype: surface.typeId }),
-            renderCreateField,
-            renderProcessTypeCreate: slots.renderProcessTypeCreate,
-            renderProjectTypeCreate: slots.renderProjectTypeCreate,
-          })}
+          {slots.renderProjectWorkspace({ typeId: surface.typeId })}
         </main>
       );
     }
-    if (surface.surface === 'type' && selected && workflow) {
+    if (surface.surface === 'type' && selected) {
+      // Маршрут ещё грузится, а на руках прежнего нет (первое открытие после
+      // перезагрузки, новый тип): рама ждёт маршрут и появляется сразу с
+      // графом — не пустым «Маршрутом», на котором потом вспыхивают граф и
+      // кнопки бара. Отказ сервера — честное «недоступно», не пустота. Под
+      // карточкой стека рама приостановлена — маршрут ей не нужен.
+      if (!shown || (!workflow && !suspended)) {
+        return workflowQuery.isError ? (
+          <MainNotice>{ui.automation.workflowUnavailable}</MainNotice>
+        ) : (
+          blankMain
+        );
+      }
       return (
         <main className="flex min-w-0 flex-1 flex-col">
           <ProcessTypeCard
-            type={selected}
-            workflow={workflow}
-            settingsRequest={processSettingsRequest}
-            backLabel={trailType?.name}
-            onBack={() => go({ type: undefined })}
+            type={shown ?? selected}
+            workflow={shown ? workflow : undefined}
+            suspended={suspended}
             renderProjectTypeCreate={slots.renderProjectTypeCreate}
           />
         </main>
       );
     }
-    return (
-      <main className="flex min-w-0 flex-1 flex-col">
-        <div className="flex flex-1 items-center justify-center">
-          <Empty>
-            <EmptyTitle>
-              {surface.surface === 'type' || surface.surface === 'empty'
-                ? ui.automation.createFirstType
-                : ui.automation.workflowUnavailable}
-            </EmptyTitle>
-          </Empty>
-        </div>
-      </main>
-    );
+    return <MainNotice>{ui.automation.createFirstType}</MainNotice>;
   }
 }

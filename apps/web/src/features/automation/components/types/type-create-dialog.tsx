@@ -19,6 +19,7 @@ import { useCreateProcessType, useProcessTypes } from '../../api/automation-api.
 import { useCanManageWorkflows } from '../../lib/use-can-manage-workflows.js';
 import { stageColorOrder, stageTone } from '../../../../shared/ui/board/stage-tone.js';
 import { ProcessTypeGlyph } from '../../../../shared/workflow/process-type-icon.js';
+import { replaceProcessesSurface } from '../../../../shared/workflow/processes-surface-search.js';
 
 const ICONS = processTypeIconSchema.options;
 
@@ -73,7 +74,8 @@ export function ProcessTypeCreateDialog({
           else {
             void navigate({
               to: '/automation',
-              search: (prev) => ({ ...prev, tab: 'processes', type: type.id }),
+              search: (prev) =>
+                replaceProcessesSurface({ ...prev, tab: 'processes' }, { type: type.id }),
             });
           }
           onClose();

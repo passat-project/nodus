@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProjectType } from '@nodus/contracts';
 import { processTypeIconSchema, ui } from '@nodus/contracts';
@@ -28,25 +28,21 @@ const PT = (patch: Partial<ProjectType> = {}) =>
     ...patch,
   }) as unknown as ProjectType;
 
-function setup(
-  props: {
-    patch?: Partial<ProjectType>;
-    canSetup?: boolean;
-    onEditWindow?: () => void;
-  } = {},
-) {
+function setup(props: { patch?: Partial<ProjectType>; canSetup?: boolean } = {}) {
   const onClose = vi.fn();
-  const onEditWindow = props.onEditWindow ?? vi.fn();
+  const onArchived = vi.fn();
   render(
     <ProjectTypeSettingsDialog
       type={PT(props.patch)}
       canSetup={props.canSetup ?? true}
-      onEditWindow={onEditWindow}
       onClose={onClose}
+      onArchived={onArchived}
     />,
   );
-  return { onClose, onEditWindow };
+  return { onClose, onArchived };
 }
+
+const colorGroup = () => screen.getByRole('radiogroup', { name: ui.nodeKinds.panel.color });
 
 beforeEach(() => {
   vi.mocked(useUpdateProjectType).mockReturnValue({ mutate: api.update } as never);
@@ -58,68 +54,81 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('окно настроек типа проекта (#857, вердикт 26.11.2026)', () => {
-  it('имя, значок и цвет-идентичность сохраняются сразу', () => {
+describe('окно настроек типа проекта — компактное (#857, ревизия UI v3)', () => {
+  it('одна колонка «Основное»: название, значок, цвет; навигации по разделам и «Окна создания» нет', () => {
     setup();
-    expect(screen.getByText(ui.projects.schemasTabSettings)).toBeTruthy();
+    expect(screen.getByRole('dialog').textContent).toContain(
+      `${ui.common.typeSettings.title.project} · Договор`,
+    );
+    expect(screen.queryByRole('tablist', { name: ui.common.sections })).toBeNull();
+    expect(screen.queryByText(/Окно создания/)).toBeNull();
+    expect(screen.getByLabelText(ui.projects.fieldName)).toBeTruthy();
+    expect(colorGroup()).toBeTruthy();
+  });
 
-    const name = screen.getByDisplayValue('Договор');
+  it('имя, значок и цвет-идентичность сохраняются сразу', async () => {
+    setup();
+    const name = screen.getByLabelText(ui.projects.fieldName);
     fireEvent.change(name, { target: { value: 'Рамочный договор' } });
     fireEvent.blur(name);
     expect(api.update).toHaveBeenCalledWith({ id: 'p1', name: 'Рамочный договор' });
 
-    fireEvent.click(screen.getByRole('button', { name: ui.structure.colorNames.green }));
+    // Цвет — ряд образцов под подписью «Цвет».
+    fireEvent.click(
+      within(colorGroup()).getByRole('radio', { name: ui.structure.colorNames.green }),
+    );
     expect(api.update).toHaveBeenCalledWith({ id: 'p1', color: 'green' });
 
-    // Набор значков — общий реестр типов; берём первый не текущий.
+    // Значок — сетка общего реестра типов в поповере; берём первый не текущий.
     const otherIcon = processTypeIconSchema.options.find((key) => key !== 'file-text')!;
-    fireEvent.click(screen.getByRole('button', { name: otherIcon }));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `${ui.nodeKinds.panel.icon}: ${ui.automation.entry.iconNames['file-text']}`,
+      }),
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: ui.automation.entry.iconNames[otherIcon] }),
+    );
     expect(api.update).toHaveBeenCalledWith({ id: 'p1', icon: otherIcon });
   });
 
-  it('строка «Окно создания проекта» зовёт редактор окна и показывает сводку полей', () => {
-    const { onEditWindow } = setup();
-    fireEvent.click(screen.getByText(ui.projects.schemasWindowPanel));
-    expect(onEditWindow).toHaveBeenCalledTimes(1);
-    // Сводка «Редактировать окно · N полей» — N из формы с системными полями.
-    expect(screen.getByText(/^Редактировать окно · \d+ пол/)).toBeTruthy();
-  });
-
-  it('архивация типа закрывает окно через onSuccess (выбор сбрасывает резолвер)', () => {
-    const { onClose } = setup();
-    fireEvent.click(screen.getByRole('button', { name: ui.projects.typesArchive }));
-    expect(api.archive).toHaveBeenCalledWith(
-      { id: 'p1', archived: true },
-      expect.objectContaining({ onSuccess: onClose }),
-    );
-
-    const [, options] = api.archive.mock.calls[0] as [
+  it('архивация закрывает окно через onSuccess и просит хост снять карточку типа', () => {
+    const { onClose, onArchived } = setup();
+    fireEvent.click(screen.getByRole('button', { name: ui.common.typeSettings.archive }));
+    expect(api.archive).toHaveBeenCalledTimes(1);
+    const [vars, options] = api.archive.mock.calls[0] as [
       { id: string; archived: boolean },
       { onSuccess: () => void },
     ];
-    options.onSuccess();
+    expect(vars).toEqual({ id: 'p1', archived: true });
+    act(() => options.onSuccess());
     expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onArchived).toHaveBeenCalledTimes(1);
   });
 
   it('архивный тип: кнопка «Вернуть тип» без закрытия окна', () => {
-    const { onClose } = setup({ patch: { archivedAt: '2026-11-01T00:00:00.000Z' } });
-    fireEvent.click(screen.getByRole('button', { name: ui.projects.typesRestore }));
+    const { onClose, onArchived } = setup({ patch: { archivedAt: '2026-11-01T00:00:00.000Z' } });
+    fireEvent.click(screen.getByRole('button', { name: ui.common.typeSettings.restore }));
     expect(api.archive).toHaveBeenCalledWith({ id: 'p1', archived: false });
     expect(onClose).not.toHaveBeenCalled();
+    expect(onArchived).not.toHaveBeenCalled();
   });
 
-  it('без права настройки — просмотр: поля недоступны, архива нет, сводка без «Редактировать»', () => {
-    const { onEditWindow } = setup({ canSetup: false });
-    expect(screen.getByDisplayValue('Договор').hasAttribute('disabled')).toBe(true);
+  it('без права настройки — просмотр: поля недоступны, архива нет', () => {
+    setup({ canSetup: false });
+    expect(screen.getByLabelText(ui.projects.fieldName).hasAttribute('disabled')).toBe(true);
     expect(
-      screen.getByRole('button', { name: ui.structure.colorNames.green }).hasAttribute('disabled'),
+      within(colorGroup())
+        .getAllByRole('radio')
+        .every((radio) => radio.hasAttribute('disabled')),
     ).toBe(true);
-    expect(screen.queryByRole('button', { name: ui.projects.typesArchive })).toBeNull();
-    expect(screen.queryByRole('button', { name: ui.projects.typesRestore })).toBeNull();
-    expect(screen.getByText(/^\d+ пол/)).toBeTruthy();
-    // Окно создания открывается и на просмотр — редактор сам решит режим.
-    fireEvent.click(screen.getByText(ui.projects.schemasWindowPanel));
-    expect(onEditWindow).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole('img', {
+        name: `${ui.nodeKinds.panel.icon}: ${ui.automation.entry.iconNames['file-text']}`,
+      }),
+    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: ui.common.typeSettings.archive })).toBeNull();
+    expect(screen.queryByRole('button', { name: ui.common.typeSettings.restore })).toBeNull();
   });
 
   it('«Закрыть» внизу окна вызывает onClose', () => {

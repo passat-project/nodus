@@ -23,7 +23,6 @@ export const automationStrings = {
   badgeSystem: 'Системный',
   badgeHidden: 'Скрыт',
   archiveGroup: 'Архив',
-  restoreFromArchive: 'Вернуть из архива',
   statStages: ['статус', 'статуса', 'статусов'],
   statButtons: ['кнопка', 'кнопки', 'кнопок'],
   /** Единый вход «Процессы» (#857): четыре группы колонки, страница
@@ -48,7 +47,6 @@ export const automationStrings = {
   chipDraft: 'Есть неопубликованные изменения',
   creatableToggle: 'Доступен при создании',
   menuCopyType: 'Копировать тип',
-  menuArchive: 'В архив',
   menuSettingsType: 'Настройки типа…',
   archiveSystemLocked: 'Системный тип нельзя убрать в архив',
   /** Настройки типа (#432, В6): «Основное», «Доступ», «Карточка», «Пульс». */
@@ -99,9 +97,7 @@ export const automationStrings = {
   moveUp: 'Выше',
   moveDown: 'Ниже',
   publish: 'Опубликовать',
-  discard: 'Отменить изменения',
-  /** Строка инструментов: сброс черновика к опубликованной версии. */
-  discardShort: 'Сбросить',
+  discard: 'Уйти',
   /** Строка инструментов: «Добавить переход» (поповер «Откуда / Куда»). */
   addTransitionLabel: 'Добавить переход',
   problemsChip: 'Проблемы',
@@ -282,9 +278,9 @@ export const automationStrings = {
     routeIfHint: 'Кнопка сразу перейдёт в выбранный статус, когда условие выполнено',
     routeIfCondition: 'Условие пропуска',
     routeIfConditionCreator: 'Постановщик сам исполнитель',
-    routeIfConditionApprover: 'Утверждающий сам сдал работу',
+    routeIfConditionApprover: 'Утверждающий сам сдал задачу',
     routeIfConditionHints: {
-      approver_is_actor: 'Работу сдал тот, кто должен утверждать, — шаг утверждения пропускается',
+      approver_is_actor: 'Задачу сдал тот, кто должен утверждать, — шаг утверждения пропускается',
       creator_is_assignee: 'Постановщик и исполнитель — один сотрудник',
     },
     routeIfTarget: 'Сразу перейти в',
