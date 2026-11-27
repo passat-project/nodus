@@ -30,6 +30,7 @@ export const desktopStrings = {
   urgentLabel: 'Важное',
   hideAll: 'Скрыть все',
   downloadTitle: 'Файл скачан',
+  downloadInProgress: 'Скачивается',
   downloadErrorTitle: 'Не удалось скачать файл',
   downloadShowInFolder: 'Показать в папке',
   attachmentImage: 'Фотография',

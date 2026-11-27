@@ -27,8 +27,26 @@ pub(crate) fn notify_finished(app: &AppHandle, url: &Url, path: Option<PathBuf>,
         .or_else(|| url_file_name(url))
         .unwrap_or_else(|| "Файл".into());
     let path_str = path.as_ref().map(|p| p.to_string_lossy().into_owned());
-    download_slot::on_finished(app, &file_name, path_str.clone(), success);
+    download_slot::on_finished(app, url.as_str(), &file_name, path_str.clone(), success);
     download_registry::record_finished(app, &file_name, path_str, success);
+}
+
+/// Началась загрузка (#1069): пометить in-flight СИНХРОННО (обработчик wry
+/// `Requested` синхронный — окно слота там создавать нельзя) и показать
+/// карточку «Скачивается» из async-контекста. Имя — из выбранного пути
+/// (Content-Disposition/дефолт «Загрузок»), запасной — из URL.
+pub(crate) fn notify_started(app: &AppHandle, url: &Url, path: &Path) {
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .filter(|n| !n.is_empty())
+        .or_else(|| url_file_name(url))
+        .unwrap_or_else(|| "Файл".into());
+    download_slot::mark_started(url.as_str(), &file_name);
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        download_slot::show_started(&app);
+    });
 }
 
 /// Имя файла из URL — запасной вариант, если WebView2 не отдал путь

@@ -57,6 +57,9 @@ export function PopupView() {
   /** Окно Nodus активно (#1038): слот скачивания ставит автоскрытие на паузу,
    *  пока Rust держит карточку скрытой («ждёт возврата фокуса»). */
   const [awake, setAwake] = useState(false);
+  /** Живой прогресс идущего скачивания (#1069): Rust шлёт __popupProgress по
+   *  факту байтов; payload несёт стартовое значение на случай позднего кадра. */
+  const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -85,6 +88,7 @@ export function PopupView() {
         if (payload?.theme === 'dark') document.documentElement.dataset.theme = 'dark';
         else delete document.documentElement.dataset.theme;
         setData(payload);
+        setDownloadProgress(payload?.download?.progress ?? null);
         setReplying(false);
         setText('');
       });
@@ -104,6 +108,18 @@ export function PopupView() {
     host.__popupAwake = (value: boolean) => setAwake(value);
     return () => {
       delete host.__popupAwake;
+    };
+  }, []);
+
+  // Живой прогресс скачивания (#1069): Rust дёргает при каждом изменении
+  // процента; payload уже несёт стартовое значение — первый кадр не мигает.
+  useEffect(() => {
+    const host = window as { __popupProgress?: (value: number) => void };
+    host.__popupProgress = (value: number) => {
+      if (typeof value === 'number' && Number.isFinite(value)) setDownloadProgress(value);
+    };
+    return () => {
+      delete host.__popupProgress;
     };
   }, []);
 
@@ -279,6 +295,7 @@ export function PopupView() {
             paused={hovered || !awake}
             autoHideMs={autoHideMs}
             onClose={close}
+            progress={downloadProgress}
           />
         ) : (
           /* Клик по карточке — открыть источник (как клик по уведомлению в Telegram):

@@ -3,6 +3,7 @@ mod anchor;
 mod badge;
 mod bridge;
 mod deep_link;
+mod download_progress;
 mod download_registry;
 mod download_slot;
 mod downloads;
@@ -125,6 +126,9 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
             create_main_window(&handle)?;
+            // Прогресс скачиваний (#1069): проценты из WebView2 для карточки
+            // «Скачивается» — wry отдаёт только старт/финиш.
+            download_progress::install(&handle);
             // Реестр загрузок (#1038, раздел 5): помнит последние 100 между
             // запусками; битый файл = пустой реестр (лог, не паника).
             download_registry::load_registry(&handle);
@@ -267,15 +271,22 @@ fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
                 NewWindowResponse::Deny
             })
             // Скачивания (#647): wry по умолчанию молча кладёт файл в
-            // «Загрузки» (download_completed_handler = None) — на завершении
-            // показываем попап оболочки. Обработчик синхронный (event loop),
-            // поэтому окно попапа создаём ТОЛЬКО из async-контекста (gotcha).
+            // «Загрузки» (download_completed_handler = None) — на старте
+            // показываем «Скачивается» с полоской (#1069), на завершении —
+            // карточку оболочки. Обработчик синхронный (event loop), поэтому
+            // окно попапа создаётся ТОЛЬКО из async-контекста (gotcha).
             .on_download(move |_webview, event| {
-                if let tauri::webview::DownloadEvent::Finished { url, path, success } = event {
-                    let app = download_app.clone();
-                    tauri::async_runtime::spawn(async move {
-                        downloads::notify_finished(&app, &url, path, success);
-                    });
+                match event {
+                    tauri::webview::DownloadEvent::Requested { url, destination } => {
+                        downloads::notify_started(&download_app, &url, destination);
+                    }
+                    tauri::webview::DownloadEvent::Finished { url, path, success } => {
+                        let app = download_app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            downloads::notify_finished(&app, &url, path, success);
+                        });
+                    }
+                    _ => {}
                 }
                 true
             })

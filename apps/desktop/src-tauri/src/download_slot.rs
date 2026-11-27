@@ -1,9 +1,13 @@
-//! Верхний слот системных карточек — «Файл скачан» / «Не удалось скачать»
-//! (эпик #1038, раздел 4): ОДИН слот над панелью главного окна, не часть
-//! личного стека попапов. Серия схлопывается в счётчик: 5 файлов подряд —
-//! одна карточка «Скачано: 5» с именем и путём ПОСЛЕДНЕГО файла; таймер
-//! автоскрытия (8 с) перезапускается на каждом новом файле серии; неуспех
-//! показывает короткую ошибку и начинает новую серию.
+//! Верхний слот системных карточек — «Файл скачан» / «Не удалось скачать» /
+//! «Скачивается» (эпик #1038, раздел 4; прогресс — #1069): ОДИН слот над
+//! панелью главного окна, не часть личного стека попапов. Серия схлопывается
+//! в счётчик: 5 файлов подряд — одна карточка «Скачано: 5» с именем и путём
+//! ПОСЛЕДНЕГО файла; таймер автоскрытия (8 с) перезапускается на каждом новом
+//! файле серии; неуспех показывает короткую ошибку и начинает новую серию.
+//!
+//! Файл осознанно >500 строк: состояние слота (серия, идущая загрузка,
+//! геометрия/видимость/готовность) и его inline-тесты держат ОДИН мьютекс и
+//! общие инварианты — разрез на файлы размазал бы их (по образцу popups.rs).
 //!
 //! Видимость (#1038, решение владельца 25.11): карточка живёт только пока
 //! окно Nodus активно — пользователь в Word ничего не видит, карточка ждёт
@@ -116,11 +120,33 @@ pub(crate) fn series_step(
     }
 }
 
+/// Скачивание В ПРОЦЕССЕ (#1069): карточка «Скачивается» с полоской. Живёт
+/// от wry `Requested` до `Finished`; прогресс приходит из WebView2
+/// (BytesReceived / TotalBytesToReceive) параллельным COM-обработчиком.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct DownloadInFlight {
+    /// URL загрузки — ключ сопоставления с прогрессом и завершением.
+    pub(crate) url: String,
+    /// Имя файла для строки карточки.
+    pub(crate) file_name: String,
+    /// Процент 0..100; None — размер ещё неизвестен (бегущая полоска).
+    pub(crate) progress: Option<u8>,
+}
+
+/// Есть что показывать слоту: серия (завершённые загрузки) ИЛИ идущая
+/// загрузка (#1069). Чистая функция — юнит-тесты: выпадение in-flight из
+/// видимости не должно остаться незамеченным (карточка «Скачивается» пропала
+/// бы целиком).
+fn card_present(series: Option<&DownloadSeries>, downloading: Option<&DownloadInFlight>) -> bool {
+    series.is_some() || downloading.is_some()
+}
+
 /// Хотим ли показывать слот прямо сейчас (#1038): системная карточка видна
 /// ТОЛЬКО при активном окне Nodus — иначе скрыта и ждёт возврата фокуса.
+/// `has_card` — есть что показывать: серия ИЛИ идущая загрузка (#1069).
 /// Чистая функция — юнит-тесты.
-pub(crate) fn want_visible(has_series: bool, webview_ready: bool, nodus_active: bool) -> bool {
-    has_series && webview_ready && nodus_active
+pub(crate) fn want_visible(has_card: bool, webview_ready: bool, nodus_active: bool) -> bool {
+    has_card && webview_ready && nodus_active
 }
 
 /// Физические координаты левого верхнего угла карточки от геометрии main:
@@ -140,6 +166,8 @@ pub(crate) fn slot_origin(win_x: i32, win_y: i32, win_w: i32, scale: f64) -> (i3
 /// приходят с разных потоков, лок не держится через вызовы окон.
 struct SlotState {
     series: Option<DownloadSeries>,
+    /// Скачивание в процессе (#1069) — показывается вместо серии.
+    downloading: Option<DownloadInFlight>,
     /// Окно слота существует (скрыто или показано).
     window_live: bool,
     /// `popup_ready` пришёл (или fallback): показывать можно.
@@ -158,6 +186,7 @@ struct SlotState {
 const fn fresh_state() -> SlotState {
     SlotState {
         series: None,
+        downloading: None,
         window_live: false,
         ready: false,
         shown: false,
@@ -193,8 +222,33 @@ fn nodus_active() -> bool {
 
 /// Payload слота для pull-модели мини-UI (`popup_get_data`): тема прикладывается
 /// здесь же (#305), счётчик серии — в `download.count`; путь не уходит (#647).
+/// Идущая загрузка (#1069) важнее серии: карточка показывает «Скачивается».
 pub(crate) fn payload() -> Option<serde_json::Value> {
-    state().series.as_ref().map(series_payload)
+    let st = state();
+    if let Some(downloading) = st.downloading.as_ref() {
+        return Some(progress_payload(downloading));
+    }
+    st.series.as_ref().map(series_payload)
+}
+
+/// Payload идущей загрузки (#1069): «Скачивается» с полоской; счётчик не
+/// показывается (count = 1 — только для полноты контракта), кнопки папки нет.
+fn progress_payload(downloading: &DownloadInFlight) -> serde_json::Value {
+    let mut download = serde_json::json!({
+        "fileName": downloading.file_name,
+        "success": true,
+        "count": 1,
+        "state": "downloading",
+    });
+    if let Some(progress) = downloading.progress {
+        download["progress"] = serde_json::json!(progress);
+    }
+    serde_json::json!({
+        "id": "download-in-flight",
+        "download": download,
+        "autoHideMs": DOWNLOAD_AUTO_HIDE_MS,
+        "theme": bridge::ui_theme(),
+    })
 }
 
 fn series_payload(series: &DownloadSeries) -> serde_json::Value {
@@ -204,6 +258,7 @@ fn series_payload(series: &DownloadSeries) -> serde_json::Value {
             "fileName": series.file_name,
             "success": series.success,
             "count": series.count,
+            "state": "done",
         },
         "autoHideMs": DOWNLOAD_AUTO_HIDE_MS,
         "theme": bridge::ui_theme(),
@@ -225,13 +280,92 @@ pub(crate) fn slot_hwnd() -> Option<isize> {
     (st.window_live && st.hwnd != 0).then_some(st.hwnd)
 }
 
-/// Завершилась загрузка (#647, #1038): шаг серии, обновление живой карточки,
-/// создание окна первой серии. Вызывать ТОЛЬКО из async-контекста — билдер
-/// окна в синхронном обработчике дедлокит WebView2 (gotcha «Десктоп»).
-pub(crate) fn on_finished(app: &AppHandle, file_name: &str, path: Option<String>, success: bool) {
+/// Началась загрузка (#1069): пометить in-flight. СИНХРОННО — вызывается из
+/// синхронного обработчика wry `Requested`, где создавать окно нельзя (gotcha
+/// «Десктоп»): показ — отдельным `show_started` из async-контекста.
+pub(crate) fn mark_started(url: &str, file_name: &str) {
+    let mut st = state();
+    log::info!(
+        "download-slot: старт загрузки {} (окно живо: {})",
+        file_name,
+        st.window_live
+    );
+    st.downloading = Some(DownloadInFlight {
+        url: url.to_string(),
+        file_name: file_name.to_string(),
+        progress: None,
+    });
+}
+
+/// Показать/обновить карточку старта загрузки: ТОЛЬКО из async-контекста —
+/// билдер окна в синхронном обработчике дедлокит WebView2 (gotcha).
+pub(crate) fn show_started(app: &AppHandle) {
+    if !state().window_live {
+        create_window(app);
+    }
+    // Живая карточка перечитывает payload: «Скачивается» + имя файла.
+    if let Some(win) = app.get_webview_window(SLOT_LABEL) {
+        let _ = win.eval("window.__popupRefresh&&window.__popupRefresh()");
+    }
+    reposition(app);
+    sync_visibility(app, "старт загрузки");
+}
+
+/// Прогресс загрузки (#1069) из WebView2: применяется только к ТЕКУЩЕЙ
+/// загрузке (совпадение URL); живой карточке — точечный `__popupProgress`,
+/// без полного pull. Чистая часть — `apply_progress` (юнит-тесты).
+pub(crate) fn on_progress(app: &AppHandle, url: &str, percent: u8) {
+    let percent = percent.min(100);
+    if !apply_progress(&mut state().downloading, url, percent) {
+        return;
+    }
+    if let Some(win) = app.get_webview_window(SLOT_LABEL) {
+        let _ = win.eval(format!(
+            "window.__popupProgress&&window.__popupProgress({percent})"
+        ));
+    }
+}
+
+/// Записать процент в текущую загрузку: чужая загрузка и повтор того же
+/// процента — no-op. `true` — значение изменилось (живой карточке нужен кадр).
+fn apply_progress(downloading: &mut Option<DownloadInFlight>, url: &str, percent: u8) -> bool {
+    match downloading.as_mut() {
+        Some(in_flight) if in_flight.url == url && in_flight.progress != Some(percent) => {
+            in_flight.progress = Some(percent);
+            true
+        }
+        _ => false,
+    }
+}
+
+/// Завершилась именно показываемая загрузка — снять in-flight; завершение
+/// параллельной серию обновляет, карточку — нет (она ещё «Скачивается»).
+fn clear_finished(downloading: &mut Option<DownloadInFlight>, url: &str) -> bool {
+    if downloading.as_ref().is_some_and(|d| d.url == url) {
+        *downloading = None;
+        true
+    } else {
+        false
+    }
+}
+
+/// Завершилась загрузка (#647, #1038): снять in-flight (#1069), шаг серии,
+/// обновление живой карточки, создание окна первой серии. Вызывать ТОЛЬКО из
+/// async-контекста — билдер окна в синхронном обработчике дедлокит WebView2
+/// (gotcha «Десктоп»).
+pub(crate) fn on_finished(
+    app: &AppHandle,
+    url: &str,
+    file_name: &str,
+    path: Option<String>,
+    success: bool,
+) {
     let now = activity::monotonic_ms();
     let need_window = {
         let mut st = state();
+        // Завершилась ИМЕННО показываемая загрузка — снимаем in-flight;
+        // завершение чужой (параллельной) серию обновляет, карточку — нет.
+        clear_finished(&mut st.downloading, url);
         let series = series_step(
             st.series.as_ref(),
             file_name.to_string(),
@@ -261,8 +395,12 @@ pub(crate) fn on_finished(app: &AppHandle, file_name: &str, path: Option<String>
 }
 
 /// Создать скрытое окно слота — сразу на своём месте (не на системном
-/// каскаде), показ — только по готовности и фокусу (см. ready/sync).
+/// каскаде), показ — только по готовности и фокусу (см. ready/sync). Повторный
+/// вызов при живом окне — no-op (гонка двух async-стартов загрузок).
 fn create_window(app: &AppHandle) {
+    if state().window_live {
+        return;
+    }
     let position = main_geometry(app).map(|(x, y, w, scale)| {
         let (px_x, px_y) = slot_origin(x, y, w, scale);
         (f64::from(px_x) / scale, f64::from(px_y) / scale)
@@ -389,12 +527,13 @@ fn set_window_pos(win: &tauri::WebviewWindow, x: i32, y: i32, width: i32, height
 
 /// Решить показ/скрытие слота (#1038): показывается только при активном окне
 /// Nodus, при уходе — скрывается на паузу (карточка «ждёт», не сгорает).
-/// Триггеры — события главного окна и завершение загрузки; решение — живой
-/// Win32-запрос foreground (`nodus_active`), событиям не верим на слово.
+/// Триггеры — события главного окна, старт и завершение загрузки; решение —
+/// живой Win32-запрос foreground (`nodus_active`), событиям не верим на слово.
 pub(crate) fn sync_visibility(app: &AppHandle, reason: &'static str) {
     let show = {
         let st = state();
-        match want_visible(st.series.is_some(), st.ready, nodus_active()) {
+        let present = card_present(st.series.as_ref(), st.downloading.as_ref());
+        match want_visible(present, st.ready, nodus_active()) {
             true if !st.shown => Some(true),
             false if st.shown => Some(false),
             _ => None,
@@ -537,7 +676,8 @@ mod tests {
         assert!(validated_height(f64::INFINITY).is_err());
     }
 
-    /// Payload мини-UI: счётчик и факт успеха есть, путь — никогда (#647).
+    /// Payload мини-UI: счётчик и факт успеха есть, путь — никогда (#647);
+    /// завершённая карточка помечена `state: done` (#1069).
     #[test]
     fn payload_слота_несёт_счётчик_но_не_путь() {
         let s = series_step(
@@ -551,10 +691,93 @@ mod tests {
         assert_eq!(json["download"]["fileName"], "Смета.xlsx");
         assert_eq!(json["download"]["count"], 1);
         assert_eq!(json["download"]["success"], true);
+        assert_eq!(json["download"]["state"], "done");
         assert_eq!(json["autoHideMs"], serde_json::json!(DOWNLOAD_AUTO_HIDE_MS));
         assert!(
             json["download"].get("path").is_none(),
             "путь не уходит в мини-UI"
         );
+    }
+
+    /// Payload идущей загрузки (#1069): «Скачивается» с процентом; размер
+    /// неизвестен — поля progress нет (полоска бегущая); путь не уходит.
+    #[test]
+    fn payload_идущей_загрузки_несёт_процент_и_состояние() {
+        let mut downloading = DownloadInFlight {
+            url: "https://nodus.by/files/f.pdf".into(),
+            file_name: "Смета.pdf".into(),
+            progress: Some(42),
+        };
+        let json = progress_payload(&downloading);
+        assert_eq!(json["download"]["state"], "downloading");
+        assert_eq!(json["download"]["progress"], 42);
+        assert_eq!(json["download"]["fileName"], "Смета.pdf");
+        assert_eq!(json["download"]["count"], 1);
+        assert!(
+            json["download"].get("path").is_none(),
+            "путь не уходит в мини-UI"
+        );
+        downloading.progress = None;
+        let json = progress_payload(&downloading);
+        assert!(
+            json["download"].get("progress").is_none(),
+            "неизвестный размер — без процента"
+        );
+    }
+
+    /// Прогресс применяется только к текущей загрузке (#1069): чужой URL и
+    /// повтор того же процента — no-op (без лишних кадров карточки).
+    #[test]
+    fn прогресс_применяется_только_к_текущей_загрузке() {
+        let mut downloading = Some(DownloadInFlight {
+            url: "a".into(),
+            file_name: "a.pdf".into(),
+            progress: None,
+        });
+        assert!(apply_progress(&mut downloading, "a", 10));
+        assert!(
+            !apply_progress(&mut downloading, "a", 10),
+            "повтор не будит карточку"
+        );
+        assert!(
+            !apply_progress(&mut downloading, "b", 20),
+            "чужая загрузка игнорируется"
+        );
+        assert_eq!(downloading.unwrap().progress, Some(10));
+        assert!(!apply_progress(&mut None, "a", 30), "нет загрузки — no-op");
+    }
+
+    /// Видимость слота (#1069): идущая загрузка — тоже «есть что показывать»
+    /// (без неё карточка «Скачивается» не появилась бы вовсе).
+    #[test]
+    fn видимость_считает_идущую_загрузку_карточкой() {
+        let series = series_step(None, "a.pdf".into(), None, true, 0);
+        let in_flight = DownloadInFlight {
+            url: "a".into(),
+            file_name: "a.pdf".into(),
+            progress: None,
+        };
+        assert!(card_present(Some(&series), None), "серия — есть карточка");
+        assert!(
+            card_present(None, Some(&in_flight)),
+            "идущая загрузка — тоже карточка"
+        );
+        assert!(card_present(Some(&series), Some(&in_flight)));
+        assert!(!card_present(None, None), "пусто — показывать нечего");
+    }
+
+    /// Завершение снимает in-flight только своей загрузки (#1069): чужая
+    /// (параллельная) продолжает показывать «Скачивается».
+    #[test]
+    fn завершение_снимает_только_свою_загрузку() {
+        let mut downloading = Some(DownloadInFlight {
+            url: "a".into(),
+            file_name: "a.pdf".into(),
+            progress: Some(50),
+        });
+        assert!(!clear_finished(&mut downloading, "b"));
+        assert!(downloading.is_some(), "чужая загрузка остаётся");
+        assert!(clear_finished(&mut downloading, "a"));
+        assert!(downloading.is_none());
     }
 }
