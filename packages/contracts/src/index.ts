@@ -49,6 +49,7 @@ export * from './workflows/creation-form.js';
 export * from './workflows/workflow-roles.js';
 export * from './workflows/workflow.schemas.js';
 export * from './workflows/condition-query.js';
+export * from './lists/list-view.schemas.js';
 export * from './workflows/press.js';
 export * from './workflows/decider.js';
 export * from './workflows/workflow-document.schemas.js';
