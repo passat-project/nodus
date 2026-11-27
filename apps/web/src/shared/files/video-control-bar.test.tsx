@@ -6,10 +6,10 @@ import { ui } from '@nodus/contracts';
 import { VideoPlayerView } from './video-player-view.js';
 
 /**
- * Своя полоса управления кинозала (#1054): кнопки командуют нативным
- * `<video>`; полоса живёт поверх нижней кромки зала и прячется во время
- * игры (Telegram). Состояние полосы читается из событий элемента — здесь
- * они воспроизводятся руками, потому что jsdom не проигрывает медиа.
+ * Своя панель кинозала (#1054): кнопки командуют нативным `<video>`; панель
+ * стоит сразу под кадром и прячется во время игры (Telegram). Состояние
+ * панели читается из событий элемента — здесь они воспроизводятся руками,
+ * потому что jsdom не проигрывает медиа.
  */
 
 let paused = true;
@@ -208,6 +208,18 @@ describe('VideoControlBar — полоса кинозала (#1054)', () => {
     expect(currentTime).toBe(5);
 
     fireEvent.keyDown(play, { key: 'ArrowLeft' });
+    expect(currentTime).toBe(0);
+    expect(video.duration).toBe(9);
+  });
+
+  it('стрелки на ползунке перемотки не перехватываются — шаг принадлежит input', () => {
+    const { video } = setup();
+    duration = 9;
+
+    const seek = screen.getByRole('slider', { name: ui.files.seek });
+    fireEvent.keyDown(seek, { key: 'ArrowRight' });
+
+    // Гейт arrowsBelongToControl: зал не делает ±5 с, событие остаётся input.
     expect(currentTime).toBe(0);
     expect(video.duration).toBe(9);
   });
