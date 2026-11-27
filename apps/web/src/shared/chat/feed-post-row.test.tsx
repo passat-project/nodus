@@ -96,9 +96,9 @@ describe('FeedPostRow — полоса «Обсудить» как тумбле�
     expect(onCloseThread).not.toHaveBeenCalled();
   });
 
-  it('тред этого поста открыт: клик по ТОЙ ЖЕ полосе закрывает (onCloseThread), aria-expanded=true', () => {
+  it('тред этого поста открыт: полоса подписана «Свернуть», клик закрывает (onCloseThread)', () => {
     const { onOpenThread, onCloseThread } = renderRow('p1');
-    const strip = screen.getByRole('button', { name: /Обсудить/ }) as HTMLElement;
+    const strip = screen.getByRole('button', { name: /Свернуть/ }) as HTMLElement;
     expect(strip.getAttribute('aria-expanded')).toBe('true');
     fireEvent.click(strip);
     expect(onCloseThread).toHaveBeenCalledTimes(1);

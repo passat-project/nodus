@@ -92,9 +92,11 @@ describe('PostCard — карточка поста канала с аватар�
     // Полоса — единственная кнопка текстового поста без реакций/вложений.
     const strip = container.querySelector('[data-slot="post-surface"] button') as HTMLElement;
     expect(strip.getAttribute('aria-expanded')).toBe('false');
+    expect(strip.textContent).toContain('Обсудить');
     strip.click();
     expect(onToggleThread).toHaveBeenCalledTimes(1);
-    // Открытый тред этого поста — aria-expanded=true.
+    // Открытый тред этого поста — aria-expanded=true и ЧЕСТНАЯ подпись
+    // «Свернуть ←» (#1061): клик по полосе вернёт к ленте.
     rerender(
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
@@ -102,9 +104,10 @@ describe('PostCard — карточка поста канала с аватар�
         </TooltipProvider>
       </QueryClientProvider>,
     );
-    expect(
-      container.querySelector('[data-slot="post-surface"] button')!.getAttribute('aria-expanded'),
-    ).toBe('true');
+    const openStrip = container.querySelector('[data-slot="post-surface"] button') as HTMLElement;
+    expect(openStrip.getAttribute('aria-expanded')).toBe('true');
+    expect(openStrip.textContent).toContain('Свернуть');
+    expect(openStrip.textContent).not.toContain('Обсудить');
   });
 
   it('надгробие с живым тредом: строка удаления + полоса-кнопка «Обсудить» → тумблер треда', () => {
@@ -123,6 +126,21 @@ describe('PostCard — карточка поста канала с аватар�
     expect(strip.textContent).toContain('Обсудить');
     strip.click();
     expect(onToggleThread).toHaveBeenCalledTimes(1);
+  });
+
+  it('надгробие с открытым тредом: полоса-тумблер подписана «Свернуть»', () => {
+    const { container } = renderCard(
+      <PostCard
+        {...base}
+        threadOpen
+        message={message({ deletedAt: '2026-09-30T10:00:00Z', text: '', attachments: [] })}
+        repliesCount={1}
+        onToggleThread={vi.fn()}
+      />,
+    );
+    const strip = container.querySelector('button') as HTMLElement;
+    expect(strip.textContent).toContain('Свернуть');
+    expect(strip.textContent).not.toContain('Обсудить');
   });
 
   it('надгробие без ответов: полосы обсуждения нет', () => {

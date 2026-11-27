@@ -1,5 +1,5 @@
 import { Fragment, memo, useMemo, useRef } from 'react';
-import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, X } from 'lucide-react';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { NodeLabel } from '@nodus/ui/components/node-label';
@@ -51,9 +51,12 @@ import { useConversationHost } from './use-conversation-host.js';
  *
  * Два варианта шапки (окно треда, #42): 'drill' — тред ЗАМЕНИЛ ленту (узкая
  * зона, карточки): кнопка «К ленте»; 'side' — тред ПОЛНОВЫСОТНЫМ окном РАДОМ
- * с лентой (Slack-паттерн, вердикт владельца 15.09.2026). Закрытие окна —
- * повторный клик по полосе «Обсудить» поста или Esc; крестика в шапке нет
- * (вердикт владельца 24.11.2026, #1021).
+ * с лентой (Slack-паттерн, вердикт владельца 15.09.2026). У окна 'side' в
+ * шапке справа — крестик «Закрыть» у края колонки (закон колонки, как у панели
+ * «О чате»; вердикт 25.11.2026, #1061): выход виден, даже если полоса поста
+ * ушла из вида. Полоса поста — честный тумблер («Обсудить →» / «Свернуть ←»),
+ * Esc и повторный клик по полосе тоже закрывают. В 'drill' крестика нет —
+ * только «К ленте» (решение 24.11.2026, #1021).
  */
 export const ThreadPane = memo(function ThreadPane({
   conversationId,
@@ -211,9 +214,20 @@ export const ThreadPane = memo(function ThreadPane({
             )}
             <span className="text-xs">{watched ? ui.chat.unwatchThread : ui.chat.watchThread}</span>
           </Button>
-          {/* Крестика в шапке НЕТ (решение владельца 24.11.2026 #1021):
-              окно треда закрывается повторным кликом по полосе «Обсудить»
-              поста или Esc — не отдельной кнопкой. */}
+          {/* Крестик — у ПРАВОГО КРАЯ колонки (закон колонки, как у панели
+              «О чате»; вердикт 25.11.2026, #1061): видимый выход из треда,
+              не зависящий от положения полосы поста в ленте. */}
+          {variant === 'side' ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={ui.common.close}
+              title={ui.common.close}
+              onClick={onClose}
+            >
+              <X />
+            </Button>
+          ) : null}
         </span>
       </header>
       <div className="flex min-h-0 flex-1 flex-col chat-wallpaper bg-chat-zone">
