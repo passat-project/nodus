@@ -65,6 +65,8 @@ function mount(overrides: Partial<Parameters<typeof DivisionsView>[0]> = {}) {
     onCreateChild: vi.fn(),
     onInvite: vi.fn(),
     onEdit: vi.fn(),
+    onTransfer: vi.fn(),
+    onDelete: vi.fn(),
     ...overrides,
   };
   const view = render(<DivisionsView {...props} />);

@@ -24,6 +24,21 @@ export const employeesStrings = {
   editDepartmentAction: 'Редактировать подразделение',
   addSubdepartment: 'Добавить подразделение',
   inviteToDepartment: 'Пригласить в Nodus',
+  /** #881: перевод сотрудника в текущее подразделение из меню «⋯». */
+  transferFromDepartment: 'Перевести из другого подразделения',
+  transferEmployeeTitle: 'Перевести сотрудника',
+  /** #881: строка «куда» в окне перевода — название целевого подразделения. */
+  transferEmployeeDestination: 'Перевести в',
+  transferEmployeeSearch: 'Поиск по имени или должности',
+  transferEmployeeNotFound: 'Сотрудник не найден — проверьте имя или должность',
+  transferEmployeeNoDepartment: 'Без подразделения',
+  /** Строка-источник в футере окна перевода: сотрудник нигде не состоит. */
+  transferEmployeeNoDepartmentInline: 'без подразделения',
+  transferEmployeeLeaderHint:
+    'Сотрудник руководит другим подразделением — там роль снимется, подразделение останется без руководителя.',
+  transferEmployeeSubmit: 'Перевести',
+  transferEmployeeDone: 'Сотрудник переведён',
+  transferEmployeeEmpty: 'Нет активных сотрудников из других подразделений',
   fieldDepartmentName: 'Название',
   fieldHead: 'Руководитель',
   fieldDeputy: 'Заместитель',
@@ -206,11 +221,17 @@ export const employeesStrings = {
   positionReassignSearch: 'Начните вводить название',
   positionReassignAction: 'Перевести сотрудников',
   positionReassignNoTarget: 'Другой должности нет — сначала создайте новую',
-  archiveDepartment: 'Архивировать подразделение',
-  archiveDepartmentTitle: 'Архивировать подразделение?',
-  archiveDepartmentText:
-    'Подразделение уйдёт из дерева оргструктуры; сотрудники, история и привязки ролей сохранятся.',
-  archiveConfirm: 'Архивировать',
+  /** #881: жёсткое удаление подразделения с переносом детей и сотрудников. */
+  deleteDepartment: 'Удалить подразделение',
+  deleteDepartmentTitle: 'Удалить подразделение?',
+  deleteDepartmentLead: 'Подразделение будет удалено без возможности восстановления.',
+  deleteDepartmentMovesOne: 'перейдёт в',
+  deleteDepartmentMovesMany: 'перейдут в',
+  deleteDepartmentEmpty: 'В подразделении нет подразделов и активных сотрудников.',
+  deleteDepartmentDismissedHint:
+    'Уволенные сотрудники тоже будут перенесены — в структуре они не отображаются.',
+  deleteDepartmentConfirm: 'Удалить подразделение',
+  deleteDepartmentDone: 'Подразделение удалено',
   parentDepartment: 'Вышестоящее подразделение',
   myDepartment: 'Ваше подразделение',
   locateMe: 'Найти меня',

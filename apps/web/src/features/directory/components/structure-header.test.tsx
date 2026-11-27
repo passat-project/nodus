@@ -70,10 +70,21 @@ describe('StructureHeader (#768)', () => {
     expect(icon?.getAttribute('stroke-width')).toBe('1.5');
   });
 
-  it('панель постоянна: шапка всегда резервирует её ширину, инструменты не двигаются', () => {
+  it('панель постоянна: резерв — CSS-класс панели (один источник с w-80), не JS', () => {
     renderHeader({ rowWidth: 1100 });
     const header = screen.getByRole('heading', { level: 1 }).parentElement!;
-    expect(header.style.paddingRight).toBe('320px');
+    // pr-80 = 20rem — та же ширина, что w-80 панели: рассинхрон масштаба
+    // между JS-константой и CSS больше невозможен (#881, живая приёмка).
+    expect(header.className).toContain('pr-80');
+    expect(header.style.paddingRight).toBe('');
     expect(header.className).not.toContain('transition-[padding]');
+  });
+
+  it('«Пригласить» сжимается в иконку по ДОСТУПНОЙ ширине (страница минус панель)', () => {
+    // 650 − 320 = 330 доступных px: текстовой кнопке места уже нет, хотя
+    // ширина страницы заметно больше прежнего мёртвого порога 340.
+    renderHeader({ rowWidth: 650 });
+    expect(screen.queryByText(ui.employees.invite)).toBeNull();
+    expect(screen.getByRole('button', { name: ui.employees.invite })).toBeTruthy();
   });
 });

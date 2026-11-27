@@ -33,6 +33,8 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.DIRECTORY_SELF_DEACTIVATE]: 'Себя уволить нельзя',
   [ErrorCode.DIRECTORY_DEPARTMENT_ROOT_FORBIDDEN]:
     'Подразделение нельзя открепить от структуры — выберите вышестоящее подразделение',
+  [ErrorCode.DIRECTORY_DEPARTMENT_LEGAL_FORBIDDEN]:
+    'Юридическое подразделение удалить нельзя — удаляются только управленческие',
   [ErrorCode.TASK_LAST_STAGE]: 'Единственную стадию удалить нельзя',
   [ErrorCode.WORKFLOW_TRANSITION_NOT_ALLOWED]: 'Такой переход сейчас недоступен',
   [ErrorCode.WORKFLOW_TRANSITION_BLOCKED]: 'Переход заблокирован: не выполнены условия',

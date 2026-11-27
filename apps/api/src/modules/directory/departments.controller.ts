@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
@@ -34,7 +34,7 @@ const treeQuerySchema = z.object({
   kind: orgUnitKindSchema.default('management'),
 });
 
-/** Оргструктура (`/api/v1/directory/departments`): дерево, CRUD, архивация. */
+/** Оргструктура (`/api/v1/directory/departments`): дерево, CRUD, удаление. */
 @ApiTags('directory')
 @ApiBearerAuth()
 @Controller('directory/departments')
@@ -110,20 +110,20 @@ export class DepartmentsController {
     return this.departmentsService.update(id, dto, actor);
   }
 
-  @Post(':id/archive')
+  @Delete(':id')
   @HttpCode(204)
   @RequirePermissions(Permission.DIRECTORY_MANAGE)
-  @Audit({ action: 'directory.department.archive', entity: 'department' })
-  @ApiOperation({ summary: 'Архивация подразделения (без удаления, I15)' })
+  @Audit({ action: 'directory.department.delete', entity: 'department' })
+  @ApiOperation({ summary: 'Удаление подразделения с переносом детей и сотрудников' })
   @ApiParam({
     name: 'id',
     description: 'UUID подразделения',
     schema: { type: 'string', format: 'uuid' },
   })
-  @ApiNoContentResponse({ description: 'Подразделение архивировано' })
+  @ApiNoContentResponse({ description: 'Подразделение удалено' })
   @ApiErrors(401, 403, 404, 409)
   @ApiIdempotencyKey()
-  archive(@Param('id') id: string, @GetUser() actor: AuthUser): Promise<void> {
-    return this.departmentsService.archive(id, actor.id);
+  delete(@Param('id') id: string, @GetUser() actor: AuthUser): Promise<void> {
+    return this.departmentsService.delete(id, actor);
   }
 }

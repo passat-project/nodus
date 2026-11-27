@@ -36,7 +36,12 @@ export const DIRECTORY_EVENTS = {
   USER_PASSWORD_CHANGED: 'directory.user.password_changed',
   DEPARTMENT_CREATED: 'directory.department.created',
   DEPARTMENT_UPDATED: 'directory.department.updated',
+  /** Устаревшее: подразделения больше не архивируются (#881, жёсткое удаление).
+   *  Имя остаётся в каталоге — события прошлых периодов живут в `events`. */
   DEPARTMENT_ARCHIVED: 'directory.department.archived',
+  /** Подразделение удалено жёстко: дети и прямые сотрудники перенесены к
+   *  родителю; `userIds` — прямые сотрудники (включая уволенных) для search. */
+  DEPARTMENT_DELETED: 'directory.department.deleted',
   POSITION_CREATED: 'directory.position.created',
   POSITION_UPDATED: 'directory.position.updated',
   /** Устаревшее: должности больше не архивируются (#768, жёсткое удаление).
@@ -138,3 +143,18 @@ export const roleAccessChangedPayloadSchema = z.object({
   userIds: z.array(z.uuid()).min(1),
 });
 export type RoleAccessChangedPayload = z.infer<typeof roleAccessChangedPayloadSchema>;
+
+/**
+ * Payload `directory.department.deleted` (#881): строка подразделения исчезает
+ * безвозвратно, поэтому имя замораживается в событии (как `position.deleted`).
+ * `parentId` — куда переехали дети и прямые сотрудники; `userIds` — прямые
+ * сотрудники (включая уволенных), их карточки переиндексирует search.
+ */
+export const departmentDeletedPayloadSchema = z.object({
+  departmentId: z.uuid(),
+  name: z.string().min(1),
+  parentId: z.uuid(),
+  childDepartmentIds: z.array(z.uuid()),
+  userIds: z.array(z.uuid()),
+});
+export type DepartmentDeletedPayload = z.infer<typeof departmentDeletedPayloadSchema>;

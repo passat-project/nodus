@@ -57,6 +57,16 @@ export function insertDepartment(roots: DepartmentNode[], node: DepartmentNode):
   return roots.map(walk);
 }
 
+/** Оптимистичное удаление узла (кэш дерева, I4): узел и его ветка исчезают
+ *  до ответа; откат — снапшотом в мутации. */
+export function removeDepartment(roots: DepartmentNode[], id: string): DepartmentNode[] {
+  const walk = (nodes: DepartmentNode[]): DepartmentNode[] =>
+    nodes
+      .filter((node) => node.id !== id)
+      .map((node) => ({ ...node, children: walk(node.children) }));
+  return walk(roots);
+}
+
 /** Оптимистичный патч узла (кэш дерева, I4); денормализованные имена и счётчики
  *  доносит инвалидация после ответа сервера. */
 export function patchDepartment(

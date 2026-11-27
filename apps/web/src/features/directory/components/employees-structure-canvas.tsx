@@ -36,6 +36,8 @@ export function EmployeesStructureCanvas({
   onCreateChild,
   onInvite,
   onEdit,
+  onTransfer,
+  onDelete,
   onLocateMe,
 }: {
   loading: boolean;
@@ -53,6 +55,8 @@ export function EmployeesStructureCanvas({
   onCreateChild: (parentId: string) => void;
   onInvite: (node: DepartmentNode) => void;
   onEdit: (node: DepartmentNode) => void;
+  onTransfer: (node: DepartmentNode) => void;
+  onDelete: (node: DepartmentNode) => void;
   onLocateMe?: () => void;
 }) {
   if (loading) {
@@ -126,6 +130,8 @@ export function EmployeesStructureCanvas({
       onCreateChild={onCreateChild}
       onInvite={onInvite}
       onEdit={onEdit}
+      onTransfer={onTransfer}
+      onDelete={onDelete}
       onLocateMe={onLocateMe}
     />
   );

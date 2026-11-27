@@ -14,9 +14,6 @@ import { DepartmentPanel } from './department-panel.js';
  */
 
 vi.mock('../../../app/shell/use-card-stack.js', () => ({ useOpenCard: () => vi.fn() }));
-vi.mock('../api/directory-api.js', () => ({
-  useArchiveDepartment: () => ({ mutate: vi.fn(), isPending: false }),
-}));
 
 const DEPARTMENT_ID = '11111111-1111-4111-8111-111111111111';
 const HEAD_ID = '22222222-2222-4222-8222-222222222222';
@@ -58,7 +55,7 @@ const node: DepartmentNode = {
   id: DEPARTMENT_ID,
   name: 'BIM-отдел',
   kind: 'management',
-  parentId: null,
+  parentId: 'root',
   headId: HEAD_ID,
   deputyIds: [DEPUTY_ID],
   sortOrder: 0,
@@ -85,9 +82,10 @@ function mount(overrides: { mainCard?: boolean; highlightUserId?: string | null 
       activeDepartmentIds={activeIds}
       highlightUserId={overrides.highlightUserId ?? null}
       topShift={0}
-      onArchived={vi.fn()}
       onInvite={vi.fn()}
       onEdit={vi.fn()}
+      onTransfer={vi.fn()}
+      onDelete={vi.fn()}
       canManage={false}
     />,
   );
@@ -122,6 +120,7 @@ describe('DepartmentPanel: группы и активные сотрудники
   });
 
   it('в меню панели нет «Добавить подразделение»: создание — плюсом на карточке', async () => {
+    const onInvite = vi.fn();
     render(
       <DepartmentPanel
         mainCard={false}
@@ -130,9 +129,10 @@ describe('DepartmentPanel: группы и активные сотрудники
         activeDepartmentIds={activeIds}
         highlightUserId={null}
         topShift={0}
-        onArchived={vi.fn()}
-        onInvite={vi.fn()}
+        onInvite={onInvite}
         onEdit={vi.fn()}
+        onTransfer={vi.fn()}
+        onDelete={vi.fn()}
         canManage
       />,
     );
@@ -142,9 +142,20 @@ describe('DepartmentPanel: группы и активные сотрудники
     fireEvent.click(trigger);
 
     expect(
-      await screen.findByRole('menuitem', { name: ui.employees.inviteToDepartment }),
+      await screen.findByRole('menuitem', { name: new RegExp(ui.employees.inviteToDepartment) }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('menuitem', { name: new RegExp(ui.employees.transferFromDepartment) }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('menuitem', { name: new RegExp(ui.employees.deleteDepartment) }),
     ).toBeTruthy();
     expect(screen.queryByRole('menuitem', { name: ui.employees.addSubdepartment })).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: new RegExp(ui.employees.inviteToDepartment) }),
+    );
+    expect(onInvite).toHaveBeenCalledWith(node.id);
   });
 
   it('секции «Подчинённые руководителя» по managerId больше нет', () => {

@@ -5,12 +5,8 @@ import { Button } from '@nodus/ui/components/button';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { uiPx } from '../../../shared/ui/ui-scale.js';
+import { COMPACT_THRESHOLD, PANEL_RESERVE } from '../lib/structure-header-geometry.js';
 import { StructureSearch } from './structure-search.js';
-
-/** Порог узкой шапки: поиск уходит в иконку, «Пригласить» — тоже. */
-const COMPACT_THRESHOLD = uiPx(640);
-/** Резерв под постоянную правую панель (w-80, стоит вплотную к краю). */
-const PANEL_RESERVE = uiPx(320);
 
 /**
  * Шапка вкладки «Структура» (#768, вердикты владельца 12–13.11.2026):
@@ -18,8 +14,10 @@ const PANEL_RESERVE = uiPx(320);
  * поиск по отделам и сотрудникам (по ширине — как в «Списке»), справа
  * «Список должностей» иконкой с подсказкой при наведении/фокусе (вердикт
  * 16.11.2026: текстовая кнопка перекашивала шапку против панели). Панель
- * постоянна, поэтому шапка всегда резервирует её ширину — инструменты не
- * двигаются и не прячутся.
+ * постоянна, поэтому шапка всегда резервирует её ширину CSS-классом `pr-80`
+ * (20rem = `w-80` панели) — резерв и панель не могут разъехаться. Пороги
+ * компактности считаются по ДОСТУПНОЙ ширине (страница минус панель): на
+ * тесной шапке «Список должностей» дополнительно живёт в шапке панели.
  */
 export function StructureHeader({
   staffCount,
@@ -44,16 +42,17 @@ export function StructureHeader({
   onPickDepartment: (id: string) => void;
   onPickEmployee: (user: UserListItem) => void;
 }) {
-  const compact = rowWidth > 0 && rowWidth - PANEL_RESERVE < COMPACT_THRESHOLD;
+  // Доступная шапке ширина: страница минус постоянная панель. Пороги — от
+  // неё, а не от ширины страницы: текстовая кнопка «Пригласить» должна
+  // сжиматься ДО того, как инструменты уедут под панель.
+  const available = rowWidth > 0 ? rowWidth - PANEL_RESERVE : 0;
+  const compact = rowWidth > 0 && available < COMPACT_THRESHOLD;
   // Совсем узкая шапка: «Пригласить» остаётся primary, но иконкой с
   // подписью для чтения с экрана — текстовая кнопка выталкивала поиск.
-  const narrow = rowWidth > 0 && rowWidth < uiPx(340);
+  const narrow = rowWidth > 0 && available < uiPx(340);
 
   return (
-    <div
-      style={{ paddingRight: PANEL_RESERVE }}
-      className={cn('flex h-14 shrink-0 items-center pl-6', compact ? 'gap-2' : 'gap-3')}
-    >
+    <div className={cn('flex h-14 shrink-0 items-center pr-80 pl-6', compact ? 'gap-2' : 'gap-3')}>
       <h1 className="shrink-0 text-xl font-semibold text-balance text-foreground">
         {ui.employees.title}
         <span className="ml-2 align-middle font-mono text-label-lg font-normal text-muted-foreground tabular-nums">

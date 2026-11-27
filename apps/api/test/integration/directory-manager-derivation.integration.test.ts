@@ -59,13 +59,10 @@ describe('Производный руководитель и профиль (#92
     return userCardSchema.parse(await response.json());
   };
 
-  const archiveDepartment = async (id: string) => {
-    const response = await f.api(
-      f.users.structureAdmin,
-      'POST',
-      `/directory/departments/${id}/archive`,
-      { key: randomUUID() },
-    );
+  const deleteDepartment = async (id: string) => {
+    const response = await f.api(f.users.structureAdmin, 'DELETE', `/directory/departments/${id}`, {
+      key: randomUUID(),
+    });
     expect(response.status).toBe(204);
   };
 
@@ -156,7 +153,7 @@ describe('Производный руководитель и профиль (#92
     expect(parent).toBeTruthy();
   });
 
-  it('архивация отдела: подчинённые находят главу ближайшего активного предка', async () => {
+  it('удаление отдела: сотрудники переезжают к родителю и находят его главу', async () => {
     const parent = await createDepartment({
       name: `Архив-родитель ${f.runId}`,
       kind: 'management',
@@ -171,9 +168,10 @@ describe('Производный руководитель и профиль (#92
     await moveEmployee(f.users.employee.id, child.id);
     expect((await card(f.users.employee.id)).managerId).toBe(f.users.directory.id);
 
-    await archiveDepartment(child.id);
+    await deleteDepartment(child.id);
 
-    // Глава архивного узла выпал из структуры — руководитель = глава активного предка.
+    // Узел удалён, сотрудник переехал к родителю — руководитель = его глава.
+    expect((await card(f.users.employee.id)).departmentId).toBe(parent.id);
     expect((await card(f.users.employee.id)).managerId).toBe(f.users.manager.id);
   });
 

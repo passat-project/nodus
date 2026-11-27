@@ -17,11 +17,11 @@ import { DomainException } from '../../core/errors/domain-exception.js';
 import { EventBus } from '../../core/events/event-bus.js';
 import { RoleAssignmentGuard } from './role-assignment-guard.service.js';
 import { ReferenceGuard } from './reference-guard.service.js';
+import { deleteDepartmentWithTransfer } from './departments-delete.js';
 import { DepartmentsRepository, type DepartmentRow } from './departments.repository.js';
 import { deputyIdsOf, toNode, uniqueIds } from './departments.node.js';
 import {
   assertNotDetachedToRoot,
-  assertRootNotArchivable,
   assertSingleManagementRoot,
   isManagementRoot,
 } from './departments-root-policy.js';
@@ -296,46 +296,25 @@ export class DepartmentsService {
     });
   }
 
-  /** Архивация (не удаление — связи сотрудников и история сохраняются, I15).
-   *  Непустой узел не архивируется (409 `has_children`): активные дети
-   *  archived-родителя выпадают из дерева вида (родитель не в выборке, а дети
-   *  не корни) — сначала архивируются/переносятся дети. Замок строки
-   *  сериализует с созданием ребёнка (create лочит родителя до проверки). */
-  async archive(id: string, actorId: string): Promise<void> {
-    await this.ensureExists(id);
+  /**
+   * Жёсткое удаление подразделения с переносом (#881): дети и прямые
+   * сотрудники (включая уволенных) уходят к родителю; роли удалённого узла
+   * снимаются каскадом, активным сотрудникам поддерева отзываются access-токены.
+   * Главная карточка (единственный management-корень) и legal-узлы не удаляются.
+   * Порядок замков — `departments → users`, как в переводе сотрудника.
+   */
+  async delete(id: string, actor: AuthUser): Promise<void> {
     await this.tx.run(async (tx) => {
-      if (!(await this.departments.lockForUpdate(id, tx))) {
-        throw DomainException.notFound('Department not found');
-      }
-      const node = await this.departments.findById(id, tx);
-      if (!node) {
-        throw DomainException.notFound('Department not found');
-      }
-      // #1028: главную карточку компании не архивируем (вердикт 12.11) —
-      // правило жило только в UI, сервер обязан отказать (I8).
-      assertRootNotArchivable(node, id);
-      if ((await this.departments.countActiveChildren(id, tx)) > 0) {
-        throw new DomainException(ErrorCode.CONFLICT, 'Department has active children', {
-          departmentId: id,
-          reason: 'has_children',
-        });
-      }
-      // Архивация убирает узел из management-дерева: привязанные к нему роли
-      // перестают действовать на сотрудников поддерева. Аудитория считается
-      // ДО мутации — после неё узел неактивен и в роль уже не входит (#866).
-      const roleIds = await this.audience.roleIdsOfDepartments([id], tx);
-      const userIds = await this.audience.departmentUserIds(id, tx);
-      await this.departments.update(id, { isActive: false }, tx);
-      // #923: члены архивного узла больше не находят главу в нём — ближайший
-      // глава переезжает к родительскому подразделению.
-      await this.managers.recomputeDepartments([id], tx);
-      await this.eventBus.emit(
-        tx,
-        DIRECTORY_EVENTS.DEPARTMENT_ARCHIVED,
-        { departmentId: id },
-        { actorId, aggregateType: 'department', aggregateId: id },
-      );
-      await this.emitAccessChanged(tx, roleIds, userIds, actorId);
+      // Дерево под advisory-локом: удаление сериализуется с переносами,
+      // созданием детей и переводами сотрудников.
+      await this.departments.lockTree(tx);
+      await deleteDepartmentWithTransfer(id, actor, tx, {
+        departments: this.departments,
+        users: this.users,
+        audience: this.audience,
+        managers: this.managers,
+        eventBus: this.eventBus,
+      });
     });
   }
 

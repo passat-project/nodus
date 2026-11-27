@@ -1,23 +1,16 @@
-import { Building2, MoreHorizontal, Search } from 'lucide-react';
+import { Building2, IdCard, MoreHorizontal, Search } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { DepartmentNode, UserListItem } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
-import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@nodus/ui/components/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@nodus/ui/components/dropdown-menu';
 import { Input } from '@nodus/ui/components/input';
 import { NodeLabel } from '@nodus/ui/components/node-label';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import { PersonAvatar } from '../../../shared/ui/person-avatar.js';
-import { useArchiveDepartment } from '../api/directory-api.js';
 import { structurePanelGroups } from '../lib/department-groups.js';
+import { DepartmentActionsMenu } from './department-actions-menu.js';
 import { StructurePanelHeader } from './structure-panel-header.js';
 import { StructureSidePanel } from './structure-side-panel.js';
 
@@ -25,14 +18,16 @@ import { StructureSidePanel } from './structure-side-panel.js';
  * Правая панель отдела (#768, вердикты владельца 12–13.11.2026):
  * постоянная — не выезжает, не закрывается крестиком и повторным кликом по
  * карточке; поиск сотрудника сверху, ниже две группы — «Руководители»
- * (руководитель + зам, даже если они не члены отдела) и «Подчинённые»
+ * (руководитель + все заместители; с #946 они члены отдела) и «Подчинённые»
  * (остальные активные члены). В главной карточке компании в «Подчинённых»
  * дополнительно видны сотрудники без управленческого отдела и с
  * архивным. Секции «Подчинённые руководителя» по managerId здесь больше нет
  * (она осталась в карточке сотрудника). Руководитель/зам не дублируются в
  * «Подчинённых»; уволенные в структуре не показываются. Действия — только
- * администратору; главная карточка компании не архивируется, архив успешен
- * только у пустого отдела (409 has_children иначе).
+ * администратору: общее меню `DepartmentActionsMenu` (#881), главная карточка
+ * компании не удаляется. На тесной ширине «Список должностей» дублируется в
+ * шапке панели (страница передаёт `showPositionsToggle` и обработчик): панель
+ * видна всегда, поэтому управление не может «пропасть» под ней.
  */
 export function DepartmentPanel({
   mainCard,
@@ -41,9 +36,12 @@ export function DepartmentPanel({
   activeDepartmentIds,
   highlightUserId,
   topShift,
-  onArchived,
   onInvite,
   onEdit,
+  onTransfer,
+  onDelete,
+  showPositionsToggle = false,
+  onTogglePositions,
   canManage,
 }: {
   /** Первый корень дерева — главная карточка компании. */
@@ -54,16 +52,19 @@ export function DepartmentPanel({
   /** Сотрудник, выбранный поиском: строку подсветить и показать в скролле. */
   highlightUserId: string | null;
   topShift: number;
-  /** Отдел архивирован: панель переключается на родителя. */
-  onArchived: (node: DepartmentNode) => void;
   onInvite: (departmentId: string) => void;
   onEdit: (node: DepartmentNode) => void;
+  /** Перевод сотрудника в это подразделение (#881). */
+  onTransfer: (node: DepartmentNode) => void;
+  /** Удаление подразделения с переносом (#881). */
+  onDelete: (node: DepartmentNode) => void;
+  /** Тесная шапка: «Список должностей» переезжает в шапку панели (#881). */
+  showPositionsToggle?: boolean;
+  onTogglePositions?: () => void;
   /** Право `directory.manage`: админ-действия панели (без права — просмотр). */
   canManage: boolean;
 }) {
   const openCard = useOpenCard();
-  const archive = useArchiveDepartment('management');
-  const [archiveOpen, setArchiveOpen] = useState(false);
   const [search, setSearch] = useState('');
   const bodyRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -147,40 +148,44 @@ export function DepartmentPanel({
             ) : undefined
           }
           actions={
-            canManage ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
+            canManage || (showPositionsToggle && onTogglePositions) ? (
+              <div className="flex items-center gap-1">
+                {showPositionsToggle && onTogglePositions ? (
                   <Button
                     variant="ghost"
                     size="icon-sm"
                     className="text-muted-foreground hover:text-foreground"
-                    aria-label={ui.employees.departmentActions}
+                    aria-label={ui.employees.positionsList}
+                    title={ui.employees.positionsList}
+                    onClick={onTogglePositions}
                   >
-                    <MoreHorizontal className="size-4" />
+                    <IdCard className="size-4" strokeWidth={1.5} />
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  {/* Порядок пунктов (вердикт владельца 23.11.2026): сверху
-                      всегда «Редактировать подразделение», ниже — приглашение
-                      в Nodus, архивация последней. */}
-                  <DropdownMenuItem onClick={() => onEdit(node)}>
-                    {ui.employees.editDepartmentAction}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onInvite(node.id)}>
-                    {ui.employees.inviteToDepartment}
-                  </DropdownMenuItem>
-                  {/* Главную карточку компании не архивируем (вердикт 12.11);
-                      непустой узел не архивируется (409 has_children). */}
-                  {!mainCard && node.children.length === 0 && (
-                    <DropdownMenuItem
-                      className="text-destructive focus:text-destructive"
-                      onClick={() => setArchiveOpen(true)}
-                    >
-                      {ui.employees.archiveDepartment}
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                ) : null}
+                {canManage ? (
+                  <DepartmentActionsMenu
+                    node={node}
+                    mainCard={mainCard}
+                    canDelete={node.parentId !== null}
+                    side="bottom"
+                    align="end"
+                    onEdit={onEdit}
+                    onInvite={(target) => onInvite(target.id)}
+                    onTransfer={onTransfer}
+                    onDelete={onDelete}
+                    trigger={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="text-muted-foreground hover:text-foreground"
+                        aria-label={ui.employees.departmentActions}
+                      >
+                        <MoreHorizontal className="size-4" />
+                      </Button>
+                    }
+                  />
+                ) : null}
+              </div>
             ) : undefined
           }
         />
@@ -220,34 +225,6 @@ export function DepartmentPanel({
           <span className="px-2 text-sm text-muted-foreground">{ui.employees.emptyDepartment}</span>
         )}
       </div>
-
-      <Dialog open={archiveOpen} onOpenChange={setArchiveOpen}>
-        <DialogContent className="w-full bg-card sm:max-w-sm">
-          <DialogTitle className="text-base font-semibold text-foreground">
-            {ui.employees.archiveDepartmentTitle}
-          </DialogTitle>
-          <p className="text-sm text-muted-foreground">{ui.employees.archiveDepartmentText}</p>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setArchiveOpen(false)}>
-              {ui.common.cancel}
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={archive.isPending}
-              onClick={() => {
-                archive.mutate(node.id, {
-                  onSuccess: () => {
-                    setArchiveOpen(false);
-                    onArchived(node);
-                  },
-                });
-              }}
-            >
-              {ui.employees.archiveConfirm}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </StructureSidePanel>
   );
 }

@@ -144,7 +144,6 @@ describe('OpenAPI: генерация из кода и публикация /api
       '/api/v1/directory/users/{id}/activate',
       '/api/v1/directory/departments/tree',
       '/api/v1/directory/departments/{id}',
-      '/api/v1/directory/departments/{id}/archive',
       '/api/v1/directory/positions',
       '/api/v1/directory/positions/{id}',
       '/api/v1/directory/positions/{id}/reassign',

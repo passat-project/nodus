@@ -150,39 +150,61 @@ describe('Ссылки оргструктуры (#441)', () => {
     expect(body.details).toMatchObject({ field: 'parentId', reason: 'kind_mismatch' });
   });
 
-  it('архивация непустого подразделения → 409 has_children; лист архивируется (#441)', async () => {
-    // #1028: корень управленческой структуры один — архивная проверка идёт
-    // на рабочем узле под компанией, иначе сработает защита корня.
+  it('удаление переносит детей и уволенных к родителю; корень и legal не удаляются (#881)', async () => {
     const root = await department('management');
     const parent = await department('management', root);
     const child = await department('management', parent);
+    // Уволенный прямой сотрудник тоже переезжает в данных, хотя в структуре
+    // не показывается (скоуп тестов issue).
+    await chat.prisma.user.update({
+      where: { id: chat.users.employee.id },
+      data: { status: 'deactivated', departmentId: parent },
+    });
 
-    const blocked = await chat.api(manager, 'POST', `/directory/departments/${parent}/archive`, {
+    const key = randomUUID();
+    const removed = await chat.api(manager, 'DELETE', `/directory/departments/${parent}`, { key });
+    expect(removed.status).toBe(204);
+    // Идемпотентность: повтор с тем же ключом — тот же 204, без второго события.
+    const replay = await chat.api(manager, 'DELETE', `/directory/departments/${parent}`, { key });
+    expect(replay.status).toBe(204);
+
+    const storedChild = await chat.prisma.department.findUnique({ where: { id: child } });
+    expect(storedChild?.parentId).toBe(root);
+    const storedUser = await chat.prisma.user.findUnique({
+      where: { id: chat.users.employee.id },
+      select: { departmentId: true },
+    });
+    expect(storedUser?.departmentId).toBe(root);
+    const deletedEvents = await chat.prisma.event.count({
+      where: { type: 'directory.department.deleted', aggregateId: parent },
+    });
+    expect(deletedEvents).toBe(1);
+    const deletedEvent = await chat.prisma.event.findFirst({
+      where: { type: 'directory.department.deleted', aggregateId: parent },
+    });
+    expect(deletedEvent?.payload).toMatchObject({
+      departmentId: parent,
+      parentId: root,
+      childDepartmentIds: [child],
+      userIds: [chat.users.employee.id],
+    });
+
+    const rootAttempt = await chat.api(manager, 'DELETE', `/directory/departments/${root}`, {
       key: randomUUID(),
     });
-    expect(blocked.status).toBe(409);
-    const body = (await blocked.json()) as {
-      code: string;
-      details: { reason: string };
-    };
-    expect(body.code).toBe(ErrorCode.CONFLICT);
-    expect(body.details.reason).toBe('has_children');
-
-    const childArchived = await chat.api(
-      manager,
-      'POST',
-      `/directory/departments/${child}/archive`,
-      { key: randomUUID() },
+    expect(rootAttempt.status).toBe(409);
+    expect(((await rootAttempt.json()) as { code: string }).code).toBe(
+      ErrorCode.DIRECTORY_DEPARTMENT_ROOT_FORBIDDEN,
     );
-    expect(childArchived.status).toBe(204);
 
-    const parentArchived = await chat.api(
-      manager,
-      'POST',
-      `/directory/departments/${parent}/archive`,
-      { key: randomUUID() },
+    const legal = await department('legal');
+    const legalAttempt = await chat.api(manager, 'DELETE', `/directory/departments/${legal}`, {
+      key: randomUUID(),
+    });
+    expect(legalAttempt.status).toBe(409);
+    expect(((await legalAttempt.json()) as { code: string }).code).toBe(
+      ErrorCode.DIRECTORY_DEPARTMENT_LEGAL_FORBIDDEN,
     );
-    expect(parentArchived.status).toBe(204);
   });
 
   it('PATCH /directory/positions/:id: kind неизменяем после создания (#441)', async () => {

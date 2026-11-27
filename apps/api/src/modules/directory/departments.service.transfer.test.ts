@@ -54,7 +54,6 @@ describe('DepartmentsService: назначение главы/зама пере�
     findParentChain: vi.fn(),
     findSubtreeIds: vi.fn(),
     findRef: vi.fn(),
-    countActiveChildren: vi.fn(),
     // Корней нет: тесты создают первый узел структуры (#1028).
     countRoots: vi.fn().mockResolvedValue(0),
     clearLeadershipIn: vi.fn(),
@@ -81,7 +80,6 @@ describe('DepartmentsService: назначение главы/зама пере�
     audience.roleIdsOfDepartments.mockResolvedValue([]);
     audience.departmentUserIds.mockResolvedValue([]);
     departments.lockForUpdate.mockResolvedValue(true);
-    departments.countActiveChildren.mockResolvedValue(0);
     departments.clearLeadershipIn.mockResolvedValue(null);
     users.findRef.mockResolvedValue({ id: 'u-1', status: 'active' });
     users.findDepartmentId.mockResolvedValue('dep-old');
