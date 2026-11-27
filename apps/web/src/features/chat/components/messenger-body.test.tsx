@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -33,7 +33,17 @@ vi.mock('../../../shared/api/users-list.js', () => ({
 vi.mock('../../../shared/chat/conversation-open-responder.js', () => ({
   ConversationOpenResponder: () => null,
 }));
-vi.mock('./conversation-list.js', () => ({ ConversationList: () => null }));
+vi.mock('./conversation-list.js', () => ({
+  ConversationList: ({
+    onSelect,
+  }: {
+    onSelect: (conversation: { id: string; type: string }) => void;
+  }) => (
+    <button type="button" onClick={() => onSelect({ id: 'c-2', type: 'task' })}>
+      выбрать беседу
+    </button>
+  ),
+}));
 vi.mock('./chat-workspace.js', () => ({ ChatWorkspace: () => null }));
 vi.mock('./chat-create-dialog.js', () => ({ ChatCreateDialog: () => null }));
 vi.mock('./chat-settings.js', () => ({ ChatSettings: () => null }));
@@ -45,7 +55,10 @@ import { MessengerBody } from './messenger-body.js';
 
 afterEach(cleanup);
 
-function mount(onTabChange: (tab: 'chats' | 'tasks' | 'settings') => void): void {
+function mount(
+  onTabChange: (tab: 'chats' | 'tasks' | 'settings') => void,
+  onSelectConversation: (id: string, type?: string) => void = vi.fn(),
+): void {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -54,7 +67,7 @@ function mount(onTabChange: (tab: 'chats' | 'tasks' | 'settings') => void): void
     <MessengerBody
       tab="chats"
       conversationId={ids.conv}
-      onSelectConversation={vi.fn()}
+      onSelectConversation={onSelectConversation}
       threadRootId={null}
       onOpenThread={vi.fn()}
       onCloseThread={vi.fn()}
@@ -72,5 +85,12 @@ describe('MessengerBody (#719)', () => {
     mount(onTabChange);
 
     expect(onTabChange).toHaveBeenCalledWith('tasks');
+  });
+
+  it('выбор строки списка передаёт хост-тип беседы (#1062)', () => {
+    const onSelect = vi.fn();
+    mount(vi.fn(), onSelect);
+    fireEvent.click(screen.getByRole('button', { name: 'выбрать беседу' }));
+    expect(onSelect).toHaveBeenCalledWith('c-2', 'task');
   });
 });

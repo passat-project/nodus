@@ -62,7 +62,9 @@ export function MessengerBody({
 }: {
   tab: ChatTab;
   conversationId?: string;
-  onSelectConversation: (conversationId: string) => void;
+  /** Тип беседы передаётся, когда он известен (строка списка, find-or-create):
+   *  хост выставляет вкладку по нему (#1062). */
+  onSelectConversation: (conversationId: string, type?: string) => void;
   /** Внутренняя навигация к беседе С ТРЕДОМ ОДНИМ действием (вердикт 25.09:
    *  переход по пересланному внутри мессенджера). Хост владеет способом:
    *  страница — один navigate, карточка — локальное состояние; по умолчанию —
@@ -141,7 +143,7 @@ export function MessengerBody({
       });
       await invalidateConversationLists(queryClient);
       setQuery('');
-      onSelectConversation(conversation.id);
+      onSelectConversation(conversation.id, conversation.type);
     } catch {
       setQuery('');
     }
@@ -326,7 +328,7 @@ export function MessengerBody({
             onLoadMore={() => void tabQuery.fetchNextPage()}
             activeId={conversationId}
             emptyLabel={tab === 'tasks' ? ui.chat.taskChatsEmpty : ui.common.empty}
-            onSelect={(conversation) => onSelectConversation(conversation.id)}
+            onSelect={(conversation) => onSelectConversation(conversation.id, conversation.type)}
           />
         </aside>
 

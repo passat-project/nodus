@@ -74,3 +74,41 @@ export function subscribeMessengerConversation(fn: () => void): () => void {
 export function messengerTabForType(type: string): 'chats' | 'tasks' {
   return type === 'task' || type === 'letter' ? 'tasks' : 'chats';
 }
+
+/**
+ * Адрес беседы со вкладкой по её типу (#1062): внешние входы — попап и
+ * `nodus://` оболочки, «открыть в новой вкладке», скопированная ссылка,
+ * пересылка — несут `?tab=tasks` для чатов задач/писем, и страница с первого
+ * кадра открывает СВОЙ список, а не «Чаты» с пустым левым списком. Для
+ * людей/каналов параметра нет — «Чаты» и так канонический адрес.
+ */
+export function chatConversationUrl(
+  conversationId: string,
+  options: { type?: string | null; threadRootId?: string | null } = {},
+): string {
+  const params = new URLSearchParams();
+  if (options.type && messengerTabForType(options.type) === 'tasks') params.set('tab', 'tasks');
+  if (options.threadRootId) params.set('thread', options.threadRootId);
+  const query = params.toString();
+  return `/chat/${conversationId}${query ? `?${query}` : ''}`;
+}
+
+/** Search-параметры вкладки для навигации к беседе по её типу (#1062):
+ *  задача/письмо → `{ tab: 'tasks' }`, остальные → `{}` (канонические «Чаты»). */
+export function messengerTabSearch(type: string | null | undefined): { tab?: 'tasks' } {
+  return type && messengerTabForType(type) === 'tasks' ? { tab: 'tasks' } : {};
+}
+
+/**
+ * Вкладка страницы `/chat` (#1062): явный `?tab=` главнее (ручной выбор не
+ * перебивается), без него — по типу уже разрешённой беседы, до разрешения —
+ * «Чаты». «Настройка» — отдельный подмодуль, к беседе не привязан.
+ */
+export function resolveChatTab(
+  searchTab: string | undefined,
+  conversationType: string | null | undefined,
+): 'chats' | 'tasks' | 'settings' {
+  if (searchTab === 'tasks' || searchTab === 'settings') return searchTab;
+  if (searchTab === 'chats') return 'chats';
+  return conversationType ? messengerTabForType(conversationType) : 'chats';
+}

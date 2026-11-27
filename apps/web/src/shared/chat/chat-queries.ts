@@ -190,7 +190,28 @@ export function useConversationLookup(conversationId: string, enabled: boolean) 
     },
     enabled: enabled && conversationId.length > 0,
     retry: false,
+    // Терминальность промаха на уровне кэша (#225/#1062): удалённая/недоступная
+    // беседа не заставляет КАЖДЫЙ маунт карточки листать до 5 страниц по 100.
+    // «Не найдена» — тоже ответ; свежая попытка — после окна, не на фокус окна.
+    staleTime: 5 * 60_000,
   });
+}
+
+/**
+ * Строка беседы по id для хостов, которым нужен её ТИП, а не экран (#1062):
+ * вкладка страницы `/chat`, вкладка карточки при восстановлении из `?cards=`.
+ * Сначала загруженные списки, при промахе — deep-link-поиск по страницам
+ * (потолок `useConversationLookup`), поэтому тип известен и для старой беседы
+ * за пределами первой страницы.
+ */
+export function useConversationById(conversationId: string | undefined) {
+  const { data } = useConversations();
+  const loaded = conversationId ? data?.items.find((c) => c.id === conversationId) : undefined;
+  const lookup = useConversationLookup(
+    conversationId ?? '',
+    Boolean(conversationId) && data !== undefined && !loaded,
+  );
+  return loaded ?? lookup.data ?? undefined;
 }
 
 /**

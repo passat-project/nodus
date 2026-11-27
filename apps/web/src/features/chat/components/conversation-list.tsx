@@ -10,6 +10,7 @@ import { cn } from '@nodus/ui/lib/utils';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { isDesktopShell } from '../../../shared/desktop/desktop-bridge.js';
 import { formatListTimestamp, withoutPatronymic } from '../../../shared/lib/format.js';
+import { chatConversationUrl } from '../../../shared/chat/messenger-nav.js';
 import { openInNewTab } from '../../../shared/lib/tab-bridge.js';
 import { ConversationAvatar } from '../../../shared/chat/conversation-avatar.js';
 import { ReadTicks } from '../../../shared/chat/read-ticks.js';
@@ -177,7 +178,10 @@ export function ConversationList({
           onAuxClick={(event) => {
             if (!isDesktopShell() || event.button !== 1) return;
             event.preventDefault();
-            openInNewTab(`/chat/${conversation.id}`, { focus: false });
+            // Вкладка — по типу беседы (#1062): чат задачи сразу на своём списке.
+            openInNewTab(chatConversationUrl(conversation.id, { type: conversation.type }), {
+              focus: false,
+            });
           }}
           aria-current={active}
           className={cn(

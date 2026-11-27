@@ -14,6 +14,7 @@ import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 
 import { useConversations } from './chat-queries.js';
+import { chatConversationUrl } from './messenger-nav.js';
 import { useUpdateConversation } from './conversation-actions.js';
 import { ConversationAvatar } from './conversation-avatar.js';
 import { conversationTitle } from './conversations.js';
@@ -57,7 +58,11 @@ export function ChatProfilePane({
 
   async function copyLink() {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/chat/${conversationId}`);
+      // Ссылка несёт вкладку по типу беседы (#1062): получатель открывает
+      // чат задачи на «Чатах задач и писем», а не на пустом списке «Чатов».
+      await navigator.clipboard.writeText(
+        `${window.location.origin}${chatConversationUrl(conversationId, { type: item?.type })}`,
+      );
       toast(ui.common.linkCopied);
     } catch {
       /* буфер обмена недоступен — без тоста */
