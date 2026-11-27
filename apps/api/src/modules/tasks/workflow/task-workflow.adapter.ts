@@ -1,3 +1,4 @@
+/* eslint-disable nodus-internal/max-lines-warn -- адаптер задач движка маршрутов: субъект, факты и роли (#635) — одна точка версии задач для движка */
 import { Inject, Injectable } from '@nestjs/common';
 import {
   ErrorCode,

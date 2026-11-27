@@ -1,3 +1,4 @@
+/* eslint-disable nodus-internal/max-lines-warn -- проверки формул-условий (#635): матрица источников и типов */
 import { describe, expect, it, vi } from 'vitest';
 import { ErrorCode } from '@nodus/contracts';
 import type {

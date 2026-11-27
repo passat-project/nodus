@@ -1,7 +1,10 @@
 import type { InjectionToken } from '@nestjs/common';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
-import type { ConditionRecordData } from '../../custom-fields/ports/condition-records.port.js';
+import type {
+  ConditionRecordData,
+  ConditionSelection,
+} from '../../custom-fields/ports/condition-records.port.js';
 import type { FormulaRecordData } from '../../custom-fields/ports/record-values.port.js';
 
 /**
@@ -23,14 +26,18 @@ export interface ProjectFormulaValues {
   projectNodes(projectId: string, tx?: TransactionClient): Promise<FormulaRecordData[]>;
 
   /** Проект полной выборки условий (#635): без фильтра видимости — квантор
-   *  честный; видимость фильтрует причина (рефс-ридер проектов). */
+   *  честный; видимость фильтрует причина (рефс-ридер проектов). Единичная
+   *  запись — потолка не превышает. */
   conditionProject(projectId: string, tx?: TransactionClient): Promise<ConditionRecordData | null>;
 
   /** Все папки проекта полной выборки условий (#635, субъект project_folders):
-   *  фильтр по типу папки делает вызывающий (typeId записи = вид папки). */
-  conditionNodes(projectId: string, tx?: TransactionClient): Promise<ConditionRecordData[]>;
+   *  фильтр по типу папки делает вызывающий (typeId записи = вид папки).
+   *  Сверх потолка CONDITION_LIMITS.selection записи не возвращаются
+   *  (`overflowed`) — проверка по такой выборке не считается. */
+  conditionNodes(projectId: string, tx?: TransactionClient): Promise<ConditionSelection>;
 
-  /** Проекты/папки по ссылкам поля-ссылки (#635, субъект ref_field). */
+  /** Проекты/папки по ссылкам поля-ссылки (#635, субъект ref_field):
+   *  единичные записи — потолка не превышают. */
   conditionRecords(
     kind: 'project' | 'node',
     ids: readonly string[],

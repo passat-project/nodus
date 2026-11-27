@@ -18,10 +18,13 @@ import {
   type TaskFormulaValues,
 } from '../../tasks/ports/task-formula-values.port.js';
 import { CUSTOM_FIELD_REGISTRY, type CustomFieldRegistry } from './custom-field-registry.port.js';
-import type {
-  ConditionHost,
-  ConditionRecordData,
-  ConditionRecordsReader,
+import {
+  capSelection,
+  singleSelection,
+  type ConditionHost,
+  type ConditionRecordData,
+  type ConditionRecordsReader,
+  type ConditionSelection,
 } from './condition-records.port.js';
 
 /** Типы атрибутов-ссылок → вид записи-цели (ref_field, #635). */
@@ -54,20 +57,20 @@ export class ConditionRecordsProvider implements ConditionRecordsReader {
     host: ConditionHost,
     subject: ConditionSubject,
     tx?: TransactionClient,
-  ): Promise<ConditionRecordData[]> {
+  ): Promise<ConditionSelection> {
     const hostRow = await this.hostRow(host, tx);
-    if (!hostRow) return [];
+    if (!hostRow) return capSelection([]);
     switch (subject.kind) {
       case 'self':
-        return [hostRow];
+        return singleSelection([hostRow]);
       case 'parent_task':
         return host.kind === 'task' && hostRow.parentId !== null
           ? await this.tasks.conditionTasks({ kind: 'one', id: hostRow.parentId }, tx)
-          : [];
+          : capSelection([]);
       case 'subtasks':
         return host.kind === 'task'
           ? await this.tasks.conditionTasks({ kind: 'subtasks_of', taskId: host.id }, tx)
-          : [];
+          : capSelection([]);
       case 'relations':
         return host.kind === 'task'
           ? await this.tasks.conditionTasks(
@@ -79,47 +82,49 @@ export class ConditionRecordsProvider implements ConditionRecordsReader {
               },
               tx,
             )
-          : [];
+          : capSelection([]);
       case 'folder_tasks':
         return host.kind === 'task' && hostRow.nodeId !== null
           ? await this.tasks.conditionTasks(
               { kind: 'node_tasks', nodeId: hostRow.nodeId, projectId: hostRow.projectId },
               tx,
             )
-          : [];
+          : capSelection([]);
       case 'project_tasks':
         return hostRow.projectId !== null
           ? await this.tasks.conditionTasks(
               { kind: 'project_tasks', projectId: hostRow.projectId },
               tx,
             )
-          : [];
+          : capSelection([]);
       case 'project_folders': {
-        if (hostRow.projectId === null) return [];
+        if (hostRow.projectId === null) return capSelection([]);
         const nodes = await this.projects.conditionNodes(hostRow.projectId, tx);
-        return subject.folderTypeId
-          ? nodes.filter((node) => node.typeId === subject.folderTypeId)
-          : nodes;
+        // Фильтр по виду сужает множество, но переполнение «все папки»
+        // всё равно переполняет выборку — потолок честный (fail-closed).
+        const filtered = subject.folderTypeId
+          ? nodes.records.filter((node) => node.typeId === subject.folderTypeId)
+          : nodes.records;
+        return { records: filtered, overflowed: nodes.overflowed };
       }
       case 'folder_type_tasks': {
-        if (hostRow.projectId === null) return [];
+        if (hostRow.projectId === null) return capSelection([]);
         const nodes = await this.projects.conditionNodes(hostRow.projectId, tx);
-        const folders = nodes.filter((node) => node.typeId === subject.folderTypeId);
-        const result: ConditionRecordData[] = [];
-        for (const folder of folders) {
-          result.push(
-            ...(await this.tasks.conditionTasks(
-              { kind: 'node_tasks', nodeId: folder.id, projectId: hostRow.projectId },
-              tx,
-            )),
-          );
-        }
-        return result;
+        const folders = nodes.records
+          .filter((node) => node.typeId === subject.folderTypeId)
+          .map((node) => node.id);
+        // Один запрос по всем папкам вида с общим потолком (#635): N+1 по
+        // папкам выносил потолок из request-пути.
+        const tasks = await this.tasks.conditionTasks(
+          { kind: 'nodes_tasks', nodeIds: folders, projectId: hostRow.projectId },
+          tx,
+        );
+        return { records: tasks.records, overflowed: nodes.overflowed || tasks.overflowed };
       }
       case 'project': {
-        if (hostRow.projectId === null) return [];
+        if (hostRow.projectId === null) return capSelection([]);
         const project = await this.projects.conditionProject(hostRow.projectId, tx);
-        return project ? [project] : [];
+        return singleSelection(project ? [project] : []);
       }
       case 'ref_field':
         return this.refFieldRecords(hostRow, subject.field, tx);
@@ -171,37 +176,39 @@ export class ConditionRecordsProvider implements ConditionRecordsReader {
     tx?: TransactionClient,
   ): Promise<ConditionRecordData | null> {
     if (host.kind === 'task') {
-      return (await this.tasks.conditionTasks({ kind: 'one', id: host.id }, tx))[0] ?? null;
+      const { records } = await this.tasks.conditionTasks({ kind: 'one', id: host.id }, tx);
+      return records[0] ?? null;
     }
     return this.letters.conditionLetter(host.id, tx);
   }
 
   /** Записи по ссылке из поля-ссылки (#635): вид цели — тип атрибута,
-   *  значение — uuid; пустое/несовместимое поле — пустая выборка. */
+   *  значение — uuid; пустое/несовместимое поле — пустая выборка. Значение
+   *  одно — выборка единичная, потолка не превышает. */
   private async refFieldRecords(
     hostRow: ConditionRecordData,
     field: string,
     tx?: TransactionClient,
-  ): Promise<ConditionRecordData[]> {
+  ): Promise<ConditionSelection> {
     const fieldId = customFieldIdOfKey(field);
-    if (fieldId === null) return [];
+    if (fieldId === null) return capSelection([]);
     const definitions = await this.registry.definitions({}, tx);
     const definition = definitions.find((entry) => entry.id === fieldId);
-    if (!definition) return [];
+    if (!definition) return capSelection([]);
     const targetKind = REF_FIELD_KINDS[definition.type];
-    if (!targetKind) return [];
+    if (!targetKind) return capSelection([]);
     const value = hostRow.values[fieldId];
-    if (typeof value !== 'string') return [];
+    if (typeof value !== 'string') return capSelection([]);
     switch (targetKind) {
       case 'task':
         return this.tasks.conditionTasks({ kind: 'ids', ids: [value] }, tx);
       case 'letter': {
         const letter = await this.letters.conditionLetter(value, tx);
-        return letter ? [letter] : [];
+        return singleSelection(letter ? [letter] : []);
       }
       case 'project':
       case 'node':
-        return this.projects.conditionRecords(targetKind, [value], tx);
+        return singleSelection(await this.projects.conditionRecords(targetKind, [value], tx));
     }
   }
 }

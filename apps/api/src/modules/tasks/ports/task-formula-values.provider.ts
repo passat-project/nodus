@@ -1,3 +1,4 @@
+/* eslint-disable nodus-internal/max-lines-warn -- задачи как источник формул и полной выборки (#632/#635): один селект и оба семейства методов чтения живут вместе */
 import { Inject, Injectable } from '@nestjs/common';
 import type {
   CustomFieldValues,
@@ -10,13 +11,17 @@ import type { FormulaValue } from '@nodus/formula-engine';
 import { PrismaService } from '../../../core/database/prisma.service.js';
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
 import type { Prisma } from '../../../generated/prisma/client.js';
+import { CONDITION_LIMITS } from '@nodus/contracts';
 import {
   PROCESS_CATALOG_READER,
   type ProcessCatalogReader,
 } from '../../workflows/ports/process-catalog-reader.port.js';
 import type { ProjectActor } from '../../projects/ports/project-reader.port.js';
 import { visibleTasksWhere, ViewerResolver } from '../access/task-visibility.js';
-import type { ConditionRecordData } from '../../custom-fields/ports/condition-records.port.js';
+import {
+  capSelection,
+  type ConditionSelection,
+} from '../../custom-fields/ports/condition-records.port.js';
 import type {
   FormulaRecordData,
   RecordReadOptions,
@@ -185,11 +190,13 @@ export class TaskFormulaValuesProvider implements TaskFormulaValues {
   async conditionTasks(
     query: Parameters<TaskFormulaValues['conditionTasks']>[0],
     tx?: TransactionClient,
-  ): Promise<ConditionRecordData[]> {
+  ): Promise<ConditionSelection> {
     const db = tx ?? this.prisma;
     // Полная выборка (#635): конфиденциальные и невидимые входят — квантор
     // «все выполнены» не должен врать; причина фильтрует видимость отдельно.
-    // Мягко удалённые исключены всегда.
+    // Мягко удалённые исключены всегда. Потолок CONDITION_LIMITS.selection:
+    // take +1 различает «ровно потолок» и «больше», сверх не возвращается.
+    const take = CONDITION_LIMITS.selection + 1;
     let rows: TaskRow[];
     switch (query.kind) {
       case 'one':
@@ -203,6 +210,7 @@ export class TaskFormulaValuesProvider implements TaskFormulaValues {
           where: { parentId: query.taskId, deletedAt: null },
           select: taskSelect,
           orderBy: [{ number: 'asc' }],
+          take,
         });
         break;
       case 'related_of': {
@@ -216,6 +224,7 @@ export class TaskFormulaValuesProvider implements TaskFormulaValues {
                 : { OR: [{ fromTaskId: query.taskId }, { toTaskId: query.taskId }] }),
           },
           select: { fromTaskId: true, toTaskId: true },
+          take,
         });
         const ids = [
           ...new Set(
@@ -231,16 +240,33 @@ export class TaskFormulaValuesProvider implements TaskFormulaValues {
                 where: { id: { in: ids }, deletedAt: null },
                 select: taskSelect,
                 orderBy: [{ number: 'asc' }],
+                take,
               });
         break;
       }
       case 'node_tasks':
         // Папка без проекта (аномалия данных) выборки не имеет — A7-2.
-        if (query.projectId === null) return [];
+        if (query.projectId === null) return capSelection([]);
         rows = await db.task.findMany({
           where: { nodeId: query.nodeId, projectId: query.projectId, deletedAt: null },
           select: taskSelect,
           orderBy: [{ number: 'asc' }],
+          take,
+        });
+        break;
+      case 'nodes_tasks':
+        // Задачи нескольких папок одним запросом (#635, folder_type_tasks):
+        // общий потолок на всё множество, N+1 по папкам не появляется.
+        if (query.projectId === null || query.nodeIds.length === 0) return capSelection([]);
+        rows = await db.task.findMany({
+          where: {
+            nodeId: { in: [...query.nodeIds] },
+            projectId: query.projectId,
+            deletedAt: null,
+          },
+          select: taskSelect,
+          orderBy: [{ number: 'asc' }],
+          take,
         });
         break;
       case 'project_tasks':
@@ -248,6 +274,7 @@ export class TaskFormulaValuesProvider implements TaskFormulaValues {
           where: { projectId: query.projectId, deletedAt: null },
           select: taskSelect,
           orderBy: [{ number: 'asc' }],
+          take,
         });
         break;
       case 'ids':
@@ -258,20 +285,23 @@ export class TaskFormulaValuesProvider implements TaskFormulaValues {
                 where: { id: { in: [...query.ids] }, deletedAt: null },
                 select: taskSelect,
                 orderBy: [{ number: 'asc' }],
+                take,
               });
         break;
     }
-    return rows.map((row) => ({
-      kind: 'task' as const,
-      id: row.id,
-      name: row.title,
-      typeId: row.typeId,
-      stageId: row.stageId,
-      values: (row.customFields ?? {}) as CustomFieldValues,
-      projectId: row.projectId,
-      parentId: row.parentId,
-      nodeId: row.nodeId,
-    }));
+    return capSelection(
+      rows.map((row) => ({
+        kind: 'task' as const,
+        id: row.id,
+        name: row.title,
+        typeId: row.typeId,
+        stageId: row.stageId,
+        values: (row.customFields ?? {}) as CustomFieldValues,
+        projectId: row.projectId,
+        parentId: row.parentId,
+        nodeId: row.nodeId,
+      })),
+    );
   }
 
   async visibleTaskIds(

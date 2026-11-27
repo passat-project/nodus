@@ -22,6 +22,7 @@ import {
   type LetterActor,
 } from '../../../../shared/mocks/data/letters.js';
 import { userRef } from '../../../../shared/mocks/data/users.js';
+import { stripValidatorOverride } from '../../../../shared/workflow/transition-window/validator-dto.js';
 import { actorUserRef, getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import {
   apiError,
@@ -95,7 +96,7 @@ export function letterTransitionsOf(letter: DemoLetter, actor: LetterActor): Wor
         blockedBy: [],
         canOverride: false,
         form: t.form.enabled ? t.form : null,
-        validators: t.rules.validators,
+        validators: t.rules.validators.map(stripValidatorOverride),
       };
     });
 }

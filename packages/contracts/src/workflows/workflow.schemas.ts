@@ -85,8 +85,9 @@ export const workflowConditionSchema = z.discriminatedUnion('kind', [
 ]);
 export type WorkflowCondition = z.infer<typeof workflowConditionSchema>;
 
-/** Валидаторы — гейты DoR/DoD: все должны пройти (И). */
-export const workflowValidatorSchema = z.discriminatedUnion('kind', [
+/** Шесть прежних видов гейтов (#378) — без настройки обхода; переиспользуются
+ *  полной схемой правил и DTO-схемой без изменений. */
+const LEGACY_VALIDATOR_OPTIONS = [
   /** Нет незавершённых подзадач. Строго (по умолчанию) мешают подзадачи и
    *  в работе, и на утверждении; `allowReview` — подзадачи на утверждении
    *  не мешают (ADR-0020, дополнение 2). Нет ключа = строго (редактор
@@ -102,6 +103,13 @@ export const workflowValidatorSchema = z.discriminatedUnion('kind', [
   /** Приложены файлы итога (#380): у текущей ревизии итога не меньше `min`
    *  живых вложений (kind image|file; стикеры не считаются). */
   z.object({ kind: z.literal('result_files'), min: z.number().int().min(1).max(5) }),
+] as const;
+
+/** Валидаторы — гейты DoR/DoD: все должны пройти (И). Полная схема правил
+ *  (хранится в маршруте, читается сервером): у records/formula — настройка
+ *  обхода. */
+export const workflowValidatorSchema = z.discriminatedUnion('kind', [
+  ...LEGACY_VALIDATOR_OPTIONS,
   /** Проверка по общей выборке (#635): кнопка видна, но не пускает, пока
    *  выборка не истинна; причина — `title` настройщика со ссылками на
    *  записи-нарушители (видимые актору; невидимые — счётчиком). Шесть прежних
@@ -124,6 +132,31 @@ export const workflowValidatorSchema = z.discriminatedUnion('kind', [
 ]);
 export type WorkflowValidator = z.infer<typeof workflowValidatorSchema>;
 export type WorkflowValidatorKind = WorkflowValidator['kind'];
+
+/** Валидатор в DTO доступности (кнопка/действие карточки): records/formula
+ *  БЕЗ настройки обхода — `override.extraUserIds` (до 50 uuid сотрудников)
+ *  не должен уходить каждому, кто видит карточку; обходит ли актор проверку,
+ *  решает сервер (`canOverride`). */
+export const workflowValidatorDtoSchema = z.discriminatedUnion('kind', [
+  ...LEGACY_VALIDATOR_OPTIONS,
+  // strict: настройка обхода в DTO — запрет не только semantics, но и
+  // синтаксиса (лишний ключ отвергается, а не молча стрипается zod).
+  z
+    .object({
+      kind: z.literal('records'),
+      title: z.string().trim().min(1).max(CONDITION_LIMITS.titleLength),
+      query: conditionQuerySchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('formula'),
+      title: z.string().trim().min(1).max(CONDITION_LIMITS.titleLength),
+      formula: formulaNodeSchema,
+    })
+    .strict(),
+]);
+export type WorkflowValidatorDto = z.infer<typeof workflowValidatorDtoSchema>;
 
 /** Пост-действия — что сделать после перехода (в той же транзакции).
  *  Встроенное (не правило): completedAt ставится входом в «Итог» (closed)
@@ -218,6 +251,14 @@ export const transitionBlockReasonSchema = z.object({
   title: z.string().optional(),
   records: z.array(conditionRecordRefSchema).max(CONDITION_LIMITS.reasonRecords).optional(),
   hiddenCount: z.number().int().min(0).optional(),
+  /** Для records — полное число записей-нарушителей проверки: в `records`
+   *  попадают только первые видимые (до reasonRecords), хвост интерфейс
+   *  показывает строкой «и ещё N записей». */
+  totalCount: z.number().int().min(0).optional(),
+  /** Для records — выборка превысила потолок CONDITION_LIMITS.selection:
+   *  проверка НЕ считалась (fail-closed), записей-нарушителей нет; человек
+   *  видит строку «проверка не может быть посчитана». */
+  overflow: z.literal(true).optional(),
 });
 export type TransitionBlockReason = z.infer<typeof transitionBlockReasonSchema>;
 
@@ -251,8 +292,9 @@ export const workflowTransitionSchema = z.object({
   /** Префилл формульных слотов окна (#632, Р12): сервер посчитал значения
    *  при открытии; человек может поправить, в тело уходит значением. */
   formPrefill: z.record(z.string(), customFieldValueSchema).optional(),
-  /** Гейты кнопки — для живого списка условий в окне. */
-  validators: z.array(workflowValidatorSchema),
+  /** Гейты кнопки — для живого списка условий в окне; настройка обхода
+   *  (extraUserIds) не уходит клиенту — обходит ли актор, решает сервер. */
+  validators: z.array(workflowValidatorDtoSchema),
 });
 export type WorkflowTransition = z.infer<typeof workflowTransitionSchema>;
 

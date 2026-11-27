@@ -18,6 +18,7 @@ import {
   windowLockDenial,
 } from './tasks-transitions-gates.js';
 import { conditionGateReasonsOf } from './tasks-condition-gates.js';
+import { stripValidatorOverride } from '../../../../shared/workflow/transition-window/validator-dto.js';
 
 /**
  * Действия маршрута в мок-мире (#633): кнопки без смены статуса. Грамматика
@@ -44,7 +45,7 @@ function actionsOf(task: TaskListItem): WorkflowAction[] {
       form: a.form.enabled ? a.form : null,
       // Проверки действия (#635): та же грамматика, что у переходов.
       blockedBy: conditionGateReasonsOf(task, a.rules.validators),
-      validators: a.rules.validators,
+      validators: a.rules.validators.map(stripValidatorOverride),
     }));
 }
 

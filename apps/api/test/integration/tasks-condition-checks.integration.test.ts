@@ -1,6 +1,8 @@
+/* eslint-disable nodus-internal/max-lines-warn -- общая выборка (#635): причины, обход, формулы и потолок — один живой набор */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   apiErrorResponseSchema,
+  CONDITION_LIMITS,
   ErrorCode,
   Permission,
   type ConditionQuery,
@@ -25,6 +27,7 @@ describe.skipIf(!process.env.DATABASE_URL)('общая выборка (#635): п
   let letterStageNext = '';
   let reasonHost = '';
   let mixHost = '';
+  let overflowHost = '';
   const hosts: Record<string, string> = {};
 
   beforeAll(async () => {
@@ -35,9 +38,9 @@ describe.skipIf(!process.env.DATABASE_URL)('общая выборка (#635): п
     await w.addField('letterMark', 'text');
 
     // Проект: alice — руководитель, bob — участник (роль в проекте), carol — мимо.
-    const projectTypes = (await (
-      await w.fx.api(w.alice, 'GET', '/projects/types')
-    ).json()) as { id: string }[];
+    const projectTypes = (await (await w.fx.api(w.alice, 'GET', '/projects/types')).json()) as {
+      id: string;
+    }[];
     const projectRes = await w.fx.api(w.alice, 'POST', '/projects', {
       body: {
         typeId: projectTypes[0]!.id,
@@ -109,7 +112,11 @@ describe.skipIf(!process.env.DATABASE_URL)('общая выборка (#635): п
     });
 
     // Хосты обхода: у каждого открытая подзадача (проверка «все выполнены» ложна).
-    const overrideHost = async (key: string, assignee: string, creator?: string): Promise<string> => {
+    const overrideHost = async (
+      key: string,
+      assignee: string,
+      creator?: string,
+    ): Promise<string> => {
       const id = await t({ title: `Обход ${key}`, assignee, creator });
       await t({ title: `открытая подзадача ${key}`, mark: 'OPEN', parent: id });
       hosts[key] = id;
@@ -142,106 +149,136 @@ describe.skipIf(!process.env.DATABASE_URL)('общая выборка (#635): п
     await w.addRecordsProbe({
       key: 'reason:7',
       title: 'Не принято: задания смежников',
-      query: q({ kind: 'subtasks' }, [{ kind: 'field', field: markField, op: 'eq', value: 'NOPE' }], 'all'),
+      query: q(
+        { kind: 'subtasks' },
+        [{ kind: 'field', field: markField, op: 'eq', value: 'NOPE' }],
+        'all',
+      ),
     });
     await w.addRecordsProbe({
       key: 'reason:mix',
       title: 'Не принято: скрытая',
-      query: q({ kind: 'subtasks' }, [{ kind: 'field', field: markField, op: 'eq', value: 'X' }], 'all'),
+      query: q(
+        { kind: 'subtasks' },
+        [{ kind: 'field', field: markField, op: 'eq', value: 'X' }],
+        'all',
+      ),
     });
 
     // Обход: default/extraUserIds/projectRole/право + смеси (пройденная
     // проверка не даёт прав своей политикой — регрессия #635).
-    await w.addTaskTransition({
-      name: 'Обход доп.сотрудник',
-      conditions: [{ kind: 'role_in', roles: ['assignee', 'creator'] }],
-      validators: [
-        {
-          kind: 'records',
-          title: 'Не принято',
-          query: failQuery,
-          override: { mode: 'default', extraUserIds: [w.bob.id] },
-        },
-      ],
-    }).then((id) => w.probeOf.set('ov:extra', id));
-    await w.addTaskTransition({
-      name: 'Обход роль',
-      conditions: [{ kind: 'role_in', roles: ['assignee', 'creator'] }],
-      validators: [
-        {
-          kind: 'records',
-          title: 'Не принято',
-          query: failQuery,
-          override: { mode: 'default', extraUserIds: [], projectRole: 'participant' },
-        },
-      ],
-    }).then((id) => w.probeOf.set('ov:role', id));
-    await w.addTaskTransition({
-      name: 'Обход право',
-      conditions: [{ kind: 'role_in', roles: ['assignee', 'creator'] }],
-      validators: [
-        {
-          kind: 'records',
-          title: 'Не принято',
-          query: failQuery,
-          override: { mode: 'default', extraUserIds: [] },
-        },
-      ],
-    }).then((id) => w.probeOf.set('ov:right', id));
-    await w.addTaskTransition({
-      name: 'Эскалация через пройденную',
-      conditions: [{ kind: 'role_in', roles: ['assignee', 'creator'] }],
-      validators: [
-        {
-          kind: 'records',
-          title: 'Не принято',
-          query: failQuery,
-          override: { mode: 'default', extraUserIds: [] },
-        },
-        {
-          kind: 'records',
-          title: 'Всегда ок',
-          query: passQuery,
-          override: { mode: 'default', extraUserIds: [w.carol.id] },
-        },
-      ],
-    }).then((id) => w.probeOf.set('ov:esc', id));
-    await w.addTaskTransition({
-      name: 'Запрет через пройденную',
-      conditions: [{ kind: 'role_in', roles: ['assignee', 'creator'] }],
-      validators: [
-        {
-          kind: 'records',
-          title: 'Не принято',
-          query: failQuery,
-          override: { mode: 'default', extraUserIds: [] },
-        },
-        {
-          kind: 'records',
-          title: 'Всегда ок',
-          query: passQuery,
-          override: { mode: 'forbidden', extraUserIds: [] },
-        },
-      ],
-    }).then((id) => w.probeOf.set('ov:strict', id));
-    await w.addTaskTransition({
-      name: 'Обход руководитель',
-      conditions: [{ kind: 'role_in', roles: ['assignee', 'creator'] }],
-      validators: [
-        {
-          kind: 'records',
-          title: 'Не принято',
-          query: failQuery,
-          override: { mode: 'default', extraUserIds: [] },
-        },
-      ],
-    }).then((id) => w.probeOf.set('ov:manager', id));
+    await w
+      .addTaskTransition({
+        name: 'Обход доп.сотрудник',
+        conditions: [{ kind: 'role_in', roles: ['assignee', 'creator'] }],
+        validators: [
+          {
+            kind: 'records',
+            title: 'Не принято',
+            query: failQuery,
+            override: { mode: 'default', extraUserIds: [w.bob.id] },
+          },
+        ],
+      })
+      .then((id) => w.probeOf.set('ov:extra', id));
+    await w
+      .addTaskTransition({
+        name: 'Обход роль',
+        conditions: [{ kind: 'role_in', roles: ['assignee', 'creator'] }],
+        validators: [
+          {
+            kind: 'records',
+            title: 'Не принято',
+            query: failQuery,
+            override: { mode: 'default', extraUserIds: [], projectRole: 'participant' },
+          },
+        ],
+      })
+      .then((id) => w.probeOf.set('ov:role', id));
+    await w
+      .addTaskTransition({
+        name: 'Обход право',
+        conditions: [{ kind: 'role_in', roles: ['assignee', 'creator'] }],
+        validators: [
+          {
+            kind: 'records',
+            title: 'Не принято',
+            query: failQuery,
+            override: { mode: 'default', extraUserIds: [] },
+          },
+        ],
+      })
+      .then((id) => w.probeOf.set('ov:right', id));
+    await w
+      .addTaskTransition({
+        name: 'Эскалация через пройденную',
+        conditions: [{ kind: 'role_in', roles: ['assignee', 'creator'] }],
+        validators: [
+          {
+            kind: 'records',
+            title: 'Не принято',
+            query: failQuery,
+            override: { mode: 'default', extraUserIds: [] },
+          },
+          {
+            kind: 'records',
+            title: 'Всегда ок',
+            query: passQuery,
+            override: { mode: 'default', extraUserIds: [w.carol.id] },
+          },
+        ],
+      })
+      .then((id) => w.probeOf.set('ov:esc', id));
+    await w
+      .addTaskTransition({
+        name: 'Запрет через пройденную',
+        conditions: [{ kind: 'role_in', roles: ['assignee', 'creator'] }],
+        validators: [
+          {
+            kind: 'records',
+            title: 'Не принято',
+            query: failQuery,
+            override: { mode: 'default', extraUserIds: [] },
+          },
+          {
+            kind: 'records',
+            title: 'Всегда ок',
+            query: passQuery,
+            override: { mode: 'forbidden', extraUserIds: [] },
+          },
+        ],
+      })
+      .then((id) => w.probeOf.set('ov:strict', id));
+    await w
+      .addTaskTransition({
+        name: 'Обход руководитель',
+        conditions: [{ kind: 'role_in', roles: ['assignee', 'creator'] }],
+        validators: [
+          {
+            kind: 'records',
+            title: 'Не принято',
+            query: failQuery,
+            override: { mode: 'default', extraUserIds: [] },
+          },
+        ],
+      })
+      .then((id) => w.probeOf.set('ov:manager', id));
 
     // Формулы: истина / ложь / ошибка вычисления.
     for (const [key, formula] of [
       ['formula:true', { kind: 'literal', value: true }],
       ['formula:false', { kind: 'literal', value: false }],
-      ['formula:error', { kind: 'op', op: 'div', args: [{ kind: 'literal', value: 1 }, { kind: 'literal', value: 0 }] }],
+      [
+        'formula:error',
+        {
+          kind: 'op',
+          op: 'div',
+          args: [
+            { kind: 'literal', value: 1 },
+            { kind: 'literal', value: 0 },
+          ],
+        },
+      ],
     ] as const) {
       const id = await w.addTaskTransition({
         name: `Формула ${key}`,
@@ -258,7 +295,8 @@ describe.skipIf(!process.env.DATABASE_URL)('общая выборка (#635): п
       w.probeOf.set(key, id);
     }
 
-    // Письмо-хост: своя запись с полем, проект письма, связи (их у письма нет).
+    // Письмо-хост: своя запись с полем и проект письма (связей у письма нет —
+    // субъект relations из карты письма убран, публикация его отвергает).
     const letterProbe = async (key: string, query: ConditionQuery): Promise<void> => {
       const row = await prisma.workflowTransition.create({
         data: {
@@ -271,9 +309,7 @@ describe.skipIf(!process.env.DATABASE_URL)('общая выборка (#635): п
           intent: 'action',
           sortOrder: 970 + w.cleanupIds.transitions.length,
           rules: {
-            conditions: [
-              { kind: 'permission', permission: Permission.CORRESPONDENCE_REGISTER },
-            ],
+            conditions: [{ kind: 'permission', permission: Permission.CORRESPONDENCE_REGISTER }],
             validators: [
               {
                 kind: 'records',
@@ -290,11 +326,43 @@ describe.skipIf(!process.env.DATABASE_URL)('общая выборка (#635): п
       w.cleanupIds.transitions.push(row.id);
       w.probeOf.set(key, row.id);
     };
-    await letterProbe('letter:self', q({ kind: 'self' }, [
-      { kind: 'field', field: w.cf('letterMark'), op: 'eq', value: 'ВХ-1' },
-    ]));
+    await letterProbe(
+      'letter:self',
+      q({ kind: 'self' }, [{ kind: 'field', field: w.cf('letterMark'), op: 'eq', value: 'ВХ-1' }]),
+    );
     await letterProbe('letter:project', q({ kind: 'project' }));
-    await letterProbe('letter:relations', q({ kind: 'relations', relation: 'relates', direction: 'both' }, [], 'any'));
+
+    // Потолок выборки (#635): 501 подзадача — квантор не считается.
+    overflowHost = await t({ title: 'Переполнение' });
+    await prisma.task.createMany({
+      data: Array.from({ length: CONDITION_LIMITS.selection + 1 }, (_, i) => ({
+        title: `подзадача-потолок ${i} ${runId}`,
+        typeId: w.taskTypeId,
+        workflowId: w.workflowId,
+        stageId: w.stage.new,
+        systemState: 'backlog',
+        stageOrder: `ov${runId}${i}`,
+        creatorId: w.alice.id,
+        assigneeId: w.bob.id,
+        parentId: overflowHost,
+      })),
+    });
+    // createMany не проходит через фабрику мира — ids вносятся в уборку руками.
+    w.cleanupIds.tasks.push(
+      ...(
+        await prisma.task.findMany({
+          where: { parentId: overflowHost },
+          select: { id: true },
+        })
+      ).map((row) => row.id),
+    );
+    await w
+      .addRecordsProbe({
+        key: 'overflow',
+        title: 'Все подзадачи выполнены',
+        query: q({ kind: 'subtasks' }, [{ kind: 'system_state', state: 'closed' }], 'all'),
+      })
+      .then((id) => w.probeOf.set('overflow', id));
   }, 240_000);
 
   afterAll(async () => {
@@ -423,16 +491,24 @@ describe.skipIf(!process.env.DATABASE_URL)('общая выборка (#635): п
     });
   });
 
-  it('письмо: своя запись с полем, проект письма; связей у письма нет (пусто)', async () => {
+  it('письмо: своя запись с полем, проект письма', async () => {
     const selfReason = await w.reasonOf(w.alice, letterId, 'letter:self', 'letters');
     expect(selfReason?.records?.map((r) => r.id)).toEqual([letterId]);
     expect(selfReason?.records?.[0]?.entityKind).toBe('letter');
     const projectReason = await w.reasonOf(w.alice, letterId, 'letter:project', 'letters');
     expect(projectReason?.records?.map((r) => r.id)).toEqual([projectId]);
-    // Субъект письму разрешён картой категории, но связи писем пока пусты:
-    // «хотя бы одна» на пустой выборке — ложь (кнопка держит, записей нет).
-    const relationsButton = await w.buttonOf(w.alice, letterId, 'letter:relations', 'letters');
-    const relationsReason = relationsButton?.blockedBy.find((r) => r.kind === 'records');
-    expect(relationsReason).toMatchObject({ kind: 'records', records: [], hiddenCount: 0 });
+  });
+
+  it('потолок выборки: 501 подзадача — кнопка держит с overflow-причиной, записей нет (#635)', async () => {
+    // Выборка (подзадачи) больше CONDITION_LIMITS.selection — квантор «все»
+    // не считается (fail-closed): причина-переполнение без записей.
+    const reason = await w.reasonOf(w.bob, overflowHost, 'overflow');
+    expect(reason).toMatchObject({
+      kind: 'records',
+      title: 'Все подзадачи выполнены',
+      overflow: true,
+      records: [],
+    });
+    expect(reason?.totalCount).toBeUndefined();
   });
 });

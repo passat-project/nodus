@@ -13,6 +13,7 @@ import {
   type ConditionHost,
   type ConditionRecordData,
   type ConditionRecordsReader,
+  type ConditionSelection,
 } from '../../../custom-fields/ports/condition-records.port.js';
 import {
   CUSTOM_FIELD_REGISTRY,
@@ -25,7 +26,7 @@ import {
 import { ProcessTypesRepository } from '../../types/process-types.repository.js';
 import { WorkflowRepository } from '../workflow.repository.js';
 import type { ConditionStageIndex, ConditionStageInfo } from './condition-logic.js';
-import { evaluateSelection, recordsReason } from './condition-logic.js';
+import { evaluateSelection, overflowReason, recordsReason } from './condition-logic.js';
 
 /** Условия/проверки общей выборки и формулы (#635). */
 export type ConditionRule =
@@ -75,17 +76,17 @@ export class ConditionEvaluator {
     );
     const typeStages = new Map<string, Map<string, ConditionStageInfo>>();
     const stageIndex: ConditionStageIndex = { stages: typeStages };
-    const selectionCache = new Map<string, ConditionRecordData[]>();
+    const selectionCache = new Map<string, ConditionSelection>();
     const conditionCache = new Map<string, boolean>();
     const reasonCache = new Map<string, TransitionBlockReason | null>();
 
-    const selectionOf = async (subject: ConditionSubject): Promise<ConditionRecordData[]> => {
+    const selectionOf = async (subject: ConditionSubject): Promise<ConditionSelection> => {
       const key = JSON.stringify(subject);
       const cached = selectionCache.get(key);
       if (cached !== undefined) return cached;
-      const rows = await this.records.selection(host, subject, tx);
-      selectionCache.set(key, rows);
-      return rows;
+      const selection = await this.records.selection(host, subject, tx);
+      selectionCache.set(key, selection);
+      return selection;
     };
 
     const ensureStages = async (typeIds: readonly string[]): Promise<void> => {
@@ -119,11 +120,24 @@ export class ConditionEvaluator {
 
     const evaluateRecords = async (
       rule: Extract<ConditionRule, { kind: 'records' }>,
-    ): Promise<{ passed: boolean; violators: ConditionRecordData[] }> => {
-      const records = await selectionOf(rule.query.subject);
+    ): Promise<{
+      passed: boolean;
+      violators: ConditionRecordData[];
+      overflowed: boolean;
+    }> => {
+      const { records, overflowed } = await selectionOf(rule.query.subject);
       await ensureStages(typeIdsOf(records));
       // ConditionRecordData структурно покрывает ConditionRow логики.
-      return evaluateSelection(records, rule.query.where, rule.query.quantifier, stageIndex, defs);
+      const result = evaluateSelection(
+        records,
+        rule.query.where,
+        rule.query.quantifier,
+        stageIndex,
+        defs,
+      );
+      // Потолок выборки (#635): сверх потолка квантор не считается —
+      // условие ложно, проверка непройдена (fail-closed).
+      return { ...result, passed: result.passed && !overflowed, overflowed };
     };
 
     const evaluateFormula = async (
@@ -154,8 +168,10 @@ export class ConditionEvaluator {
         if (reasonCache.has(key)) return reasonCache.get(key)!;
         let reason: TransitionBlockReason | null = null;
         if (rule.kind === 'records') {
-          const { passed, violators } = await evaluateRecords(rule);
-          if (!passed) {
+          const { passed, violators, overflowed } = await evaluateRecords(rule);
+          if (overflowed) {
+            reason = overflowReason(rule.title);
+          } else if (!passed) {
             reason = recordsReason(rule.title, violators, await visibleOf(violators));
           }
         } else if (!(await evaluateFormula(rule.formula))) {

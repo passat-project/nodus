@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import type { CustomFieldValues } from '@nodus/contracts';
+import { CONDITION_LIMITS, type CustomFieldValues } from '@nodus/contracts';
 import type { FormulaValue } from '@nodus/formula-engine';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
-import type { ConditionRecordData } from '../../custom-fields/ports/condition-records.port.js';
+import {
+  capSelection,
+  type ConditionRecordData,
+  type ConditionSelection,
+} from '../../custom-fields/ports/condition-records.port.js';
 import type { FormulaRecordData } from '../../custom-fields/ports/record-values.port.js';
 import { NodeKindsRepository } from '../project-node-kinds.repository.js';
 import { ProjectNodesRepository, type ProjectNodeRow } from '../project-nodes.repository.js';
@@ -70,10 +74,11 @@ export class ProjectFormulaValuesProvider implements ProjectFormulaValues {
     return row ? toConditionProject(row) : null;
   }
 
-  /** Все папки проекта полной выборки (#635): вид — в typeId записи. */
-  async conditionNodes(projectId: string, tx?: TransactionClient): Promise<ConditionRecordData[]> {
-    const rows = await this.nodes.listByProject(projectId, tx);
-    return rows.map((row) => toConditionNode(row));
+  /** Все папки проекта полной выборки (#635): вид — в typeId записи;
+   *  сверх потолка не возвращаются (overflowed — проверка не считается). */
+  async conditionNodes(projectId: string, tx?: TransactionClient): Promise<ConditionSelection> {
+    const rows = await this.nodes.listByProject(projectId, tx, CONDITION_LIMITS.selection + 1);
+    return capSelection(rows.map((row) => toConditionNode(row)));
   }
 
   /** Проекты/папки по ссылкам (#635, ref_field): несуществующие пропускаются. */

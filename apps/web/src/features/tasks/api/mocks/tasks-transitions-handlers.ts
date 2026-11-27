@@ -33,6 +33,7 @@ import {
 import { placeOfTask, segmentReaderOfTask } from '../../../../shared/mocks/data/numbering-store.js';
 import { planNumbers } from '../../../../shared/mocks/data/numbering-create.js';
 import { numberingFailureResponse } from '../../../../shared/custom-fields/mocks/numbering-responses.js';
+import { stripValidatorOverride } from '../../../../shared/workflow/transition-window/validator-dto.js';
 import {
   applyForm,
   blockedByOf,
@@ -99,7 +100,7 @@ export function transitionsOf(task: TaskListItem): WorkflowTransition[] {
       blockedBy: blockedByOf(task, route, t.id),
       canOverride: true,
       form: t.form.enabled ? t.form : null,
-      validators: t.rules.validators,
+      validators: t.rules.validators.map(stripValidatorOverride),
     };
     (t.fromStageId === null ? anyFrom : own).push(item);
   }

@@ -1,3 +1,4 @@
+/* eslint-disable nodus-internal/max-lines-warn -- каркас интеграционных наборов выборки (#635): мир целиком */
 import { expect } from 'vitest';
 import {
   Permission,
@@ -70,9 +71,19 @@ export interface ConditionWorld {
   }): Promise<string>;
   probeOf: Map<string, string>;
   /** Причина records кнопки-пробы для пользователя (null — пройдена). */
-  reasonOf(user: ChatUser, entityId: string, key: string, path?: string): Promise<TransitionBlockReason | null>;
+  reasonOf(
+    user: ChatUser,
+    entityId: string,
+    key: string,
+    path?: string,
+  ): Promise<TransitionBlockReason | null>;
   /** Кнопка-переход по ключу пробы (для execute/обхода). */
-  buttonOf(user: ChatUser, entityId: string, key: string, path?: string): Promise<WorkflowTransition | null>;
+  buttonOf(
+    user: ChatUser,
+    entityId: string,
+    key: string,
+    path?: string,
+  ): Promise<WorkflowTransition | null>;
   /** Реестры уборки: специфичные сущности набора. */
   cleanupIds: {
     transitions: string[];
@@ -295,7 +306,10 @@ export async function setupConditionWorld(): Promise<ConditionWorld> {
   world.buttonOf = async (user, entityId, key, path = 'tasks') => {
     const res = await fx.api(user, 'GET', `/${path}/${entityId}/transitions`);
     expect(res.status, await res.clone().text()).toBe(200);
-    return ((await res.json()) as WorkflowTransition[]).find((t) => t.id === world.probeOf.get(key)) ?? null;
+    return (
+      ((await res.json()) as WorkflowTransition[]).find((t) => t.id === world.probeOf.get(key)) ??
+      null
+    );
   };
 
   world.reasonOf = async (user, entityId, key, path = 'tasks') => {

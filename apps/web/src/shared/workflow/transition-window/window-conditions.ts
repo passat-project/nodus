@@ -2,7 +2,7 @@ import type {
   EffectiveSection,
   TransitionBlockReason,
   WorkflowTransition,
-  WorkflowValidator,
+  WorkflowValidatorDto,
 } from '@nodus/contracts';
 import { customFieldIdOfKey, gateFixableBy, isCustomFieldValueFilled } from '@nodus/contracts';
 
@@ -12,7 +12,7 @@ import type { TransitionWindowContext } from './window-context.js';
 
 /** Строка живого списка условий окна: ✓/✗ и исправимость окном. */
 export interface WindowConditionLine {
-  validator: WorkflowValidator;
+  validator: WorkflowValidatorDto;
   ok: boolean;
   /** Окно этого актора может исправить (иначе — ссылка «Открыть …»). */
   fixable: boolean;

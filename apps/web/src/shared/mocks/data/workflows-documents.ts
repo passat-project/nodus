@@ -1,3 +1,4 @@
+/* eslint-disable nodus-internal/max-lines-warn -- демо-документы маршрутов (#635): канон мок-мира целиком */
 import type { WorkflowCondition, WorkflowDocument, WorkflowValidator } from '@nodus/contracts';
 
 import {

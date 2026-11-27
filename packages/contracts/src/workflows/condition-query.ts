@@ -28,6 +28,10 @@ export const CONDITION_LIMITS = {
   overrideUsers: 50,
   /** Подпись причины/условия, которую пишет настройщик. */
   titleLength: 200,
+  /** Потолок выборки (записей): как FORMULA_LIMITS.selection — защита
+   *  request-пути. Выборка больше потолка НЕ считается (fail-closed):
+   *  условие ложно, проверка непройдена с причиной-переполнением. */
+  selection: 500,
 } as const;
 
 /**
@@ -79,7 +83,7 @@ export const CONDITION_SUBJECTS_BY_CATEGORY = {
     'project',
     'ref_field',
   ],
-  letter: ['self', 'relations', 'project_tasks', 'project_folders', 'project', 'ref_field'],
+  letter: ['self', 'project_tasks', 'project_folders', 'project', 'ref_field'],
 } as const satisfies Record<ProcessCategory, readonly ConditionSubjectKind[]>;
 
 /** Операторы сравнения значения поля. Совместимость оператора с типом

@@ -23,6 +23,7 @@ const mkStage = (
   color: 'neutral',
   systemState,
   outcome: systemState === 'closed' ? 'success' : null,
+  resultIssued: false,
   isInitial: false,
   sortOrder: 0,
   ...extra,

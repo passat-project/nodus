@@ -333,6 +333,10 @@ export const workflowProblemCodeSchema = z.enum([
   'condition_folder_type_unknown',
   'condition_field_op_incompatible',
   'condition_query_unfiltered',
+  /** Субъект «по ссылке из поля» указывает на атрибут не-ссылочного типа
+   *  (сотрудник, подразделение, контрагент, перечисление…): выборка всегда
+   *  пуста — проверка-пустышка. */
+  'condition_ref_field_not_link',
   /** Проверка records/formula без подписи причины или без самой формулы:
    *  черновик конструктора не переживёт схему документа — называем это
    *  человеком в редакторе до публикации. */

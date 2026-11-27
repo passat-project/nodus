@@ -10,7 +10,7 @@ import {
   windowFieldKeys,
   windowItems,
 } from './transition-form.schemas.js';
-import type { TransitionBlockReason, WorkflowTransitionRules } from './workflow.schemas.js';
+import type { TransitionBlockReason, WorkflowValidatorDto } from './workflow.schemas.js';
 
 /**
  * Эффективное окно перехода (#380, Р4 плана): разделы настройки кнопки ∪
@@ -74,7 +74,7 @@ export type EffectiveSection =
 
 export function effectiveWindowSections(
   form: TransitionForm | null,
-  rules: Pick<WorkflowTransitionRules, 'validators'>,
+  rules: { validators: readonly WorkflowValidatorDto[] },
 ): EffectiveSection[] {
   const sections = new Map<TransitionFormSectionKind, EffectiveSection>();
   const ordered: EffectiveSection[] = [];

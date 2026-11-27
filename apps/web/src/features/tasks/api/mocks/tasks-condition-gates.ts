@@ -4,7 +4,7 @@ import type {
   TaskListItem,
   TransitionBlockReason,
   WorkflowDocument,
-  WorkflowValidator,
+  WorkflowValidatorDto,
 } from '@nodus/contracts';
 import { CONDITION_LIMITS, isFinalState } from '@nodus/contracts';
 
@@ -100,10 +100,11 @@ function selectionOf(task: TaskListItem, query: ConditionQuery): TaskListItem[] 
 
 /** Причина непройденной проверки records/formula; null — проверка пройдена
  *  (или вне мок-мира). Записи в причине — видимые демо-актору (все), счётчик
- *  невидимых нулевой: «и ещё N» покажет живой сервер с реальной видимостью. */
+ *  невидимых нулевой: «и ещё N» покажет живой сервер с реальной видимостью.
+ *  totalCount — полный состав нарушителей, как у сервера (#635). */
 export function conditionGateReasonOf(
   task: TaskListItem,
-  validator: WorkflowValidator,
+  validator: WorkflowValidatorDto,
 ): TransitionBlockReason | null {
   if (validator.kind === 'formula') return null;
   if (validator.kind !== 'records') return null;
@@ -137,14 +138,15 @@ export function conditionGateReasonOf(
       entityKind: 'task' as const,
       name: record.title,
     })),
-    hiddenCount: Math.max(0, violators.length - shown.length),
+    hiddenCount: 0,
+    totalCount: violators.length,
   };
 }
 
 /** Все причины проверок общей выборки кнопки (мок blockedBy). */
 export function conditionGateReasonsOf(
   task: TaskListItem,
-  validators: readonly WorkflowValidator[],
+  validators: readonly WorkflowValidatorDto[],
 ): TransitionBlockReason[] {
   return validators.flatMap((validator) => {
     const reason = conditionGateReasonOf(task, validator);

@@ -1,3 +1,4 @@
+/* eslint-disable nodus-internal/max-lines-warn -- публикация выборок (#635): полная матрица op×тип и коды проблем */
 import { describe, expect, it } from 'vitest';
 
 import type { CustomFieldDefinition } from '../custom-fields/custom-field.schemas.js';
@@ -138,6 +139,21 @@ describe('checkConditionRules (#635): публикация выборок', () =
     expect(codes(docWith(validator(query(`cf.${FIELD_DEAD}`))))).toContain(
       'custom_field_not_in_type',
     );
+    expect(codes(docWith(validator(query(`cf.${FIELD_REF}`))))).toEqual([]);
+  });
+
+  it('ref_field: атрибут не-ссылочного типа — ошибка (выборка всегда пуста)', () => {
+    const query = (field: string) => ({
+      subject: { kind: 'ref_field', field },
+      where: [],
+      quantifier: 'any',
+    });
+    // Число (как и сотрудник/подразделение/контрагент/перечисление) — не
+    // запись движка: субъект по такому полю всегда даёт пустую выборку.
+    expect(codes(docWith(validator(query(`cf.${FIELD_NUM}`))))).toContain(
+      'condition_ref_field_not_link',
+    );
+    // Поле-ссылка на задачу — законный субъект.
     expect(codes(docWith(validator(query(`cf.${FIELD_REF}`))))).toEqual([]);
   });
 

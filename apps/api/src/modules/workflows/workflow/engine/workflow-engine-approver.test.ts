@@ -1,3 +1,4 @@
+/* eslint-disable nodus-internal/max-lines-warn -- акторные сценарии движка (#430/#635): роли/факты до и после окна, матрица утверждающего */
 import { describe, expect, it, vi } from 'vitest';
 
 import type {
@@ -116,7 +117,10 @@ const simpleWorkflow = {
   ],
 };
 
-function makeEngine(subject: Partial<WorkflowActorSubject> = {}) {
+function makeEngine(
+  subject: Partial<WorkflowActorSubject> = {},
+  conditions: unknown = { runtime: vi.fn() },
+) {
   const adapter = {
     lock: vi.fn(async () => void 0),
     subject: vi.fn(async () => ({
@@ -146,7 +150,7 @@ function makeEngine(subject: Partial<WorkflowActorSubject> = {}) {
       registry as never,
       records as never,
       { nextForType: vi.fn() } as never,
-      { runtime: vi.fn() } as never,
+      conditions as never,
       { plan: vi.fn(async () => ({ ok: true, issue: async () => ({}) })) } as never,
     ),
     adapter,
@@ -184,6 +188,48 @@ describe('WorkflowEngine: approver_is_actor (#430)', () => {
     workflows.load.mockResolvedValueOnce(structuredClone(approvalWorkflow) as never);
     const buttons = await engine.available(TX as never, 't1', 'task', USER);
     expect(buttons.find((b) => b.id === SUBMIT)?.toStageId).toBe(STAGE_REVIEW);
+  });
+
+  it('available: approver_is_actor — пройденная records-проверка делает актора утверждающим, непройденная нет (#635)', async () => {
+    // На главной кнопке статуса утверждения — проверка общей выборки: её
+    // живая причина решает, утверждающий ли актор (матрица видит рантайм).
+    const withRecords = structuredClone(approvalWorkflow);
+    Object.assign(
+      withRecords.transitions.find((t) => t.id === ACCEPT)!,
+      {
+        rules: {
+          conditions: [{ kind: 'role_in' as const, roles: ['creator' as const] }],
+          validators: [
+            {
+              kind: 'records' as const,
+              title: 'Проверка выборки',
+              query: { subject: { kind: 'self' }, where: [], quantifier: 'all' },
+              override: { mode: 'default', extraUserIds: [] },
+            },
+          ],
+          postFunctions: [],
+        },
+      },
+    );
+    const validatorReason = vi.fn(() => null);
+    const passed = makeEngine(
+      { roles: new Set(['creator']), actsWithoutConditions: false },
+      { runtime: vi.fn(async () => ({ validatorReason })) },
+    );
+    passed.workflows.load.mockResolvedValueOnce(structuredClone(withRecords) as never);
+    const buttons = await passed.engine.available(TX as never, 't1', 'task', USER);
+    expect(validatorReason).toHaveBeenCalled();
+    expect(buttons.find((b) => b.id === SUBMIT)?.toStageId).toBe(STAGE_DONE);
+
+    // Непройденная проверка целевой кнопки — актор не утверждающий.
+    const failedReason = vi.fn(() => ({ kind: 'records' as const, title: 'Проверка выборки' }));
+    const failed = makeEngine(
+      { roles: new Set(['creator']), actsWithoutConditions: false },
+      { runtime: vi.fn(async () => ({ validatorReason: failedReason })) },
+    );
+    failed.workflows.load.mockResolvedValueOnce(structuredClone(withRecords) as never);
+    const failedButtons = await failed.engine.available(TX as never, 't1', 'task', USER);
+    expect(failedButtons.find((b) => b.id === SUBMIT)?.toStageId).toBe(STAGE_REVIEW);
   });
 });
 

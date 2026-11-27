@@ -21,6 +21,7 @@ function letterDoc(patch: Partial<WorkflowDraftTransition> = {}): WorkflowDraftD
     color: 'neutral' as const,
     systemState,
     outcome: systemState === 'closed' ? ('cancelled' as const) : null,
+    resultIssued: false,
     isInitial,
     sortOrder: 0,
   });

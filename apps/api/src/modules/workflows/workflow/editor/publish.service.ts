@@ -1,3 +1,4 @@
+/* eslint-disable nodus-internal/max-lines-warn -- публикация маршрута (#635): одна транзакция плана и применения */
 import { Inject, Injectable } from '@nestjs/common';
 import {
   DEFAULT_TRANSITION_FORM,

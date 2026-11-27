@@ -15,6 +15,8 @@ import type {
 } from '../../../custom-fields/ports/number-issue.port.js';
 import type { TransitionDef } from '../transition-rules.js';
 import { checkFormInput, windowOf } from '../transition-form.js';
+import type { TransitionChoice } from '../../ports/workflow-engine.port.js';
+import type { TransitionFormInput } from '@nodus/contracts';
 import type { WorkflowEntityRegistry } from './entity-adapter.registry.js';
 
 export const EMPTY_APPLIED: WorkflowFormApplied = {
@@ -49,6 +51,49 @@ export function assertFallbackWindow(t: TransitionDef): void {
     'Transition window is required',
     { transitionId: t.id, missing, unexpected: [] },
   );
+}
+
+/** Сверка тела с эффективным окном кнопки (#380): лишнее/пропущенное
+ *  обязательное — 422 (иначе обязательные разделы обходились бы пустым
+ *  телом, а лишние поля писались мимо окна). */
+export function assertFormAllowed(t: TransitionDef, form: TransitionFormInput | undefined): void {
+  const { sections } = windowOf(t.form, t.rules);
+  const { missing, unexpected } = checkFormInput(sections, form ?? {});
+  if (missing.length > 0 || unexpected.length > 0) {
+    throw new DomainException(
+      ErrorCode.WORKFLOW_TRANSITION_FORM_INVALID,
+      'Transition window input does not match its form',
+      { transitionId: t.id, missing, unexpected },
+    );
+  }
+}
+
+/** Выбор кнопки (#378): явная (transitionId) — она; DnD/«Мой план» — первая
+ *  без обязательного окна, иначе 422 (жест окно не открывает). */
+export function pickTransition(
+  candidates: readonly TransitionDef[],
+  choice: TransitionChoice,
+  form: TransitionFormInput | undefined,
+): TransitionDef {
+  if ('transitionId' in choice) {
+    const picked = candidates[0]!;
+    assertFormAllowed(picked, form);
+    return picked;
+  }
+  const ordered = [...candidates].sort(
+    (a, b) => Number(requiresWindow(a)) - Number(requiresWindow(b)),
+  );
+  const picked = ordered[0]!;
+  if (requiresWindow(picked)) {
+    const { sections } = windowOf(picked.form, picked.rules);
+    const { missing } = checkFormInput(sections, {});
+    throw new DomainException(
+      ErrorCode.WORKFLOW_TRANSITION_FORM_INVALID,
+      'Transition window is required',
+      { transitionId: picked.id, missing, unexpected: [] },
+    );
+  }
+  return picked;
 }
 
 /** Пост-функция «Присвоить номер» письма: номер из серии типа сущности.

@@ -121,6 +121,7 @@ describe('TransitionGateDetails: подробности гейтов', () => {
               },
             ],
             hiddenCount: 2,
+            totalCount: 7,
           },
         ]}
         gate={{ task: TASK, definitions: DEFINITIONS }}
@@ -140,6 +141,30 @@ describe('TransitionGateDetails: подробности гейтов', () => {
     // Видимость одна: невидимые записи — только счётчиком «и ещё N».
     expect(
       screen.getByText(`${ui.tasks.gateHiddenPrefix} 2 ${ui.tasks.gateHiddenFew}`),
+    ).toBeTruthy();
+    // Хвост сверх показанных (totalCount 7 − 3 записи): «и ещё 4 записи».
+    expect(screen.getByText(`${ui.tasks.gateHiddenPrefix} 4 ${ui.tasks.gateMoreFew}`)).toBeTruthy();
+  });
+
+  it('переполненная выборка (#635): «проверка не может быть посчитана», записей нет', () => {
+    render(
+      <TransitionGateDetails
+        reasons={[
+          {
+            kind: 'records',
+            title: 'Все подзадачи выполнены',
+            records: [],
+            overflow: true,
+          },
+        ]}
+        gate={{ task: TASK, definitions: DEFINITIONS }}
+      />,
+    );
+
+    expect(
+      screen.getByText(`${ui.tasks.gateOverflowPrefix} 500 ${ui.tasks.gateMoreMany}`, {
+        exact: false,
+      }),
     ).toBeTruthy();
   });
 

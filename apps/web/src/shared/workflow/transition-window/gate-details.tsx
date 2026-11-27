@@ -9,6 +9,7 @@ import { cn } from '@nodus/ui/lib/utils';
 
 import { openCardViaBridge } from '../../lib/card-bridge.js';
 import { plural } from '../../lib/format.js';
+import { moreRecordsText, overflowText } from '../../tasks/transition-error.js';
 import { TaskStatusBadge } from '../../ui/task-status-badge.js';
 
 /** Минимум данных задачи для детализации гейтов: подзадачи и чек-лист. */
@@ -129,15 +130,19 @@ export function MissingFields({
 /** Записи-нарушители проверки records (#635): кликабельные имена — задача,
  *  письмо и проект открывают карточку (стек карточек, ADR-0009); у папки
  *  карточки нет — имя без перехода (как у ссылок-значений, #655). Невидимые
- *  нажавшему записи не приходят с сервера — только счётчик «и ещё N». */
+ *  нажавшему записи не приходят с сервера — только счётчик «и ещё N»;
+ *  нарушители сверх показанных — «и ещё N записей» (totalCount причины). */
 export function RecordRefsList({
   refs,
   hiddenCount,
+  totalCount,
 }: {
   refs: readonly ConditionRecordRef[];
   hiddenCount: number;
+  totalCount?: number;
 }) {
-  if (refs.length === 0 && hiddenCount === 0) return null;
+  const more = (totalCount ?? refs.length) - refs.length;
+  if (refs.length === 0 && hiddenCount === 0 && more <= 0) return null;
   return (
     <div className="flex min-w-0 flex-col gap-1">
       {refs.map((ref) => {
@@ -177,6 +182,7 @@ export function RecordRefsList({
           ])}
         </p>
       ) : null}
+      {more > 0 ? <p className="text-xs text-muted-foreground">{moreRecordsText(more)}</p> : null}
     </div>
   );
 }
@@ -223,7 +229,17 @@ export function TransitionGateDetails({
             ) : null}
             {reason.kind === 'records' ? (
               <div className="ml-5">
-                <RecordRefsList refs={reason.records ?? []} hiddenCount={reason.hiddenCount ?? 0} />
+                {reason.overflow === true ? (
+                  // Потолок выборки (#635): квантор не считался — записей-
+                  // нарушителей нет, говорим честно, что проверка не считается.
+                  <p className="text-xs text-muted-foreground">{overflowText()}</p>
+                ) : (
+                  <RecordRefsList
+                    refs={reason.records ?? []}
+                    hiddenCount={reason.hiddenCount ?? 0}
+                    totalCount={reason.totalCount}
+                  />
+                )}
               </div>
             ) : null}
           </li>

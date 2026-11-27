@@ -242,8 +242,8 @@ function inAnyPredicate(
 
 /** Причина проверки по записям (#635): подпись настройщика + до 5 записей,
  *  видимых актору, + счётчик невидимых («и ещё N без доступа» — видимость
- *  одна). Нарушители сверх 5 видимых не считаются скрытыми — их счёт
- *  показывает «и ещё N записей» интерфейсом списка. */
+ *  одна) + полное число нарушителей `totalCount`: список — интерфейс списка,
+ *  хвост сверх показанных клиент собирает строкой «и ещё N записей». */
 export function recordsReason(
   title: string,
   violators: readonly ConditionRow[],
@@ -258,5 +258,13 @@ export function recordsReason(
     title,
     records: shown,
     hiddenCount: violators.length - visible.length,
+    totalCount: violators.length,
   };
+}
+
+/** Причина-переполнение (#635): выборка больше потолка
+ *  CONDITION_LIMITS.selection — квантор не считался (fail-closed), записей-
+ *  нарушителей нет; человек видит «проверка не может быть посчитана». */
+export function overflowReason(title: string): TransitionBlockReason {
+  return { kind: 'records', title, records: [], overflow: true };
 }

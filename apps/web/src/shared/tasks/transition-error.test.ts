@@ -34,11 +34,12 @@ describe('причины records/formula (#635): структура и стро�
         },
       ],
       hiddenCount: 3,
+      totalCount: 9,
     },
     { kind: 'formula', title: 'Комплект не собран' },
   ];
 
-  it('gateReasonLines: подпись + записи-ссылки + счётчик невидимых', () => {
+  it('gateReasonLines: подпись + записи-ссылки + счётчики', () => {
     const [records, formula] = gateReasonLines(reasons);
     expect(records).toEqual({
       title: 'Задания смежникам не выполнены',
@@ -50,16 +51,36 @@ describe('причины records/formula (#635): структура и стро�
         },
       ],
       hiddenCount: 3,
+      totalCount: 9,
+      overflow: false,
     });
-    expect(formula).toEqual({ title: 'Комплект не собран', refs: [], hiddenCount: 0 });
+    expect(formula).toEqual({
+      title: 'Комплект не собран',
+      refs: [],
+      hiddenCount: 0,
+      totalCount: 0,
+      overflow: false,
+    });
   });
 
-  it('gateReasonsText: имена записей и «и ещё N» — для тостов и тултипов', () => {
+  it('gateReasonsText: имена записей, «и ещё N» невидимых и хвост totalCount', () => {
     const text = gateReasonsText(reasons);
     expect(text).toContain('Задания смежникам не выполнены: Задание → КЖ1.1');
     // 3 записи — форма «few» русской плюрализации.
     expect(text).toContain(`${ui.tasks.gateHiddenPrefix} 3 ${ui.tasks.gateHiddenFew}`);
+    // 9 нарушителей, показан 1: хвост «и ещё 8 записей» (totalCount).
+    expect(text).toContain(`${ui.tasks.gateHiddenPrefix} 8 ${ui.tasks.gateMoreMany}`);
     expect(text).toContain('Комплект не собран');
+  });
+
+  it('переполненная выборка: «проверка не может быть посчитана», записей нет', () => {
+    const overflow: TransitionBlockReason[] = [
+      { kind: 'records', title: 'Все подзадачи выполнены', records: [], overflow: true },
+    ];
+    expect(gateReasonLines(overflow)[0]!.overflow).toBe(true);
+    expect(gateReasonsText(overflow)).toBe(
+      `Все подзадачи выполнены: ${ui.tasks.gateOverflowPrefix} 500 ${ui.tasks.gateMoreMany}`,
+    );
   });
 
   it('без подписи — запасной текст вида проверки', () => {

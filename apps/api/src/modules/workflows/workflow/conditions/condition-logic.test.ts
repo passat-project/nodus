@@ -1,9 +1,15 @@
+/* eslint-disable nodus-internal/max-lines-warn -- чистая логика выборки (#635): кванторы, предикаты и матрица операторов×типов — таблица ожиданий целиком */
 import { describe, expect, it } from 'vitest';
 
 import type { ConditionFieldOp, ConditionPredicate, CustomFieldValue } from '@nodus/contracts';
 
 import type { ConditionFieldDefs, ConditionRow, ConditionStageIndex } from './condition-logic.js';
-import { evaluateSelection, predicatePasses, recordsReason } from './condition-logic.js';
+import {
+  evaluateSelection,
+  overflowReason,
+  predicatePasses,
+  recordsReason,
+} from './condition-logic.js';
 
 /** uuid-подобные id: значения произвольные, важна стабильность в тесте. */
 const TYPE_A = '11111111-1111-4111-8111-111111111111';
@@ -282,6 +288,27 @@ describe('recordsReason (#635): видимость одна', () => {
     expect(reason.records!.map((r) => r.id)).toEqual(['v1', 'v3']);
     expect(reason.hiddenCount).toBe(5);
   });
+
+  it('totalCount — полное число нарушителей: хвост сверх показанных видимых', () => {
+    // 7 видимых: показаны 5, хвост «и ещё 2 записи» собирает клиент из
+    // totalCount (записи сверх 5 — не скрытые, скрытых 0).
+    const visible = new Set(['v0', 'v1', 'v2', 'v3', 'v4', 'v5', 'v6']);
+    expect(recordsReason('Не принято', violators, visible).totalCount).toBe(7);
+    // Скрытые не входят в показанные, но в полный счёт входят.
+    expect(recordsReason('Не принято', violators, new Set(['v1'])).totalCount).toBe(7);
+    expect(recordsReason('Не принято', [], new Set()).totalCount).toBe(0);
+  });
+});
+
+describe('overflowReason (#635): потолок выборки', () => {
+  it('переполнение — без записей и счётчиков, с признаком overflow', () => {
+    expect(overflowReason('Проверка не может быть посчитана')).toEqual({
+      kind: 'records',
+      title: 'Проверка не может быть посчитана',
+      records: [],
+      overflow: true,
+    });
+  });
 });
 
 // --- Грани значений по типам атрибутов (#635, матрица op×тип) ---------------
@@ -339,19 +366,25 @@ function fieldPasses(
 
 describe('field (#635): деньги', () => {
   it('eq/ne — сумма и валюта; порядок — только той же валюты', () => {
-    expect(fieldPasses(FIELD_MONEY, { amount: 100, currencyId: CUR_1 }, 'eq', {
-      amount: 100,
-      currencyId: CUR_1,
-    })).toBe(true);
+    expect(
+      fieldPasses(FIELD_MONEY, { amount: 100, currencyId: CUR_1 }, 'eq', {
+        amount: 100,
+        currencyId: CUR_1,
+      }),
+    ).toBe(true);
     // Та же сумма другой валюты — не равно.
-    expect(fieldPasses(FIELD_MONEY, { amount: 100, currencyId: CUR_2 }, 'eq', {
-      amount: 100,
-      currencyId: CUR_1,
-    })).toBe(false);
-    expect(fieldPasses(FIELD_MONEY, { amount: 100, currencyId: CUR_2 }, 'ne', {
-      amount: 100,
-      currencyId: CUR_1,
-    })).toBe(true);
+    expect(
+      fieldPasses(FIELD_MONEY, { amount: 100, currencyId: CUR_2 }, 'eq', {
+        amount: 100,
+        currencyId: CUR_1,
+      }),
+    ).toBe(false);
+    expect(
+      fieldPasses(FIELD_MONEY, { amount: 100, currencyId: CUR_2 }, 'ne', {
+        amount: 100,
+        currencyId: CUR_1,
+      }),
+    ).toBe(true);
     // Сравнение сумм — только в одной валюте: чужая валюта несравнима (ложь).
     expect(
       fieldPasses(FIELD_MONEY, { amount: 500, currencyId: CUR_2 }, 'gt', {
@@ -379,9 +412,9 @@ describe('field (#635): даты и продолжительность', () => {
     expect(fieldPasses(FIELD_DATE, '2026-03-15', 'eq', '2026-03-15')).toBe(true);
     expect(fieldPasses(FIELD_DATE, '2026-01-15', 'lt', '2026-03-15')).toBe(true);
     expect(fieldPasses(FIELD_DATE, '2026-06-01', 'lt', '2026-03-15')).toBe(false);
-    expect(fieldPasses(FIELD_DATETIME, '2026-03-15T10:00:00.000Z', 'gte', '2026-03-15T08:00:00.000Z')).toBe(
-      true,
-    );
+    expect(
+      fieldPasses(FIELD_DATETIME, '2026-03-15T10:00:00.000Z', 'gte', '2026-03-15T08:00:00.000Z'),
+    ).toBe(true);
     expect(fieldPasses(FIELD_DURATION, 60, 'lte', 60)).toBe(true);
     expect(fieldPasses(FIELD_DURATION, 120, 'lte', 60)).toBe(false);
     // gt/gte/lt/lte без значения (null) — несравнимо, всегда ложь.

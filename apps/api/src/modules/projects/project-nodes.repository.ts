@@ -45,12 +45,19 @@ export interface ProjectNodePatch {
 export class ProjectNodesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Все узлы проекта по ключу порядка (≤ NODE_LIMITS.nodesPerProject). */
-  listByProject(projectId: string, tx?: TransactionClient): Promise<ProjectNodeRow[]> {
+  /** Все узлы проекта по ключу порядка (≤ NODE_LIMITS.nodesPerProject);
+   *  `take` — потолок выборки условий (#635: вызывающий берёт потолок + 1,
+   *  чтобы отличить «ровно потолок» от «больше потолка»). */
+  listByProject(
+    projectId: string,
+    tx?: TransactionClient,
+    take?: number,
+  ): Promise<ProjectNodeRow[]> {
     return (tx ?? this.prisma).projectNode.findMany({
       select: nodeSelect,
       where: { projectId },
       orderBy: [{ order: 'asc' }, { id: 'asc' }],
+      ...(take !== undefined ? { take } : {}),
     });
   }
 

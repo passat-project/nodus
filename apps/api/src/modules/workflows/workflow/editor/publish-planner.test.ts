@@ -1,3 +1,4 @@
+/* eslint-disable nodus-internal/max-lines-warn -- план публикации (#635): стадии/кнопки/действия — один сквозной сценарий */
 import { describe, expect, it } from 'vitest';
 
 import {

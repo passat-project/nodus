@@ -214,20 +214,6 @@ export function TransitionDialog({
   const windowHelpful =
     transition !== null &&
     effectiveWindowSections(transition.form, { validators: transition.validators }).length > 0;
-  // Обход запрещён настройкой проверки (#635): среди непройденных есть
-  // records/formula с `forbidden` — сервер вернёт 403 даже обладателю
-  // права, кнопки обхода не показываем, говорим честно.
-  const overrideForbidden =
-    transition !== null &&
-    transition.blockedBy.some((blocked) => {
-      if (blocked.kind !== 'records' && blocked.kind !== 'formula') return false;
-      return transition.validators.some(
-        (validator) =>
-          (validator.kind === 'records' || validator.kind === 'formula') &&
-          validator.kind === blocked.kind &&
-          validator.override.mode === 'forbidden',
-      );
-    });
 
   return (
     <Dialog
@@ -256,11 +242,6 @@ export function TransitionDialog({
           </DialogDescription>
         </DialogHeader>
         <TransitionGateDetails reasons={reasons} gate={gate} allowReview={allowReview} />
-        {overrideForbidden ? (
-          <p className="text-xs break-words text-muted-foreground">
-            {ui.tasks.overrideForbiddenNote}
-          </p>
-        ) : null}
         {transition?.canOverride ? (
           <Textarea
             value={reason}

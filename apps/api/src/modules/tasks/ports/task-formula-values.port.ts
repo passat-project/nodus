@@ -2,7 +2,7 @@ import type { InjectionToken } from '@nestjs/common';
 import type { FormulaRelationDirection, FormulaRelationKind } from '@nodus/contracts';
 
 import type { TransactionClient } from '../../../core/database/transaction-runner.js';
-import type { ConditionRecordData } from '../../custom-fields/ports/condition-records.port.js';
+import type { ConditionSelection } from '../../custom-fields/ports/condition-records.port.js';
 import type {
   FormulaRecordData,
   RecordReadOptions,
@@ -54,7 +54,9 @@ export interface TaskFormulaValues {
   /** Полная выборка условий (#635): ВСЕ живые задачи множества — включая
    *  конфиденциальные и невидимые актору (квантор «все» не врёт; причина
    *  фильтрует видимость отдельно, `visibleTaskIds`). Мягко удалённые
-   *  исключены всегда; видимость НЕ фильтруется. */
+   *  исключены всегда; видимость НЕ фильтруется. Сверх потолка
+   *  CONDITION_LIMITS.selection записи не возвращаются (`overflowed`) —
+   *  проверка по такой выборке не считается. */
   conditionTasks(
     query:
       | { kind: 'one'; id: string }
@@ -66,10 +68,13 @@ export interface TaskFormulaValues {
           direction: FormulaRelationDirection;
         }
       | { kind: 'node_tasks'; nodeId: string; projectId: string | null }
+      /** Задачи нескольких папок одним запросом (#635, folder_type_tasks):
+       *  общий потолок на всё множество, без N+1 по папкам. */
+      | { kind: 'nodes_tasks'; nodeIds: readonly string[]; projectId: string | null }
       | { kind: 'project_tasks'; projectId: string }
       | { kind: 'ids'; ids: readonly string[] },
     tx?: TransactionClient,
-  ): Promise<ConditionRecordData[]>;
+  ): Promise<ConditionSelection>;
 
   /** Видимые актору задачи из ids (#635, «видимость одна») — та же функция,
    *  что у списка задач. */

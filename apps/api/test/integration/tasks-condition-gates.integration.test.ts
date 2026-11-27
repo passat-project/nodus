@@ -1,3 +1,4 @@
+/* eslint-disable nodus-internal/max-lines-warn -- гейты общей выборки (#635) на реальном движке */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   apiErrorResponseSchema,

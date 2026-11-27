@@ -41,7 +41,7 @@ import {
 } from '../transition-rules.js';
 import { ConditionEvaluator } from '../conditions/evaluator.service.js';
 import { approverContext } from './approver-context.js';
-import { assertGateOverride, precomputeGates } from './gate-runtime.js';
+import { assertGateOverride, engineGates } from './gate-runtime.js';
 import {
   canShow,
   actionOptions,
@@ -50,7 +50,7 @@ import {
   type GateRuntime,
 } from './transition-availability.js';
 import * as exec from './transition-execution-helpers.js';
-import { checkFormInput, windowOf } from '../transition-form.js';
+import { windowOf } from '../transition-form.js';
 import { WorkflowEntityRegistry } from './entity-adapter.registry.js';
 import { TransitionRecordsRepository } from './transition-records.repository.js';
 import { WorkflowRepository, type LoadedWorkflow, type StageRow } from '../workflow.repository.js';
@@ -85,8 +85,25 @@ export class WorkflowEngine implements WorkflowEnginePort {
     actor: WorkflowActor,
   ): Promise<WorkflowTransition[]> {
     const { workflow, subject } = await this.context(tx, entityId, category, actor);
-    const gates = await this.gates(tx, workflow, subject, entityId, category, actor, true);
-    return this.options(workflow, subject, approverContext(workflow, subject), gates);
+    const gates = await engineGates(
+      this.conditions,
+      tx,
+      workflow,
+      subject,
+      entityId,
+      category,
+      actor,
+      true,
+    );
+    // Матрица «актор — утверждающий» (#430) видит живые причины проверок
+    // (#635): непройденная проверка целевой кнопки не делает актора
+    // утверждающим (в available причины уже вычислены).
+    return this.options(
+      workflow,
+      subject,
+      approverContext(workflow, subject, gates.validatorReason),
+      gates,
+    );
   }
 
   /** Действия текущего статуса для панели карточки (#633): видимые актору,
@@ -98,7 +115,16 @@ export class WorkflowEngine implements WorkflowEnginePort {
     actor: WorkflowActor,
   ): Promise<WorkflowAction[]> {
     const { workflow, subject } = await this.context(tx, entityId, category, actor);
-    const gates = await this.gates(tx, workflow, subject, entityId, category, actor, true);
+    const gates = await engineGates(
+      this.conditions,
+      tx,
+      workflow,
+      subject,
+      entityId,
+      category,
+      actor,
+      true,
+    );
     return actionOptions(workflow, subject, gates);
   }
 
@@ -120,10 +146,13 @@ export class WorkflowEngine implements WorkflowEnginePort {
     await adapter.lock(tx, entityId);
     const subject0 = await this.subjectWithPermissions(tx, entityId, category, actor);
     const workflow = await this.workflows.load(subject0.workflowId, tx);
+    // Матрица «актор — утверждающий» в execute без живых причин проверок
+    // (#635): до окна они не вычислены — сознательно не подаём (как было).
     const targetCtx = approverContext(workflow, subject0);
     // Условия records/formula (#635) — ДО окна, по состоянию до него (как
     // условия «кто»): кнопку с ложным условием актор даже не выбирает.
-    const conditionGates = await this.gates(
+    const conditionGates = await engineGates(
+      this.conditions,
       tx,
       workflow,
       subject0,
@@ -159,7 +188,7 @@ export class WorkflowEngine implements WorkflowEnginePort {
       );
     }
 
-    const picked = this.pick(candidates, choice, opts.form);
+    const picked = exec.pickTransition(candidates, choice, opts.form);
     // Коллективную кнопку нельзя выполнить обычным нажатием, пока открыт
     // раунд сбора: она собирает отметки, а переход выполняет движок при
     // кворуме (pressCompletion). Нет раунда (источники пусты/старая задача) —
@@ -201,7 +230,16 @@ export class WorkflowEngine implements WorkflowEnginePort {
     // Причины records/formula (#635) — ПОСЛЕ окна по живым данным: окно могло
     // закрыть условие (итог, время, поля). Свежий рантайм — кэш выбора
     // рантайма до окна протух после записи окна.
-    const liveGates = await this.gates(tx, workflow, subject1, entityId, category, actor, true);
+    const liveGates = await engineGates(
+      this.conditions,
+      tx,
+      workflow,
+      subject1,
+      entityId,
+      category,
+      actor,
+      true,
+    );
     const scored = ordered.map((t) => ({
       t,
       reasons: [
@@ -345,7 +383,8 @@ export class WorkflowEngine implements WorkflowEnginePort {
     const subject = await this.subjectWithPermissions(tx, entityId, category, actor);
     const workflow = await this.workflows.load(subject.workflowId, tx);
     // Условия records/formula (#635) — до окна, как у перехода.
-    const conditionGates = await this.gates(
+    const conditionGates = await engineGates(
+      this.conditions,
       tx,
       workflow,
       subject,
@@ -374,7 +413,7 @@ export class WorkflowEngine implements WorkflowEnginePort {
     // с настройкой окна (иначе обязательные разделы обходились бы пустым
     // телом, а лишние поля писались мимо окна).
     const asTransition = action as unknown as TransitionDef;
-    this.assertFormAllowed(asTransition, opts.form);
+    exec.assertFormAllowed(asTransition, opts.form);
     const applied = await this.applyForm(
       adapter,
       category,
@@ -389,7 +428,16 @@ export class WorkflowEngine implements WorkflowEnginePort {
     // (итог, время, поля), пишет само окно. Перечитываем субъект в той же
     // транзакции; отказ откатит окно вместе с записью.
     const subjectAfter = await this.subjectWithPermissions(tx, entityId, category, actor);
-    const liveGates = await this.gates(tx, workflow, subjectAfter, entityId, category, actor, true);
+    const liveGates = await engineGates(
+      this.conditions,
+      tx,
+      workflow,
+      subjectAfter,
+      entityId,
+      category,
+      actor,
+      true,
+    );
     const gateReasons = evaluateValidators(
       action.rules,
       subjectAfter.facts,
@@ -443,45 +491,8 @@ export class WorkflowEngine implements WorkflowEnginePort {
     };
   }
 
-  /** Выбор кнопки: явная — она; DnD/«Мой план» — первая без обязательного
-   *  окна, иначе 422 (жест не открывает окно). */
-  private pick(
-    candidates: TransitionDef[],
-    choice: TransitionChoice,
-    form: TransitionFormInput | undefined,
-  ): TransitionDef {
-    if ('transitionId' in choice) {
-      const picked = candidates[0]!;
-      this.assertFormAllowed(picked, form);
-      return picked;
-    }
-    const ordered = [...candidates].sort(
-      (a, b) => Number(exec.requiresWindow(a)) - Number(exec.requiresWindow(b)),
-    );
-    const picked = ordered[0]!;
-    if (exec.requiresWindow(picked)) {
-      const { sections } = windowOf(picked.form, picked.rules);
-      const { missing } = checkFormInput(sections, {});
-      throw new DomainException(
-        ErrorCode.WORKFLOW_TRANSITION_FORM_INVALID,
-        'Transition window is required',
-        { transitionId: picked.id, missing, unexpected: [] },
-      );
-    }
-    return picked;
-  }
-
-  private assertFormAllowed(t: TransitionDef, form: TransitionFormInput | undefined): void {
-    const { sections } = windowOf(t.form, t.rules);
-    const { missing, unexpected } = checkFormInput(sections, form ?? {});
-    if (missing.length > 0 || unexpected.length > 0) {
-      throw new DomainException(
-        ErrorCode.WORKFLOW_TRANSITION_FORM_INVALID,
-        'Transition window input does not match its form',
-        { transitionId: t.id, missing, unexpected },
-      );
-    }
-  }
+  /** Выбор кнопки и сверка окна — `exec.pickTransition` /
+   *  `exec.assertFormAllowed` (#378/#380, лимит I5 движка). */
 
   private async applyForm(
     adapter: ReturnType<WorkflowEntityRegistry['get']>,
@@ -526,28 +537,6 @@ export class WorkflowEngine implements WorkflowEnginePort {
       writableKeys: windowWritableKeys(sections, (key) => lockFieldFilled(key, facts)),
       ...(pressCompletion ? { pressCompletion: true } : {}),
     };
-  }
-
-  /** Обёртка precomputeGates (#635): движок всегда передаёт себя и хост. */
-  private gates(
-    tx: TransactionClient,
-    workflow: LoadedWorkflow,
-    subject: EngineSubject,
-    entityId: string,
-    category: ProcessCategory,
-    actor: WorkflowActor,
-    withValidators: boolean,
-  ): Promise<GateRuntime> {
-    return precomputeGates({
-      evaluator: this.conditions,
-      tx,
-      workflow,
-      subject,
-      entityId,
-      category,
-      actor,
-      withValidators,
-    });
   }
 
   private matches(

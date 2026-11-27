@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+/* eslint-disable nodus-internal/max-lines-warn -- стор документа редактора маршрутов (#635): сценарии правки условий */
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { WorkflowDetail } from '@nodus/contracts';
 

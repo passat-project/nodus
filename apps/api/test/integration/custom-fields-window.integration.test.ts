@@ -148,7 +148,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
         // Удаление не блокируется черновиком (Review Focus §9): 204.
         const removed = await fx.api(admin, 'DELETE', `/custom-fields/definitions/${field.id}`);
-        expect(removed.status, await removed.clone().text()).toBe(204);
+        expect(removed.status).toBe(204);
       } finally {
         await fx.prisma.workflow.delete({ where: { id: draft.id } });
       }

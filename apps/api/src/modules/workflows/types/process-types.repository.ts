@@ -1,3 +1,4 @@
+/* eslint-disable nodus-internal/max-lines-warn -- репозиторий типов процессов: каталог и workflowIdOf выборки (#635) */
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../../generated/prisma/client.js';
 

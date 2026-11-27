@@ -53,6 +53,11 @@ export const CONDITION_FIELD_OPS_BY_TYPE: Readonly<
  *  типа/поля проверка молотит все записи проекта — предупреждение. */
 const UNFILTERED_SUBJECTS = new Set(['project_tasks', 'folder_type_tasks']);
 
+/** Типы атрибутов-ссылок (ref_field, #635): только они дают записи движка.
+ *  Сотрудник/подразделение/контрагент/перечисление — не записи: вычисление
+ *  такого субъекта всегда пусто, публикация rejects (проверка-пустышка). */
+const CONDITION_REF_FIELD_TYPES = new Set<CustomFieldType>(['task', 'letter', 'project', 'node']);
+
 type ConditionRules = Pick<WorkflowTransitionRules, 'conditions' | 'validators'>;
 type OwnerRef = Pick<WorkflowProblem, 'transitionId' | 'actionId'>;
 
@@ -170,9 +175,16 @@ function checkQuery(
     problems.push({ code: 'condition_folder_type_unknown', severity: 'error', ...refs });
   }
   // Поле-ссылка (ref_field): атрибут хоста — существует и привязан к типу
-  // маршрута (механизм checkKey: unknown/not_in_type).
+  // маршрута (механизм checkKey: unknown/not_in_type); тип атрибута обязан
+  // быть ссылкой на запись движка — сотрудник/подразделение/контрагент и
+  // прочие не-ссылки дают всегда пустую выборку (проверка-пустышка).
   if (query.subject.kind === 'ref_field') {
     checkFieldKey(query.subject.field, refs, opts, true, definitionsById, problems);
+    const fieldId = customFieldIdOfKey(query.subject.field);
+    const definition = fieldId !== null ? definitionsById.get(fieldId) : undefined;
+    if (definition && !CONDITION_REF_FIELD_TYPES.has(definition.type)) {
+      problems.push({ code: 'condition_ref_field_not_link', severity: 'error', ...refs });
+    }
   }
   const typeIs = query.where.filter(
     (p): p is Extract<typeof p, { kind: 'type_is' }> => p.kind === 'type_is',

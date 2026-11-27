@@ -8,7 +8,11 @@ import {
   DEFAULT_GATE_OVERRIDE,
   gateOverridePolicySchema,
 } from './condition-query.js';
-import { workflowTransitionRulesSchema } from './workflow.schemas.js';
+import {
+  workflowTransitionRulesSchema,
+  workflowValidatorDtoSchema,
+  workflowValidatorSchema,
+} from './workflow.schemas.js';
 import { formulaNodeSchema } from '../custom-fields/formula.js';
 
 const TYPE = '11111111-1111-4111-8111-111111111111';
@@ -32,9 +36,12 @@ describe('conditionQuery (#635: одна выборка на всё)', () => {
     }
   });
 
-  it('субъекты: у письма нет задачных множеств (подзадачи, папки)', () => {
+  it('субъекты: у письма нет задачных множеств (подзадачи, папки, связи)', () => {
     expect(CONDITION_SUBJECTS_BY_CATEGORY.letter).not.toContain('subtasks');
     expect(CONDITION_SUBJECTS_BY_CATEGORY.letter).not.toContain('folder_tasks');
+    // Связи — только у задач: рантайм для писем всегда пуст (проверка-
+    // пустышка), редактор не предлагает, публикация отвергает.
+    expect(CONDITION_SUBJECTS_BY_CATEGORY.letter).not.toContain('relations');
   });
 
   it('выборка читается целиком; where по умолчанию пуст', () => {
@@ -131,5 +138,36 @@ describe('интеграция выборки в правила перехода
       gateOverridePolicySchema.parse({ extraUserIds: [USER], projectRole: 'manager' }),
     ).toEqual({ mode: 'default', extraUserIds: [USER], projectRole: 'manager' });
     expect(gateOverridePolicySchema.parse({ mode: 'forbidden' }).extraUserIds).toEqual([]);
+  });
+
+  it('DTO-валидатор: без настройки обхода — override отвергнут, полный — принимает', () => {
+    const base = {
+      kind: 'records',
+      title: 'Нельзя выдать',
+      query: { subject: { kind: 'self' }, where: [], quantifier: 'all' },
+    };
+    expect(workflowValidatorDtoSchema.safeParse(base).success).toBe(true);
+    // extraUserIds (до 50 uuid сотрудников) не должны уходить каждому, кто
+    // видит карточку, — DTO их не несёт.
+    expect(
+      workflowValidatorDtoSchema.safeParse({
+        ...base,
+        override: { mode: 'default', extraUserIds: [] },
+      }).success,
+    ).toBe(false);
+    expect(
+      workflowValidatorDtoSchema.safeParse({
+        kind: 'formula',
+        title: 'Формула',
+        formula,
+        override: { mode: 'forbidden', extraUserIds: [] },
+      }).success,
+    ).toBe(false);
+    expect(
+      workflowValidatorSchema.safeParse({
+        ...base,
+        override: { mode: 'default', extraUserIds: [] },
+      }).success,
+    ).toBe(true);
   });
 });

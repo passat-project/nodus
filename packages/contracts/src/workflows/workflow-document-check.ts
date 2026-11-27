@@ -1,3 +1,4 @@
+/* eslint-disable nodus-internal/max-lines-warn -- базовые проверки документа маршрута (#635): один набор для редактора и публикации */
 import { customFieldIdOfKey } from '../custom-fields/custom-field-key.js';
 import type { CustomFieldDefinition } from '../custom-fields/custom-field.schemas.js';
 import { checkCreationForm } from './creation-form.js';

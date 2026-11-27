@@ -5,6 +5,7 @@ import type {
   WorkflowTransition,
   WorkflowTransitionRules,
   WorkflowValidator,
+  WorkflowValidatorDto,
 } from '@nodus/contracts';
 import { isFinalState } from '@nodus/contracts';
 
@@ -49,6 +50,19 @@ export interface GateRuntime {
   ) => boolean;
 }
 
+/** Валидатор → DTO карточки (#635): настройка обхода (extraUserIds — до 50
+ *  uuid сотрудников) не уходит каждому, кто видит карточку; обходит ли
+ *  актор проверку, решает сервер (`canOverride`). */
+export function stripOverride(validator: WorkflowValidator): WorkflowValidatorDto {
+  if (validator.kind === 'records') {
+    return { kind: validator.kind, title: validator.title, query: validator.query };
+  }
+  if (validator.kind === 'formula') {
+    return { kind: validator.kind, title: validator.title, formula: validator.formula };
+  }
+  return validator;
+}
+
 /** Кнопки текущего статуса с причинами блокировки (#433): чистый сборщик,
  *  вынесенный из движка (лимит I5). */
 export function transitionOptions(
@@ -82,7 +96,7 @@ export function transitionOptions(
           ? gates.canOverrideOf(t.rules.validators, blockedBy)
           : subject.canOverrideGates,
         form: t.form?.enabled ? t.form : null,
-        validators: t.rules.validators,
+        validators: t.rules.validators.map(stripOverride),
       };
     });
 }
@@ -123,7 +137,7 @@ export function actionOptions(
       form: action.form?.enabled ? action.form : null,
       // Гейты (#740): кнопка видна и объясняет причину до нажатия.
       blockedBy: evaluateValidators(action.rules, subject.facts, gates?.validatorReason),
-      validators: action.rules.validators,
+      validators: action.rules.validators.map(stripOverride),
     }));
 }
 

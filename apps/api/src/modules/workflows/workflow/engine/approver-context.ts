@@ -1,6 +1,11 @@
 import type { WorkflowActorSubject } from '../../../../core/ports/workflow-entity.port.js';
 import type { LoadedWorkflow } from '../workflow.repository.js';
-import { evaluateValidators, passesConditions, type TargetContext } from '../transition-rules.js';
+import {
+  evaluateValidators,
+  passesConditions,
+  type AsyncValidatorReason,
+  type TargetContext,
+} from '../transition-rules.js';
 import { windowOf } from '../transition-form.js';
 
 type Subject = WorkflowActorSubject & { permissions: readonly string[] };
@@ -12,9 +17,15 @@ type Subject = WorkflowActorSubject & { permissions: readonly string[] };
  * условие «кто видит» непустое и у кнопки нет обязательных разделов окна
  * (иначе пропуск потерял бы обязательный комментарий/файл). Служебная/
  * несколько/без условий — не утверждающий (консервативно; публикация даст
- * warning `approver_rule_unresolvable`).
+ * warning `approver_rule_unresolvable`). `validatorReason` (#635) — живые
+ * причины проверок records/formula: непройденная проверка целевой кнопки
+ * не делает актора утверждающим; без причин матрица прежняя (чистые вызовы).
  */
-export function approverContext(workflow: LoadedWorkflow, subject: Subject): TargetContext {
+export function approverContext(
+  workflow: LoadedWorkflow,
+  subject: Subject,
+  validatorReason?: AsyncValidatorReason,
+): TargetContext {
   return {
     isActorApprover: (stageId) => {
       const primaries = workflow.transitions.filter(
@@ -33,7 +44,7 @@ export function approverContext(workflow: LoadedWorkflow, subject: Subject): Tar
       ) {
         return false;
       }
-      return evaluateValidators(primary.rules, subject.facts).length === 0;
+      return evaluateValidators(primary.rules, subject.facts, validatorReason).length === 0;
     },
   };
 }

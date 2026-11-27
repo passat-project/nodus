@@ -13,7 +13,9 @@ import type {
  * Реализация порта использования атрибута в процессах (#631): ищет ключ
  * `cf.<uuid>` в документах маршрутов — в разделах окна перехода
  * (`form.sections[kind=fields].fields`), в валидаторах «Заполнены поля» и в
- * условиях решающих `decider_in` (источник «поле», Р8 #631). Оператор `?`
+ * условиях решающих `decider_in` (источник «поле», Р8 #631), а также в
+ * правилах общей выборки (#635): субъект `ref_field` (поле хоста) и
+ * предикаты `field` в `query.where` у условий/проверок records. Оператор `?`
  * jsonb проверяет наличие элемента массива, сравнение идёт по точному ключу.
  * Маршруты — только опубликованные (черновик публикацией ещё не стал).
  * Формы создания считаются вместе с непубликуемыми черновиками: удаление
@@ -57,6 +59,25 @@ export class WorkflowFieldUsageProvider implements WorkflowFieldUsageReader {
             WHERE c->>'kind' = 'decider_in'
               AND c->'source'->>'kind' = 'field'
               AND c->'source'->>'field' = ${key}
+          )
+          OR EXISTS (
+            SELECT 1
+            FROM (
+              SELECT x AS elem
+              FROM jsonb_array_elements(COALESCE(t.rules->'conditions', '[]'::jsonb)) x
+              UNION ALL
+              SELECT v
+              FROM jsonb_array_elements(COALESCE(t.rules->'validators', '[]'::jsonb)) v
+            ) rules
+            WHERE rules.elem->>'kind' = 'records'
+              AND (
+                rules.elem->'query'->'subject'->>'field' = ${key}
+                OR EXISTS (
+                  SELECT 1
+                  FROM jsonb_array_elements(COALESCE(rules.elem->'query'->'where', '[]'::jsonb)) p
+                  WHERE p->>'field' = ${key}
+                )
+              )
           )
         )
       ORDER BY name

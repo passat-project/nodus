@@ -32,6 +32,30 @@ export type GatesSubject = {
  * считаются ПОСЛЕ окна по свежим данным, отдельным вызовом). Без новых видов
  * правил — пустой рантайм, ни одного лишнего запроса.
  */
+/** Обёртка precomputeGates для движка (#635): связывает оценщик условий с
+ *  хостом вызова; держит вызовы движка однострочными (лимит I5 движка). */
+export function engineGates(
+  evaluator: ConditionEvaluator,
+  tx: TransactionClient,
+  workflow: LoadedWorkflow,
+  subject: GatesSubject,
+  entityId: string,
+  category: ProcessCategory,
+  actor: WorkflowActor,
+  withValidators: boolean,
+): Promise<GateRuntime> {
+  return precomputeGates({
+    evaluator,
+    tx,
+    workflow,
+    subject,
+    entityId,
+    category,
+    actor,
+    withValidators,
+  });
+}
+
 export async function precomputeGates(args: {
   evaluator: ConditionEvaluator;
   tx: TransactionClient;
