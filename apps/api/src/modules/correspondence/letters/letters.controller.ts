@@ -1,3 +1,4 @@
+/* eslint-disable nodus-internal/max-lines-warn -- контроллер писем: маршруты одного префикса, ext-роутинг списка #435 добавил 5 строк */
 import {
   Body,
   Controller,

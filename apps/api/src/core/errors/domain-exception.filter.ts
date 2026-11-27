@@ -1,3 +1,4 @@
+/* eslint-disable nodus-internal/max-lines-warn -- карта код→HTTP: один словарь фильтра, +2 строки двух кодов списков #435 */
 import {
   type ArgumentsHost,
   Catch,
