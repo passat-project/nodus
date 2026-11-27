@@ -56,6 +56,22 @@ export function rolesSummary(rules: WorkflowDraftTransition['rules'], category: 
     : ui.automation.panel.nobody;
 }
 
+/** Сводка «Условия действия» (#635): условия по записям/формулы (прячут
+ *  кнопку) и проверки (подпись настройщика) — одна строка под названием. */
+export function actionConditionsSummary(action: {
+  rules: WorkflowDraftTransition['rules'];
+}): string {
+  const labels = [
+    ...action.rules.conditions
+      .filter((c) => c.kind === 'records' || c.kind === 'formula')
+      .map((c) => ui.automation.condition.addKinds[c.kind]),
+    ...action.rules.validators.map((v) =>
+      'title' in v && v.title.trim() ? v.title.trim() : ui.automation.validators[v.kind],
+    ),
+  ];
+  return labels.length > 0 ? labels.join(', ') : ui.automation.panel.noConditions;
+}
+
 /** Сводка «Окно»: выключено, пустое или состав разделов. */
 export function windowSummary(form: WorkflowDraftTransition['form']): string {
   if (!form.enabled) return ui.automation.window.summaryOff;
@@ -80,6 +96,15 @@ export function sectionSummaries(
   const validators = VALIDATOR_KINDS.filter(
     (kind) => validatorOrder.includes(kind) && validatorOf(transition.rules, kind),
   );
+  // Проверки общей выборки и формулы (#635): в сводке — подпись настройщика
+  // (или вид проверки), как их увидит сотрудник в причине отказа.
+  const asyncValidators = transition.rules.validators.filter(
+    (v) => v.kind === 'records' || v.kind === 'formula',
+  );
+  const checkLabels = [
+    ...validators.map((kind) => ui.automation.validators[kind]),
+    ...asyncValidators.map((v) => v.title.trim() || ui.automation.validators[v.kind]),
+  ];
   const routeIf = routeIfOf(transition.rules);
   return {
     roles: rolesSummary(transition.rules, category),
@@ -103,10 +128,7 @@ export function sectionSummaries(
               }
             })
             .join(', '),
-    conditions:
-      validators.length > 0
-        ? validators.map((kind) => ui.automation.validators[kind]).join(', ')
-        : ui.automation.panel.noConditions,
+    conditions: checkLabels.length > 0 ? checkLabels.join(', ') : ui.automation.panel.noConditions,
     rules:
       routeIf !== null
         ? `${

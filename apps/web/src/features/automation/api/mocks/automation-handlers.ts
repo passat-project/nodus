@@ -87,7 +87,10 @@ export const automationHandlers = [
     }
     // Тип-владелец маршрута: его привязки атрибутов и категория (Р8, #432).
     const type = mockTypes.find((entry) => entry.workflowId === detail.id);
-    const problems = checkWorkflowDocument(document, documentFacts(type, type?.category ?? 'task'));
+    const problems = checkWorkflowDocument(
+      document,
+      documentFacts(type, type?.category ?? 'task', document),
+    );
     if (hasBlockingProblems(problems)) {
       return invalid(422, 'WORKFLOW_INVALID', { problems });
     }

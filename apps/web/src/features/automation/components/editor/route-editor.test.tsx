@@ -95,6 +95,11 @@ vi.mock('../../api/automation-api.js', () => ({
     data: [{ systemState: 'active', name: 'В работе', routes: 1 }],
     isLoading: false,
   }),
+  // Факты общей выборки (#635): живых типов нет — проверки типов пропущены.
+  useProcessTypes: () => ({ data: [] }),
+}));
+vi.mock('../../api/condition-facts.js', () => ({
+  useConditionFacts: () => ({}),
 }));
 vi.mock('../../lib/use-can-manage-workflows.js', () => ({
   useCanManageWorkflows: () => true,

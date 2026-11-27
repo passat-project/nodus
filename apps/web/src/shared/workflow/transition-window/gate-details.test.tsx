@@ -4,6 +4,9 @@ import type { CustomFieldDefinition, TaskListItem, TransitionBlockReason } from 
 import { ui } from '@nodus/contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const cardOpen = vi.hoisted(() => vi.fn());
+vi.mock('../../lib/card-bridge.js', () => ({ openCardViaBridge: cardOpen }));
+
 import { TransitionGateDetails } from './gate-details.js';
 
 const OPEN_SUBTASK = {
@@ -45,7 +48,10 @@ const REASONS: TransitionBlockReason[] = [
 ];
 
 describe('TransitionGateDetails: подробности гейтов', () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    cardOpen.mockClear();
+  });
 
   it('показывает только незакрытые подзадачи и ведёт в каждую', () => {
     const onOpenSubtask = vi.fn();
@@ -88,5 +94,62 @@ describe('TransitionGateDetails: подробности гейтов', () => {
     expect(screen.getByText('Не заполнены обязательные поля')).toBeTruthy();
     expect(screen.getByText(`${ui.tasks.deadline}, Номер накладной`)).toBeTruthy();
     expect(screen.getByText('Нет файлов итога · 0 из 2')).toBeTruthy();
+  });
+
+  it('проверка по записям (#635): подпись, записи-ссылки, невидимые счётчиком', () => {
+    render(
+      <TransitionGateDetails
+        reasons={[
+          {
+            kind: 'records',
+            title: 'Задания смежникам не выполнены',
+            records: [
+              {
+                id: '30000000-0000-4000-8000-000000000201',
+                entityKind: 'task',
+                name: 'Задание → КЖ1.1',
+              },
+              {
+                id: '30000000-0000-4000-8000-000000000202',
+                entityKind: 'letter',
+                name: 'Вх-2026/115',
+              },
+              {
+                id: '30000000-0000-4000-8000-000000000203',
+                entityKind: 'node',
+                name: 'Комплект КЖ-01',
+              },
+            ],
+            hiddenCount: 2,
+          },
+        ]}
+        gate={{ task: TASK, definitions: DEFINITIONS }}
+      />,
+    );
+
+    expect(screen.getByText('Задания смежникам не выполнены')).toBeTruthy();
+    // Задача и письмо — кнопки-ссылки (открывают карточку по entityKind),
+    // у папки карточки нет — имя без перехода (#655).
+    fireEvent.click(screen.getByText('Задание → КЖ1.1'));
+    expect(cardOpen).toHaveBeenCalledWith({
+      kind: 'task',
+      id: '30000000-0000-4000-8000-000000000201',
+    });
+    expect(screen.getByText('Вх-2026/115').closest('button')).not.toBeNull();
+    expect(screen.getByText('Комплект КЖ-01').closest('button')).toBeNull();
+    // Видимость одна: невидимые записи — только счётчиком «и ещё N».
+    expect(
+      screen.getByText(`${ui.tasks.gateHiddenPrefix} 2 ${ui.tasks.gateHiddenFew}`),
+    ).toBeTruthy();
+  });
+
+  it('формула-проверка (#635) показывает подпись настройщика', () => {
+    render(
+      <TransitionGateDetails
+        reasons={[{ kind: 'formula', title: 'Комплект не собран' }]}
+        gate={{ task: TASK, definitions: DEFINITIONS }}
+      />,
+    );
+    expect(screen.getByText('Комплект не собран')).toBeTruthy();
   });
 });

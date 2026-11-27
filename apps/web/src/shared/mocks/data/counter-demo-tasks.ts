@@ -3,7 +3,7 @@ import type { TaskListItem } from '@nodus/contracts';
 import { isoAgo, isoIn } from './dates.js';
 import { nodeIds } from './project-node-ids.js';
 import { mk, projectRefs, tid } from './task-item-factory.js';
-import { stageInProgress } from './task-stages.js';
+import { stageInProgress, stageNew, systemProcessType } from './task-stages.js';
 import { changeTypeRef } from './workflows.js';
 import { userIds, userRef } from './users.js';
 
@@ -76,5 +76,23 @@ export const counterDemoTasks: TaskListItem[] = [
     project: projectRefs.p1,
     nodeId: null,
     updatedAt: isoAgo(0, 8, 30),
+  }),
+];
+
+/** Подзадача-задание смежнику (#635, демо проверки общей выборки): держит
+ *  открытой проверку «Задания смежникам не выполнены» у изменения 9631 —
+ *  «Выдать в печать» на месте, не пускает и объясняет записью-ссылкой;
+ *  у остальных изменений подзадач нет, кнопка свободна. */
+export const counterDemoSubtasks: TaskListItem[] = [
+  mk({
+    ...base,
+    id: tid(635),
+    number: 9635,
+    title: 'Задание смежнику: армирование ростверка',
+    type: systemProcessType,
+    stage: stageNew,
+    parentId: tid(631),
+    deadline: isoIn(3),
+    updatedAt: isoAgo(1, 6),
   }),
 ];

@@ -71,8 +71,11 @@ export function ConditionsList({
               >
                 {/* ✓ — положительная формулировка («Нет незавершённых подзадач»),
                     ✗ — текст отказа из gate.*: та же фраза, что в диалоге
-                    блокировки, не читается наоборот (#511). */}
-                {line.ok ? ui.tasks.window.conditionLabels[kind] : ui.tasks.gate[kind]}
+                    блокировки, не читается наоборот (#511). records/formula
+                    (#635) не чинятся окном — ✗ показывает подпись настройки. */}
+                {line.ok
+                  ? ui.tasks.window.conditionLabels[kind]
+                  : (reason?.title ?? ui.tasks.gate[kind])}
                 {detail ? ` · ${detail}` : ''}
                 {action?.onClick ? (
                   <Button

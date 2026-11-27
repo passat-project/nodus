@@ -333,6 +333,11 @@ export const workflowProblemCodeSchema = z.enum([
   'condition_folder_type_unknown',
   'condition_field_op_incompatible',
   'condition_query_unfiltered',
+  /** Проверка records/formula без подписи причины или без самой формулы:
+   *  черновик конструктора не переживёт схему документа — называем это
+   *  человеком в редакторе до публикации. */
+  'condition_title_empty',
+  'condition_formula_missing',
 ]);
 export type WorkflowProblemCode = z.infer<typeof workflowProblemCodeSchema>;
 

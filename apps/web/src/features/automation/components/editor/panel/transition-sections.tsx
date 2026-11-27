@@ -30,6 +30,7 @@ import {
   validatorOf,
 } from '../../../model/transition-rules.js';
 import { ModeChoices, PanelField, SwitchRow } from '../../../../../shared/ui/panel/panel-kit.js';
+import { ConditionRuleCards } from './condition-rule-cards.js';
 import { CustomFieldChecks } from './custom-fields-checks.js';
 import { AssignNumberRule } from './assign-number-rule.js';
 import { CheckRow } from './transition-roles-section.js';
@@ -44,10 +45,16 @@ import { CheckRow } from './transition-roles-section.js';
 
 type Rules = WorkflowDraftTransition['rules'];
 
-function usePatchRules(transition: WorkflowDraftTransition) {
+/** Правки правил: у кнопки-перехода и действия один раздел (#633, #635). */
+export function usePatchRules(
+  owner: Pick<WorkflowDraftTransition, 'id' | 'rules'>,
+  kind: 'transition' | 'action' = 'transition',
+) {
   return (next: Rules) => {
-    if (next !== transition.rules) {
-      useRouteDocStore.getState().patchTransition(transition.id, { rules: next });
+    if (next !== owner.rules) {
+      const store = useRouteDocStore.getState();
+      if (kind === 'action') store.patchAction(owner.id, { rules: next });
+      else store.patchTransition(owner.id, { rules: next });
     }
   };
 }
@@ -58,16 +65,21 @@ export function ConditionsSection({
   typeId,
   readOnly,
   category = 'task',
+  kind = 'transition',
 }: {
-  transition: WorkflowDraftTransition;
+  /** Кнопка-переход или действие: разделу нужны только правила (#633). */
+  transition: Pick<WorkflowDraftTransition, 'id' | 'rules'>;
   scope: CustomFieldModule;
   /** Тип процесса: в гейт выбираются только его атрибуты (#432, Р8). */
   typeId?: string;
   readOnly: boolean;
-  /** Гейты категории (Р6): у писем в #55 их нет — задачные факты не считаются. */
+  /** Гейты категории (Р6): у писем задачные факты не считаются — но
+   *  проверки общей выборки (#635) доступны обеим категориям. */
   category?: ProcessCategory;
+  /** Действие (#633) правится методом стора `patchAction`. */
+  kind?: 'transition' | 'action';
 }) {
-  const patch = usePatchRules(transition);
+  const patch = usePatchRules(transition, kind);
   const rules = transition.rules;
   const subtasks = validatorOf(rules, 'no_open_subtasks');
   const fields = validatorOf(rules, 'fields_required');
@@ -75,76 +87,85 @@ export function ConditionsSection({
   const kinds = VALIDATOR_KINDS.filter((kind) =>
     (WORKFLOW_VALIDATORS_BY_CATEGORY[category] as readonly string[]).includes(kind),
   );
-  if (kinds.length === 0) {
-    return (
-      <p className="text-sm break-words text-muted-foreground">
-        {ui.automation.panel.noConditions}
-      </p>
-    );
-  }
+  /** Заготовки-пресеты (шесть прежних видов) — внутри группы «Проверки». */
+  const presets =
+    kinds.length > 0 ? (
+      <>
+        {kinds.map((kind) => (
+          <CheckRow
+            key={kind}
+            checked={validatorOf(rules, kind) !== undefined}
+            disabled={readOnly}
+            title={ui.automation.validators[kind]}
+            hint={ui.automation.panel.validatorHints[kind]}
+            onChange={() => patch(toggleValidator(rules, kind))}
+          >
+            {kind === 'no_open_subtasks' && subtasks ? (
+              <CheckRow
+                checked={subtasks.allowReview === true}
+                disabled={readOnly}
+                title={ui.automation.panel.allowReviewSubtasks}
+                onChange={(checked) => patch(setAllowReview(rules, checked))}
+              />
+            ) : null}
+            {kind === 'result_files' && files ? (
+              <PanelField label={ui.automation.window.minFiles}>
+                <Input
+                  type="number"
+                  min={1}
+                  max={5}
+                  value={files.min}
+                  disabled={readOnly}
+                  aria-label={ui.automation.window.minFiles}
+                  onChange={(e) => patch(setMinFiles(rules, Number(e.target.value)))}
+                />
+              </PanelField>
+            ) : null}
+            {kind === 'fields_required' && fields ? (
+              <>
+                {REQUIRABLE_FIELDS.map((field) => (
+                  <CheckRow
+                    key={field}
+                    checked={fields.fields.includes(field)}
+                    disabled={
+                      readOnly || (fields.fields.length === 1 && fields.fields.includes(field))
+                    }
+                    title={
+                      field === 'result' ? ui.tasks.result : ui.automation.requirableFields[field]
+                    }
+                    onChange={() => patch(toggleField(rules, field))}
+                  />
+                ))}
+                <CustomFieldChecks
+                  scope={scope}
+                  typeId={typeId}
+                  selected={fields.fields}
+                  disabled={readOnly}
+                  limit={CUSTOM_FIELD_LIMITS.gateFields}
+                  limitHint={ui.automation.panel.gateFieldsLimit}
+                  onToggle={(key) => patch(toggleField(rules, key))}
+                />
+              </>
+            ) : null}
+          </CheckRow>
+        ))}
+      </>
+    ) : null;
+
   return (
     <>
       <p className="text-sm break-words text-muted-foreground">
         {ui.automation.panel.conditionsLead}
       </p>
-      {kinds.map((kind) => (
-        <CheckRow
-          key={kind}
-          checked={validatorOf(rules, kind) !== undefined}
-          disabled={readOnly}
-          title={ui.automation.validators[kind]}
-          hint={ui.automation.panel.validatorHints[kind]}
-          onChange={() => patch(toggleValidator(rules, kind))}
-        >
-          {kind === 'no_open_subtasks' && subtasks ? (
-            <CheckRow
-              checked={subtasks.allowReview === true}
-              disabled={readOnly}
-              title={ui.automation.panel.allowReviewSubtasks}
-              onChange={(checked) => patch(setAllowReview(rules, checked))}
-            />
-          ) : null}
-          {kind === 'result_files' && files ? (
-            <PanelField label={ui.automation.window.minFiles}>
-              <Input
-                type="number"
-                min={1}
-                max={5}
-                value={files.min}
-                disabled={readOnly}
-                aria-label={ui.automation.window.minFiles}
-                onChange={(e) => patch(setMinFiles(rules, Number(e.target.value)))}
-              />
-            </PanelField>
-          ) : null}
-          {kind === 'fields_required' && fields ? (
-            <>
-              {REQUIRABLE_FIELDS.map((field) => (
-                <CheckRow
-                  key={field}
-                  checked={fields.fields.includes(field)}
-                  disabled={
-                    readOnly || (fields.fields.length === 1 && fields.fields.includes(field))
-                  }
-                  title={
-                    field === 'result' ? ui.tasks.result : ui.automation.requirableFields[field]
-                  }
-                  onChange={() => patch(toggleField(rules, field))}
-                />
-              ))}
-              <CustomFieldChecks
-                scope={scope}
-                typeId={typeId}
-                selected={fields.fields}
-                disabled={readOnly}
-                limit={CUSTOM_FIELD_LIMITS.gateFields}
-                limitHint={ui.automation.panel.gateFieldsLimit}
-                onToggle={(key) => patch(toggleField(rules, key))}
-              />
-            </>
-          ) : null}
-        </CheckRow>
-      ))}
+      <ConditionRuleCards
+        rules={rules}
+        category={category}
+        scope={scope}
+        typeId={typeId}
+        readOnly={readOnly}
+        patch={patch}
+        presets={presets}
+      />
       <p className="text-xs break-words text-muted-foreground">{ui.automation.conditionsHint}</p>
     </>
   );

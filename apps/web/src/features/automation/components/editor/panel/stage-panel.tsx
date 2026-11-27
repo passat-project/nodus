@@ -150,6 +150,18 @@ export function StagePanel({
         </PanelField>
       ) : null}
 
+      {/* «Результат выдан» (#635, §11): отметка статуса — с него результат
+          считается выданным, хотя работа ещё не закрыта (у комплекта —
+          «Выдано в печать» и всё после него). Без отметок в маршруте
+          «выдана» значит «закрыта успешно». */}
+      <SwitchRow
+        title={ui.automation.resultIssued}
+        hint={ui.automation.resultIssuedHint}
+        checked={stage.resultIssued}
+        disabled={readOnly}
+        onChange={(checked) => patch({ resultIssued: checked })}
+      />
+
       <SwitchRow
         title={ui.automation.isInitial}
         hint={ui.automation.isInitialHint}

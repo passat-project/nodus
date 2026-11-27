@@ -101,7 +101,9 @@ export function EditorPanel({
   const title = inSection
     ? action && section === 'window'
       ? ui.automation.panel.actionWindow
-      : SECTION_TITLE[section as Exclude<PanelSection, 'root'>]
+      : action && section === 'conditions'
+        ? ui.automation.panel.sectionActionConditions
+        : SECTION_TITLE[section as Exclude<PanelSection, 'root'>]
     : stage
       ? ui.automation.panel.kindStage
       : action
@@ -145,6 +147,16 @@ export function EditorPanel({
         <RolesSection
           transition={action}
           kind="action"
+          readOnly={readOnly}
+          category={type.category}
+        />
+      ) : null}
+      {action && section === 'conditions' ? (
+        <ConditionsSection
+          transition={action}
+          kind="action"
+          scope={scope}
+          typeId={type.id}
           readOnly={readOnly}
           category={type.category}
         />

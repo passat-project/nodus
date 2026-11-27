@@ -134,6 +134,18 @@ function checkOwner(
   for (const query of queries) {
     checkQuery(query, refs, opts, definitionsById, problems);
   }
+  // Черновик конструктора: проверка без подписи (сотрудник не узнает причину)
+  // или формула без формулы — схема документа их отвергнет, называем заранее.
+  // Тип формулы в схеме ненулевой: черновик редактора проходит сюда до
+  // валидации, поэтому сравнение с null — сознательное (runtime-страховка).
+  for (const validator of validators) {
+    if (!validator.title.trim()) {
+      problems.push({ code: 'condition_title_empty', severity: 'error', ...refs });
+    }
+    if (validator.kind === 'formula' && (validator.formula as unknown as object | null) === null) {
+      problems.push({ code: 'condition_formula_missing', severity: 'error', ...refs });
+    }
+  }
 }
 
 function checkQuery(

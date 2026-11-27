@@ -9,6 +9,7 @@ import { isFinalState } from '@nodus/contracts';
 
 import { demoTaskCustomFields } from './custom-fields.js';
 import { demoRefsForValues } from './custom-fields-refs.js';
+import { counterDemoSubtasks } from './counter-demo-tasks.js';
 import { isoAgo } from './dates.js';
 import { lid } from './letter-ids.js';
 import { personalNew } from './personal-stages.js';
@@ -79,6 +80,9 @@ export function makeSubtask(parent: TaskListItem, title: string): TaskListItem {
 
 export const demoSubtasks: Record<string, TaskListItem[]> = {
   [tid(2)]: [kjSubtask],
+  // Задание смежнику под изменением 9631 (#635): живая демонстрация
+  // проверки общей выборки на «Выдать в печать».
+  [tid(631)]: counterDemoSubtasks,
 };
 
 /** Задачи-поручения из письма lid(3) («Замечания по разделу КЖ», Вх-2026/115):

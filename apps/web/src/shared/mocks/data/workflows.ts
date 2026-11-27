@@ -3,7 +3,7 @@ import { customFieldKey } from '@nodus/contracts';
 
 import { requestDocument } from './request-workflow-document.js';
 import { quickDocument, simpleDocument, standardDocument } from './workflows-documents.js';
-import { stageInProgress } from './task-stages.js';
+import { stageInProgress, systemProcessType } from './task-stages.js';
 import { letterWorkflowDetails } from './letter-catalog.js';
 import { fieldIds } from './field-ids.js';
 import {
@@ -103,6 +103,12 @@ export const demoWorkflowDetails: Record<string, WorkflowDetail> = {
     publishedBy,
     document: {
       ...quickDocument,
+      // «Результат выдан» (#635, демо отметки): «Выполнена» у изменения
+      // отмечена — с неё результат считается выданным; маршруты без
+      // отметок считают «выданной» закрытую успешно запись.
+      stages: quickDocument.stages.map((stage) =>
+        stage.code === 'done' ? { ...stage, resultIssued: true } : stage,
+      ),
       transitions: [
         ...quickDocument.transitions,
         {
@@ -116,7 +122,24 @@ export const demoWorkflowDetails: Record<string, WorkflowDetail> = {
           sortOrder: 2,
           rules: {
             conditions: [{ kind: 'role_in', roles: ['assignee', 'coexecutor'] }],
-            validators: [],
+            // Проверка общей выборки (#635, демо): «нельзя выдать комплект,
+            // пока подзадачи-задания не выполнены» — кнопка на месте, не
+            // пускает и объясняет записями-ссылками; у 9631 задания открыты.
+            validators: [
+              {
+                kind: 'records',
+                title: 'Задания смежникам не выполнены',
+                query: {
+                  subject: { kind: 'subtasks' },
+                  where: [
+                    { kind: 'type_is', typeId: systemProcessType.id },
+                    { kind: 'outcome', outcome: 'success' },
+                  ],
+                  quantifier: 'all',
+                },
+                override: { mode: 'default', extraUserIds: [] },
+              },
+            ],
             postFunctions: [{ kind: 'assign_number', fieldId: fieldIds.waybillNumber }],
           },
           // Окно кнопки (#496, сценарий «Комплект»): «Файл» спрашивается и

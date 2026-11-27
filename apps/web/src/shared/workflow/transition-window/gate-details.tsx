@@ -1,7 +1,14 @@
-import type { CustomFieldDefinition, TaskListItem, TransitionBlockReason } from '@nodus/contracts';
+import type {
+  ConditionRecordRef,
+  CustomFieldDefinition,
+  TaskListItem,
+  TransitionBlockReason,
+} from '@nodus/contracts';
 import { customFieldIdOfKey, isFinalState, isReviewState, ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
+import { openCardViaBridge } from '../../lib/card-bridge.js';
+import { plural } from '../../lib/format.js';
 import { TaskStatusBadge } from '../../ui/task-status-badge.js';
 
 /** Минимум данных задачи для детализации гейтов: подзадачи и чек-лист. */
@@ -119,8 +126,64 @@ export function MissingFields({
   return <p className="text-xs leading-relaxed text-muted-foreground">{names.join(', ')}</p>;
 }
 
+/** Записи-нарушители проверки records (#635): кликабельные имена — задача,
+ *  письмо и проект открывают карточку (стек карточек, ADR-0009); у папки
+ *  карточки нет — имя без перехода (как у ссылок-значений, #655). Невидимые
+ *  нажавшему записи не приходят с сервера — только счётчик «и ещё N». */
+export function RecordRefsList({
+  refs,
+  hiddenCount,
+}: {
+  refs: readonly ConditionRecordRef[];
+  hiddenCount: number;
+}) {
+  if (refs.length === 0 && hiddenCount === 0) return null;
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      {refs.map((ref) => {
+        const openable = ref.entityKind !== 'node';
+        const name = (
+          <span className="min-w-0 break-words" title={ref.name}>
+            {ref.name}
+          </span>
+        );
+        return (
+          <div key={ref.id} className="flex min-w-0 items-start gap-2 text-sm">
+            <span
+              aria-hidden
+              className="mt-2 size-1.5 shrink-0 rounded-full bg-muted-foreground/50"
+            />
+            {openable ? (
+              <button
+                type="button"
+                className="min-w-0 text-left underline-offset-2 hover:underline"
+                onClick={() => openCardViaBridge({ kind: ref.entityKind, id: ref.id })}
+              >
+                {name}
+              </button>
+            ) : (
+              name
+            )}
+          </div>
+        );
+      })}
+      {hiddenCount > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          {ui.tasks.gateHiddenPrefix} {hiddenCount}{' '}
+          {plural(hiddenCount, [
+            ui.tasks.gateHiddenOne,
+            ui.tasks.gateHiddenFew,
+            ui.tasks.gateHiddenMany,
+          ])}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 /** Причины блокировки перехода с деталями (диалог отказа): чек-лист «n из m»,
- *  названия незаполненных полей, список незакрытых подзадач с переходом. */
+ *  названия незаполненных полей, список незакрытых подзадач с переходом,
+ *  записи-ссылки у проверки по записям (#635). */
 export function TransitionGateDetails({
   reasons,
   gate,
@@ -132,10 +195,10 @@ export function TransitionGateDetails({
 }) {
   return (
     <ul className="flex flex-col gap-2.5 text-sm">
-      {reasons.map((reason) => {
+      {reasons.map((reason, index) => {
         const detail = gateDetailText(reason, gate.task);
         return (
-          <li key={reason.kind} className="flex flex-col gap-1">
+          <li key={`${reason.kind}:${index}`} className="flex flex-col gap-1">
             <span className="flex items-start gap-2">
               <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-warning" />
               <span>
@@ -156,6 +219,11 @@ export function TransitionGateDetails({
             {reason.kind === 'fields_required' ? (
               <div className="ml-5">
                 <MissingFields fields={reason.fields} definitions={gate.definitions} />
+              </div>
+            ) : null}
+            {reason.kind === 'records' ? (
+              <div className="ml-5">
+                <RecordRefsList refs={reason.records ?? []} hiddenCount={reason.hiddenCount ?? 0} />
               </div>
             ) : null}
           </li>

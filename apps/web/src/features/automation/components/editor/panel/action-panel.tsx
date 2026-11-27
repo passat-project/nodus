@@ -22,7 +22,7 @@ import {
   Segmented,
   focusName,
 } from '../../../../../shared/ui/panel/panel-kit.js';
-import { rolesSummary, windowSummary } from './transition-panel.js';
+import { actionConditionsSummary, rolesSummary, windowSummary } from './transition-panel.js';
 
 const ANY = 'any';
 const DISPLAYS: readonly TransitionDisplay[] = ['primary', 'button', 'menu'];
@@ -48,7 +48,7 @@ export function ActionPanel({
   readOnly: boolean;
   category?: ProcessCategory;
   autoFocusName: boolean;
-  onOpenSection: (section: 'roles' | 'window') => void;
+  onOpenSection: (section: 'roles' | 'conditions' | 'window') => void;
 }) {
   const store = useRouteDocStore.getState;
   const patch = (value: Partial<Omit<WorkflowDraftAction, 'id' | 'sortOrder'>>) =>
@@ -130,6 +130,11 @@ export function ActionPanel({
           title={ui.automation.panel.sectionWhoSees}
           summary={rolesSummary(action.rules, category)}
           onClick={() => onOpenSection('roles')}
+        />
+        <SectionLink
+          title={ui.automation.panel.sectionActionConditions}
+          summary={actionConditionsSummary(action)}
+          onClick={() => onOpenSection('conditions')}
         />
         <SectionLink
           title={ui.automation.panel.actionWindow}

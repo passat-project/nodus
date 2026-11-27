@@ -19,6 +19,7 @@ import { userRef } from '../../../../shared/mocks/data/users.js';
 import { lockDenial } from '../../../../shared/mocks/data/task-locks.js';
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import type { standardDocument } from '../../../../shared/mocks/data/workflows.js';
+import { conditionGateReasonOf } from './tasks-condition-gates.js';
 
 /** Гейты, окно и запись блока перехода в мок-мире (#380): та же грамматика,
  *  что у сервера (ADR-0020) — демо на `:5173` и веб-тесты видят поведение. */
@@ -50,7 +51,8 @@ export function fieldFilled(task: TaskListItem, field: string): boolean {
   });
 }
 
-/** Гейты мока — та же грамматика, что у сервера (ADR-0020). */
+/** Гейты мока — та же грамматика, что у сервера (ADR-0020); проверки общей
+ *  выборки (#635) — tasks-condition-gates (записи-ссылки в причине). */
 export function blockedByOf(
   task: TaskListItem,
   route: typeof standardDocument,
@@ -89,6 +91,12 @@ export function blockedByOf(
         if (count < validator.min) {
           reasons.push({ kind: validator.kind, count, min: validator.min });
         }
+        break;
+      }
+      case 'records':
+      case 'formula': {
+        const reason = conditionGateReasonOf(task, validator);
+        if (reason) reasons.push(reason);
         break;
       }
     }

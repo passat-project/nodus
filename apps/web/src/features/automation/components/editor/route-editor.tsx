@@ -9,6 +9,7 @@ import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/quer
 import { projectsAvailable } from '../../../../shared/api/projects-available.js';
 import { ROUTE_GEOMETRY } from '../../../../shared/flow/route-layout.js';
 import { usePublishWorkflow, useStageNames } from '../../api/automation-api.js';
+import { useConditionFacts } from '../../api/condition-facts.js';
 import { useCanManageWorkflows } from '../../lib/use-can-manage-workflows.js';
 import { useRouteDocStore } from '../../model/route-doc-store.js';
 import { useLayoutAutosave } from '../../model/use-layout-autosave.js';
@@ -138,6 +139,9 @@ function RouteEditorInner({
     const before = new Map(baseline.stages.map((s) => [s.id, s.name.trim()]));
     return new Set(doc.stages.filter((s) => before.get(s.id) !== s.name.trim()).map((s) => s.id));
   }, [baseline, doc.stages, type.isSystem]);
+  // Живые типы/стадии/виды папок для проверок общей выборки (#635): мёртвая
+  // ссылка ловится в редакторе теми же кодами, что и на публикации.
+  const conditionFacts = useConditionFacts(doc);
   const problems = useMemo(
     () =>
       checkWorkflowDocument(doc, {
@@ -147,8 +151,17 @@ function RouteEditorInner({
         projectsAvailable: projectsAvailable(),
         stageNameFacts,
         stageNameStageIds,
+        ...conditionFacts,
       }),
-    [doc, customFieldFacts, definitions, type.category, stageNameFacts, stageNameStageIds],
+    [
+      doc,
+      customFieldFacts,
+      definitions,
+      type.category,
+      stageNameFacts,
+      stageNameStageIds,
+      conditionFacts,
+    ],
   );
   const problemStageIds = useMemo(
     () => new Set(problems.filter((p) => p.stageId).map((p) => p.stageId as string)),

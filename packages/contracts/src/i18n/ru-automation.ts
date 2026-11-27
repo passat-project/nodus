@@ -1,6 +1,7 @@
 import { creationScopeStrings } from './ru-automation-creation-scope.js';
 import { entryStrings } from './ru-automation-entry.js';
 import { creationStrings, typeSettingsStrings } from './ru-automation-forms.js';
+import { conditionStrings } from './ru-automation-condition.js';
 import { deciderStrings } from './ru-automation-deciders.js';
 import { problemStrings } from './ru-automation-problems.js';
 import { intentStrings } from './ru-automation-intent.js';
@@ -14,6 +15,7 @@ import { publishPreviewStrings } from './ru-automation-publish.js';
 export const automationStrings = {
   ...outcomeStrings,
   ...publishPreviewStrings,
+  ...conditionStrings,
   /** Вкладки раздела; «Права доступа» — общая матрица прав (#379, ADR-0034). */
   tabProcesses: 'Процессы',
   /** Реестр атрибутов — кастомных полей сущностей (#431, ADR-0029). */
@@ -106,6 +108,9 @@ export const automationStrings = {
   /** Инспектор статуса. */
   isInitial: 'Начальный статус',
   isInitialHint: 'Новая карточка создаётся в этом статусе',
+  /** «Результат выдан» (#635, §11): отметка статуса в редакторе. */
+  resultIssued: 'Результат выдан',
+  resultIssuedHint: 'С этого статуса результат считается выданным, хотя работа ещё не закрыта',
   addTransitionTitle: 'Новая кнопка перехода',
   addTransitionSubmit: 'Добавить',
   deleteStage: 'Удалить статус',
@@ -151,6 +156,8 @@ export const automationStrings = {
     result_present: 'Есть итог',
     fields_required: 'Заполнены поля',
     result_files: 'Приложены файлы итога',
+    records: 'Проверка по записям',
+    formula: 'Формула-проверка',
   },
   requirableFields: {
     description: 'Описание',
@@ -240,6 +247,9 @@ export const automationStrings = {
     },
     sectionWhoSees: 'Кто видит',
     sectionConditions: 'Условия перехода',
+    /** Тот же раздел у действия (#633 + #635): статус не меняется — не
+     *  «переход», а условия и проверки самой кнопки. */
+    sectionActionConditions: 'Условия действия',
     sectionRules: 'Особые правила',
     sectionWindow: 'Окно перехода',
     nobody: 'Никто',

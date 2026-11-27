@@ -17,6 +17,7 @@ import {
   postActionBlock,
   windowLockDenial,
 } from './tasks-transitions-gates.js';
+import { conditionGateReasonsOf } from './tasks-condition-gates.js';
 
 /**
  * Действия маршрута в мок-мире (#633): кнопки без смены статуса. Грамматика
@@ -41,7 +42,8 @@ function actionsOf(task: TaskListItem): WorkflowAction[] {
       name: a.name,
       display: a.display,
       form: a.form.enabled ? a.form : null,
-      blockedBy: [],
+      // Проверки действия (#635): та же грамматика, что у переходов.
+      blockedBy: conditionGateReasonsOf(task, a.rules.validators),
       validators: a.rules.validators,
     }));
 }
@@ -74,6 +76,20 @@ export const tasksActionsHandlers = [
       );
     }
     const form = parsed.data.form ?? {};
+    // Проверки действия (#635): как у переходов — кнопка не пускает без
+    // обхода с причиной (мок-грамматика едина с сервером).
+    const docAction = documentOfTask(task).actions?.find((a) => a.id === action.id);
+    const blocked = docAction ? conditionGateReasonsOf(task, docAction.rules.validators) : [];
+    if (blocked.length > 0 && !(parsed.data.override === true && parsed.data.reason?.trim())) {
+      return HttpResponse.json(
+        {
+          code: ErrorCode.WORKFLOW_TRANSITION_BLOCKED,
+          message: 'Action gates not passed',
+          details: { reasons: blocked },
+        },
+        { status: 409 },
+      );
+    }
     const sections = effectiveWindowSections(action.form, { validators: [] });
     const check = checkWindow(sections, form);
     if (check.missing.length > 0 || check.unexpected.length > 0) {
