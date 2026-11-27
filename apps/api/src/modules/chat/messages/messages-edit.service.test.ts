@@ -151,7 +151,7 @@ describe('MessagesService.edit (#188: текст + состав вложений
     expect(repo.updateEditText).not.toHaveBeenCalled();
   });
 
-  it('пересланную копию не правит даже переславший (#111)', async () => {
+  it('пересланную копию ЧУЖОГО текста не правит даже переславший (#111 → #1072)', async () => {
     repo.findByIdInConversation.mockResolvedValue(
       makeMessage({ fwdMessageId: 'src-msg', fwdConversationId: 'src-conv', fwdAuthorId: PEER }),
     );
@@ -163,6 +163,40 @@ describe('MessagesService.edit (#188: текст + состав вложений
     });
     expect(repo.updateEditText).not.toHaveBeenCalled();
     expect(eventBus.emit).not.toHaveBeenCalled();
+  });
+
+  it('пересланную копию СВОЕГО текста автор пересылки правит (#1072)', async () => {
+    repo.findByIdInConversation.mockResolvedValue(
+      makeMessage({ fwdMessageId: 'src-msg', fwdConversationId: 'src-conv', fwdAuthorId: ME }),
+    );
+    repo.updateEditText.mockResolvedValue(
+      makeMessage({
+        text: 'поправленное своё',
+        editedAt: new Date('2026-11-27T13:00:00Z'),
+        fwdMessageId: 'src-msg',
+        fwdConversationId: 'src-conv',
+        fwdAuthorId: ME,
+      }),
+    );
+
+    const result = await service.edit(ME, CONV, 'msg-1', { text: 'поправленное своё' });
+
+    expect(repo.updateEditText).toHaveBeenCalledWith(
+      CONV,
+      'msg-1',
+      ME,
+      'поправленное своё',
+      [],
+      [],
+      TX,
+    );
+    expect(result.message.text).toBe('поправленное своё');
+    expect(eventBus.emit).toHaveBeenCalledWith(
+      TX,
+      CHAT_EVENTS.MESSAGE_EDITED,
+      expect.objectContaining({ text: 'поправленное своё' }),
+      expect.anything(),
+    );
   });
 
   it('блок перехода (#380) не правится: журнал и чат не расходятся', async () => {

@@ -124,4 +124,48 @@ describe('ChatComposer — «вечный курсор» переживает с
     expect(document.activeElement).toBe(textarea);
     trigger.remove();
   });
+
+  it('передача курсора между композерами — немедленная (#1072: язычок «Ответить» в треде)', async () => {
+    // Лента канала + окно треда: каретка в композере ЛЕНТЫ (язычок держит
+    // preventDefault, activeElement не менялся); команда фокуса в композер
+    // ТРЕДА обязана переехать сразу — зарегистрированный композер «свободен»,
+    // раньше ожидание «не-editable» истекало и курсор оставался в ленте.
+    const ROOT = '55555555-5555-4555-8555-555555555555';
+    const FEED_SCOPE = `feed:${CONV}`;
+    const THREAD_SCOPE = `thread:${ROOT}`;
+    const props = (focusId: string) => ({
+      placeholder: 'Поле ввода',
+      focusId,
+      conversationId: CONV,
+      selection: null,
+      onSubmit: () => {},
+    });
+    const feed = render(
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(ChatComposer, props(FEED_SCOPE)),
+      ),
+    );
+    const thread = render(
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(ChatComposer, props(THREAD_SCOPE)),
+      ),
+    );
+    const feedArea = feed.container.querySelector('textarea') as HTMLTextAreaElement;
+    const threadArea = await waitFor(() => {
+      const el = thread.container.querySelector('textarea');
+      expect(el).toBeTruthy();
+      return el as HTMLTextAreaElement;
+    });
+
+    feedArea.focus();
+    expect(document.activeElement).toBe(feedArea);
+
+    focusComposerWhenFree(THREAD_SCOPE, 600);
+    await frame();
+    expect(document.activeElement).toBe(threadArea);
+  });
 });

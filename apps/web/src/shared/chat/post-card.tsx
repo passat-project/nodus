@@ -6,6 +6,9 @@ import { personTone } from '../ui/person-tone.js';
 import { snapDevicePx } from '../ui/ui-scale.js';
 import { attachmentsLayout, mediaBubbleWidth, MessageAttachments } from './attachments.js';
 import { MessageReactions } from './chat-message.js';
+import { useChatHostNavigation } from './chat-host.js';
+import { jumpToForwardSource } from './forward-source-jump.js';
+import { ForwardedHeader } from './message-headers.js';
 import { messageSurface } from './message-surface.js';
 import {
   MediaArea,
@@ -80,6 +83,7 @@ export function PostCard({
   onToggleThread: () => void;
 }) {
   const surface = messageSurface(mine);
+  const host = useChatHostNavigation();
   const sticker = stickerAttachmentOf(message);
   const layout = attachmentsLayout(message.attachments);
   const media = (layout.mode === 'single' || layout.mode === 'gallery') && !sticker;
@@ -191,7 +195,7 @@ export function PostCard({
             <span
               className={cn(
                 '-mt-[3px] block px-2.5 pt-2.5 text-sm leading-[19px] font-semibold',
-                media && 'pb-[9px]',
+                media && !message.forwardedFrom && 'pb-[9px]',
                 personTone(message.author.id),
               )}
             >
@@ -200,6 +204,23 @@ export function PostCard({
           ) : (
             <span className="sr-only">{message.author.displayName}: </span>
           )}
+          {/* Атрибуция пересылки (#1072): у корневого поста канала — та же
+              пометка «Переслано от», что в пузырях чата; клик — переход к
+              оригиналу (мост карточек при чужой беседе-источнике). */}
+          {message.forwardedFrom ? (
+            <span
+              className={cn(
+                'block px-2.5',
+                showName ? 'pt-[2px]' : 'pt-[7px]',
+                media ? 'pb-[9px]' : 'pb-[2px]',
+              )}
+            >
+              <ForwardedHeader
+                from={message.forwardedFrom}
+                onClick={() => jumpToForwardSource(message, host)}
+              />
+            </span>
+          ) : null}
           {/* Плотность (#181): поля карточки одинаковые сверху/слева/справа для
             ВСЕГО контента; медиа — full-bleed без полей (#187); имя → контент
             2px (leading-[19px] короб строки #96). */}
@@ -246,7 +267,7 @@ export function PostCard({
                 'relative block px-2.5 pb-[8px] leading-tight text-sm',
                 media
                   ? 'pt-[5px]'
-                  : showName || sticker || message.attachments.length > 0
+                  : showName || sticker || message.attachments.length > 0 || message.forwardedFrom
                     ? 'pt-[2px]'
                     : 'pt-[7px]',
               )}

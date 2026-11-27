@@ -85,6 +85,19 @@ export interface ThreadReplyDeps {
   eventBus: Pick<EventBus, 'emit'>;
 }
 
+/** Корневой пост канала: автор — участник своего треда с момента публикации
+ *  (#1072): уведомления об ответах и точка «есть новые» работают сразу, а не
+ *  с первого чужого ответа (аудитория thread_reply и веб-гейт попапов читают
+ *  thread_participants). ON CONFLICT DO NOTHING: реплай/кнопка «Следить»
+ *  уже могли создать строку с другим source. */
+export async function applyRootPostAuthorWatch(
+  threadParticipants: Pick<ThreadParticipantsRepository, 'upsert'>,
+  input: { rootId: string; userId: string },
+  tx: TransactionClient,
+): Promise<void> {
+  await threadParticipants.upsert(input.rootId, input.userId, 'author', tx);
+}
+
 /** Ответ в тред: участники треда, watermark реплайера, первый ответ —
  *  событие THREAD_CREATED (в той же транзакции отправки). */
 export async function applyThreadReplyEffects(

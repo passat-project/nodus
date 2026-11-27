@@ -261,6 +261,13 @@ export class MessageActionsService {
         }
       } else {
         await this.writes.touchLastMessageAt(targetConversationId, tx);
+        // Копии-корни в ленте канала: пересылающий — автор поста, значит
+        // наблюдатель своего треда с публикации (#1072, паритет с send).
+        if (conversation.type === 'project_channel') {
+          for (const row of created) {
+            await this.threadParticipants.upsert(row.id, userId, 'author', tx);
+          }
+        }
       }
       await this.memberships.unsnooze(targetConversationId, userId, tx);
       // Пересылка — активность: раскрывает беседу скрывшим её участникам (#103).

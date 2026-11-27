@@ -1,4 +1,4 @@
-import { Fragment, memo, useMemo, useRef } from 'react';
+import { Fragment, memo, useEffect, useMemo, useRef } from 'react';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
@@ -16,6 +16,7 @@ import {
 
 import { useAuthStore } from '../auth-store.js';
 import { useThreadMessages, useThreadStates } from './chat-queries.js';
+import { focusComposerWhenFree } from './composer-focus.js';
 import { useThreadTyping } from './use-thread-typing.js';
 import { useWatchThread } from './conversation-actions.js';
 import { ChatComposer } from './chat-composer.js';
@@ -38,6 +39,7 @@ import { useHistoryLoader } from './use-history-loader.js';
 import { JumpResponder } from './use-jump-responder.js';
 import { useFeedSubmit } from './use-feed-submit.js';
 import { useConversationHost } from './use-conversation-host.js';
+import { useThreadHost } from './use-thread-host.js';
 /**
  * Тред канала (вердикт владельца): «провалиться внутрь — обычный чат».
  * Шапка — моно-метка «Обсуждение»; корневой пост отделён штриховой линией и
@@ -75,6 +77,16 @@ export const ThreadPane = memo(function ThreadPane({
   // Открытая беседа для гейта уведомлений (#124/#300): реестр хостов —
   // закрытие окна треда не гасит признак, пока жива лента беседы.
   useConversationHost(conversationId);
+  // Открытое окно ИМЕННО этого треда (#1072): область тишины для ответов
+  // в нём — при скрытой панели уведомления приходят (в ленте их не видно).
+  useThreadHost(conversationId, threadRootId);
+  // Курсор — в композере треда (#1072): маунт-фокус registerComposer мог
+  // перетереться поздними фокусами смены беседы (пуш-открытие треда поверх
+  // уже открытого канала оставлял каретку в ленте); возвращаем после
+  // оседания монтажа — передача между композерами штатна (composer-focus).
+  useEffect(() => {
+    focusComposerWhenFree(`thread:${threadRootId}`);
+  }, [threadRootId]);
   const { data, isLoading } = useThreadMessages(conversationId, threadRootId);
   // Guardrail молнии (#177): размер беседы треда = размеру беседы.
   const me = useAuthStore((s) => s.user);

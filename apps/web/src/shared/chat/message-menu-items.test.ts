@@ -53,3 +53,31 @@ describe('buildMessageItems: цитата в канале (#1027)', () => {
     expect(ids).toContain('quoteFragment');
   });
 });
+
+describe('buildMessageItems: правка пересланного (#1072)', () => {
+  const AUTHOR_ID = 'author-1';
+  const OTHER_ID = 'author-2';
+
+  const fwdMessage = (originalAuthorId: string) =>
+    ({
+      ...message,
+      author: { id: AUTHOR_ID },
+      forwardedFrom: {
+        author: { id: originalAuthorId },
+        conversationId: 'conv-src',
+        messageId: 'src-1',
+        threadRootId: null,
+      },
+    }) as unknown as ChatMessage;
+
+  const idsOf = (msg: ChatMessage) =>
+    buildMessageItems({ ...input('quote'), message: msg, mine: true }).items.map((i) => i.id);
+
+  it('копия чужого текста — «Редактировать» нет (#111 сохранён)', () => {
+    expect(idsOf(fwdMessage(OTHER_ID))).not.toContain('edit');
+  });
+
+  it('копия своего текста — «Редактировать» есть', () => {
+    expect(idsOf(fwdMessage(AUTHOR_ID))).toContain('edit');
+  });
+});
