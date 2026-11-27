@@ -108,15 +108,18 @@ export class WorkflowEditorService {
     const refs = workflow.publishedById
       ? await this.profiles.findRefs([workflow.publishedById], undefined)
       : [];
+    // Скрытые значения формы и настройка обхода проверок (#635) — только
+    // настройщикам процессов; читателю отдаются маскированными.
+    const reader = !user.permissions.includes(Permission.WORKFLOW_MANAGE);
     return {
       id: workflowId,
       typeIds,
       version: workflow.version,
       publishedAt: workflow.publishedAt?.toISOString() ?? null,
       publishedBy: refs[0] ?? null,
-      // Значения скрытых полей формы — только настройщикам процессов.
       document: documentOf(row, workflow.layout, workflow.creation, {
-        maskPresets: !user.permissions.includes(Permission.WORKFLOW_MANAGE),
+        maskPresets: reader,
+        maskOverride: reader,
       }),
       stageEntityCounts,
     };

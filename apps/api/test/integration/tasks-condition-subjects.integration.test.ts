@@ -1,7 +1,8 @@
 /* eslint-disable nodus-internal/max-lines-warn -- субъекты/кванторы/предикаты выборки (#635): таблица проб на живом стеке */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { ConditionQuery } from '@nodus/contracts';
+import { CONDITION_LIMITS } from '@nodus/contracts';
 
+import { subjectProbes } from './tasks-condition-subjects.data.js';
 import {
   addIssuedRoute,
   setupConditionWorld,
@@ -35,6 +36,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     let nestedTask = '';
     let noProjectHost = '';
     let letterId = '';
+    let relOverflowHost = '';
     let relA = '';
     let relB = '';
     const w3Stage: Record<string, string> = {};
@@ -238,125 +240,61 @@ describe.skipIf(!process.env.DATABASE_URL)(
         },
       });
 
-      // Кнопки-пробы: таблица «ключ → выборка».
-      const q = (
-        subject: ConditionQuery['subject'],
-        where: ConditionQuery['where'] = [],
-        quantifier: ConditionQuery['quantifier'] = 'none',
-      ): ConditionQuery => ({ subject, where, quantifier });
-      const fieldEq = (key: string, value: unknown) =>
-        ({
-          kind: 'field',
-          field: w.cf(key),
-          op: 'eq',
-          value,
-        }) as ConditionQuery['where'][number];
-      const probes: [string, ConditionQuery][] = [
-        ['self', q({ kind: 'self' })],
-        ['self:mark', q({ kind: 'self' }, [fieldEq('taskMark', 'HOST')])],
-        ['parent', q({ kind: 'parent_task' })],
-        ['subtasks', q({ kind: 'subtasks' })],
-        ['folder', q({ kind: 'folder_tasks' })],
-        ['project:tasks', q({ kind: 'project_tasks' }, [{ kind: 'type_is', typeId: t3TypeId }])],
-        ['folders:all', q({ kind: 'project_folders' })],
-        ['folders:kind', q({ kind: 'project_folders', folderTypeId: kindFolder })],
-        ['folders:volume', q({ kind: 'project_folders', folderTypeId: kindVolume })],
-        ['folders:mark', q({ kind: 'project_folders' }, [fieldEq('folderMark', 'КЖ')])],
-        [
-          'folders:stage',
-          q({ kind: 'project_folders' }, [{ kind: 'system_state', state: 'closed' }]),
-        ],
-        [
-          'ftype:kind',
-          q({ kind: 'folder_type_tasks', folderTypeId: kindFolder }, [fieldEq('taskMark', 'F3T')]),
-        ],
-        [
-          'ftype:volume',
-          q({ kind: 'folder_type_tasks', folderTypeId: kindVolume }, [fieldEq('taskMark', 'F2T')]),
-        ],
-        [
-          'ftype:foreign',
-          q({ kind: 'folder_type_tasks', folderTypeId: kindVolume }, [fieldEq('taskMark', 'F3T')]),
-        ],
-        ['project', q({ kind: 'project' })],
-        ['project:mark', q({ kind: 'project' }, [fieldEq('projectMark', 'СД')])],
-        ['project:stage', q({ kind: 'project' }, [{ kind: 'system_state', state: 'active' }])],
-        ['type:own', q({ kind: 'subtasks' }, [{ kind: 'type_is', typeId: w.taskTypeId }])],
-        ['type:t3', q({ kind: 'subtasks' }, [{ kind: 'type_is', typeId: t3TypeId }])],
-        [
-          'stage:work',
-          q({ kind: 'subtasks' }, [
-            { kind: 'type_is', typeId: w.taskTypeId },
-            { kind: 'stage_is', stageId: w.stage.work },
-          ]),
-        ],
-        [
-          'stage:miss',
-          q({ kind: 'subtasks' }, [
-            { kind: 'type_is', typeId: w.taskTypeId },
-            { kind: 'stage_is', stageId: w3Stage.printed! },
-          ]),
-        ],
-        [
-          'issued:std',
-          q({ kind: 'subtasks' }, [
-            { kind: 'type_is', typeId: w.taskTypeId },
-            { kind: 'result_issued' },
-          ]),
-        ],
-        [
-          'issued:t3:none',
-          q({ kind: 'subtasks' }, [
-            { kind: 'type_is', typeId: t3TypeId },
-            { kind: 'result_issued' },
-          ]),
-        ],
-        [
-          'issued:t3:all',
-          q(
-            { kind: 'subtasks' },
-            [{ kind: 'type_is', typeId: t3TypeId }, { kind: 'result_issued' }],
-            'all',
-          ),
-        ],
-      ];
-      for (const relation of ['relates', 'blocks', 'precedes', 'duplicates'] as const) {
-        for (const direction of ['out', 'in', 'both'] as const) {
-          probes.push([
-            `rel:${relation}:${direction}`,
-            q({ kind: 'relations', relation, direction }),
-          ]);
-        }
-      }
-      for (const key of [
-        'refTask',
-        'refLetter',
-        'refProject',
-        'refNode',
-        'refUser',
-        'refDept',
-        'refCP',
-      ]) {
-        probes.push([`ref:${key}`, q({ kind: 'ref_field', field: w.cf(key) })]);
-      }
-      for (const state of ['backlog', 'active', 'paused', 'done', 'closed'] as const) {
-        probes.push([`state:${state}`, q({ kind: 'subtasks' }, [{ kind: 'system_state', state }])]);
-      }
-      for (const outcome of ['success', 'cancelled', 'rejected'] as const) {
-        probes.push([
-          `outcome:${outcome}`,
-          q({ kind: 'subtasks' }, [{ kind: 'outcome', outcome }]),
-        ]);
-      }
-      const markX: ConditionQuery['where'] = [fieldEq('taskMark', 'X')];
-      for (const quantifier of ['all', 'any', 'none'] as const) {
-        for (const hostKey of ['q0', 'q1', 'q2'] as const) {
-          probes.push([`${hostKey}:${quantifier}`, q({ kind: 'subtasks' }, markX, quantifier)]);
-        }
-      }
-      for (const [key, query] of probes) {
+      // Кнопки-пробы: таблица «ключ → выборка» (данные — subjects.data.ts).
+      for (const [key, query] of subjectProbes({
+        taskTypeId: w.taskTypeId,
+        t3TypeId,
+        kindFolder,
+        kindVolume,
+        workStageId: w.stage.work,
+        w3PrintedStageId: w3Stage.printed!,
+        cf: w.cf,
+      })) {
         await w.addRecordsProbe({ key, query });
       }
+
+      // Потолок СВЯЗЕЙ (#635, security-ревью): 502 связи на мягко удалённые
+      // цели — живых задач в выборке нет, но состав связей обрезан take+1:
+      // выборка неполна, квантор «все» не считается (fail-closed).
+      relOverflowHost = await t({ title: 'Переполнение связей' });
+      await prisma.task.createMany({
+        data: Array.from({ length: CONDITION_LIMITS.selection + 2 }, (_, i) => ({
+          title: `цель-связь ${i} ${runId}`,
+          typeId: w.taskTypeId,
+          workflowId: w.workflowId,
+          stageId: w.stage.new,
+          systemState: 'backlog',
+          stageOrder: `ro${runId}${i}`,
+          creatorId: w.alice.id,
+          assigneeId: w.bob.id,
+          deletedAt: new Date(),
+        })),
+      });
+      const relTargets = await prisma.task.findMany({
+        where: { AND: [{ title: { contains: 'цель-связь' } }, { title: { contains: runId } }] },
+        select: { id: true },
+      });
+      // createMany не проходит через фабрику мира — ids вносятся в уборку руками.
+      w.cleanupIds.tasks.push(...relTargets.map((row) => row.id));
+      await prisma.taskRelation.createMany({
+        data: relTargets.map((row) => ({
+          kind: 'relates',
+          fromTaskId: relOverflowHost,
+          toTaskId: row.id,
+          createdBy: w.alice.id,
+        })),
+      });
+      await w
+        .addRecordsProbe({
+          key: 'rel-overflow',
+          title: 'Все связанные выполнены',
+          query: {
+            subject: { kind: 'relations', relation: 'relates', direction: 'both' },
+            where: [{ kind: 'system_state', state: 'closed' }],
+            quantifier: 'all',
+          },
+        })
+        .then((id) => w.probeOf.set('rel-overflow', id));
     }, 240_000);
 
     afterAll(async () => {
@@ -413,6 +351,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
         );
       },
     );
+
+    it('потолок связей: целей больше потолка (удалены) — выборка неполна, overflow-причина (#635)', async () => {
+      // Живых задач в выборке нет, но связи обрезаны take+1 — квантор «все»
+      // не считается (fail-closed), причина-переполнение без записей.
+      const reason = await w.reasonOf(w.bob, relOverflowHost, 'rel-overflow');
+      expect(reason).toMatchObject({ kind: 'records', overflow: true, records: [] });
+      expect(reason?.totalCount).toBeUndefined();
+    });
 
     it('folder_tasks: задачи узла записи; конфиденциальная соседка скрыта в причине', async () => {
       const reason = await w.reasonOf(w.bob, host, 'folder');

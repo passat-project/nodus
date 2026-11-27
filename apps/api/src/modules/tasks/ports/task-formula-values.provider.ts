@@ -20,6 +20,7 @@ import type { ProjectActor } from '../../projects/ports/project-reader.port.js';
 import { visibleTasksWhere, ViewerResolver } from '../access/task-visibility.js';
 import {
   capSelection,
+  type ConditionRecordData,
   type ConditionSelection,
 } from '../../custom-fields/ports/condition-records.port.js';
 import type {
@@ -224,6 +225,9 @@ export class TaskFormulaValuesProvider implements TaskFormulaValues {
                 : { OR: [{ fromTaskId: query.taskId }, { toTaskId: query.taskId }] }),
           },
           select: { fromTaskId: true, toTaskId: true },
+          // Порядок делает обрез take детерминированным: без него состав
+          // первых связей недетерминирован (security-ревью #635).
+          orderBy: [{ fromTaskId: 'asc' }, { toTaskId: 'asc' }],
           take,
         });
         const ids = [
@@ -233,7 +237,9 @@ export class TaskFormulaValuesProvider implements TaskFormulaValues {
             ),
           ),
         ];
-        rows =
+        // Переполнение СВЯЗЕЙ — та же неполная выборка: живая задача-нарушитель
+        // может лежать за пределами take, квантор не должен врать (#635).
+        const linked =
           ids.length === 0
             ? []
             : await db.task.findMany({
@@ -242,7 +248,11 @@ export class TaskFormulaValuesProvider implements TaskFormulaValues {
                 orderBy: [{ number: 'asc' }],
                 take,
               });
-        break;
+        const capped = capSelection(linked.map((row) => toConditionRecord(row)));
+        return {
+          records: capped.records,
+          overflowed: capped.overflowed || links.length > CONDITION_LIMITS.selection,
+        };
       }
       case 'node_tasks':
         // Папка без проекта (аномалия данных) выборки не имеет — A7-2.
@@ -289,19 +299,7 @@ export class TaskFormulaValuesProvider implements TaskFormulaValues {
               });
         break;
     }
-    return capSelection(
-      rows.map((row) => ({
-        kind: 'task' as const,
-        id: row.id,
-        name: row.title,
-        typeId: row.typeId,
-        stageId: row.stageId,
-        values: (row.customFields ?? {}) as CustomFieldValues,
-        projectId: row.projectId,
-        parentId: row.parentId,
-        nodeId: row.nodeId,
-      })),
-    );
+    return capSelection(rows.map((row) => toConditionRecord(row)));
   }
 
   async visibleTaskIds(
@@ -390,3 +388,18 @@ type TaskRow = {
   deletedAt: Date | null;
   customFields: unknown;
 };
+
+/** Строка задачи → запись общей выборки #635 (предикаты и причины). */
+function toConditionRecord(row: TaskRow): ConditionRecordData {
+  return {
+    kind: 'task',
+    id: row.id,
+    name: row.title,
+    typeId: row.typeId,
+    stageId: row.stageId,
+    values: (row.customFields ?? {}) as CustomFieldValues,
+    projectId: row.projectId,
+    parentId: row.parentId,
+    nodeId: row.nodeId,
+  };
+}

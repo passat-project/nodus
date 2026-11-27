@@ -1,4 +1,8 @@
-import type { WorkflowDocument, WorkflowDraftAction } from '@nodus/contracts';
+import {
+  DEFAULT_GATE_OVERRIDE,
+  type WorkflowDocument,
+  type WorkflowDraftAction,
+} from '@nodus/contracts';
 
 import { maskCreationForm } from '../../types/process-type.mapper.js';
 import { liveLayout } from './layout.js';
@@ -6,14 +10,32 @@ import type { LoadedWorkflow } from '../workflow.repository.js';
 
 /** Документ живого маршрута → документ контракта (+ раскладка холста).
  *  `maskPresets` — читателю без `workflow.manage`: значения скрытых полей
- *  формы не отдаются (признак «поле скрыто» сохраняется, #432 security). */
+ *  формы не отдаются (признак «поле скрыто» сохраняется, #432 security).
+ *  `maskOverride` — там же: настройка обхода проверок (#635) заменяется
+ *  умолчанием — список допущенных к обходу сотрудников видят только
+ *  настройщики процессов (security-ревью #635). */
 export function documentOf(
   row: LoadedWorkflow,
   layout?: unknown,
   creation?: unknown,
-  opts: { maskPresets?: boolean } = {},
+  opts: { maskPresets?: boolean; maskOverride?: boolean } = {},
 ): WorkflowDocument {
   const form = creation as WorkflowDocument['creation'];
+  const rulesOf = <
+    R extends { validators: WorkflowDocument['transitions'][number]['rules']['validators'] },
+  >(
+    rules: R,
+  ): R =>
+    opts.maskOverride
+      ? {
+          ...rules,
+          validators: rules.validators.map((v) =>
+            v.kind === 'records' || v.kind === 'formula'
+              ? { ...v, override: { ...DEFAULT_GATE_OVERRIDE } }
+              : v,
+          ) as R['validators'],
+        }
+      : rules;
   return {
     ...(creation === null || creation === undefined
       ? {}
@@ -38,7 +60,7 @@ export function documentOf(
       display: t.display,
       intent: t.intent,
       sortOrder: t.sortOrder,
-      rules: t.rules,
+      rules: rulesOf(t.rules),
       form: t.form ?? { enabled: false, sections: [] },
       press: t.press ?? null,
     })),
@@ -49,7 +71,7 @@ export function documentOf(
       stageId: a.stageId,
       display: a.display,
       sortOrder: a.sortOrder,
-      rules: a.rules,
+      rules: rulesOf(a.rules),
       form: (a.form as WorkflowDraftAction['form']) ?? {
         enabled: false,
         sections: [],
