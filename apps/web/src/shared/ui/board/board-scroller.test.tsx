@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { EDGE_DELAY_MS, EDGE_STEP_MS } from '../../lib/board/edge-scroll.js';
+import { EDGE_DELAY_MS } from '../../lib/board/edge-scroll.js';
 import { BoardScroller, EdgeHints } from './board-scroller.js';
 
 /**
@@ -164,29 +164,20 @@ describe('EdgeHints — закреплённая колонка (#1006)', () => 
   });
 });
 
-describe('BoardScroller — prefers-reduced-motion', () => {
-  it('без плавности: шаг на колонку после паузы и далее раз в EDGE_STEP_MS, кадров нет', () => {
+describe('BoardScroller — системное «уменьшить движение» (#1035)', () => {
+  it('не гасит плавную прокрутку у края: пауза, кадры, движение', () => {
     vi.stubGlobal('matchMedia', () => ({ matches: true }));
     const { el } = mount();
     move(el, 995);
     act(() => {
       vi.advanceTimersByTime(EDGE_DELAY_MS);
     });
-    expect(el.scrollLeft).toBe(240);
-    expect(frames).toHaveLength(0);
-    act(() => {
-      vi.advanceTimersByTime(EDGE_STEP_MS - 1);
-    });
-    expect(el.scrollLeft).toBe(240);
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
-    expect(el.scrollLeft).toBe(480);
+    flushFrames(10);
+    expect(el.scrollLeft).toBeGreaterThan(0);
     move(el, 500);
-    act(() => {
-      vi.advanceTimersByTime(EDGE_STEP_MS * 3);
-    });
-    expect(el.scrollLeft).toBe(480);
+    const travelled = el.scrollLeft;
+    flushFrames(10);
+    expect(el.scrollLeft).toBe(travelled);
   });
 });
 

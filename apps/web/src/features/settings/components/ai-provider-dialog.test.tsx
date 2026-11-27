@@ -77,7 +77,7 @@ const urlInput = () => screen.getByRole('textbox', { name: strings.baseUrl }) as
 
 beforeEach(() => {
   const matchMedia = (query: string) => ({
-    matches: query.includes('prefers-reduced-motion'),
+    matches: false,
     media: query,
     onchange: null,
     addEventListener() {},

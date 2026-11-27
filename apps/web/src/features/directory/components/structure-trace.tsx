@@ -41,8 +41,9 @@ const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
  * загрузки документа, поэтому вставленный позже «уже закончился» — точка
  * замирает в конце маршрута (gotcha frontend). Анимация — rAF по измеренным
  * рёбрам (`useTreeEdges`), координаты — `getPointAtLength` по тому же path,
- * что и закрашенная линия. `prefers-reduced-motion` и среды без SVG-геометрии
- * (jsdom) — след закрашивается сразу, без пробега.
+ * что и закрашенная линия. Среды без SVG-геометрии (jsdom) — след
+ * закрашивается сразу, без пробега; системное «уменьшить движение» пробег НЕ
+ * гасит (#1035): веб ведёт себя как десктопная оболочка.
  */
 export function StructureTrace({
   routes,
@@ -119,11 +120,7 @@ export function StructureTrace({
       for (const path of paths) if (path) path.style.strokeDashoffset = '0';
       if (dot) dot.style.opacity = '0';
     };
-    const reduced =
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const canAnimate =
-      !reduced &&
       typeof window.requestAnimationFrame === 'function' &&
       paths.every((path) => path !== null && typeof path.getPointAtLength === 'function');
 

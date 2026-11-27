@@ -249,8 +249,8 @@ export function CircuitFrame() {
 
   useLayoutEffect(() => {
     if (!geo) return;
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
+    // Вспышка контура — ВСЕГДА (#1035): системное «уменьшить движение» её не
+    // гасит, веб ведёт себя как десктопная оболочка.
     const next = currentFocus(geo);
     // Кадровый пересчёт во время движения панелей: фокус НЕ трогаем (ни
     // вспышка, ни запись): промежуточные замеры несут уже НОВЫЙ модуль —
@@ -259,7 +259,7 @@ export function CircuitFrame() {
     // переход на/с мессенджера прячет правую полосу width-анимацией —
     // вспышка глохла на нём и на соседних модулях).
     if (moving.current) return;
-    if (!reduced && focusSig(next) !== focusSig(prevFocus.current)) {
+    if (focusSig(next) !== focusSig(prevFocus.current)) {
       const p = transitionPulse(geo, prevFocus.current);
       if (p) firePulse(p.points, p.dot);
     }

@@ -20,12 +20,12 @@ function mulberry32(seed: number): () => number {
  * Раскладка оседает один раз и замирает в базовых точках; дальше движение —
  * только гладкие синусоидальные дрейфы, медленное вращение карты, мерцание
  * звёзд, пульсы событий и постоянный рост (никакой физики — нет вибрации).
- * prefers-reduced-motion — один статичный кадр. */
+ * Движение включено ВСЕГДА (#1035): системное «уменьшить движение» портал не
+ * гасит — веб ведёт себя как десктопная оболочка. */
 export function startGraph(canvas: HTMLCanvasElement, graph: CompanyGraph): () => void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return () => {};
 
-  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const rand = mulberry32(1971);
   const bodies: Body[] = graph.nodes.map((n) => ({
     ...n,
@@ -195,22 +195,15 @@ export function startGraph(canvas: HTMLCanvasElement, graph: CompanyGraph): () =
     freeze();
   }
 
-  if (reduced) {
-    paint(ctx, { bodies, edges, pulses, stars, w, h, frozen, px, py }, 0);
-  } else {
-    raf = requestAnimationFrame(frame);
-  }
+  raf = requestAnimationFrame(frame);
 
-  const onResize = () => {
-    resize();
-    if (reduced) paint(ctx, { bodies, edges, pulses, stars, w, h, frozen, px, py }, 0);
-  };
+  const onResize = () => resize();
   const onMove = (event: MouseEvent) => {
     tx = (event.clientX / Math.max(1, w) - 0.5) * 14;
     ty = (event.clientY / Math.max(1, h) - 0.5) * 10;
   };
   window.addEventListener('resize', onResize);
-  if (!reduced) window.addEventListener('mousemove', onMove);
+  window.addEventListener('mousemove', onMove);
 
   return () => {
     cancelAnimationFrame(raf);

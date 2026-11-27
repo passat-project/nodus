@@ -26,14 +26,6 @@ const MAX_SMOOTH_SCROLL_MS = 640;
 /** Комфортная скорость длинного перелёта: мс = расстояние / 10 px за мс. */
 const SMOOTH_PX_PER_MS = 10;
 
-/** Системная настройка «меньше движения» — прокрутка без анимации. */
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-}
-
 /** Длительность: база 320 мс на близких прыжках, на длинных — растёт, но
  *  упирается в потолок 640 мс (гигантский чат не «едет вечность»). */
 export function smoothDurationFor(distance: number): number {
@@ -94,23 +86,13 @@ export function scrollTopFor(
  *
  * Длительность зависит от расстояния, но с потолком (320 → 640 мс): близкий
  * прыжок — привычные 0,3 с, гигантская история — быстрее, но всё же видимым
- * движением, без мгновенного телепорта. «Меньше движения» в системе —
- * единственный случай без анимации.
+ * движением, без мгновенного телепорта. Системное «меньше движения» портал НЕ
+ * гасит (#1035): веб ведёт себя как десктопная оболочка.
  */
 function smoothScrollTop(container: HTMLElement, target: () => number | null): void {
   const startTop = container.scrollTop;
   const first = target();
   if (first === null) return;
-  if (prefersReducedMotion()) {
-    container.scrollTop = first;
-    // Один доснап следующим кадром: строки у новой позиции домеряются уже
-    // после установки scrollTop (оценочные высоты content-visibility).
-    requestAnimationFrame(() => {
-      const want = target();
-      if (want !== null) container.scrollTop = want;
-    });
-    return;
-  }
   const duration = smoothDurationFor(first - startTop);
   const startedAt = performance.now();
   let stopped = false;

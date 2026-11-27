@@ -72,10 +72,8 @@ export function AssistantPanel() {
 
   useEffect(() => {
     if (!open) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setReady(true);
-      return;
-    }
+    // Контент монтируется после кадра ширины — ВСЕГДА (#1035): системное
+    // «уменьшить движение» портал не гасит, поведение как в оболочке.
     const t = window.setTimeout(() => setReady(true), 210);
     return () => window.clearTimeout(t);
   }, [open]);
