@@ -1,8 +1,5 @@
 import { Fragment, memo, useEffect, useMemo, useRef } from 'react';
-import { ArrowLeft, Eye, EyeOff, X } from 'lucide-react';
 import { ui } from '@nodus/contracts';
-import { Button } from '@nodus/ui/components/button';
-import { NodeLabel } from '@nodus/ui/components/node-label';
 import { MessageGroup } from '@nodus/ui/components/message';
 import { cn } from '@nodus/ui/lib/utils';
 import {
@@ -27,6 +24,7 @@ import { DayChip } from './day-chip.js';
 import { FeedDropzone } from './feed-dropzone.js';
 import { MessageMenu } from './message-menu.js';
 import { MessageRow } from './message-row.js';
+import { ThreadHeader } from './thread-header.js';
 import { buildMessageRuns, formatDayLabel, startsNewDay } from './message-groups.js';
 import { MessageRunView } from './message-run.js';
 import { selectionComposerProps, useFeedSelection } from './use-feed-selection.js';
@@ -195,53 +193,16 @@ export const ThreadPane = memo(function ThreadPane({
   // ленты (ConversationBar вне ThreadFeed), обои накрывают ленту + композер.
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col">
-      <header
-        className={cn('flex shrink-0 items-center gap-2 border-b border-border px-3', barClass)}
-      >
-        {variant === 'drill' ? (
-          <Button variant="ghost" size="icon" aria-label={ui.chat.backToFeed} onClick={onClose}>
-            <ArrowLeft />
-          </Button>
-        ) : null}
-        <NodeLabel label={ui.chat.discussion} count={replies.length} />
-        {typingLabel ? (
-          <span className="min-w-0 truncate text-xs italic text-info">{typingLabel}</span>
-        ) : null}
-        <span className="ml-auto flex items-center gap-1">
-          {/* «Следить/Перестать» (раунд 3): уведомления и счётчик трэда —
-              только наблюдателям (кнопка / реплай / @ / автор поста). */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 gap-1.5 px-2 text-muted-foreground"
-            aria-label={watched ? ui.chat.unwatchThread : ui.chat.watchThread}
-            title={watched ? ui.chat.unwatchThread : ui.chat.watchThread}
-            disabled={watch.isPending}
-            onClick={() => watch.mutate(threadRootId)}
-          >
-            {watched ? (
-              <EyeOff className="size-4" strokeWidth={1.75} />
-            ) : (
-              <Eye className="size-4" strokeWidth={1.75} />
-            )}
-            <span className="text-xs">{watched ? ui.chat.unwatchThread : ui.chat.watchThread}</span>
-          </Button>
-          {/* Крестик — у ПРАВОГО КРАЯ колонки (закон колонки, как у панели
-              «О чате»; вердикт 25.11.2026, #1061): видимый выход из треда,
-              не зависящий от положения полосы поста в ленте. */}
-          {variant === 'side' ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={ui.common.close}
-              title={ui.common.close}
-              onClick={onClose}
-            >
-              <X />
-            </Button>
-          ) : null}
-        </span>
-      </header>
+      <ThreadHeader
+        variant={variant}
+        barClass={barClass}
+        replyCount={replies.length}
+        typingLabel={typingLabel}
+        watched={watched}
+        watchPending={watch.isPending}
+        onToggleWatch={() => watch.mutate(threadRootId)}
+        onClose={onClose}
+      />
       <div className="flex min-h-0 flex-1 flex-col chat-wallpaper bg-chat-zone">
         <FeedDropzone
           className="relative flex min-h-0 flex-1 flex-col"
