@@ -34,9 +34,10 @@ export function taskWithFormulas(task: TaskListItem): TaskListItem {
   };
 }
 
-/** Деталь задачи с формулами типа (клонированный DTO). */
-export function taskDetailWithFormulas(task: TaskListItem): TaskDetail {
-  const detail = taskDetailOf(task);
+/** Деталь задачи с формулами типа (клонированный DTO). `viewerId` —
+ *  для смотрящего-зависимых полей (`press`): мок-актор из сессии (#965). */
+export function taskDetailWithFormulas(task: TaskListItem, viewerId?: string): TaskDetail {
+  const detail = taskDetailOf(task, viewerId);
   const computed = applyTypeFormulas(
     'task',
     { id: task.id, customFields: detail.customFields },

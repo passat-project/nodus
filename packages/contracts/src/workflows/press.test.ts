@@ -13,6 +13,24 @@ describe('сбор отметок (#434)', () => {
     expect(press.excludeAuthor).toBe(true);
   });
 
+  it('свои названия статусов: пусто по умолчанию, обрезаются, старые настройки парсятся (#965)', () => {
+    const press = pressConfigDraftSchema.parse({ quorum: { kind: 'all' } });
+    expect(press.statusLabels).toEqual({ waiting: '', submitted: '' });
+    expect(
+      pressConfigSchema.parse({
+        sources: [source],
+        quorum: { kind: 'all' },
+        statusLabels: { waiting: '  Ожидаем  ', submitted: 'Ознакомлен' },
+      }).statusLabels,
+    ).toEqual({ waiting: 'Ожидаем', submitted: 'Ознакомлен' });
+    expect(() =>
+      pressConfigDraftSchema.parse({
+        quorum: { kind: 'all' },
+        statusLabels: { waiting: 'x'.repeat(25) },
+      }),
+    ).toThrow();
+  });
+
   it('граница публикации требует источник', () => {
     expect(() => pressConfigSchema.parse({ sources: [], quorum: { kind: 'all' } })).toThrow();
     expect(

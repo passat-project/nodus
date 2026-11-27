@@ -32,6 +32,7 @@ describe('сводка «Кнопку жмут несколько» (#434)', () 
           quorum: { kind: 'all' },
           order: 'parallel',
           excludeAuthor: true,
+          statusLabels: { waiting: '', submitted: '' },
         }),
       ),
     ).toBe(ui.automation.press.summaryEmpty);
@@ -44,6 +45,7 @@ describe('сводка «Кнопку жмут несколько» (#434)', () 
         quorum: { kind: 'all' },
         order: 'parallel',
         excludeAuthor: true,
+        statusLabels: { waiting: '', submitted: '' },
       }),
     );
     expect(summary).toContain(ui.automation.press.sources.coexecutors);

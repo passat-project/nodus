@@ -3,6 +3,7 @@ import {
   ErrorCode,
   Permission,
   TASK_EVENTS,
+  ui,
   type AuthUser,
   type TaskListItem,
   type TaskUpdateBody,
@@ -172,14 +173,13 @@ export class TaskEditService {
             : [assigneeAfter],
         );
       }
-      if (changingAssignee) {
-        await this.press.assertCanRemove(tx, id, [fresh.assigneeId]);
-      }
       if (fields.length > 0 || hasCustomFields) {
         await this.applyFields(tx, user, fresh, body, fields);
       }
-      if (body.assigneeId && body.assigneeId !== fresh.assigneeId) {
-        await this.press.syncAdded(tx, id, body.assigneeId);
+      if (changingAssignee) {
+        // Состав сбора следует за задачей (#965): прежний ответственный
+        // снимается с причиной, новый входит отметкой «ждём».
+        await this.press.syncRoster(tx, id, ui.tasks.press.assigneeChangedReason, user.id);
       }
       // Смена стадии не должна обходить сбор (#434): раунд по настройке
       // текущей стадии стартует здесь, в мутации, а не при чтении карточки.

@@ -27,6 +27,7 @@ describe.skipIf(!process.env.DATABASE_URL)('tasks press (integration)', () => {
     quorum: { kind: 'all' },
     order: 'parallel',
     excludeAuthor: true,
+    statusLabels: { waiting: '', submitted: '' },
   };
   const form = {
     enabled: true,

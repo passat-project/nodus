@@ -6,7 +6,7 @@ import { TaskPressButton, TaskPressStatus } from './task-press-button.js';
 
 afterEach(cleanup);
 
-function setup() {
+function setup(participants: { userId: string; displayName: string }[] = []) {
   const onPress = vi.fn();
   const onOpenStatuses = vi.fn();
   render(
@@ -14,6 +14,7 @@ function setup() {
       name="Ознакомлен"
       pressed={5}
       total={9}
+      participants={participants}
       main
       onPress={onPress}
       onOpenStatuses={onOpenStatuses}
@@ -33,17 +34,23 @@ describe('кнопка коллективного действия (#434)', () =
 
     const ring = screen.getByRole('button', { name: 'Статусы участников: 5 / 9' });
     fireEvent.mouseEnter(ring);
-    expect(await screen.findByText('Прогресс')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Статусы участников' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Статусы участников' }));
     expect(onOpenStatuses).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(screen.queryByText('Прогресс')).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Статусы участников' })).toBeNull(),
+    );
   });
 
-  it('кольцо показывает прогресс без текста «Кто нажал»', async () => {
-    setup();
+  it('попап показывает фото нажавших без строки «Прогресс» и счётчика (#965)', async () => {
+    setup([
+      { userId: 'u1', displayName: 'Борис Климов' },
+      { userId: 'u2', displayName: 'Анна Петрова' },
+    ]);
     fireEvent.mouseEnter(screen.getByRole('button', { name: 'Статусы участников: 5 / 9' }));
-    expect(await screen.findByText('5 / 9')).toBeTruthy();
-    expect(screen.queryByText('Кто нажал')).toBeNull();
+    expect(await screen.findByTitle('Борис Климов')).toBeTruthy();
+    expect(screen.getByTitle('Анна Петрова')).toBeTruthy();
+    expect(screen.queryByText('Прогресс')).toBeNull();
+    expect(screen.queryByText('5 / 9')).toBeNull();
   });
 
   it('индикатор после нажатия открывает статусы без действия кнопки', async () => {
@@ -60,9 +67,12 @@ describe('кнопка коллективного действия (#434)', () =
     setup();
     const ring = screen.getByRole('button', { name: 'Статусы участников: 5 / 9' });
     fireEvent.mouseEnter(ring);
-    expect(await screen.findByText('Прогресс')).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Статусы участников' })).toBeTruthy();
     fireEvent.mouseLeave(ring);
-    await waitFor(() => expect(screen.queryByText('Прогресс')).toBeNull(), { timeout: 1000 });
+    await waitFor(
+      () => expect(screen.queryByRole('button', { name: 'Статусы участников' })).toBeNull(),
+      { timeout: 1000 },
+    );
   });
 
   it('клик по кольцу и чипу открывает статусы без нажатия кнопки', async () => {

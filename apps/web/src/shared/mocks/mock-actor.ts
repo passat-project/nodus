@@ -95,3 +95,18 @@ export function actorUserRef(): UserRef {
   if (demo) return { id: demo.id, displayName: demo.displayName, avatarUrl: demo.avatarUrl };
   return { id: actor.id, displayName: actor.displayName, avatarUrl: null };
 }
+
+/** Право правки задачи в мок-мире — как серверный `taskAccess.canEdit`:
+ *  постановщик/ответственный или `task.manage_any`. Нужно экранам, где
+ *  «управляющий» вид зависит от прав (окно сбора #434/#965). */
+export function actorCanManageTask(task: {
+  assignee?: { id: string } | null;
+  creator?: { id: string } | null;
+}): boolean {
+  const actor = getMockActor();
+  return (
+    task.assignee?.id === actor.id ||
+    task.creator?.id === actor.id ||
+    actor.permissions.includes('task.manage_any')
+  );
+}

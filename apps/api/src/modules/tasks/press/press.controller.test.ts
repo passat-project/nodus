@@ -16,7 +16,6 @@ function setup() {
   };
   const admin = {
     returnEntries: vi.fn(async () => null),
-    excludeEntries: vi.fn(async () => null),
   };
   const query = {
     visibleRow: vi.fn(async () => ({
@@ -49,13 +48,11 @@ describe('TaskPressController (#434)', () => {
     expect(transitions.listFor).toHaveBeenCalledWith(USER, 't1');
   });
 
-  it('return/exclude идут в админский сервис с причиной', async () => {
+  it('return идёт в админский сервис с причиной', async () => {
     const { controller, admin } = setup();
     const body = { userIds: ['u2'], reason: 'Причина' };
     await expect(controller.returnSelected(USER, 't1', body)).resolves.toEqual(RESULT);
     expect(admin.returnEntries).toHaveBeenCalledWith(USER, 't1', body);
-    await expect(controller.excludeSelected(USER, 't1', body)).resolves.toEqual(RESULT);
-    expect(admin.excludeEntries).toHaveBeenCalledWith(USER, 't1', body);
   });
 
   it('внешний нажавший после кворума получает 200 с итогом, а не 404 (#434)', async () => {

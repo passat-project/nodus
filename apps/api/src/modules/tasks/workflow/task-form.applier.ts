@@ -3,6 +3,7 @@ import {
   fieldLocksOf,
   mergeLocks,
   TASK_EVENTS,
+  ui,
   type FormLock,
   type TransitionFormInput,
 } from '@nodus/contracts';
@@ -97,9 +98,6 @@ export class TaskFormApplier {
       if (input.fields.assigneeId !== undefined && input.fields.assigneeId !== task.assigneeId) {
         // Секретный проект: новый ответственный — только участник проекта;
         // лок строки проекта исключает гонку с open→secret (#541).
-        // Открытый раунд сбора: прежний ответственный не может быть снят
-        // молча — иначе он сохранит доступ и право закрыть задачу (#434).
-        await this.press.assertCanRemove(tx, taskId, [task.assigneeId]);
         if (task.projectId) {
           await this.projects.lockProject(tx, task.projectId);
           await this.projects.assertMembersAllowed(task.projectId, [input.fields.assigneeId]);
@@ -142,8 +140,11 @@ export class TaskFormApplier {
             written.customFieldChanges.map((change) => change.fieldId),
           );
         }
-        // Новый ответственный входит в открытый раунд, если его даёт источник.
-        if (patch.assigneeId) await this.press.syncAdded(tx, taskId, patch.assigneeId);
+        // Состав сбора следует за задачей (#965): прежний ответственный
+        // снимается с причиной, новый входит отметкой «ждём».
+        if (patch.assigneeId) {
+          await this.press.syncRoster(tx, taskId, ui.tasks.press.assigneeChangedReason, actor.id);
+        }
         // Смена ответственного меняет права на СЛЕДУЮЩИЕ разделы: время и
         // итог перепроверяются по свежим ролям (иначе актор, передавший
         // задачу, дописал бы время/итог уже после передачи).

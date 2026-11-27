@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 import { ErrorCode, type AuthUser, type FieldLocks } from '@nodus/contracts';
 
 import { ParticipantsRepository } from './participants.repository.js';
@@ -35,8 +35,7 @@ function setup(removed = 1, opts: { required?: string[]; left?: number } = {}) {
     detail: vi.fn().mockResolvedValue({ id: 't1' }),
   };
   const press = {
-    syncAdded: vi.fn(async () => void 0),
-    assertCanRemove: vi.fn(async () => void 0),
+    syncRoster: vi.fn(async () => void 0),
   };
   const catalog = {
     typeById: vi.fn().mockResolvedValue({
@@ -76,7 +75,7 @@ describe('ParticipantsService', () => {
     ).rejects.toMatchObject({ code: ErrorCode.CONFLICT });
     await service.add(user('alice'), 't1', { userId: 'alice', role: 'coexecutor' });
     expect(repo.assignRole).toHaveBeenCalledWith(TX, 't1', 'alice', 'coexecutor');
-    expect(press.syncAdded).toHaveBeenCalledWith(TX, 't1', 'alice');
+    expect(press.syncRoster).toHaveBeenCalledWith(TX, 't1', expect.any(String), 'alice');
   });
 
   it('ответственный участником — конфликт', async () => {
@@ -131,7 +130,7 @@ describe('ParticipantsService: обязательные участники (#432
   it('остались другие — снятие проходит', async () => {
     const { service, repo, press } = setup(1, { required: ['coexecutors'], left: 2 });
     await service.remove(user('alice'), 't1', 'dave');
-    expect(press.assertCanRemove).toHaveBeenCalledWith(TX, 't1', ['dave']);
+    expect(press.syncRoster).toHaveBeenCalledWith(TX, 't1', expect.any(String), 'alice');
     expect(repo.remove).toHaveBeenCalled();
   });
 
@@ -192,7 +191,7 @@ describe('ParticipantsService: замок состава (#496, Р4)', () => {
         }),
       } as never,
       { assertMembersAllowed: vi.fn() } as never,
-      { syncAdded: vi.fn(), assertCanRemove: vi.fn() } as never,
+      { syncRoster: vi.fn() } as never,
     );
     return { service, repo, tasksRepo };
   }

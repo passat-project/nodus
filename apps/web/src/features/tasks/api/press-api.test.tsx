@@ -9,7 +9,7 @@ import { createElement, type ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PressExecuteResult, TaskDetail } from '@nodus/contracts';
 
-import { useExcludePress, useReturnPress, useSubmitPress, useWithdrawPress } from './press-api.js';
+import { useReturnPress, useSubmitPress, useWithdrawPress } from './press-api.js';
 import { tasksKeys } from '../../../shared/api/tasks-keys.js';
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -51,7 +51,6 @@ const press = {
   canSubmit: true,
   canWithdraw: false,
   canReturn: false,
-  canExclude: false,
   completed: false,
 };
 
@@ -156,7 +155,7 @@ describe('press-api (#434)', () => {
     expect(cached?.press?.pressed).toBe(0);
   });
 
-  it('withdraw, return и exclude используют свои маршруты', async () => {
+  it('withdraw и return используют свои маршруты', async () => {
     const { client, fetchMock } = setup();
     const withdraw = renderHook(() => useWithdrawPress(TASK_ID), {
       wrapper: makeWrapper(client),
@@ -164,18 +163,13 @@ describe('press-api (#434)', () => {
     const returnHook = renderHook(() => useReturnPress(TASK_ID), {
       wrapper: makeWrapper(client),
     });
-    const excludeHook = renderHook(() => useExcludePress(TASK_ID), {
-      wrapper: makeWrapper(client),
-    });
     await act(async () => {
       withdraw.result.current.mutate();
       returnHook.result.current.mutate({ userIds: [USER_ID], reason: 'Доработать' });
-      excludeHook.result.current.mutate({ userIds: [USER_ID], reason: 'Уволен' });
     });
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     const urls = fetchMock.mock.calls.map((call) => String(call[0]));
     expect(urls.some((url) => url.endsWith('/press/withdraw'))).toBe(true);
     expect(urls.some((url) => url.endsWith('/press/return'))).toBe(true);
-    expect(urls.some((url) => url.endsWith('/press/exclude'))).toBe(true);
   });
 });

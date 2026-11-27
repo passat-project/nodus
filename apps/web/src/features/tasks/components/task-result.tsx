@@ -21,7 +21,12 @@ export function TaskResultSection({ task }: { task: TaskDetail }) {
   const { data: conversation } = useTaskConversation(task.id);
   const [draft, setDraft] = useState<string | null>(null);
   const result = task.result;
-  const canWrite = task.access.canCheck;
+  // Сбор отметок закрыт: итог — вклад каждого участника, а не текст последнего
+  // (#965). Так результат выбывшего остаётся подписан его автором.
+  const collected = task.press?.completed
+    ? task.press.entries.filter((entry) => entry.result?.text.trim())
+    : [];
+  const canWrite = task.access.canCheck && collected.length === 0;
 
   function submit() {
     if (draft === null) return;
@@ -73,6 +78,34 @@ export function TaskResultSection({ task }: { task: TaskDetail }) {
               {ui.common.cancel}
             </Button>
           </div>
+        </div>
+      ) : collected.length > 0 ? (
+        <div className="mt-2 rounded-lg bg-success-soft/40 px-3 py-2.5">
+          {collected.map((entry, index) => (
+            <div
+              key={entry.userId}
+              className={index > 0 ? 'mt-3 border-t border-border/60 pt-3' : undefined}
+            >
+              <p className="text-sm leading-relaxed wrap-anywhere whitespace-pre-wrap">
+                {entry.result?.text}
+              </p>
+              <p className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                <PersonAvatar
+                  name={entry.displayName}
+                  avatarUrl={entry.avatarUrl}
+                  className="size-4"
+                  decorative
+                />
+                {withoutPatronymic(entry.displayName)} ·{' '}
+                {entry.pressedAt ? formatDateTime(entry.pressedAt) : '—'}
+                {entry.state === 'excluded' ? (
+                  <span className="rounded border border-border px-1.5 py-0.5 text-[11px]">
+                    {ui.tasks.press.resultRetained}
+                  </span>
+                ) : null}
+              </p>
+            </div>
+          ))}
         </div>
       ) : result ? (
         <div className="mt-2 rounded-lg bg-success-soft/40 px-3 py-2.5">
