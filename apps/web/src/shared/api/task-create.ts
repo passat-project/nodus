@@ -4,6 +4,7 @@ import type { CreateTaskBody, TaskListItem, TaskStageWithCount } from '@nodus/co
 import { api } from '../api-client.js';
 import { withEmptyNumberConfirm } from '../custom-fields/number-confirm.js';
 import { tasksKeys } from './tasks-keys.js';
+import { userRelationsKeys } from './user-relations.js';
 
 /** Личная схема «Мой план» (ADR-0008): колонки личной доски со счётчиками.
  *  В shared — потребители и фича задач, и общая экспресс-форма
@@ -40,6 +41,10 @@ export function useCreateTask() {
       void queryClient.invalidateQueries({ queryKey: tasksKeys.listPages() });
       void queryClient.invalidateQueries({ queryKey: tasksKeys.kanbanAll() });
       void queryClient.invalidateQueries({ queryKey: tasksKeys.stages() });
+      // Вкладка «Задачи» карточки сотрудника (#1036): свой срез
+      // `['tasks','assignee',<id>]` не входил в ветку журнала — созданная из
+      // карточки задачи не появлялась в журнале и счётчике до перезахода.
+      void queryClient.invalidateQueries({ queryKey: userRelationsKeys.tasksAll() });
       // Подзадача из быстрого входа (#432): карточка родителя показывает
       // новую строку сразу после ответа.
       if (body.parentId) {
