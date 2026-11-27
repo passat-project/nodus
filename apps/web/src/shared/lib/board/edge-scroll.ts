@@ -10,8 +10,6 @@ export const EDGE_DELAY_MS = 200;
 /** Скорость у внутренней границы зоны и у самого края, px/мс (≈250–1250 px/с). */
 export const EDGE_MIN_SPEED = 0.25;
 export const EDGE_MAX_SPEED = 1.25;
-/** Шаг без плавности (prefers-reduced-motion): пауза между шагами, мс. */
-export const EDGE_STEP_MS = 450;
 /** Порог drag-to-pan: меньший сдвиг — обычный клик по фону. */
 export const PAN_THRESHOLD_PX = 4;
 

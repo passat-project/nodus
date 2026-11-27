@@ -139,16 +139,20 @@ describe('StructureTrace (#768)', () => {
     expect(queue.length).toBe(0);
   });
 
-  it('prefers-reduced-motion: след закрашивается сразу, без точки', () => {
+  it('системное «уменьшить движение» не гасит пробег следа (#1035)', () => {
     vi.stubGlobal('matchMedia', () => ({ matches: true }));
     render(
       <svg>
         <StructureTrace routes={routes} trail={[link('main', 'bim')]} runKey="k1" />
       </svg>,
     );
+    expect(offsets()).toEqual(['1']);
+    frames(16);
+    expect(Number.parseFloat(offsets()[0]!)).toBeLessThan(1);
+    expect(dot()?.style.opacity).toBe('1');
+    frames(500);
     expect(offsets()).toEqual(['0']);
     expect(dot()?.style.opacity).toBe('0');
-    expect(queue.length).toBe(0);
   });
 
   it('геометрия ещё не измерена — след не рисуется (половину не красим)', () => {

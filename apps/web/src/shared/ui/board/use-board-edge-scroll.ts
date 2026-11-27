@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type PointerEvent, type RefObject } from '
 
 import {
   EDGE_DELAY_MS,
-  EDGE_STEP_MS,
   PAN_THRESHOLD_PX,
   edgeHit,
   edgeSpeed,
@@ -26,13 +25,11 @@ interface Pan {
   active: boolean;
 }
 
-function clearLoop(loop: { timer: number; frame: number; step: number }) {
+function clearLoop(loop: { timer: number; frame: number }) {
   window.clearTimeout(loop.timer);
-  window.clearInterval(loop.step);
   cancelAnimationFrame(loop.frame);
   loop.timer = 0;
   loop.frame = 0;
-  loop.step = 0;
 }
 
 const sameRoom = (a: ScrollRoom, b: ScrollRoom) => a.left === b.left && a.right === b.right;
@@ -40,8 +37,8 @@ const sameRoom = (a: ScrollRoom, b: ScrollRoom) => a.left === b.left && a.right 
 /**
  * Горизонтальная навигация широкой доски (#366): (1) прокрутка подводом
  * курсора к краю — зона 48px, пауза 200мс, квадратичный разгон к кромке, стоп
- * при уходе курсора и у конца доски; prefers-reduced-motion — шагами по
- * колонке без плавности; (2) drag-to-pan фона зажатой левой кнопкой (Trello/
+ * при уходе курсора и у конца доски (движение всегда плавное, #1035); (2)
+ * drag-to-pan фона зажатой левой кнопкой (Trello/
  * Miro). Только мышь: тач листает доску нативно. Перетаскивание карточки
  * сюда не относится — у края доску листает autoScroll dnd-kit (движок доски).
  * Покадровая прокрутка — императивно (scrollLeft в rAF), React рендерит
@@ -70,8 +67,8 @@ export function useBoardEdgeScroll(
   const [panning, setPanning] = useState(false);
 
   const hitRef = useRef<{ side: EdgeSide; depth: number } | null>(null);
-  // Таймер паузы, кадр плавной прокрутки, интервал шагов (reduced-motion).
-  const loopRef = useRef({ timer: 0, frame: 0, step: 0 });
+  // Таймер паузы и кадр плавной прокрутки.
+  const loopRef = useRef({ timer: 0, frame: 0 });
   const panRef = useRef<Pan | null>(null);
 
   // Флаги «есть куда листать»: скролл, ресайз доски, смена набора колонок.
@@ -114,21 +111,6 @@ export function useBoardEdgeScroll(
     const canGo = (side: EdgeSide) =>
       scrollRoom(el.scrollLeft, el.clientWidth, el.scrollWidth)[side];
 
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      const first = el.firstElementChild as HTMLElement | null;
-      const gap = Number.parseFloat(getComputedStyle(el).columnGap) || 0;
-      // Шаг — колонка с зазором; колонки ещё нет (0) — треть видимой области.
-      const step = (first?.offsetWidth || el.clientWidth / 3) + gap;
-      const tick = () => {
-        const hit = hitRef.current;
-        if (!hit || !canGo(hit.side)) return stop();
-        el.scrollBy({ left: hit.side === 'left' ? -step : step, behavior: 'instant' });
-      };
-      tick();
-      loop.step = window.setInterval(tick, EDGE_STEP_MS);
-      return;
-    }
-
     // Дробная позиция копится в переменной: scrollLeft снапается к
     // device-px, и медленный старт (≈4px/кадр при --ui-scale) терял бы шаги.
     let pos = el.scrollLeft;
@@ -170,7 +152,7 @@ export function useBoardEdgeScroll(
     if (!hitRef.current) setHot(hit.side);
     hitRef.current = hit;
     const loop = loopRef.current;
-    if (!loop.timer && !loop.frame && !loop.step) {
+    if (!loop.timer && !loop.frame) {
       loop.timer = window.setTimeout(start, EDGE_DELAY_MS);
     }
   };
