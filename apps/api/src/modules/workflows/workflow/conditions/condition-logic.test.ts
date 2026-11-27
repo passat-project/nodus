@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ConditionPredicate } from '@nodus/contracts';
+import type { ConditionFieldOp, ConditionPredicate, CustomFieldValue } from '@nodus/contracts';
 
 import type { ConditionFieldDefs, ConditionRow, ConditionStageIndex } from './condition-logic.js';
 import { evaluateSelection, predicatePasses, recordsReason } from './condition-logic.js';
@@ -281,5 +281,210 @@ describe('recordsReason (#635): видимость одна', () => {
     const reason = recordsReason('Не принято', violators, visible);
     expect(reason.records!.map((r) => r.id)).toEqual(['v1', 'v3']);
     expect(reason.hiddenCount).toBe(5);
+  });
+});
+
+// --- Грани значений по типам атрибутов (#635, матрица op×тип) ---------------
+
+const FIELD_MONEY = '55555555-5555-4555-8555-555555555555';
+const FIELD_DATE = '66666666-6666-4666-8666-666666666666';
+const FIELD_DATETIME = '77777777-7777-4777-8777-777777777770';
+const FIELD_DURATION = '88888888-8888-4888-8888-888888888888';
+const FIELD_BOOL = '99999999-9999-4999-8999-999999999999';
+const FIELD_ENUM = 'aaaaaaa2-0000-4000-8000-000000000001';
+const FIELD_MULTIENUM = 'aaaaaaa2-0000-4000-8000-000000000002';
+const FIELD_USER = 'aaaaaaa2-0000-4000-8000-000000000003';
+const FIELD_USERS = 'aaaaaaa2-0000-4000-8000-000000000004';
+const FIELD_LINK = 'aaaaaaa2-0000-4000-8000-000000000005';
+const FIELD_COUNTER = 'aaaaaaa2-0000-4000-8000-000000000006';
+const FIELD_REF = 'aaaaaaa2-0000-4000-8000-000000000007';
+
+const ITEM_A = 'bbbbbbb1-0000-4000-8000-00000000000a';
+const ITEM_B = 'bbbbbbb1-0000-4000-8000-00000000000b';
+const ITEM_C = 'bbbbbbb1-0000-4000-8000-00000000000c';
+const ITEM_D = 'bbbbbbb1-0000-4000-8000-00000000000d';
+const CUR_1 = 'ccccccc1-0000-4000-8000-000000000001';
+const CUR_2 = 'ccccccc1-0000-4000-8000-000000000002';
+
+const edgeDefs: ConditionFieldDefs = new Map([
+  ...defs,
+  [FIELD_MONEY, { id: FIELD_MONEY, type: 'money', settings: { currencyId: CUR_1 } }],
+  [FIELD_DATE, { id: FIELD_DATE, type: 'date', settings: {} }],
+  [FIELD_DATETIME, { id: FIELD_DATETIME, type: 'datetime', settings: {} }],
+  [FIELD_DURATION, { id: FIELD_DURATION, type: 'duration', settings: {} }],
+  [FIELD_BOOL, { id: FIELD_BOOL, type: 'bool', settings: {} }],
+  [FIELD_ENUM, { id: FIELD_ENUM, type: 'enum', settings: {} }],
+  [FIELD_MULTIENUM, { id: FIELD_MULTIENUM, type: 'multienum', settings: {} }],
+  [FIELD_USER, { id: FIELD_USER, type: 'user', settings: {} }],
+  [FIELD_USERS, { id: FIELD_USERS, type: 'users', settings: {} }],
+  [FIELD_LINK, { id: FIELD_LINK, type: 'link', settings: {} }],
+  [FIELD_COUNTER, { id: FIELD_COUNTER, type: 'counter', settings: {} }],
+  [FIELD_REF, { id: FIELD_REF, type: 'task', settings: {} }],
+]);
+
+/** Короткий вызов предиката field на строке со значением. */
+function fieldPasses(
+  fieldId: string,
+  raw: unknown,
+  op: ConditionFieldOp,
+  value?: CustomFieldValue | null,
+): boolean {
+  return predicatePasses(
+    row({ id: '1', values: { [fieldId]: raw } }),
+    { kind: 'field', field: `cf.${fieldId}`, op, value: value ?? null },
+    noStages,
+    edgeDefs,
+  );
+}
+
+describe('field (#635): деньги', () => {
+  it('eq/ne — сумма и валюта; порядок — только той же валюты', () => {
+    expect(fieldPasses(FIELD_MONEY, { amount: 100, currencyId: CUR_1 }, 'eq', {
+      amount: 100,
+      currencyId: CUR_1,
+    })).toBe(true);
+    // Та же сумма другой валюты — не равно.
+    expect(fieldPasses(FIELD_MONEY, { amount: 100, currencyId: CUR_2 }, 'eq', {
+      amount: 100,
+      currencyId: CUR_1,
+    })).toBe(false);
+    expect(fieldPasses(FIELD_MONEY, { amount: 100, currencyId: CUR_2 }, 'ne', {
+      amount: 100,
+      currencyId: CUR_1,
+    })).toBe(true);
+    // Сравнение сумм — только в одной валюте: чужая валюта несравнима (ложь).
+    expect(
+      fieldPasses(FIELD_MONEY, { amount: 500, currencyId: CUR_2 }, 'gt', {
+        amount: 100,
+        currencyId: CUR_1,
+      }),
+    ).toBe(false);
+    expect(
+      fieldPasses(FIELD_MONEY, { amount: 150, currencyId: CUR_1 }, 'gt', {
+        amount: 100,
+        currencyId: CUR_1,
+      }),
+    ).toBe(true);
+    expect(
+      fieldPasses(FIELD_MONEY, { amount: 100, currencyId: CUR_1 }, 'gte', {
+        amount: 100,
+        currencyId: CUR_1,
+      }),
+    ).toBe(true);
+  });
+});
+
+describe('field (#635): даты и продолжительность', () => {
+  it('date/datetime — лексикографически по ISO; duration — числом', () => {
+    expect(fieldPasses(FIELD_DATE, '2026-03-15', 'eq', '2026-03-15')).toBe(true);
+    expect(fieldPasses(FIELD_DATE, '2026-01-15', 'lt', '2026-03-15')).toBe(true);
+    expect(fieldPasses(FIELD_DATE, '2026-06-01', 'lt', '2026-03-15')).toBe(false);
+    expect(fieldPasses(FIELD_DATETIME, '2026-03-15T10:00:00.000Z', 'gte', '2026-03-15T08:00:00.000Z')).toBe(
+      true,
+    );
+    expect(fieldPasses(FIELD_DURATION, 60, 'lte', 60)).toBe(true);
+    expect(fieldPasses(FIELD_DURATION, 120, 'lte', 60)).toBe(false);
+    // gt/gte/lt/lte без значения (null) — несравнимо, всегда ложь.
+    expect(fieldPasses(FIELD_DATE, '2026-03-15', 'gt', null)).toBe(false);
+  });
+});
+
+describe('field (#635): флаг', () => {
+  it('хранится только true: eq true / ne true / пусто', () => {
+    expect(fieldPasses(FIELD_BOOL, true, 'eq', true)).toBe(true);
+    expect(fieldPasses(FIELD_BOOL, true, 'ne', true)).toBe(false);
+    // «Нет» = пусто: eq null истинен на отсутствующем ключе, ne null — на true.
+    expect(fieldPasses(FIELD_BOOL, undefined, 'eq', null)).toBe(true);
+    expect(fieldPasses(FIELD_BOOL, true, 'ne', null)).toBe(true);
+    expect(fieldPasses(FIELD_BOOL, undefined, 'filled')).toBe(false);
+    expect(fieldPasses(FIELD_BOOL, true, 'filled')).toBe(true);
+  });
+});
+
+describe('field (#635): списки и люди', () => {
+  it('enum: eq/ne и in_any со скаляром; пустой список in_any — всегда ложь', () => {
+    expect(fieldPasses(FIELD_ENUM, ITEM_A, 'eq', ITEM_A)).toBe(true);
+    expect(fieldPasses(FIELD_ENUM, ITEM_B, 'ne', ITEM_A)).toBe(true);
+    expect(fieldPasses(FIELD_ENUM, undefined, 'ne', ITEM_A)).toBe(true);
+    expect(fieldPasses(FIELD_ENUM, ITEM_A, 'in_any', [ITEM_A, ITEM_B])).toBe(true);
+    expect(fieldPasses(FIELD_ENUM, ITEM_A, 'in_any', [ITEM_C])).toBe(false);
+    expect(fieldPasses(FIELD_ENUM, ITEM_A, 'in_any', [])).toBe(false);
+  });
+
+  it('multienum: eq поэлементно (порядок значим), in_any — пересечение', () => {
+    expect(fieldPasses(FIELD_MULTIENUM, [ITEM_A, ITEM_B], 'eq', [ITEM_A, ITEM_B])).toBe(true);
+    // Тот же набор в другом порядке — не равно (сравнение массивов
+    // поэлементно, общая грамматика значений): фиксировано тестом.
+    expect(fieldPasses(FIELD_MULTIENUM, [ITEM_B, ITEM_A], 'eq', [ITEM_A, ITEM_B])).toBe(false);
+    expect(fieldPasses(FIELD_MULTIENUM, [ITEM_A, ITEM_B], 'in_any', [ITEM_A])).toBe(true);
+    expect(fieldPasses(FIELD_MULTIENUM, [ITEM_B, ITEM_C], 'in_any', [ITEM_A])).toBe(false);
+    expect(fieldPasses(FIELD_MULTIENUM, [ITEM_B, ITEM_C], 'in_any', [ITEM_B, ITEM_D])).toBe(true);
+    expect(fieldPasses(FIELD_MULTIENUM, undefined, 'in_any', [ITEM_A])).toBe(false);
+    // Явный null в JSONB — то же «пусто», что отсутствие ключа.
+    expect(fieldPasses(FIELD_MULTIENUM, null, 'filled')).toBe(false);
+    expect(fieldPasses(FIELD_MULTIENUM, null, 'not_filled')).toBe(true);
+  });
+
+  it('user/users: скаляр читается как массив (расширяющее чтение, Р3)', () => {
+    expect(fieldPasses(FIELD_USER, ITEM_A, 'in_any', [ITEM_A, ITEM_B])).toBe(true);
+    expect(fieldPasses(FIELD_USERS, [ITEM_A, ITEM_B], 'in_any', [ITEM_B, ITEM_C])).toBe(true);
+    expect(fieldPasses(FIELD_USERS, [ITEM_C], 'in_any', [ITEM_A, ITEM_B])).toBe(false);
+  });
+});
+
+describe('field (#635): строковые типы и ссылки', () => {
+  it('link/counter: contains без учёта регистра, not_contains на пустом — истина', () => {
+    expect(fieldPasses(FIELD_LINK, 'https://example.com/docs/KZH', 'contains', 'docs')).toBe(true);
+    expect(fieldPasses(FIELD_LINK, '\\\\file\\share\\ov1', 'not_contains', 'docs')).toBe(true);
+    expect(fieldPasses(FIELD_LINK, undefined, 'not_contains', 'docs')).toBe(true);
+    expect(fieldPasses(FIELD_LINK, undefined, 'contains', 'docs')).toBe(false);
+    expect(fieldPasses(FIELD_COUNTER, 'Вх-2026/118', 'eq', 'Вх-2026/118')).toBe(true);
+    expect(fieldPasses(FIELD_COUNTER, 'Вх-2026/118', 'contains', 'вх-2026')).toBe(true);
+    expect(fieldPasses(FIELD_COUNTER, 'Изм. 3', 'ne', 'Вх-2026/118')).toBe(true);
+  });
+
+  it('ссылки (task/letter/project/node/…): uuid-строки, eq/ne/filled', () => {
+    expect(fieldPasses(FIELD_REF, ITEM_A, 'eq', ITEM_A)).toBe(true);
+    expect(fieldPasses(FIELD_REF, ITEM_B, 'eq', ITEM_A)).toBe(false);
+    expect(fieldPasses(FIELD_REF, ITEM_B, 'ne', ITEM_A)).toBe(true);
+    expect(fieldPasses(FIELD_REF, undefined, 'eq', null)).toBe(true);
+    expect(fieldPasses(FIELD_REF, undefined, 'ne', null)).toBe(false);
+    expect(fieldPasses(FIELD_REF, ITEM_A, 'filled')).toBe(true);
+  });
+});
+
+describe('result_issued (#635): отметка действует «с этого статуса и дальше»', () => {
+  // Порядок вставки = порядок маршрута (sortOrder): draft → printed → done.
+  const marked = stagesOf({ printed: true });
+  const rowAt = (stageId: string) => row({ id: '1', stageId });
+
+  it('стадия до отметки — не выдана', () => {
+    expect(predicatePasses(rowAt('new'), { kind: 'result_issued' }, marked, defs)).toBe(false);
+  });
+
+  it('отмеченная стадия и все после неё — выданы (канон §11)', () => {
+    expect(predicatePasses(rowAt('printed'), { kind: 'result_issued' }, marked, defs)).toBe(true);
+    // «done» после «printed»: в фикстуре помечен сам — проверяем «после»
+    // отдельным маршрутом, где отметка ТОЛЬКО на printed.
+    const onlyPrinted: ConditionStageIndex = {
+      stages: new Map([
+        [
+          TYPE_A,
+          new Map([
+            ['draft', { systemState: 'backlog', outcome: null, resultIssued: false }],
+            ['printed', { systemState: 'active', outcome: null, resultIssued: true }],
+            ['done', { systemState: 'closed', outcome: 'success', resultIssued: false }],
+            ['cancelled', { systemState: 'closed', outcome: 'cancelled', resultIssued: false }],
+          ]),
+        ],
+      ]),
+    };
+    expect(predicatePasses(rowAt('done'), { kind: 'result_issued' }, onlyPrinted, defs)).toBe(true);
+    expect(predicatePasses(rowAt('cancelled'), { kind: 'result_issued' }, onlyPrinted, defs)).toBe(
+      true,
+    );
+    expect(predicatePasses(rowAt('draft'), { kind: 'result_issued' }, onlyPrinted, defs)).toBe(
+      false,
+    );
   });
 });

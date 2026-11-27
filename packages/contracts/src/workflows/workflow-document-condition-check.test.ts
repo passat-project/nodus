@@ -257,3 +257,92 @@ describe('CONDITION_FIELD_OPS_BY_TYPE (#635): матрица операторо�
     }
   });
 });
+
+/** Независимая от кода таблица ожиданий (#635): публикация обязана
+ *  отвергать каждую пару (тип × оператор), которой здесь нет. Изменение
+ *  матрицы = сознательная правка этого канона, а не тихий дрейф. */
+const EXPECTED_OPS: Record<string, readonly string[]> = {
+  text: ['eq', 'ne', 'contains', 'not_contains', 'filled', 'not_filled'],
+  long_text: ['eq', 'ne', 'contains', 'not_contains', 'filled', 'not_filled'],
+  number: ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'filled', 'not_filled'],
+  money: ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'filled', 'not_filled'],
+  date: ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'filled', 'not_filled'],
+  datetime: ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'filled', 'not_filled'],
+  duration: ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'filled', 'not_filled'],
+  bool: ['eq', 'ne', 'filled', 'not_filled'],
+  enum: ['eq', 'ne', 'in_any', 'filled', 'not_filled'],
+  multienum: ['eq', 'ne', 'in_any', 'filled', 'not_filled'],
+  user: ['eq', 'ne', 'in_any', 'filled', 'not_filled'],
+  users: ['eq', 'ne', 'in_any', 'filled', 'not_filled'],
+  department: ['eq', 'ne', 'filled', 'not_filled'],
+  project: ['eq', 'ne', 'filled', 'not_filled'],
+  counterparty: ['eq', 'ne', 'filled', 'not_filled'],
+  task: ['eq', 'ne', 'filled', 'not_filled'],
+  letter: ['eq', 'ne', 'filled', 'not_filled'],
+  node: ['eq', 'ne', 'filled', 'not_filled'],
+  link: ['eq', 'ne', 'contains', 'not_contains', 'filled', 'not_filled'],
+  counter: ['eq', 'ne', 'contains', 'not_contains', 'filled', 'not_filled'],
+};
+
+const ALL_TYPES = Object.keys(EXPECTED_OPS);
+
+const ALL_OPS = [
+  'eq',
+  'ne',
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+  'contains',
+  'not_contains',
+  'in_any',
+  'filled',
+  'not_filled',
+] as const;
+
+describe('checkConditionRules (#635): полная матрица op×тип', () => {
+  // Публикация имеет факты обо всех определениях — по одному на тип.
+  const fieldOf = new Map(
+    ALL_TYPES.map((type, index) => [
+      type,
+      `99900000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+    ]),
+  );
+  const matrixOpts = (): WorkflowCheckOptions => ({
+    ...opts(),
+    definitions: ALL_TYPES.map(
+      (type) =>
+        ({
+          id: fieldOf.get(type)!,
+          type,
+          settings: {},
+        }) as unknown as Pick<CustomFieldDefinition, 'id' | 'type' | 'settings'>,
+    ),
+    customFields: {
+      active: new Set(fieldOf.values()),
+      inType: new Set(fieldOf.values()),
+    },
+  });
+
+  const cases = ALL_TYPES.flatMap((type) =>
+    ALL_OPS.map((op) => ({ type, op, allowed: EXPECTED_OPS[type]!.includes(op) })),
+  );
+
+  it.each(cases)('тип $type × оператор $op → $allowed', ({ type, op, allowed }) => {
+    const doc = docWith(
+      validator({
+        subject: { kind: 'subtasks' },
+        where: [{ kind: 'field', field: `cf.${fieldOf.get(type)}`, op }],
+        quantifier: 'all',
+      }),
+    );
+    const problems: { code: string; severity: string }[] = [];
+    checkConditionRules(doc, matrixOpts(), problems as never);
+    const incompatible = problems.some((p) => p.code === 'condition_field_op_incompatible');
+    expect(incompatible, `${type} × ${op}`).toBe(!allowed);
+  });
+
+  it('матрица кода совпадает с каноном (все 19 типов, без лишних)', () => {
+    expect({ ...CONDITION_FIELD_OPS_BY_TYPE }).toEqual(EXPECTED_OPS);
+  });
+});
