@@ -1,16 +1,19 @@
-import { Maximize2, Minimize2, Pause, Play, RotateCcw, Volume2, VolumeX } from 'lucide-react';
-import type { CSSProperties } from 'react';
+import { Pause, Play, RotateCcw, Volume2, VolumeX } from 'lucide-react';
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { cn } from '@nodus/ui/lib/utils';
 
 import { formatVideoDuration } from '../lib/format.js';
+import { VideoSpeedMenu } from './video-speed-menu.js';
 import type { VideoPlayer } from './use-video-player.js';
 
 /**
- * Полоса управления кинозала (#1054) — ПОД кадром, на тёмном фоне зала.
- * Кадр не перекрывается ничем: браузерная полоса Chromium рисовала над ним
- * градиент и притемняла низ ролика (`docs/gotchas/frontend.md`).
+ * Нижняя панель кинозала (#1054; Telegram-вид, 26.11.2026): серая панель
+ * сразу под кадром, появляется по движению мыши/фокусу и прячется во время
+ * игры (видимостью управляет `VideoPlayerView`). Верхний ряд — звук,
+ * пуск/пауза, шестерёнка скорости; нижний — время, перемотка, остаток.
+ * Своя панель вместо браузерной: Chromium рисовал нативной полосой
+ * тёмный градиент над кадром (`docs/gotchas/frontend.md`).
  *
  * Разметка — тулбар с кнопками и нативными `input[type=range]`: клавиатура,
  * скринридер и объявление значений перемотки достаются от платформы
@@ -40,7 +43,7 @@ const RANGE_CLASS = cn(
   '[&::-moz-range-thumb]:size-3 [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-transparent',
 );
 
-/** Дорожка с фокус-кольцом: кольцо темы (`--ring` индиго) на чёрном не видно. */
+/** Дорожка с фокус-кольцом: кольцо темы (`--ring` индиго) на сером не видно. */
 const TRACK_CLASS = cn(
   'relative h-1 rounded-full bg-white/20',
   '[--knob:0.75rem]',
@@ -53,31 +56,33 @@ const KNOB_CLASS =
   'pointer-events-none absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white';
 
 /**
- * Хром зала ВСЕГДА на чёрном (обе темы) — фокус-кольцо темы (`--ring` индиго)
- * на чёрном даёт ~1.3:1 и не читается: кнопки зала рисуют фокус белым.
- * Экспортируется в шапку: правила у бара и шапки одни.
+ * Хром зала ВСЕГДА на тёмно-сером (обе темы) — фокус-кольцо темы (`--ring`
+ * индиго) на сером даёт ~1.3:1 и не читается: кнопки зала рисуют фокус
+ * белым. Экспортируется в шапку: правила у панели и шапки одни.
  */
 export const HALL_CONTROL_CLASS = 'focus-visible:border-white/60 focus-visible:ring-white/40';
 
-/** Пуск/пауза — единственная команда полосы «в полную силу» (ось 2: якорь зала). */
-const PLAY_BUTTON_CLASS = cn('text-white hover:bg-white/10', HALL_CONTROL_CLASS);
-/** Служебные команды (звук, полный экран) — тише транспорта, тот же вес, что у шапки. */
+/** Пуск/пауза — единственная команда панели «в полную силу» (ось 2: якорь зала). */
+const PLAY_BUTTON_CLASS = cn('text-neutral-100 hover:bg-white/10', HALL_CONTROL_CLASS);
+/** Служебные команды (звук, скорость) — тише транспорта, тот же вес, что у шапки. */
 const UTILITY_BUTTON_CLASS = cn(
-  'text-white/60 hover:bg-white/10 hover:text-white',
+  'text-neutral-300 hover:bg-white/10 hover:text-neutral-100',
   HALL_CONTROL_CLASS,
 );
 
 export function VideoControlBar({
   player,
   className,
-  style,
+  onSpeedOpenChange,
 }: {
   player: VideoPlayer;
   className?: string;
-  style?: CSSProperties;
+  /** Открытое меню скорости держит панель видимой (таймер скрытия в зале). */
+  onSpeedOpenChange?: (open: boolean) => void;
 }) {
   const current = formatVideoDuration(player.time * 1000);
   const total = formatVideoDuration(player.duration * 1000);
+  const remaining = formatVideoDuration(Math.max(0, (player.duration - player.time) * 1000));
   const played = player.duration > 0 ? Math.min(100, (player.time / player.duration) * 100) : 0;
   const volume = player.muted ? 0 : Math.round(player.volume * 100);
 
@@ -91,88 +96,90 @@ export function VideoControlBar({
     <div
       role="toolbar"
       aria-label={ui.files.videoControls}
-      // pl-1.5: иконка пуска встаёт на одну вертикаль с именем файла в шапке
-      // (внутренний отступ icon-кнопки ровно pl-1.5) — левый край хрома один.
-      className={cn('flex h-12 shrink-0 items-center gap-1.5 bg-black pr-3 pl-1.5', className)}
-      style={style}
-      // Клик по полосе — не «мимо плеера»: кинозал не закрывается.
+      className={cn(
+        'flex w-full flex-col gap-0.5 rounded-xl border border-white/10 bg-neutral-700/95 px-2.5 py-1.5 text-neutral-200 backdrop-blur-md',
+        className,
+      )}
+      // Клик по панели — не «мимо плеера»: кинозал не закрывается.
       onClick={(event) => event.stopPropagation()}
     >
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        className={PLAY_BUTTON_CLASS}
-        onClick={player.togglePlay}
-        aria-label={playLabel}
-        title={playLabel}
-      >
-        {player.ended ? <RotateCcw /> : player.playing ? <Pause /> : <Play />}
-      </Button>
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+        {/* Звук — одна группа (близость = принадлежность): иконка не
+            отрывается от своей громкости. */}
+        <div className="flex min-w-0 items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className={UTILITY_BUTTON_CLASS}
+            onClick={player.toggleMute}
+            aria-label={player.muted ? ui.files.unmute : ui.files.mute}
+            title={player.muted ? ui.files.unmute : ui.files.mute}
+          >
+            {player.muted ? <VolumeX /> : <Volume2 />}
+          </Button>
 
-      <span className="min-w-[5.25rem] shrink-0 font-mono text-xs tabular-nums text-white/60">
-        {current} / {total}
-      </span>
+          <div className={cn('hidden w-16 sm:block', TRACK_CLASS)}>
+            <span aria-hidden className={FILL_CLASS} style={{ width: knobPosition(volume) }} />
+            <span aria-hidden className={KNOB_CLASS} style={{ left: knobPosition(volume) }} />
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={player.muted ? 0 : player.volume}
+              onChange={(event) => player.changeVolume(Number(event.target.value))}
+              aria-label={ui.files.volume}
+              className={RANGE_CLASS}
+            />
+          </div>
+        </div>
 
-      <div className={cn('mx-1 min-w-0 flex-1', TRACK_CLASS)}>
-        <span aria-hidden className={FILL_CLASS} style={{ width: knobPosition(played) }} />
-        <span aria-hidden className={KNOB_CLASS} style={{ left: knobPosition(played) }} />
-        <input
-          type="range"
-          min={0}
-          max={player.duration || 0}
-          step="any"
-          value={Math.min(player.time, player.duration || 0)}
-          onChange={(event) => player.seekTo(Number(event.target.value))}
-          disabled={player.duration === 0}
-          aria-label={ui.files.seek}
-          aria-valuetext={`${current} ${ui.files.timeOf} ${total}`}
-          className={RANGE_CLASS}
-        />
-      </div>
-
-      {/* Звук — одна группа (близость = принадлежность): иконка не отрывается
-          от своей громкости, полный экран — отдельная команда с бо́льшим шагом. */}
-      <div className="flex items-center gap-1">
         <Button
           type="button"
           variant="ghost"
-          size="icon-sm"
-          className={UTILITY_BUTTON_CLASS}
-          onClick={player.toggleMute}
-          aria-label={player.muted ? ui.files.unmute : ui.files.mute}
-          title={player.muted ? ui.files.unmute : ui.files.mute}
+          size="icon"
+          className={PLAY_BUTTON_CLASS}
+          onClick={player.togglePlay}
+          aria-label={playLabel}
+          title={playLabel}
         >
-          {player.muted ? <VolumeX /> : <Volume2 />}
+          {player.ended ? <RotateCcw /> : player.playing ? <Pause /> : <Play />}
         </Button>
 
-        <div className={cn('hidden w-16 sm:block', TRACK_CLASS)}>
-          <span aria-hidden className={FILL_CLASS} style={{ width: knobPosition(volume) }} />
-          <span aria-hidden className={KNOB_CLASS} style={{ left: knobPosition(volume) }} />
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.01}
-            value={player.muted ? 0 : player.volume}
-            onChange={(event) => player.changeVolume(Number(event.target.value))}
-            aria-label={ui.files.volume}
-            className={RANGE_CLASS}
+        <div className="flex min-w-0 items-center justify-end">
+          <VideoSpeedMenu
+            player={player}
+            triggerClassName={UTILITY_BUTTON_CLASS}
+            onOpenChange={onSpeedOpenChange}
           />
         </div>
       </div>
 
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        className={cn('ml-1', UTILITY_BUTTON_CLASS)}
-        onClick={player.toggleFullscreen}
-        aria-label={player.fullscreen ? ui.files.exitFullscreen : ui.files.fullscreen}
-        title={player.fullscreen ? ui.files.exitFullscreen : ui.files.fullscreen}
-      >
-        {player.fullscreen ? <Minimize2 /> : <Maximize2 />}
-      </Button>
+      <div className="flex items-center gap-2">
+        <span className="w-10 shrink-0 text-right font-mono text-[11px] tabular-nums text-neutral-300">
+          {current}
+        </span>
+        <div className={cn('min-w-0 flex-1', TRACK_CLASS)}>
+          <span aria-hidden className={FILL_CLASS} style={{ width: knobPosition(played) }} />
+          <span aria-hidden className={KNOB_CLASS} style={{ left: knobPosition(played) }} />
+          <input
+            type="range"
+            min={0}
+            max={player.duration || 0}
+            step="any"
+            value={Math.min(player.time, player.duration || 0)}
+            onChange={(event) => player.seekTo(Number(event.target.value))}
+            disabled={player.duration === 0}
+            aria-label={ui.files.seek}
+            aria-valuetext={`${current} ${ui.files.timeOf} ${total}`}
+            className={RANGE_CLASS}
+          />
+        </div>
+        <span className="w-10 shrink-0 font-mono text-[11px] tabular-nums text-neutral-300">
+          -{remaining}
+        </span>
+      </div>
     </div>
   );
 }
