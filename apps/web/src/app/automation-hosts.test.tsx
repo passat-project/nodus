@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NodeKind, ProcessType, ProjectType } from '@nodus/contracts';
@@ -205,6 +207,34 @@ describe('TypeSettingsHost — резидентное окно настроек 
       'openSettings',
       'target',
     ]);
+  });
+
+  it('окно открывается ВНЕ раздела «Автоматизация»: хосту не нужен контекст маршрута', () => {
+    // Так его монтирует app-shell (стек карточек живёт поверх любого
+    // раздела, ADR-0009): без AutomationRoute, без его провайдеров.
+    render(<TypeSettingsHost />);
+    act(() =>
+      useTypeSettingsStore.getState().openSettings({ kind: 'process-type', id: ID.process }),
+    );
+    expect(screen.getByTestId('process-settings').dataset.id).toBe(ID.process);
+  });
+});
+
+describe('контракт монтажа окна настроек: шелл, а не маршрут раздела (#857)', () => {
+  // Карточки типов живут в стеке `?cards=` поверх любого раздела и переживают
+  // смену раздела (ADR-0009) — их шестерёнка обязана работать и вне
+  // «Автоматизации». Хост монтирует app-shell; возврат в маршрут раздела
+  // молча ломает настройки в чужих разделах (ревью #857, 27.11) — держим
+  // состав монтажа тестом, а не памятью исполнителя.
+  const read = (relative: string) =>
+    readFileSync(fileURLToPath(new URL(relative, import.meta.url)), 'utf8')
+      // Комментарии вправе упоминать хост (документация) — контракт о коде.
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+
+  it('TypeSettingsHost рендерит app-shell.tsx и НЕ рендерит automation-route.tsx', () => {
+    expect(read('./shell/app-shell.tsx')).toMatch(/<TypeSettingsHost\s*\/>/);
+    expect(read('./automation-route.tsx')).not.toMatch(/TypeSettingsHost/);
   });
 });
 

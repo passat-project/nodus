@@ -7,7 +7,6 @@ import { useSetProjectTypeArchived } from '../features/projects/api/project-cata
 import {
   NodeKindScreenHost,
   ProjectTypeWorkspaceHost,
-  TypeSettingsHost,
   renderKindCreate,
   renderProcessTypeCreate,
   renderProjectTypeCreate,
@@ -23,9 +22,9 @@ import { preloadTypeCardEntries } from './shell/card-type-entry.js';
  * automation в общих хостах `automation-hosts` — тех же, что рендерят
  * карточки типов в стеке. Левая колонка видна всегда: `?ptype=`, `?type=`,
  * `?ftype=`, `?noproject=1` выбирают, что показать справа, — как выбор
- * беседы в чатах, без полноэкранных режимов. `TypeSettingsHost` — резидентное
- * окно настроек типа: шестерёнка бара и «⋯ → Настройки типа…» открывают его,
- * не переезжая рамой на другой тип.
+ * беседы в чатах, без полноэкранных режимов. Резидентное окно настроек
+ * типа (`TypeSettingsHost`) монтирует шелл: карточки типов переживают
+ * смену раздела, и шестерёнка бара обязана работать и вне «Автоматизации».
  */
 export function AutomationRoute() {
   const navigate = useNavigate();
@@ -59,7 +58,6 @@ export function AutomationRoute() {
         onArchiveProject={(id, archived) => archiveProject.mutate({ id, archived })}
         onArchiveNodeKind={(id, archived) => archiveKind.mutate({ id, archived })}
       />
-      <TypeSettingsHost />
     </>
   );
 }

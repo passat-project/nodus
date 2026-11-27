@@ -18,6 +18,7 @@ import { startModalLayerTracking } from '../../shared/attention/modal-layers.js'
 import { stageMessengerThread } from '../../shared/chat/messenger-nav.js';
 import { ChatDialogHosts } from '../../shared/chat/dialog-hosts.js';
 import { TaskCreateHost } from '../../shared/tasks/task-create-host.js';
+import { TypeSettingsHost } from '../automation-hosts.js';
 import { ProjectCreateHost } from '../../features/projects/components/project-create-host.js';
 import { NumberConfirmHost } from '../../shared/custom-fields/number-confirm.js';
 import { AttachmentViewer } from '../../shared/files/attachment-viewer.js';
@@ -266,6 +267,11 @@ export function AppShell() {
       <ChatDialogHosts />
       {/* Единое окно создания задачи (#432): один хост на все входы. */}
       <TaskCreateHost />
+      {/* Окно настроек типа (#857): карточки типов живут в стеке `?cards=`
+          поверх ЛЮБОГО раздела и переживают смену раздела (ADR-0009) —
+          их шестерёнка и «⋯ → Настройки типа…» обязаны работать и вне
+          «Автоматизации», поэтому хост монтирует шелл, а не маршрут. */}
+      <TypeSettingsHost />
       {/* Единое окно создания проекта (#52): журнал и пикер проекта. */}
       <ProjectCreateHost />
       {/* Окно «В номере есть незаполненное поле» (#630): одно на все

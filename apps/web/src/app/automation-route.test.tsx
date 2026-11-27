@@ -78,7 +78,9 @@ vi.mock('../features/automation/components/types/type-create-dialog.js', () => (
     <div data-testid="process-create-dialog" data-base={props.defaultBaseTypeId ?? ''} />
   ),
 }));
-/** Хост окна настроек: резидент раздела — проверяем, что он смонтирован. */
+/** Хост окна настроек монтирует app-shell (карточки типов живут в стеке
+ *  поверх любого раздела): мок с testid остаётся как детектор — если маршрут
+ *  снова начнёт рендерить хост, проверка ниже его поймает. */
 vi.mock('./automation-hosts.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./automation-hosts.js')>();
   return {
@@ -117,10 +119,10 @@ type CreateSlot = { baseId?: string; onClose: () => void; onCreated: (id: string
 afterEach(cleanup);
 
 describe('композиция раздела «Автоматизация» (#857, ревизия UI v3, I6)', () => {
-  it('рама и резидентный хост окна настроек смонтированы вместе', () => {
+  it('рама смонтирована; хост окна настроек маршрутом НЕ рендерится — он в шелле', () => {
     setup({ tab: 'processes', ptype: 'p1', ftype: 'k1' });
     expect(screen.getByTestId('automation-page')).toBeTruthy();
-    expect(screen.getByTestId('type-settings-host')).toBeTruthy();
+    expect(screen.queryByTestId('type-settings-host')).toBeNull();
   });
 
   it('вход в раздел предзагружает ленивые тела карточек типов — клик по строке их не ждёт', () => {
