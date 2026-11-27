@@ -5,11 +5,12 @@ import { effectiveCreationForm, ui } from '@nodus/contracts';
 import { useCustomFieldDefinitions } from '../../../../shared/custom-fields/queries.js';
 import type { BuilderValue } from '../../../../shared/forms/builder/builder-model.js';
 import {
-  FormBuilderBody,
+  BuilderSheet,
   BuilderLead,
   builderLeadNote,
   FormTabLayout,
 } from '../../../../shared/forms/builder/form-builder-body.js';
+import { BuilderRail } from '../../../../shared/forms/builder/builder-side.js';
 import { PanelNote } from '../../../../shared/ui/panel/panel-kit.js';
 import {
   creationFromBuilder,
@@ -23,10 +24,13 @@ const c = ui.automation.creation;
 
 /**
  * Вкладка «Форма создания» типа задачи и письма (единая модель «Процессов»,
- * #857): редактор окна ЦЕЛИКОМ во вкладке — не окном и не правой панелью.
- * Правки идут прямо в черновик маршрута, как на холсте: каждая — один коммит
- * стора, история, черновик и публикация общие с маршрутом; кнопок «Готово» и
- * «Отмена» нет. У письма и без права — только просмотр. Пока форма не
+ * #857; ревизия 27.11): две панели на всю высоту — слева палитра полей
+ * (`BuilderRail`: «Добавить в окно» и «Закрепить также»), по центру лист
+ * окна целиком по ширине настоящего окна и на всю оставшуюся высоту;
+ * прокручивается только содержимое листа. Не окном и не правой панелью:
+ * правки идут прямо в черновик маршрута, как на холсте — каждая один коммит
+ * стора, история, черновик и публикация общие с маршрутом; кнопок «Готово»
+ * и «Отмена» нет. У письма и без права — только просмотр. Пока форма не
  * настроена (`doc.creation === null`), на листе стандартная — первая правка
  * пишет её в документ. Один редактор на экран: вкладка пишет в тот же
  * глобальный стор, что и холст, поэтому в раме под карточкой стека (и в
@@ -69,8 +73,19 @@ export function CreationFormTab({
           <PanelNote title={c.defaultForm}>{c.defaultFormHint}</PanelNote>
         ) : null
       }
+      rail={
+        readOnly && !host.lockMode ? null : (
+          <BuilderRail
+            value={value}
+            host={host}
+            readOnly={readOnly}
+            onChange={(next) => commit(next, form.titleFormula ?? null)}
+          />
+        )
+      }
     >
-      <FormBuilderBody
+      <BuilderSheet
+        fill
         host={host}
         value={value}
         readOnly={readOnly}

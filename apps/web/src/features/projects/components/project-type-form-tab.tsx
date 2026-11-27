@@ -19,12 +19,13 @@ import {
 } from '../../../shared/forms/attribute-form-model.js';
 import type { BuilderValue } from '../../../shared/forms/builder/builder-model.js';
 import {
-  FormBuilderBody,
+  BuilderSheet,
   FormBuilderSkeleton,
   BuilderLead,
   builderLeadNote,
   FormTabLayout,
 } from '../../../shared/forms/builder/form-builder-body.js';
+import { BuilderRail } from '../../../shared/forms/builder/builder-side.js';
 import { useFormAutosave } from '../../../shared/forms/builder/form-autosave.js';
 import { PreviewControl } from '../../../shared/forms/builder/preview-control.js';
 import { useUpdateProjectType } from '../api/project-catalog-mutations.js';
@@ -77,10 +78,13 @@ export function useProjectTypeForm(type: ProjectType) {
 
 /**
  * Вкладка «Форма создания» типа проекта (#496, единое ядро; #857, единая
- * модель «Процессов»): тот же редактор окна, что у задачи и кнопки, — целиком
- * во вкладке, с автосохранением и без «Готово». Атрибуты привязываются к типу
- * в справочнике «Атрибуты»; здесь — какие из них и системные строки проекта
- * окно показывает и в каком порядке. Без права `project.setup.manage` — просмотр.
+ * модель «Процессов»; ревизия 27.11): тот же редактор окна, что у задачи и
+ * кнопки, — две панели на всю высоту: слева палитра атрибутов
+ * (`BuilderRail`), по центру лист окна на всю оставшуюся высоту с
+ * внутренней прокруткой; автосохранение, без «Готово». Атрибуты
+ * привязываются к типу в справочнике «Атрибуты»; здесь — какие из них и
+ * системные строки проекта окно показывает и в каком порядке. Без права
+ * `project.setup.manage` — просмотр.
  */
 export function ProjectTypeFormTab({
   type,
@@ -123,11 +127,17 @@ export function ProjectTypeFormTab({
     <>
       <FormTabLayout
         lead={<BuilderLead title={host.title} note={builderLeadNote({ readOnly: !canSetup })} />}
+        rail={
+          canSetup ? (
+            <BuilderRail value={form.value} host={host} readOnly={false} onChange={form.edit} />
+          ) : null
+        }
       >
         {query.isLoading ? (
           <FormBuilderSkeleton />
         ) : (
-          <FormBuilderBody
+          <BuilderSheet
+            fill
             host={host}
             value={form.value}
             readOnly={!canSetup}

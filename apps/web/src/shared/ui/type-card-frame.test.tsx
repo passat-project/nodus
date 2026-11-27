@@ -137,18 +137,12 @@ describe('TypeCardFrame — единый бар карточки «Процес�
     ).toEqual([true, true, true]);
   });
 
-  it('крошек «‹ назад» у рамы нет: только подсказка места типа под баром', () => {
+  it('крошек «‹ назад» у рамы нет, строки-подсказки над содержимым тоже: бар и сразу поверхность', () => {
     render(
-      <TypeCardFrame
-        tabs={TABS}
-        activeTab="route"
-        onActivateTab={() => void 0}
-        meta="Используется во всех типах проектов"
-      >
-        <div />
+      <TypeCardFrame tabs={TABS} activeTab="route" onActivateTab={() => void 0}>
+        <div data-testid="surface" />
       </TypeCardFrame>,
     );
-    expect(screen.getByText('Используется во всех типах проектов')).toBeTruthy();
     // В баре только вкладки: кнопок возврата и разделителя-точки нет.
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
       'Маршрут',
@@ -156,6 +150,9 @@ describe('TypeCardFrame — единый бар карточки «Процес�
     ]);
     expect(screen.queryAllByRole('button')).toEqual([]);
     expect(screen.queryByText('·')).toBeNull();
+    // Содержимое начинается сразу под баром: полосы подсказки места типа
+    // больше нет — фон холста доходит до бара (замечание владельца 27.11).
+    expect(screen.getByTestId('surface').parentElement?.className).toBe('min-h-0 flex-1');
   });
 
   it('полоса вкладок появляется с fade только у карточки стека: рабочая область отключает анимацию', () => {

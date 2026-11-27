@@ -49,22 +49,6 @@ export function creationMeta(
   return ui.automation.entry.metaAllowedIn.replace('{names}', allowedNamesTail(allowed));
 }
 
-/** Подсказка «Используется в: …» для шапки «Настроек типа» (#857, п.1
- *  правил выпусков): типы проектов, где тип разрешён. `null` — сервер
- *  скрыл конфигурацию, подсказки нет. */
-export function creationUsageText(
-  type: ProcessType,
-  aliveProjects: readonly ProjectType[],
-): string | null {
-  if (type.config === undefined) return null;
-  const scope = typeConfigOf(type).creation;
-  if (aliveProjects.length === 0) return ui.automation.entry.metaNoProjectOnly;
-  const allowed = allowedProjectTypes(scope, aliveProjects);
-  if (allowed.length === aliveProjects.length) return ui.automation.entry.usageEverywhere;
-  if (allowed.length === 0) return ui.automation.entry.metaNoProjectOnly;
-  return ui.automation.entry.usageIn.replace('{names}', allowedNamesTail(allowed));
-}
-
 /** «Договор, Тема +2» — имена разрешённых типов (первые два + счётчик). */
 function allowedNamesTail(allowed: readonly ProjectType[]): string {
   const rest = allowed.length - 2;

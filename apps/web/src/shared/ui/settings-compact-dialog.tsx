@@ -42,7 +42,10 @@ export function SettingsCompactDialog({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-x-hidden overflow-y-auto pr-1">
+        {/* Запас p-1.5 с компенсацией -m-1.5: кольцо выбранного образца
+            цвета (4px вне кружка) попадает в padding-бокс и не режется
+            кромкой скроллера, а содержимое остаётся на прежних местах. */}
+        <div className="-m-1.5 flex min-h-0 flex-1 flex-col gap-5 overflow-x-hidden overflow-y-auto p-1.5">
           {children}
         </div>
 

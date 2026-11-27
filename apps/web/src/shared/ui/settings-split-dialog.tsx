@@ -135,12 +135,15 @@ export function SettingsSplitDialog({
           </aside>
 
           {/* overflow-x-hidden: иначе вертикальная прокрутка включает
-              горизонтальную полосу от долей пикселя (как в окне атрибута). */}
+              горизонтальную полосу от долей пикселя (как в окне атрибута).
+              Запас p-1.5 с компенсацией -m-1.5: кольцо выбранного образца
+              цвета (4px вне кружка) попадает в padding-бокс и не режется
+              кромкой скроллера, а содержимое остаётся на прежних местах. */}
           <div
             role="tabpanel"
             id={`${id}-${active}-panel`}
             aria-labelledby={`${id}-${active}-tab`}
-            className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto pr-1"
+            className="-m-1.5 min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-1.5"
           >
             <div className="flex min-w-0 flex-col gap-5">{children}</div>
           </div>

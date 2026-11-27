@@ -1,10 +1,9 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { ProcessType, WorkflowDetail } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { NodeChip } from '@nodus/ui/components/node-chip';
 import { FilePenLine, MapPin, Workflow } from 'lucide-react';
 
-import { useProjectTypes } from '../../../../shared/api/projects-list.js';
 import { useCanManageWorkflows } from '../../../../shared/api/use-can-manage-workflows.js';
 import { useTypeSettingsStore } from '../../../../shared/ui/type-settings-store.js';
 import type { CardTabDef } from '../../../../shared/ui/entity-card/card-tab-strip.js';
@@ -16,7 +15,6 @@ import {
 import { CreationFormTab } from '../editor/creation-form-tab.js';
 import { RouteEditor } from '../editor/route-editor.js';
 import { useRouteDocStore } from '../../model/route-doc-store.js';
-import { creationUsageText } from './unified-meta.js';
 import { ProcessTypeCreationTab } from './process-type-creation-tab.js';
 
 type ProcessTab = 'route' | 'form' | 'creation';
@@ -65,12 +63,6 @@ export function ProcessTypeCard({
   idPrefix?: string;
   renderProjectTypeCreate?: (slot: ProcessTypeCreateSlot) => ReactNode;
 }) {
-  const { data: projectTypes } = useProjectTypes();
-  const aliveProjects = useMemo(
-    () => (projectTypes ?? []).filter((project) => project.archivedAt === null),
-    [projectTypes],
-  );
-  const usage = creationUsageText(type, aliveProjects);
   const locked = type.category !== 'task';
   const canManage = useCanManageWorkflows();
   const openSettings = useTypeSettingsStore((s) => s.openSettings);
@@ -130,24 +122,23 @@ export function ProcessTypeCard({
 
   return (
     <TypeCardFrame
-      meta={
-        locked ? (
-          <span className="flex min-w-0 items-center gap-2">
-            {usage ? <span className="truncate">{usage}</span> : null}
-            <NodeChip tone="muted" className="shrink-0">
-              {ui.automation.readOnly}
-            </NodeChip>
-          </span>
-        ) : (
-          (usage ?? undefined)
-        )
-      }
       tools={
         editorMounted && tab === 'route' ? (
           <div ref={setToolsHost} className="flex items-center gap-0.5" />
         ) : undefined
       }
-      status={editorMounted ? <div ref={setStatusHost} className="flex items-center" /> : undefined}
+      status={
+        editorMounted || locked ? (
+          <div className="flex items-center gap-1.5">
+            {editorMounted ? <div ref={setStatusHost} className="flex items-center" /> : null}
+            {locked ? (
+              <NodeChip tone="muted" className="shrink-0">
+                {ui.automation.readOnly}
+              </NodeChip>
+            ) : null}
+          </div>
+        ) : undefined
+      }
       primaryAction={
         editorMounted ? <div ref={setPrimaryHost} className="flex items-center" /> : undefined
       }

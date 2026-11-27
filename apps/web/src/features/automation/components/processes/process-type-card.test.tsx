@@ -268,10 +268,11 @@ describe('карточка типа процесса — рама с вклад�
     expect(screen.getByTestId('creation-tab')).toBeTruthy();
   });
 
-  it('подсказка «Используется в» — в тихой строке под баром, без крошки возврата', () => {
+  it('строки-подсказки «Используется в» над холстом нет: фон доходит до бара', () => {
     setup();
-    // Один живой тип проекта, тип разрешён везде (архивный не считается).
-    expect(screen.getByText(ui.automation.entry.usageEverywhere)).toBeTruthy();
+    // Тип разрешён везде — но строка места типа больше не рисуется (замечание
+    // владельца 27.11): над содержимым только бар, без полосы подсказки.
+    expect(screen.queryByText(ui.automation.entry.usageEverywhere)).toBeNull();
     expect(screen.queryByRole('button', { name: 'Договор' })).toBeNull();
   });
 
@@ -300,7 +301,7 @@ describe('карточка типа процесса — рама с вклад�
     expect(tab(TAB.form).getAttribute('id')).toBe('process-type-card-t1-form-tab');
   });
 
-  it('письмо (системный каталог): всё только для чтения, форма — просмотр, мета с чипом «Только просмотр»', () => {
+  it('письмо (системный каталог): всё только для чтения, форма — просмотр, чип «Только чтение» в баре', () => {
     setup({
       type: TYPE({
         id: 'l1',
@@ -312,7 +313,6 @@ describe('карточка типа процесса — рама с вклад�
       }),
     });
     expect(screen.getByText(ui.automation.readOnly)).toBeTruthy();
-    expect(screen.getByText(ui.automation.entry.usageEverywhere)).toBeTruthy();
     fireEvent.click(tab(TAB.form));
     expect(screen.getByTestId('form-tab').getAttribute('data-read-only')).toBe('yes');
     fireEvent.click(tab(TAB.creation));

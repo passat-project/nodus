@@ -16,10 +16,10 @@ import { CardTabStrip, type CardTabDef } from './entity-card/card-tab-strip.js';
  * поверх стека, а не переходом рамы «внутрь другого типа». Его нижняя
  * граница — та же линия, что под шапкой-поиском левой колонки (одна
  * горизонталь через весь экран, вертикальных швов между шапками нет).
- * Единая вертикаль слева: первый инструмент, первая вкладка и строка `meta`
- * стоят на одной линии с содержимым тулбаров вкладок (`px-6`). Имя и значок
- * типа справа НЕ повторяются — они живут в строке списка слева и в заголовке
- * карточки стека.
+ * Единая вертикаль слева: первый инструмент и первая вкладка стоят на одной
+ * линии с содержимым тулбаров вкладок (`px-6`). Имя и значок типа справа НЕ
+ * повторяются — они живут в строке списка слева и в заголовке карточки
+ * стека.
  */
 
 /** В баре уже 1120px (ниже полной ступени инструментов) у вкладки уходит
@@ -40,7 +40,6 @@ export function TypeCardFrame({
   quiet,
   settingsAction,
   primaryAction,
-  meta,
   bar,
   tabs,
   activeTab,
@@ -64,8 +63,6 @@ export function TypeCardFrame({
   settingsAction?: ReactNode;
   /** Главная кнопка — самая правая («Опубликовать»). */
   primaryAction?: ReactNode;
-  /** Подсказка места типа: «Используется в: …» (тихая строка под баром). */
-  meta?: ReactNode;
   /** Содержимое бара у поверхности БЕЗ вкладок («Без проекта»): тулбар списка. */
   bar?: ReactNode;
   tabs?: CardTabDef[];
@@ -84,7 +81,7 @@ export function TypeCardFrame({
           <div className="@container flex min-w-0 flex-1 items-center pr-6 pl-6">{bar}</div>
         ) : tabs && tabs.length > 0 && activeTab && onActivateTab ? (
           // pl-3 + px-3 полосы = 24px: вкладки начинаются на вертикали
-          // тулбаров вкладок и строки meta; pr-2 + pr-2 слота = 16px справа.
+          // тулбаров вкладок; pr-2 + pr-2 слота = 16px справа.
           // Полоса — контейнерный контекст: в баре уже 1120px у вкладок уходят
           // иконки, инструменты переходят на короткие подписи без иконок, а уже
           // 730px остаются одними иконками — названия вкладок читаются, а не
@@ -138,11 +135,6 @@ export function TypeCardFrame({
           <div className="min-w-0 flex-1" />
         )}
       </div>
-      {meta ? (
-        <div className="flex shrink-0 items-center gap-2 px-6 pt-1.5 pb-0.5 text-label-sm text-muted-foreground">
-          <span className="min-w-0 truncate">{meta}</span>
-        </div>
-      ) : null}
       <div className="min-h-0 flex-1">{children}</div>
     </div>
   );

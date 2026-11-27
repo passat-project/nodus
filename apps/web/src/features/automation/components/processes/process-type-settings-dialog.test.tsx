@@ -103,10 +103,10 @@ const selected = (label: string) =>
 const openSection = (label: string) => fireEvent.click(nav().getByRole('tab', { name: label }));
 const colorGroup = () => screen.getByRole('radiogroup', { name: ui.automation.fieldColor });
 const withoutProjectSwitch = () => screen.queryByRole('switch', { name: SCOPE.withoutProject });
-/** Тумблер «Без проекта» активного раздела — обязательно на экране. */
+/** Тумблер «Можно создавать без проекта» активного раздела — обязательно на экране. */
 const requireWithoutProjectSwitch = () => {
   const toggle = withoutProjectSwitch();
-  if (!toggle) throw new Error('нет тумблера «Без проекта»');
+  if (!toggle) throw new Error('нет тумблера «Можно создавать без проекта»');
   return toggle;
 };
 
@@ -210,8 +210,8 @@ describe('раздел «Основное» — сохранение немед�
   });
 });
 
-describe('раздел «Без проекта и папки» (#857, ревизия UI v3)', () => {
-  it('тумблер «Без проекта» сохраняет связку', () => {
+describe('раздел «Место создания» (#857, ревизия UI v3)', () => {
+  it('тумблер «Можно создавать без проекта» сохраняет связку', () => {
     setup();
     openSection(SECTION.placement);
     const withoutProject = requireWithoutProjectSwitch();
@@ -223,7 +223,7 @@ describe('раздел «Без проекта и папки» (#857, ревиз
     });
   });
 
-  it('тип папки — список в поповере: архивного вида нет, выбор сохраняется, «Где угодно» обнуляет', async () => {
+  it('ограничение по папке — список в поповере: архивного вида нет, выбор сохраняется, «Не ограничивать» обнуляет', async () => {
     setup();
     openSection(SECTION.placement);
     const trigger = screen.getByRole('button', {

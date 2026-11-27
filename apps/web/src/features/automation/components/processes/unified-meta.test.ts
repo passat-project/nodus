@@ -5,7 +5,6 @@ import { normalizeTypeConfig, ui } from '@nodus/contracts';
 import {
   allowedProjectTypes,
   creationMeta,
-  creationUsageText,
   kindUsageText,
   nodeKindMeta,
   projectTypeMeta,
@@ -85,18 +84,6 @@ describe('мета и подсказки единой колонки (#857)', ()
     expect(creationMeta(TYPE([P3], false), projects)).toBeNull();
     // живых типов проектов нет — только без проекта
     expect(creationMeta(TYPE([]), [])).toBe(ui.automation.entry.metaNoProjectOnly);
-  });
-
-  it('creationUsageText: подсказка шапки настроек типа', () => {
-    const projects = [PROJECT(P1, 'Договор'), PROJECT(P2, 'Тема'), PROJECT(P3, 'Тендер')];
-    expect(creationUsageText(TYPE([]), projects)).toBe(ui.automation.entry.usageEverywhere);
-    expect(creationUsageText(TYPE([P1, P2, P3]), projects)).toBe(
-      ui.automation.entry.metaNoProjectOnly,
-    );
-    expect(creationUsageText(TYPE([P3]), projects)).toBe(
-      ui.automation.entry.usageIn.replace('{names}', 'Договор, Тема'),
-    );
-    expect(creationUsageText(TYPE([P1], false), projects)).toBeNull();
   });
 
   it('kindUsageText/nodeKindMeta: сколько живых типов проектов разрешают', () => {

@@ -41,7 +41,7 @@ export const entryStrings = {
   /** Окно настроек типа задачи/письма (ревизия UI v3): разделы слева,
    *  содержимое активного — справа. */
   settingsSectionMain: 'Основное',
-  settingsSectionPlacement: 'Без проекта и папки',
+  settingsSectionPlacement: 'Место создания',
   settingsSectionCard: 'Карточка',
   settingsSectionRoles: 'Роли',
   /** Русские имена значков типа (набор `processTypeIconSchema`): подпись

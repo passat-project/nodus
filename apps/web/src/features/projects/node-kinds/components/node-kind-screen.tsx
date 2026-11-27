@@ -1,13 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Permission, ui } from '@nodus/contracts';
-import type { NodeKind, ProjectType } from '@nodus/contracts';
+import type { NodeKind } from '@nodus/contracts';
 import { Empty, EmptyTitle } from '@nodus/ui/components/empty';
 import { Skeleton } from '@nodus/ui/components/skeleton';
 import { FilePenLine, ListChecks, Share2 } from 'lucide-react';
 
 import { useNodeKinds } from '../../../../shared/api/node-kinds.js';
 import { useCanManageWorkflows } from '../../../../shared/api/use-can-manage-workflows.js';
-import { useProjectTypes } from '../../../../shared/api/projects-list.js';
 import { useAuthStore } from '../../../../shared/auth-store.js';
 import { useCanManageFields } from '../../../../shared/custom-fields/use-can-manage-fields.js';
 import type { CardTabDef } from '../../../../shared/ui/entity-card/card-tab-strip.js';
@@ -20,7 +19,6 @@ import { useTypeSettingsStore } from '../../../../shared/ui/type-settings-store.
 import { FormSaveState } from '../../../../shared/forms/builder/form-autosave.js';
 import type { RenderCreateField } from '../types.js';
 import { NodeKindFormTab, useNodeKindForm } from './node-kind-form-tab.js';
-import { kindUsageText } from './node-kind-summary.js';
 import { NodeKindUsageSection } from './node-kind-usage-section.js';
 import { NodeKindWorksSection } from './node-kind-works-section.js';
 
@@ -63,7 +61,6 @@ export function NodeKindScreen({
   const kindsQuery = useNodeKinds();
   const kinds = kindsQuery.data ?? [];
   const kind = kinds.find((entry) => entry.id === kindId) ?? null;
-  const { data: projectTypes } = useProjectTypes();
   const permissions = useAuthStore((s) => s.user?.permissions ?? []);
   const canSetup = permissions.includes(Permission.PROJECT_SETUP_MANAGE);
   const canManageWorkflows = useCanManageWorkflows();
@@ -100,7 +97,6 @@ export function NodeKindScreen({
     <NodeKindFrame
       key={kind.id}
       kind={kind}
-      projectTypes={projectTypes ?? []}
       canSetup={canSetup}
       canManageWorkflows={canManageWorkflows}
       renderCreateField={renderCreateField}
@@ -112,7 +108,6 @@ export function NodeKindScreen({
 
 function NodeKindFrame({
   kind,
-  projectTypes,
   canSetup,
   canManageWorkflows,
   renderCreateField,
@@ -120,7 +115,6 @@ function NodeKindFrame({
   renderProjectTypeCreate,
 }: {
   kind: NodeKind;
-  projectTypes: ProjectType[];
   canSetup: boolean;
   canManageWorkflows: boolean;
   renderCreateField?: RenderCreateField;
@@ -158,7 +152,6 @@ function NodeKindFrame({
 
   return (
     <TypeCardFrame
-      meta={kindUsageText(kind, projectTypes) || undefined}
       quiet={<FormSaveState state={form.state} onRetry={form.retry} />}
       settingsAction={
         <FrameSettingsButton
