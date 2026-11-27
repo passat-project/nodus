@@ -4,6 +4,7 @@ import { ui } from '@nodus/contracts';
 
 import type { PopupData } from '../shell/shell-ipc.js';
 import { DownloadCard } from './download-card.js';
+import { PopupCloseButton } from './popup-close-button.js';
 
 const t = ui.desktop;
 
@@ -277,6 +278,7 @@ export function PopupView() {
             download={data.download}
             paused={hovered || !awake}
             autoHideMs={autoHideMs}
+            onClose={close}
           />
         ) : (
           /* Клик по карточке — открыть источник (как клик по уведомлению в Telegram):
@@ -347,32 +349,14 @@ export function PopupView() {
         ) : null}
       </div>
 
-      {/* Крестик: SVG-глиф заполняет кнопку (канон Telegram notifyClose —
-       *  иконка ≈ 70% зоны), ховер ровно по видимой кнопке (фидбек 08.10).
-       *  Абсолютный — ВНЕ потока контента, доступен в любом режиме.
-       *  Чатовой карточке — верхний правый угол (канон); компактной карточке
-       *  скачивания (#1038, волна 25.11) — центр высоты: одна строка, крестик
-       *  НА ОДНОЙ ВЫСОТЕ с иконкой папки (вердикт владельца). */}
-      <button
-        type="button"
-        aria-label={ui.common.close}
-        onClick={close}
-        className={`text-muted-foreground hover:text-foreground hover:bg-accent absolute right-1 z-10 flex size-5 items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100 ${
-          data.download ? 'top-1/2 -translate-y-1/2' : 'top-1'
-        }`}
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2.6}
-          strokeLinecap="round"
-          className="size-3.5"
-          aria-hidden
-        >
-          <path d="M5 5l14 14M19 5 5 19" />
-        </svg>
-      </button>
+      {/* Крестик чатовой карточки: SVG-глиф заполняет кнопку (канон Telegram
+       *  notifyClose — иконка ≈ 70% зоны), ховер ровно по видимой кнопке
+       *  (фидбек 08.10). Абсолютный — ВНЕ потока контента, верхний правый угол
+       *  (канон). У карточки скачивания (#1068) крестик живёт в самой строке
+       *  (DownloadCard): его уровень не зависит от размера окна и состояния. */}
+      {data.download ? null : (
+        <PopupCloseButton className="absolute top-1 right-1 z-10" onClose={close} />
+      )}
 
       {/* «Ответить» — маленькая, поверх контента, только на hover (Telegram). */}
       {!replying && data.canReply ? (

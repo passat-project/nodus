@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { ui, type PopupDownload } from '@nodus/contracts';
 
 import { DownloadIcon, FolderIcon } from '../shell/icons.js';
+import { PopupCloseButton } from './popup-close-button.js';
 
 const t = ui.desktop;
 
@@ -12,25 +13,31 @@ const t = ui.desktop;
 const AUTO_HIDE_MS = 8000;
 
 /**
- * Карточка «Файл скачан» (#647, #1038) — КОМПАКТНАЯ ОДНОСТРОЧНАЯ (вердикт
- * владельца 25.11: круглый аватар был пародией на чатовые попапы, высота не
- * нужна; калибр — как у коллаута обновления портала): глиф скачивания ·
- * «Файл скачан» / «Скачано: N» / ошибка · имя файла (truncate, тултип) ·
- * иконка папки «Показать в папке» (кнопка без текста — не раздувает высоту).
- * Неуспех — красный заголовок, папки нет. Путь файла в JS не приходит:
- * команда reveal берёт его из серии в Rust и заново проверяет каталог
- * «Загрузки». Клик по карточке ничего не открывает — цели в портале нет.
+ * Карточка «Файл скачан» (#647, #1038) — того же размера, что обычная карточка
+ * уведомления (вердикт владельца 27.11.2026, #1068): ширина окна общая, контент
+ * по высоте аватара обычной карточки (`min-h-14` = 3.5rem) — окно совпадает по
+ * высоте с чатовым попапом. Строка одна и стоит по центру карточки: глиф
+ * скачивания · «Файл скачан» / «Скачано: N» / ошибка · имя файла (truncate,
+ * тултип) · иконка папки «Показать в папке» · крестик. Крестик — последний
+ * элемент строки, а не абсолютный по окну: его уровень одинаков в любом
+ * состоянии и серии (карточки подряд — крестики на одной линии). Неуспех —
+ * красный заголовок, папки нет. Путь файла в JS не приходит: команда reveal
+ * берёт его из серии в Rust и заново проверяет каталог «Загрузки». Клик по
+ * карточке ничего не открывает — цели в портале нет.
  */
 export function DownloadCard({
   download,
   paused,
   autoHideMs,
+  onClose,
 }: {
   download: PopupDownload;
   /** Курсор на карточке или окно Nodus неактивно: автоскрытие на паузе. */
   paused: boolean;
   /** Автоскрытие из payload (единый источник с Rust, как fadeMs). */
   autoHideMs: number;
+  /** Крестик — в строке (общий с чатовой карточкой компонент). */
+  onClose: () => void;
 }) {
   // Старый payload без счётчика (до #1038) — считаем одиночной загрузкой.
   const count = download.count ?? 1;
@@ -66,10 +73,12 @@ export function DownloadCard({
   }
 
   return (
-    <div className="flex min-w-0 shrink-0 items-center gap-2 pr-6">
+    // Строка по центру карточки: высота контента = аватару обычной карточки
+    // (min-h-14), поэтому окно и видимые поля такие же, как у уведомления.
+    <div className="flex min-h-14 min-w-0 items-center gap-2">
       <DownloadIcon className="text-muted-foreground size-4 shrink-0" />
-      {/* Имя файла в той же строке после «·»: понятно, ЧТО скачано, высота
-          при этом однострочная; сверхдлинное имя — truncate с тултипом. */}
+      {/* Имя файла в той же строке после «·»: понятно, ЧТО скачано; длинное
+          имя — truncate с тултипом. */}
       <span className="min-w-0 flex-1 truncate text-[13px] leading-4" title={download.fileName}>
         <span className={download.success ? 'font-semibold' : 'text-destructive font-semibold'}>
           {title}
@@ -89,6 +98,7 @@ export function DownloadCard({
           <FolderIcon className="size-4" />
         </button>
       ) : null}
+      <PopupCloseButton onClose={onClose} />
     </div>
   );
 }

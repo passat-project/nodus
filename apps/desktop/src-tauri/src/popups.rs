@@ -695,14 +695,15 @@ pub fn popup_close(app: AppHandle, window: WebviewWindow) {
 /// Валидация на границе IPC: конечное число в разумных пределах.
 #[tauri::command]
 pub fn popup_set_height(app: AppHandle, window: WebviewWindow, height: f64) -> Result<(), String> {
+    let label = window.label().to_string();
+    // Слот скачивания (#1038) — своя валидация и своя перестановка (#1068):
+    // его карточка может быть ниже общего предела личных попапов, общий
+    // `POPUP_MIN_H` к ней не применяется.
+    if crate::download_slot::is_slot(&label) {
+        return crate::download_slot::set_height(&app, height);
+    }
     if !height.is_finite() || !(POPUP_MIN_H..=POPUP_MAX_H).contains(&height) {
         return Err("invalid_payload".into());
-    }
-    let label = window.label().to_string();
-    // Слот скачивания (#1038) растёт вниз от панели — своя перестановка.
-    if crate::download_slot::is_slot(&label) {
-        crate::download_slot::set_height(&app, height);
-        return Ok(());
     }
     let changed = {
         let mut s = stack(&app);
