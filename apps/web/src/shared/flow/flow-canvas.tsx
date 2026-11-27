@@ -26,6 +26,7 @@ import type { Edge, Node } from '@xyflow/react';
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
 
+import { usePanelExpanded } from '../lib/panel-expanded.js';
 import { AnyNode } from './any-node.js';
 import { FlowAutoFit } from './flow-autofit.js';
 import { FlowMarkers } from './flow-markers.js';
@@ -271,68 +272,75 @@ export function FlowCanvas({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const measured = useMeasuredNodes(nodes, fitKey);
   const snap = useSnapDrag(measured.nodes, onNodeDrag, onNodeDragStop);
+  // В карточке стека холст монтируется ПОСЛЕ раскрытия панели: во время
+  // scale-анимации React Flow меряет ручки rect'ами, умноженными на масштаб
+  // анимации, — стрелки первого кадра шли по верху нод и «выравнивались»
+  // позже (наблюдение владельца 27.11). Вне панели значение — сразу true.
+  const expanded = usePanelExpanded();
   return (
     <div ref={wrapperRef} className={cn('relative h-full w-full', className)}>
       <FlowMarkers />
-      <ReactFlow
-        nodes={measured.nodes}
-        onNodesChange={measured.onNodesChange}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        onConnect={onConnect}
-        onReconnect={interactive ? onReconnect : undefined}
-        isValidConnection={isValidConnection}
-        onDelete={onDelete}
-        // Delete/Backspace удаляют выделенное, только когда фокус на холсте
-        // (или нигде): клавиши в панели, поповерах и диалогах — не удаляют.
-        onBeforeDelete={async () => {
-          const active = document.activeElement;
-          return (
-            !active || active === document.body || (wrapperRef.current?.contains(active) ?? false)
-          );
-        }}
-        onNodeDrag={snap.onNodeDrag}
-        onNodeDragStop={snap.onNodeDragStop}
-        onNodeClick={onNodeClick}
-        onEdgeClick={onEdgeClick}
-        onPaneClick={onPaneClick}
-        nodesDraggable={interactive}
-        nodesConnectable={interactive}
-        edgesReconnectable={interactive}
-        reconnectRadius={6}
-        elementsSelectable={interactive || onNodeClick !== undefined}
-        deleteKeyCode={interactive ? DELETE_KEYS : null}
-        nodesFocusable={interactive}
-        edgesFocusable={interactive}
-        connectionMode={ConnectionMode.Loose}
-        connectionRadius={24}
-        // Нижняя граница — только для кнопки «Вписать»: длинный маршрут виден
-        // целиком; рабочие виды не опускаются ниже `WORK_ZOOM_FLOOR`.
-        minZoom={CANVAS_MIN_ZOOM}
-        maxZoom={1.6}
-        attributionPosition="bottom-right"
-        ariaLabelConfig={ARIA}
-        // Выделение рамкой не нужно: выбор — клик по узлу/ребру.
-        selectionOnDrag={false}
-        panOnScroll
-        zoomOnScroll={false}
-        preventScrolling
-      >
-        <Background variant={BackgroundVariant.Dots} gap={28} size={1} />
-        <Controls
-          position="bottom-left"
-          showInteractive={false}
-          fitViewOptions={FIT}
-          className="flow-controls"
+      {expanded ? (
+        <ReactFlow
+          nodes={measured.nodes}
+          onNodesChange={measured.onNodesChange}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          onConnect={onConnect}
+          onReconnect={interactive ? onReconnect : undefined}
+          isValidConnection={isValidConnection}
+          onDelete={onDelete}
+          // Delete/Backspace удаляют выделенное, только когда фокус на холсте
+          // (или нигде): клавиши в панели, поповерах и диалогах — не удаляют.
+          onBeforeDelete={async () => {
+            const active = document.activeElement;
+            return (
+              !active || active === document.body || (wrapperRef.current?.contains(active) ?? false)
+            );
+          }}
+          onNodeDrag={snap.onNodeDrag}
+          onNodeDragStop={snap.onNodeDragStop}
+          onNodeClick={onNodeClick}
+          onEdgeClick={onEdgeClick}
+          onPaneClick={onPaneClick}
+          nodesDraggable={interactive}
+          nodesConnectable={interactive}
+          edgesReconnectable={interactive}
+          reconnectRadius={6}
+          elementsSelectable={interactive || onNodeClick !== undefined}
+          deleteKeyCode={interactive ? DELETE_KEYS : null}
+          nodesFocusable={interactive}
+          edgesFocusable={interactive}
+          connectionMode={ConnectionMode.Loose}
+          connectionRadius={24}
+          // Нижняя граница — только для кнопки «Вписать»: длинный маршрут виден
+          // целиком; рабочие виды не опускаются ниже `WORK_ZOOM_FLOOR`.
+          minZoom={CANVAS_MIN_ZOOM}
+          maxZoom={1.6}
+          attributionPosition="bottom-right"
+          ariaLabelConfig={ARIA}
+          // Выделение рамкой не нужно: выбор — клик по узлу/ребру.
+          selectionOnDrag={false}
+          panOnScroll
+          zoomOnScroll={false}
+          preventScrolling
         >
-          {controls}
-        </Controls>
-        <FlowAutoFit fitKey={fitKey} graph={measured.nodes} duration={fitDuration} />
-        <ZoomProbe zoomRef={snap.zoomRef} />
-        <SnapGuideLines guides={snap.guides} />
-        {children}
-      </ReactFlow>
+          <Background variant={BackgroundVariant.Dots} gap={28} size={1} />
+          <Controls
+            position="bottom-left"
+            showInteractive={false}
+            fitViewOptions={FIT}
+            className="flow-controls"
+          >
+            {controls}
+          </Controls>
+          <FlowAutoFit fitKey={fitKey} graph={measured.nodes} duration={fitDuration} />
+          <ZoomProbe zoomRef={snap.zoomRef} />
+          <SnapGuideLines guides={snap.guides} />
+          {children}
+        </ReactFlow>
+      ) : null}
     </div>
   );
 }

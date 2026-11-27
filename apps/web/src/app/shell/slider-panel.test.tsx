@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ui } from '@nodus/contracts';
 
+import { usePanelExpanded } from '../../shared/lib/panel-expanded.js';
 import { SliderPanel, type SliderPanelHandle } from './slider-panel.js';
 
 // Видимость полосы читает роутер — вне RouterProvider подменяем (не предмет теста).
@@ -61,14 +62,17 @@ describe('SliderPanel: закрытие схлопыванием в источн
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('после раскрытия промоушен снимается — слой перерисовывается в 1:1 (#969)', () => {
+  it('после раскрытия промоушен снимается, панель объявлена раскрытой (#969, #857)', async () => {
+    function ExpandedProbe() {
+      return <span data-testid="expanded">{usePanelExpanded() ? 'yes' : 'no'}</span>;
+    }
     render(
       <SliderPanel
         title="Карточка"
         onClose={vi.fn()}
         sourceRect={{ x: 0, y: 0, width: 10, height: 10 }}
       >
-        <div />
+        <ExpandedProbe />
       </SliderPanel>,
     );
     const section = screen.getByRole('dialog');
@@ -82,6 +86,9 @@ describe('SliderPanel: закрытие схлопыванием в источн
 
     fireEvent.animationEnd(section);
     expect(section.style.willChange).toBe('');
+    // Холсты внутри узнают, что масштаб анимации снят: React Flow
+    // монтируется вне scale и меряет ручки правильно с первого кадра (#857).
+    expect((await screen.findByTestId('expanded')).textContent).toBe('yes');
   });
 
   it('открытие без источника — постоянного промоушена нет (#969)', () => {

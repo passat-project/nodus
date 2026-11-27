@@ -22,6 +22,7 @@ import { cn } from '@nodus/ui/lib/utils';
 
 import { inputModality } from '../../shared/lib/input-modality.js';
 import { hasOpenPopperLayer } from '../../shared/lib/overlay-layers.js';
+import { PanelExpandedContext } from '../../shared/lib/panel-expanded.js';
 import { SurfaceVisibilityProvider } from '../../shared/lib/surface-visibility.js';
 import { shellPanelHeight } from '../../shared/desktop/desktop-bridge.js';
 import { CardHeaderActionsContext } from './card-header-actions.js';
@@ -312,30 +313,36 @@ export function SliderPanel({
    *  дерева карточки (десятки мс на первом открытии) не задерживает её кадры. */
   const [contentMounted, setContentMounted] = useState(false);
   useEffect(() => {
-    let raf2 = 0;
-    const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => setContentMounted(true));
+    let raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(() => setContentMounted(true));
     });
-    return () => {
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
-    };
+    return () => cancelAnimationFrame(raf);
   }, []);
 
   // Раскрытие осело — снимаем промоушен слоя (#969): постоянный `will-change`
-  // держал содержимое растром масштаба источника, и текст/фото «мылились» до
-  // первой перерисовки. Слушатель нативный: animationend всплывает и от
-  // дочерних content-fade — фильтруем по target (анимация самой панели).
-  // Во время закрытия промоушен НЕ снимаем: он только что поставлен перед
-  // WAAPI-схлопыванием и должен жить до конца анимации.
+  // держал содержимое растром масштаба источника. animationend всплывает и от
+  // дочерних content-fade — фильтруем по target; при закрытии промоушен живёт
+  // до конца WAAPI. Тем же событием панель объявляется РАСКРЫТОЙ: холсты
+  // (React Flow) монтируются только вне scale — иначе ручки меряются rect'ами
+  // со масштабом анимации и стрелки идут по верху нод (#857).
+  const [expanded, setExpanded] = useState(false);
   useEffect(() => {
     const el = panelRef.current;
-    if (!el || !sourceRect) return;
+    if (!el) return;
     const onEnd = (event: AnimationEvent) => {
-      if (event.target === el && !closingRef.current) setFlipPromoted(false);
+      if (event.target !== el || closingRef.current) return;
+      if (sourceRect) setFlipPromoted(false);
+      setExpanded(true);
     };
     el.addEventListener('animationend', onEnd);
-    return () => el.removeEventListener('animationend', onEnd);
+    // Нет анимации (reduced motion/тесты) — уже раскрыто; таймер — страховка
+    // на случай потерянного animationend.
+    if (getComputedStyle(el).animationName === 'none') setExpanded(true);
+    const fallback = window.setTimeout(() => setExpanded(true), 700);
+    return () => {
+      el.removeEventListener('animationend', onEnd);
+      window.clearTimeout(fallback);
+    };
   }, [sourceRect]);
 
   /** FLIP-переменные раскрытия: геометрия панели детерминирована (inset-2
@@ -452,16 +459,21 @@ export function SliderPanel({
                 {headerActions}
               </div>
             </header>
-            <div
-              className={cn(
-                'min-h-0 flex-1 overflow-hidden transition-opacity duration-100',
-                fadeContent && sourceRect && !closing && 'content-fade',
-                // Фаза 1 закрытия: тело гаснет за 100 мс (см. хром выше).
-                closing && 'opacity-0',
-              )}
-            >
-              {contentMounted ? children : null}
-            </div>
+            {/* Холсты внутри узнают, что масштаб анимации снят: React Flow
+                монтируется вне scale и меряет ручки правильно с первого кадра
+                (`shared/lib/panel-expanded.tsx`). */}
+            <PanelExpandedContext.Provider value={expanded}>
+              <div
+                className={cn(
+                  'min-h-0 flex-1 overflow-hidden transition-opacity duration-100',
+                  fadeContent && sourceRect && !closing && 'content-fade',
+                  // Фаза 1 закрытия: тело гаснет за 100 мс (см. хром выше).
+                  closing && 'opacity-0',
+                )}
+              >
+                {contentMounted ? children : null}
+              </div>
+            </PanelExpandedContext.Provider>
           </section>
         </CardHeaderActionsContext.Provider>
       </SurfaceVisibilityProvider>

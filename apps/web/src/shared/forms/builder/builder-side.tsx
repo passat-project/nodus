@@ -1,5 +1,6 @@
 import { ui } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
+import { NodeLabel } from '@nodus/ui/components/node-label';
 import {
   AlignLeft,
   Calendar,
@@ -65,20 +66,23 @@ function PaletteRow({
 /**
  * Палитра полей окна: «Добавить в окно» — поля, которых в окне нет (клик —
  * в конец окна), и «Блоки». Два вида: `chips` — лоток под листом в окне
- * перехода (как было, #496); `rows` — вертикальный список левой колонки
- * вкладки «Форма создания» (ревизия 27.11), грамматика списка типов окна
- * атрибута.
+ * перехода (как было, #496); `rows` — вертикальный список панели полей
+ * справа во вкладке «Форма создания» (ревизия 27.11), грамматика списка
+ * типов окна атрибута. `header` — собственная шапка секции; в панели её
+ * рисует `BuilderRail` (шапка панели в грамматике панели узла).
  */
 export function BuilderTray<X>({
   value,
   host,
   onChange,
   layout = 'chips',
+  header = true,
 }: {
   value: BuilderValue<X>;
   host: FormBuilderHost<X>;
   onChange: (next: BuilderValue<X>) => void;
   layout?: 'chips' | 'rows';
+  header?: boolean;
 }) {
   const rows = layout === 'rows';
   const full = fieldCount(value.items) >= host.limits.fields;
@@ -93,21 +97,23 @@ export function BuilderTray<X>({
     <section
       className={rows ? 'flex flex-col gap-2' : 'flex flex-col gap-2 rounded-xl bg-muted/40 p-4'}
     >
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1">
-        <h3 className="shrink-0 text-sm font-medium whitespace-nowrap">{b.tray}</h3>
-        {host.onCreateField ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            className="ml-auto shrink-0"
-            onClick={host.onCreateField}
-          >
-            <Plus className="size-3" strokeWidth={2} />
-            {b.createField}
-          </Button>
-        ) : null}
-      </div>
+      {header ? (
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1">
+          <h3 className="shrink-0 text-sm font-medium whitespace-nowrap">{b.tray}</h3>
+          {host.onCreateField ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              className="ml-auto shrink-0"
+              onClick={host.onCreateField}
+            >
+              <Plus className="size-3" strokeWidth={2} />
+              {b.createField}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       {available.length === 0 && blocks.length === 0 ? (
         <p className="text-xs text-muted-foreground">{b.trayEmpty}</p>
       ) : (
@@ -206,10 +212,13 @@ export function BuilderTray<X>({
   );
 }
 
-/** Левая колонка вкладки «Форма создания» (ревизия 27.11): палитра полей
- *  вертикальным списком и «Закрепить также» — только там, где у формы есть
- *  замки (тип задачи/письма). В просмотре остаются одни замки: добавлять
- *  нечего. */
+/** Панель полей вкладки «Форма создания» (ревизия 27.11, второй заход —
+ *  вердикт владельца: «справа как выдвижная панель, как панель настройки
+ *  узла»). Грамматика `EditorPanel`: шапка `h-14` с подписью раздела и
+ *  границей, прокручиваемое содержимое; сама панель — в `FormTabLayout`
+ *  (фон `bg-card`, бордер слева, ширина 384). Внутри — палитра полей
+ *  вертикальным списком и «Закрепить также» там, где у формы есть замки
+ *  (тип задачи/письма); в просмотре добавлять нечего — остаются одни замки. */
 export function BuilderRail<X>({
   value,
   host,
@@ -222,13 +231,32 @@ export function BuilderRail<X>({
   onChange: (next: BuilderValue<X>) => void;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-5">
+    <>
       {readOnly ? null : (
-        <BuilderTray value={value} host={host} onChange={onChange} layout="rows" />
+        <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
+          <NodeLabel label={b.tray} />
+          {host.onCreateField ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              className="ml-auto shrink-0"
+              onClick={host.onCreateField}
+            >
+              <Plus className="size-3" strokeWidth={2} />
+              {b.createField}
+            </Button>
+          ) : null}
+        </div>
       )}
-      {host.lockMode ? (
-        <BuilderAlsoLocks value={value} host={host} readOnly={readOnly} onChange={onChange} />
-      ) : null}
-    </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-3">
+        {readOnly ? null : (
+          <BuilderTray value={value} host={host} onChange={onChange} layout="rows" header={false} />
+        )}
+        {host.lockMode ? (
+          <BuilderAlsoLocks value={value} host={host} readOnly={readOnly} onChange={onChange} />
+        ) : null}
+      </div>
+    </>
   );
 }

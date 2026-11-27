@@ -131,14 +131,15 @@ export function FormBuilderSkeleton() {
 }
 
 /**
- * Каркас вкладки «Форма создания» (ревизия 27.11, замечание владельца):
- * ДВЕ панели на всю высоту вкладки, сама вкладка не прокручивается. Слева
- * (`rail`) — палитра полей и «Закрепить также» со своей прокруткой; за
- * кнопками не нужно никуда лезть. По центру — подводка и лист окна: лист
- * заполняет остаток высоты и центрирован по ширине, прокручивается только
- * его содержимое. Узкая рама (меньше 40rem содержимого — колонка списка и
- * карточка стека на 1280) переходит в две ступени: палитра сверху со своей
- * прокруткой, лист под ней — форма не сжимается в полоску.
+ * Каркас вкладки «Форма создания» (ревизия 27.11, заход 2 — вердикт
+ * владельца): лист окна по центру на всю высоту вкладки, а палитра полей —
+ * СПРАВА, отдельной панелью в грамматике панели настройки узла процесса
+ * (`EditorPanel`/`SidePanel`: шапка `h-14`, `border-l`, фон `bg-card`,
+ * ширина 384, своя прокрутка) — «чтобы всё было однообразно в одном стиле».
+ * За кнопками не нужно никуда лезть: панель всегда на месте. Узкая рама
+ * (меньше 56rem содержимого — карточка стека на 1280–1600) складывает
+ * панель наверх со своей прокруткой, лист — под ней: форма не сжимается в
+ * полоску.
  */
 export function FormTabLayout({
   lead,
@@ -148,7 +149,7 @@ export function FormTabLayout({
 }: {
   lead: ReactNode;
   notice?: ReactNode;
-  /** Левая колонка; `null` — панели нет (просмотр без палитры). */
+  /** Панель полей справа; `null` — панели нет (просмотр без палитры). */
   rail?: ReactNode;
   children: ReactNode;
 }) {
@@ -157,9 +158,9 @@ export function FormTabLayout({
     // контейнерного запроса действуют только на потомков, на самом элементе
     // с `@container` они мертвы (gotcha #497).
     <div className="@container/form flex min-h-0 min-w-0 flex-1">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col @min-[40rem]/form:flex-row">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col @min-[56rem]/form:flex-row">
         {rail ? (
-          <aside className="flex max-h-[38%] w-full shrink-0 flex-col overflow-y-auto border-b border-border/60 px-6 py-3 @min-[40rem]/form:max-h-none @min-[40rem]/form:w-64 @min-[40rem]/form:border-r @min-[40rem]/form:border-b-0 @min-[40rem]/form:py-4 @min-[40rem]/form:pr-4 @min-[40rem]/form:pl-6 @min-[80rem]/form:w-72">
+          <aside className="order-first flex max-h-[38%] w-full shrink-0 flex-col overflow-hidden border-b border-border bg-card @min-[56rem]/form:order-last @min-[56rem]/form:max-h-none @min-[56rem]/form:w-[384px] @min-[56rem]/form:border-b-0 @min-[56rem]/form:border-l">
             {rail}
           </aside>
         ) : null}
