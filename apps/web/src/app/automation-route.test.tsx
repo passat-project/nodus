@@ -163,10 +163,10 @@ describe('композиция раздела «Автоматизация» (#8
     cleanup();
     render(slot({ typeId: 'p2' }) as React.ReactElement);
     expect(screen.getByTestId('workspace').dataset.type).toBe('p2');
-    // Окно создания типа задачи — код фичи automation: хост уровня app
-    // подставляет его фиче projects (I6).
+    // Слота создания у рабочей области больше НЕТ (модель связей #857):
+    // создание типов — у «+» колонки, в типах — подключение пикером.
     const props = workspaceProps.value!;
-    expect(typeof props.renderProcessTypeCreate).toBe('function');
+    expect(props.renderProcessTypeCreate).toBeUndefined();
   });
 
   it('слоты окон создания несут основу-копию', () => {

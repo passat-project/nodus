@@ -15,6 +15,7 @@ describe('ProjectReaderProvider — место создания (#665)', () => {
     };
     const provider = new ProjectReaderProvider(
       projects as never,
+      { liveProjectTypeIds: vi.fn(async () => []) } as never,
       { rolesByProject: vi.fn(), userIdsBySources: vi.fn() } as never,
       { findById: vi.fn() } as never,
       { isEnabled: vi.fn(async () => true) } as never,
@@ -24,6 +25,7 @@ describe('ProjectReaderProvider — место создания (#665)', () => {
 
     const disabled = new ProjectReaderProvider(
       projects as never,
+      { liveProjectTypeIds: vi.fn(async () => []) } as never,
       { rolesByProject: vi.fn(), userIdsBySources: vi.fn() } as never,
       { findById: vi.fn() } as never,
       { isEnabled: vi.fn(async () => false) } as never,
@@ -42,6 +44,7 @@ describe('ProjectReaderProvider — место создания (#665)', () => {
     };
     const provider = new ProjectReaderProvider(
       { findById: vi.fn() } as never,
+      { liveProjectTypeIds: vi.fn(async () => []) } as never,
       { rolesByProject: vi.fn(), userIdsBySources: vi.fn() } as never,
       nodes as never,
       { isEnabled: vi.fn(async () => true) } as never,

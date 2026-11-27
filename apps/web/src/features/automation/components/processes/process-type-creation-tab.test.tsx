@@ -99,9 +99,6 @@ function setup(
     canSave?: boolean;
     projects?: ProjectType[];
     kinds?: NodeKind[];
-    renderProjectTypeCreate?: Parameters<
-      typeof ProcessTypeCreationTab
-    >[0]['renderProjectTypeCreate'];
   } = {},
 ) {
   vi.mocked(useProjectTypes).mockReturnValue({
@@ -115,11 +112,7 @@ function setup(
     data: props.kinds ?? [kind('k1', 'Комплект'), kind('k2', 'Здание')],
   } as never);
   render(
-    <ProcessTypeCreationTab
-      type={type(props.excluded ?? [])}
-      canSave={props.canSave ?? true}
-      renderProjectTypeCreate={props.renderProjectTypeCreate}
-    />,
+    <ProcessTypeCreationTab type={type(props.excluded ?? [])} canSave={props.canSave ?? true} />,
   );
 }
 
@@ -139,54 +132,43 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('вкладка «Где создаётся» типа процесса — журнал типов проектов (#665, #857)', () => {
-  it('живые типы проектов строками: сводка типов папок и тумблер по модели исключений', () => {
-    setup();
-    // Архивный тип проекта в связке не участвует.
-    expect(screen.queryByText('Архивный')).toBeNull();
-    expect(screen.getByText('Договор')).toBeTruthy();
+describe('вкладка «Где создаётся» типа процесса — список связей (#665, #857)', () => {
+  it('живые ПОДКЛЮЧЁННЫЕ типы проектов строками; исключённый и архивный скрыты', () => {
+    setup({ excluded: [P1] });
     expect(screen.getByText('Тема')).toBeTruthy();
-    // «Комплект» разрешён явным списком, «Здание» — нет: 1 из 2.
-    expect(screen.getAllByText('1 из 2').length).toBeGreaterThan(0);
-    // Пустой явный список — все типы папок.
+    // Исключённый и архивный типы в списке связей не участвуют.
+    expect(screen.queryByText('Договор')).toBeNull();
+    expect(screen.queryByText('Архивный')).toBeNull();
+    // Сводка типов папок строки — как в журнале типов проектов (у «Темы»
+    // kindIds=null — «все типы»; «Договор» с явным списком исключён и скрыт).
     expect(screen.getAllByText('Все типы · 2').length).toBeGreaterThan(0);
-    expect(screen.getByRole('switch', { name: /Договор/ }).getAttribute('aria-checked')).toBe(
-      'true',
-    );
+    expect(screen.getByText(/Подключено: 1/)).toBeTruthy();
   });
 
-  it('тумблер строки запрещает/разрешает тип проекта в связке', () => {
+  it('пикер подключает тип проекта: в нём — только неподключённые живые', async () => {
+    setup({ excluded: [P1] });
+    fireEvent.click(screen.getByRole('button', { name: ui.automation.entry.connectProjectType }));
+    // Запросы — ВНУТРИ окна пикера: за ним живёт таблица связей с теми же именами.
+    const picker = within(screen.getByRole('dialog'));
+    expect(picker.getByText('Договор')).toBeTruthy();
+    expect(picker.queryByText('Тема')).toBeNull();
+    expect(picker.queryByText('Архивный')).toBeNull();
+    fireEvent.click(picker.getByRole('checkbox', { name: 'Договор' }));
+    fireEvent.click(picker.getByRole('button', { name: ui.automation.entry.connectAction }));
+    expect(api.mutate).toHaveBeenCalledWith({
+      typeId: 't1',
+      creation: expect.objectContaining({ excludedProjectTypeIds: [] }),
+    });
+  });
+
+  it('«Отключить» в меню строки пишет исключение', async () => {
     setup();
-    fireEvent.click(screen.getByRole('switch', { name: /Договор/ }));
+    const menu = await openRowMenu('Договор');
+    fireEvent.click(within(menu).getByRole('menuitem', { name: ui.automation.entry.disconnect }));
     expect(api.mutate).toHaveBeenCalledWith({
       typeId: 't1',
       creation: expect.objectContaining({ excludedProjectTypeIds: [P1] }),
     });
-  });
-
-  it('исключённый тип — тумблер выключен; включение снимает исключение', () => {
-    setup({ excluded: [P1] });
-    const toggle = screen.getByRole('switch', { name: /Договор/ });
-    expect(toggle.getAttribute('aria-checked')).toBe('false');
-    fireEvent.click(toggle);
-    expect(api.mutate).toHaveBeenCalledWith({
-      typeId: 't1',
-      creation: expect.objectContaining({ excludedProjectTypeIds: [] }),
-    });
-  });
-
-  it('«Разрешить во всех типах проектов» видна при исключениях и снимает их', () => {
-    setup({ excluded: [P1, P2] });
-    fireEvent.click(screen.getByRole('button', { name: ui.automation.creationScope.allowAll }));
-    expect(api.mutate).toHaveBeenCalledWith({
-      typeId: 't1',
-      creation: expect.objectContaining({ excludedProjectTypeIds: [] }),
-    });
-  });
-
-  it('без исключений кнопки «Разрешить везде» нет — связка уже полная', () => {
-    setup();
-    expect(screen.queryByRole('button', { name: ui.automation.creationScope.allowAll })).toBeNull();
   });
 
   it('поиск в шапке фильтрует строки; без совпадений — пустое состояние', () => {
@@ -201,82 +183,39 @@ describe('вкладка «Где создаётся» типа процесса
     expect(screen.getByText(ui.automation.entry.searchEmpty)).toBeTruthy();
   });
 
-  it('главная кнопка создаёт тип проекта: слот открывается и закрывается по onCreated', () => {
-    const onCreated = vi.fn();
-    setup({
-      renderProjectTypeCreate: ({ onClose, onCreated: onCreatedSlot }) => (
-        <div data-testid="project-create-dialog">
-          <button
-            type="button"
-            onClick={() => {
-              onCreatedSlot(P1);
-              onCreated();
-            }}
-          >
-            dialog-created
-          </button>
-          <button type="button" onClick={onClose}>
-            dialog-close
-          </button>
-        </div>
-      ),
+  it('чекбоксы вернулись (пакетное отключение), тумблеров и команд «над всеми» нет', () => {
+    setup({ excluded: [P1] });
+    // Строчные чекбоксы есть (заголовочный «выбрать все» + строки).
+    expect(screen.getAllByRole('checkbox').length).toBeGreaterThan(0);
+    expect(screen.queryAllByRole('switch')).toHaveLength(0);
+    expect(screen.queryAllByRole('button', { name: /^Разрешить|^Запретить/ })).toHaveLength(0);
+    // Пачка: выделили «Тему» — островок с «Отключить выбранные» пишет исключение.
+    fireEvent.click(within(rowOf('Тема')).getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: ui.automation.entry.disconnectSelected }));
+    // Исключение ДОПОЛНЯЕТ список: P1 уже был исключён настройкой сета.
+    expect(api.mutate).toHaveBeenCalledWith({
+      typeId: 't1',
+      creation: expect.objectContaining({
+        excludedProjectTypeIds: ['11111111-1111-4111-8111-111111111111', P2],
+      }),
     });
-
-    fireEvent.click(screen.getByRole('button', { name: ui.automation.entry.createProjectType }));
-    expect(screen.getByTestId('project-create-dialog')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'dialog-created' }));
-    expect(onCreated).toHaveBeenCalledTimes(1);
-    // После создания окно закрыто: список перечитан, строка придёт включённой.
-    expect(screen.queryByTestId('project-create-dialog')).toBeNull();
   });
 
-  it('закрытие окна создания связку не пишет', () => {
-    setup({
-      renderProjectTypeCreate: ({ onClose }) => (
-        <div data-testid="project-create-dialog">
-          <button type="button" onClick={onClose}>
-            dialog-close
-          </button>
-        </div>
-      ),
-    });
-    fireEvent.click(screen.getByRole('button', { name: ui.automation.entry.createProjectType }));
-    fireEvent.click(screen.getByRole('button', { name: 'dialog-close' }));
-    expect(screen.queryByTestId('project-create-dialog')).toBeNull();
-    expect(api.mutate).not.toHaveBeenCalled();
-  });
-
-  it('список без чекбоксов: массовых команд над выбранными строками нет', () => {
-    setup({ excluded: [P1, P2] });
-    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
-    // В тулбаре осталась одна команда «над всеми» — «Разрешить во всех типах
-    // проектов»; кнопок «над выбранными строками» и островка нет.
-    const commands = screen.getAllByRole('button', { name: /^Разрешить|^Запретить/ });
-    expect(commands.map((button) => button.textContent)).toEqual([
-      ui.automation.creationScope.allowAll,
-    ]);
-    // Сводка связки — тихим текстом перед командами.
-    expect(screen.getByText('1 из 2')).toBeTruthy();
-  });
-
-  it('клик по строке (не по тумблеру) кладёт карточку типа проекта ПОВЕРХ с прямоугольником строки', () => {
+  it('клик по строке кладёт карточку типа проекта ПОВЕРХ с прямоугольником строки', () => {
     setup();
     const rect = withRowRect(rowOf('Договор'));
     fireEvent.click(rowOf('Договор'));
     expect(openCardSpy.mock.calls).toEqual([[{ kind: 'project-type', id: P1 }, rect]]);
-    // Тумблер — элемент строки: его клик правит связку и не открывает карточку.
-    fireEvent.click(screen.getByRole('switch', { name: /Договор/ }));
-    expect(api.mutate).toHaveBeenCalledWith({
-      typeId: 't1',
-      creation: expect.objectContaining({ excludedProjectTypeIds: [P1] }),
-    });
-    expect(openCardSpy).toHaveBeenCalledTimes(1);
   });
 
   it('«⋯» строки: «Открыть» — карточка в стек, «Настройки типа…» — общий стор настроек', async () => {
     setup();
     const menu = await openRowMenu('Тема');
-    expect(menuLabels(menu)).toEqual([ui.common.open, ui.automation.menuSettingsType]);
+    expect(menuLabels(menu)).toEqual([
+      ui.common.open,
+      ui.automation.menuSettingsType,
+      ui.automation.entry.disconnect,
+    ]);
     fireEvent.click(within(menu).getByRole('menuitem', { name: ui.automation.menuSettingsType }));
     expect(useTypeSettingsStore.getState().target).toEqual({ kind: 'project-type', id: P2 });
     expect(openCardSpy).not.toHaveBeenCalled();
@@ -287,14 +226,20 @@ describe('вкладка «Где создаётся» типа процесса
     expect(openCardSpy.mock.calls).toEqual([[{ kind: 'project-type', id: P1 }]]);
   });
 
-  it('просмотр без права: кнопки создания нет, тумблеры недоступны', () => {
+  it('просмотр без права: пикера нет, «Отключить» в меню нет', async () => {
     setup({ canSave: false });
     expect(
-      screen.queryByRole('button', { name: ui.automation.entry.createProjectType }),
+      screen.queryByRole('button', { name: ui.automation.entry.connectProjectType }),
     ).toBeNull();
-    const toggle = screen.getByRole('switch', { name: /Договор/ });
-    expect(toggle.hasAttribute('disabled') || toggle.getAttribute('data-disabled') !== null).toBe(
-      true,
-    );
+    const menu = await openRowMenu('Договор');
+    expect(
+      within(menu).queryByRole('menuitem', { name: ui.automation.entry.disconnect }),
+    ).toBeNull();
+  });
+
+  it('все живые типы подключены — в пикере честная заглушка', () => {
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: ui.automation.entry.connectProjectType }));
+    expect(screen.getByText(ui.automation.entry.pickerNothingLeft)).toBeTruthy();
   });
 });

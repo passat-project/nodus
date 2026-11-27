@@ -98,6 +98,7 @@ export async function createProjectType(
     'created',
     Object.keys(input),
     actorId,
+    source?.id,
   );
   if (source) {
     await emitProjectTypeCopied(deps.eventBus, tx, created.id, source.id, actorId);

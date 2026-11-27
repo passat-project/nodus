@@ -1,10 +1,9 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { ProcessType, ProjectType } from '@nodus/contracts';
 import { allowedNodeKinds, typeConfigOf, ui, withProjectTypeAllowed } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
-import { Switch } from '@nodus/ui/components/switch';
 import { cn } from '@nodus/ui/lib/utils';
-import { Plus, RotateCcw } from 'lucide-react';
+import { Plus } from 'lucide-react';
 
 import { useOpenCard } from '../../../../app/shell/use-card-stack.js';
 import { useNodeKinds } from '../../../../shared/api/node-kinds.js';
@@ -12,9 +11,12 @@ import { useProjectTypes } from '../../../../shared/api/projects-list.js';
 import { useUpdateTypeCreation } from '../../../../shared/api/process-types-api.js';
 import { CardTabToolbar } from '../../../../shared/ui/entity-card/card-tab-toolbar.js';
 import { identityTone } from '../../../../shared/ui/identity-tone.js';
+import { CatalogPicker, CatalogPickerTile } from '../../../../shared/ui/catalog-picker.js';
 import { useTypeSettingsStore } from '../../../../shared/ui/type-settings-store.js';
 import { ProcessTypeGlyph } from '../../../../shared/workflow/process-type-icon.js';
 import { DataTable, type DataTableField } from '../../../../shared/views/data-table.js';
+import { BulkIsland } from '../../../../shared/views/bulk-island.js';
+import { useRowSelection } from '../../../../shared/views/use-row-selection.js';
 import type { FilterFieldDef } from '../../../../shared/views/list-filters.js';
 import { ListToolbar, ListToolbarSummary } from '../../../../shared/views/list-toolbar.js';
 import { useListToolbar } from '../../../../shared/views/use-list-toolbar.js';
@@ -24,36 +26,21 @@ import { ViewSettings } from '../../../../shared/views/view-settings.js';
 const VIEW_KEY = 'processes.type-scope';
 
 /**
- * Вкладка «Где создаётся» типа задачи/письма (#665, ADR-0041 п.9; ревизия
- * UI v3) — БОЛЬШАЯ поверхность: список типов проектов в грамматике журналов
- * портала на всю ширину вкладки, без чекбоксов и островка массовых команд.
- * Тумблер — элемент строки; «Разрешить во всех типах проектов» снимает все
- * исключения — тихая команда справа в тулбаре, рядом со сводкой. Клик по
- * строке открывает карточку типа проекта ПОВЕРХ с анимацией из строки.
- * Главная кнопка создаёт тип проекта (он разрешает все типы по умолчанию —
- * связка сразу).
+ * Вкладка «Где создаётся» типа задачи/письма (#665, ADR-0041 п.9; модель
+ * связей, вердикт владельца 27.11) — список типов проектов, к которым тип
+ * ПОДКЛЮЧЁН, а не весь справочник с тумблерами. Подключение — пикером из
+ * справочника (`CatalogPicker`), создание типов проектов живёт у «+»
+ * колонки «Процессов», отключение — в меню строки. Клик по строке открывает
+ * карточку типа проекта ПОВЕРХ с анимацией из строки. Обе стороны связи
+ * пишут в настройку САМОГО типа — в типе проекта видно то же самое.
  */
-export function ProcessTypeCreationTab({
-  type,
-  canSave,
-  renderProjectTypeCreate,
-}: {
-  type: ProcessType;
-  canSave: boolean;
-  /** Окно создания типа проекта (слот фичи projects, I6). */
-  renderProjectTypeCreate?: (slot: {
-    onClose: () => void;
-    onCreated: (id: string) => void;
-    baseId?: string;
-  }) => ReactNode;
-}) {
+export function ProcessTypeCreationTab({ type, canSave }: { type: ProcessType; canSave: boolean }) {
   const projectTypes = useProjectTypes();
   const kindsQuery = useNodeKinds();
   const update = useUpdateTypeCreation();
   const toolbar = useListToolbar(VIEW_KEY);
   const openCard = useOpenCard();
   const openSettings = useTypeSettingsStore((s) => s.openSettings);
-  const [createOpen, setCreateOpen] = useState(false);
 
   const scope = typeConfigOf(type).creation;
   const kinds = useMemo(
@@ -70,42 +57,47 @@ export function ProcessTypeCreationTab({
             .replace('{total}', String(kinds.length)),
     [kinds],
   );
-  const rows = useMemo(
-    () => (projectTypes.data ?? []).filter((item) => item.archivedAt === null),
-    [projectTypes.data],
+  /** Тип проекта подключён к этому типу записи: исключения хранит сам тип. */
+  const connectedTo = useCallback(
+    (projectType: ProjectType) => !scope.excludedProjectTypeIds.includes(projectType.id),
+    [scope.excludedProjectTypeIds],
   );
+  const rows = useMemo(
+    () => (projectTypes.data ?? []).filter((item) => item.archivedAt === null && connectedTo(item)),
+    [projectTypes.data, connectedTo],
+  );
+  // Чекбоксы + островок: связи отключают и пачкой (вердикт владельца 27.11).
+  const selection = useRowSelection(rows.map((item) => item.id));
+  const selectedRows = rows.filter((item) => selection.selected.has(item.id));
+  const [pickerOpen, setPickerOpen] = useState(false);
   const q = toolbar.query.trim().toLowerCase();
   const filtered = useMemo(
     () => rows.filter((item) => !q || item.name.toLowerCase().includes(q)),
     [rows, q],
   );
+  /** Пикер: живые типы проектов, куда тип ещё не подключён. */
+  const connectable = useMemo(
+    () =>
+      (projectTypes.data ?? [])
+        .filter((item) => item.archivedAt === null && !connectedTo(item))
+        .map((item) => ({
+          id: item.id,
+          name: item.name,
+          icon: (
+            <CatalogPickerTile className={identityTone[item.color].tile}>
+              <ProcessTypeGlyph icon={item.icon} className="size-3" />
+            </CatalogPickerTile>
+          ),
+        })),
+    [projectTypes.data, connectedTo],
+  );
 
-  /** Созданный тип проекта разрешает этот тип по умолчанию — связка уже есть;
-   *  после ответа список перечитан, строка появится включённой. */
-  const onCreated = () => {
-    setCreateOpen(false);
-  };
-
-  function save(excludedProjectTypeIds: string[]) {
-    update.mutate({ typeId: type.id, creation: { ...scope, excludedProjectTypeIds } });
+  function setAllowed(projectTypeId: string, allowed: boolean) {
+    update.mutate({
+      typeId: type.id,
+      creation: withProjectTypeAllowed(scope, projectTypeId, allowed),
+    });
   }
-
-  function toggle(projectTypeId: string, allowed: boolean) {
-    save(withProjectTypeAllowed(scope, projectTypeId, allowed).excludedProjectTypeIds);
-  }
-
-  /** Сводка тулбара: в скольких живых типах проектов тип разрешён. */
-  const allowedCount = rows.filter(
-    (item) => !scope.excludedProjectTypeIds.includes(item.id),
-  ).length;
-  const summary =
-    rows.length === 0
-      ? ui.automation.creationScope.projectSummaryNone
-      : allowedCount === rows.length
-        ? ui.automation.creationScope.projectSummaryAll
-        : ui.automation.creationScope.projectSummary
-            .replace('{allowed}', String(allowedCount))
-            .replace('{total}', String(rows.length));
 
   const defs = useMemo<DataTableField<ProjectType>[]>(
     () => [
@@ -158,21 +150,17 @@ export function ProcessTypeCreationTab({
           defs={[] as FilterFieldDef<ProjectType>[]}
           left={
             canSave ? (
-              <Button onClick={() => setCreateOpen(true)}>
+              <Button onClick={() => setPickerOpen(true)}>
                 <Plus data-icon="inline-start" />
-                {ui.automation.entry.createProjectType}
+                {ui.automation.entry.connectProjectType}
               </Button>
             ) : undefined
           }
           right={
             <>
-              <ListToolbarSummary>{summary}</ListToolbarSummary>
-              {canSave && scope.excludedProjectTypeIds.length > 0 ? (
-                <Button variant="ghost" onClick={() => save([])}>
-                  <RotateCcw data-icon="inline-start" />
-                  {ui.automation.creationScope.allowAll}
-                </Button>
-              ) : null}
+              <ListToolbarSummary>
+                {ui.automation.entry.connectedSummary.replace('{count}', String(rows.length))}
+              </ListToolbarSummary>
               <ViewSettings viewKey={VIEW_KEY} defs={defs} />
             </>
           }
@@ -184,9 +172,9 @@ export function ProcessTypeCreationTab({
           defs={defs}
           rows={filtered}
           rowKey={(projectType) => projectType.id}
-          selectable={false}
+          selection={selection}
           label={ui.automation.creationScope.sectionTitle}
-          emptyTitle={q ? ui.automation.entry.searchEmpty : ui.projects.typesEmpty}
+          emptyTitle={q ? ui.automation.entry.searchEmpty : ui.automation.entry.connectedEmpty}
           onOpenRow={(projectType, rowEl) =>
             openCard({ kind: 'project-type', id: projectType.id }, rowEl.getBoundingClientRect())
           }
@@ -201,20 +189,44 @@ export function ProcessTypeCreationTab({
               label: ui.automation.menuSettingsType,
               onSelect: () => openSettings({ kind: 'project-type', id: projectType.id }),
             },
+            ...(canSave
+              ? [
+                  {
+                    id: 'disconnect',
+                    label: ui.automation.entry.disconnect,
+                    onSelect: () => setAllowed(projectType.id, false),
+                  },
+                ]
+              : []),
           ]}
-          actions={(projectType) => (
-            <Switch
-              checked={!scope.excludedProjectTypeIds.includes(projectType.id)}
-              disabled={!canSave || update.isPending}
-              aria-label={`${projectType.name}: ${ui.automation.creationScope.projectTypeRow}`}
-              onCheckedChange={(checked) => toggle(projectType.id, checked)}
-            />
-          )}
         />
       </div>
-      {createOpen && renderProjectTypeCreate
-        ? renderProjectTypeCreate({ onClose: () => setCreateOpen(false), onCreated })
-        : null}
+      <BulkIsland
+        visible={canSave && selectedRows.length > 0}
+        count={selectedRows.length}
+        ariaLabel={ui.automation.creationScope.sectionTitle}
+        onClear={selection.clear}
+      >
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            for (const item of selectedRows) setAllowed(item.id, false);
+            selection.clear();
+          }}
+        >
+          {ui.automation.entry.disconnectSelected}
+        </Button>
+      </BulkIsland>
+      <CatalogPicker
+        title={ui.automation.entry.connectProjectType}
+        groups={[{ id: 'pt', label: ui.automation.entry.groups.project, items: connectable }]}
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onConnect={(ids) => {
+          for (const id of ids) setAllowed(id, true);
+        }}
+      />
     </div>
   );
 }

@@ -83,13 +83,7 @@ export function useFieldDialogSlots() {
  */
 export function ProjectTypeWorkspaceHost({ id }: { id: string }) {
   const fields = useFieldDialogSlots();
-  return (
-    <ProjectTypeWorkspace
-      typeId={id}
-      renderProcessTypeCreate={renderProjectTypeCreate}
-      renderCreateField={fields.renderCreateField}
-    />
-  );
+  return <ProjectTypeWorkspace typeId={id} renderCreateField={fields.renderCreateField} />;
 }
 
 export function NodeKindScreenHost({

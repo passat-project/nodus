@@ -218,11 +218,15 @@ export const projectNodeKindChangedPayloadSchema = z.object({
 export type ProjectNodeKindChangedPayload = z.infer<typeof projectNodeKindChangedPayloadSchema>;
 
 /** Тип проекта изменился (#631, Р10): форма-слоты, справочные поля, архив.
- *  `form` в `fields` — слоты и привязки атрибутов перечитаны. */
+ *  `form` в `fields` — слоты и привязки атрибутов перечитаны.
+ *  `sourceTypeId` при `change=created` — тип создан КОПИЕЙ основы: модель
+ *  связей (#857) не расчищает ему список подключённых типов — наследование
+ *  делает подписчик `project.type_copied`. */
 export const projectTypeChangedPayloadSchema = z.object({
   typeId: z.uuid(),
   change: z.enum(['created', 'updated', 'archived', 'restored']),
   fields: z.array(z.string()),
+  sourceTypeId: z.uuid().optional(),
 });
 export type ProjectTypeChangedPayload = z.infer<typeof projectTypeChangedPayloadSchema>;
 

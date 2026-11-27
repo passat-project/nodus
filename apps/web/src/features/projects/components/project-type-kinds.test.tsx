@@ -30,20 +30,6 @@ vi.mock('../../../shared/api/use-can-manage-workflows.js', () => ({
 vi.mock('../api/project-catalog-mutations.js', () => ({
   useUpdateProjectType: vi.fn(() => ({ mutate: vi.fn() })),
 }));
-// Окно создания типа папки — на своём месте (#857): здесь проверяем СВЯЗКУ
-// «создан → разрешён в этом типе проекта», само окно живёт своими тестами.
-vi.mock('../node-kinds/components/node-kind-create-dialog.js', () => ({
-  NodeKindCreateDialog: (props: { onClose: () => void; onCreated: (id: string) => void }) => (
-    <div data-testid="kind-create-dialog">
-      <button type="button" onClick={() => props.onCreated('55555555-5555-4555-8555-555555555555')}>
-        dialog-created
-      </button>
-      <button type="button" onClick={props.onClose}>
-        dialog-close
-      </button>
-    </div>
-  ),
-}));
 
 import { useTypeSettingsStore } from '../../../shared/ui/type-settings-store.js';
 import { openRowMenu, rowOf } from '../../../test/journal-row.js';
@@ -53,7 +39,6 @@ const KIND_A = '70000000-0000-4000-8000-000000000001';
 const KIND_B = '70000000-0000-4000-8000-000000000002';
 const KIND_ARCHIVED = '70000000-0000-4000-8000-000000000003';
 const KIND_C = '70000000-0000-4000-8000-000000000004';
-const NEW_KIND = '55555555-5555-4555-8555-555555555555';
 const P1 = '11111111-1111-4111-8111-111111111111';
 
 const kind = (id: string, name: string, patch: Partial<NodeKind> = {}) =>
@@ -103,91 +88,84 @@ function setup(
   return { update, updateScope };
 }
 
-describe('вкладка «Какие папки здесь бывают» — журнальный список (#556, #857)', () => {
+describe('вкладка «Какие папки здесь бывают» — список связей (#556, #857)', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
   });
 
-  it('null в kindIds — все типы включены; явный список — только перечисленные', () => {
+  it('null в kindIds — список показывает фактический полный набор', () => {
+    setup(null);
+    expect(screen.getByText('Комплект')).toBeTruthy();
+    expect(screen.getByText('Здание')).toBeTruthy();
+    expect(screen.getByText(/Подключено: 2/)).toBeTruthy();
+  });
+
+  it('явный список — только перечисленные; остальные — в пикере', async () => {
+    const { update } = setup([KIND_A], true, [], kindsThree);
+    expect(screen.getByText('Комплект')).toBeTruthy();
+    expect(screen.queryByText('Здание')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: ui.automation.entry.connectFolderKind }));
+    // Запросы — ВНУТРИ окна пикера: за ним живёт таблица связей.
+    const picker = within(screen.getByRole('dialog'));
+    expect(picker.getByText('Здание')).toBeTruthy();
+    expect(picker.getByText('Очередь')).toBeTruthy();
+    expect(picker.queryByText('Комплект')).toBeNull();
+    fireEvent.click(picker.getByRole('checkbox', { name: 'Здание' }));
+    fireEvent.click(picker.getByRole('button', { name: ui.automation.entry.connectAction }));
+    expect(update.mutate).toHaveBeenCalledWith({ id: P1, kindIds: [KIND_A, KIND_B] });
+  });
+
+  it('«Отключить» из полного набора (null) пишет явный список без типа', async () => {
     const { update } = setup(null);
-    const switchA = screen.getByRole('switch', { name: /Комплект/ });
-    expect(switchA.getAttribute('aria-checked')).toBe('true');
-    fireEvent.click(switchA);
-    // Первый тумблер от полного набора пишет явный список без первого типа.
+    const menu = await openRowMenu('Комплект');
+    fireEvent.click(within(menu).getByRole('menuitem', { name: ui.automation.entry.disconnect }));
     expect(update.mutate).toHaveBeenCalledWith({ id: P1, kindIds: [KIND_B] });
   });
 
-  it('тумблер явного списка возвращает полный набор как null', () => {
-    const { update } = setup([KIND_A]);
-    fireEvent.click(screen.getByRole('switch', { name: /Здание/ }));
-    expect(update.mutate).toHaveBeenCalledWith({ id: P1, kindIds: null });
-  });
-
   it('клик по строке открывает компактное окно настроек типа папки — карточки у типа папки нет', () => {
-    const { update } = setup();
-    const row = rowOf('Комплект');
-    fireEvent.click(row);
-    expect(useTypeSettingsStore.getState().target).toEqual({ kind: 'node-kind', id: KIND_A });
-    // Клик по тумблеру другой строки — правка набора папок, окно не переоткрывает.
-    fireEvent.click(within(rowOf('Здание')).getByRole('switch', { name: /Здание/ }));
-    expect(update.mutate).toHaveBeenCalledWith({ id: P1, kindIds: [KIND_A] });
+    setup([KIND_A]);
+    fireEvent.click(rowOf('Комплект'));
     expect(useTypeSettingsStore.getState().target).toEqual({ kind: 'node-kind', id: KIND_A });
   });
 
-  it('список без чекбоксов и островка массовых команд: правка — тумблером строки', () => {
-    setup([KIND_A], true, [], kindsThree);
-    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
-    expect(screen.queryByRole('button', { name: /выбранн/ })).toBeNull();
-    // В тулбаре осталась одна команда «над всеми» — «Включить все типы папок».
-    const commands = screen.getAllByRole('button', { name: /^Включить|^Выключить/ });
-    expect(commands.map((button) => button.textContent)).toEqual([ui.projects.schemasResetKinds]);
+  it('чекбоксы вернулись (пакетное отключение), тумблеров и команд «над всеми» нет', () => {
+    const { update } = setup([KIND_A], true, [], kindsThree);
+    expect(screen.getAllByRole('checkbox').length).toBeGreaterThan(0);
+    expect(screen.queryAllByRole('switch')).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: /^Включить все/ })).toBeNull();
+    fireEvent.click(within(rowOf('Комплект')).getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: ui.automation.entry.disconnectSelected }));
+    expect(update.mutate).toHaveBeenCalledWith({ id: P1, kindIds: [] });
   });
 
-  it('«⋯» строки: только «Настройки типа…» — тот же стор, что и клик по строке', async () => {
-    setup();
+  it('«⋯» строки: «Настройки типа…» и «Отключить» — тот же стор, что и клик по строке', async () => {
+    setup([KIND_A, KIND_B]);
     const items = await openRowMenu('Здание');
     expect(
       within(items)
         .getAllByRole('menuitem')
         .map((item) => item.textContent),
-    ).toEqual([ui.automation.menuSettingsType]);
+    ).toEqual([ui.automation.menuSettingsType, ui.automation.entry.disconnect]);
     fireEvent.click(within(items).getByRole('menuitem', { name: ui.automation.menuSettingsType }));
     expect(useTypeSettingsStore.getState().target).toEqual({ kind: 'node-kind', id: KIND_B });
   });
 
-  it('без права настройки тумблеры недоступны и кнопки создания нет', () => {
+  it('без права настройки: пикера и «Отключить» нет, список читается', async () => {
     setup(null, false);
-    expect(screen.getByRole('switch', { name: /Комплект/ })).toHaveProperty('disabled', true);
-    expect(screen.queryByText(ui.projects.schemasCreateKind)).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: ui.automation.entry.connectFolderKind }),
+    ).toBeNull();
+    const menu = await openRowMenu('Комплект');
+    expect(
+      within(menu).queryByRole('menuitem', { name: ui.automation.entry.disconnect }),
+    ).toBeNull();
   });
 
-  it('создание из окна: новый тип добавляется к явному списку', () => {
-    const { update } = setup([KIND_A], true, [], kindsThree);
-    fireEvent.click(screen.getByRole('button', { name: ui.projects.schemasCreateKind }));
-    fireEvent.click(screen.getByText('dialog-created'));
-    expect(update.mutate).toHaveBeenCalledWith({ id: P1, kindIds: [KIND_A, NEW_KIND] });
-  });
-
-  it('создание при «все типы» — записи нет: новый тип уже разрешён', () => {
-    const { update } = setup(null);
-    fireEvent.click(screen.getByRole('button', { name: ui.projects.schemasCreateKind }));
-    fireEvent.click(screen.getByText('dialog-created'));
-    expect(update.mutate).not.toHaveBeenCalled();
-  });
-
-  it('закрытие окна создания не пишет связку', () => {
-    const { update } = setup([KIND_A]);
-    fireEvent.click(screen.getByRole('button', { name: ui.projects.schemasCreateKind }));
-    fireEvent.click(screen.getByText('dialog-close'));
-    expect(screen.queryByTestId('kind-create-dialog')).toBeNull();
-    expect(update.mutate).not.toHaveBeenCalled();
-  });
-
-  it('«Включить все типы папок» возвращает null', () => {
-    const { update } = setup([KIND_A]);
-    fireEvent.click(screen.getByRole('button', { name: ui.projects.schemasResetKinds }));
-    expect(update.mutate).toHaveBeenCalledWith({ id: P1, kindIds: null });
+  it('в пикере всё уже подключено — честная заглушка', () => {
+    setup(null);
+    fireEvent.click(screen.getByRole('button', { name: ui.automation.entry.connectFolderKind }));
+    expect(screen.getByText(ui.automation.entry.pickerNothingLeft)).toBeTruthy();
   });
 
   it('у включённого типа есть выключенные привязанные работы — предложение разрешить', () => {
@@ -208,7 +186,6 @@ describe('вкладка «Какие папки здесь бывают» — �
     // массовых команд: чекбоксов и кнопок «над выбранными» нет.
     const action = screen.getByRole('button', { name: ui.projects.schemasSuggestWorks });
     expect(screen.getByText(ui.projects.schemasSuggestWorksNote)).toBeTruthy();
-    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
     fireEvent.click(action);
     expect(updateScope.mutate).toHaveBeenCalledWith({
       typeId: 't1',

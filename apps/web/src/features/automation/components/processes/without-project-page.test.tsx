@@ -31,20 +31,6 @@ vi.mock('../../../../shared/api/process-types-api.js', () => ({
   useLiveProcessTypes: vi.fn(),
   useUpdateTypeCreation: vi.fn(),
 }));
-// Окно создания типа задачи — на своём месте; здесь проверяем связку
-// «создан → включён в «Без проекта»» и возврат списка живых типов.
-vi.mock('../types/type-create-dialog.js', () => ({
-  ProcessTypeCreateDialog: (props: { onClose: () => void; onCreated?: (id: string) => void }) => (
-    <div data-testid="task-create-dialog">
-      <button type="button" onClick={() => props.onCreated?.('t1')}>
-        dialog-created
-      </button>
-      <button type="button" onClick={props.onClose}>
-        dialog-close
-      </button>
-    </div>
-  ),
-}));
 
 import { WithoutProjectPage } from './without-project-page.js';
 
@@ -81,95 +67,62 @@ function setup(tasks: ProcessType[], canManage = true) {
   return { mutate };
 }
 
-describe('страница «Без проекта» (#857)', () => {
+describe('страница «Без проекта» — список связей (#857)', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
   });
 
-  it('тумблер шлёт useUpdateTypeCreation с правильным creation', () => {
-    const { mutate } = setup([TASK('t1', true)]);
-    expect(screen.getByRole('switch', { name: /Быстрая/ }).getAttribute('aria-checked')).toBe(
-      'true',
-    );
-
-    fireEvent.click(screen.getByRole('switch', { name: /Быстрая/ }));
-    expect(mutate).toHaveBeenCalledWith({
-      typeId: 't1',
-      creation: expect.objectContaining({ withoutProject: false }),
-    });
+  it('показывает только ПОДКЛЮЧЁННЫЕ типы; сводка — числом связей', () => {
+    setup([TASK('t1', true, { name: 'Быстрая' }), TASK('t2', false, { name: 'Медленная' })]);
+    expect(screen.getByText('Быстрая')).toBeTruthy();
+    expect(screen.queryByText('Медленная')).toBeNull();
+    expect(screen.getByText(/Подключено: 1/)).toBeTruthy();
   });
 
-  it('включение возвращает withoutProject: true, не теряя прочие поля', () => {
-    const { mutate } = setup([TASK('t2', false)]);
-    fireEvent.click(screen.getByRole('switch', { name: /Быстрая/ }));
+  it('пикер подключает тип: в нём — неподключённые, выбор пишет без потери полей', async () => {
+    const { mutate } = setup([TASK('t2', false, { name: 'Медленная' })]);
+    expect(screen.getByText(ui.automation.entry.connectedEmpty)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: ui.automation.entry.connectTaskType }));
+    // Запросы — ВНУТРИ окна пикера: за ним пустая таблица связей.
+    const picker = within(screen.getByRole('dialog'));
+    fireEvent.click(picker.getByRole('checkbox', { name: 'Медленная' }));
+    fireEvent.click(picker.getByRole('button', { name: ui.automation.entry.connectAction }));
     expect(mutate).toHaveBeenCalledWith({
       typeId: 't2',
       creation: expect.objectContaining({ withoutProject: true, folderKindId: null }),
     });
   });
 
-  it('без workflow.manage — read-only с пояснением', () => {
-    setup([TASK('t3', true)], false);
-    expect(screen.getByText(ui.automation.creationScope.noWorkflowPermission)).toBeTruthy();
-    expect(screen.getByRole('switch', { name: /Быстрая/ })).toHaveProperty('disabled', true);
-  });
-
-  it('сводка рамы деловым языком: «Включено: N из M»', () => {
-    const both = [TASK('t4', true), TASK('t5', false)];
-    setup(both);
-    expect(
-      screen.getByText(
-        ui.automation.entry.noProjectSummary.replace('{enabled}', '1').replace('{total}', '2'),
-      ),
-    ).toBeTruthy();
-  });
-
-  it('пустой список — спокойная подсказка; создания нет без права', () => {
-    setup([], false);
-    expect(screen.getByText(ui.automation.entry.noProjectEmpty)).toBeTruthy();
-    expect(screen.queryByText(ui.automation.entry.createTaskType)).toBeNull();
-  });
-
-  it('созданный тип дожидается в живых данных и сразу включается «Без проекта»', () => {
-    const { mutate } = setup([TASK('t1', false)]);
-    fireEvent.click(screen.getByRole('button', { name: ui.automation.entry.createTaskType }));
-    expect(screen.getByTestId('task-create-dialog')).toBeTruthy();
-    fireEvent.click(screen.getByText('dialog-created'));
-    // Основа копии уже настроена, перезаписываем только тумблер.
+  it('«Отключить» в меню строки пишет withoutProject: false', async () => {
+    const { mutate } = setup([TASK('t1', true)]);
+    const menu = await openRowMenu('Быстрая');
+    fireEvent.click(within(menu).getByRole('menuitem', { name: ui.automation.entry.disconnect }));
     expect(mutate).toHaveBeenCalledWith({
       typeId: 't1',
-      creation: expect.objectContaining({ withoutProject: true, excludedProjectTypeIds: [] }),
+      creation: expect.objectContaining({ withoutProject: false }),
     });
   });
 
-  it('закрытие окна создания настройку не пишет', () => {
-    const { mutate } = setup([TASK('t1', false)]);
-    fireEvent.click(screen.getByRole('button', { name: ui.automation.entry.createTaskType }));
-    fireEvent.click(screen.getByText('dialog-close'));
-    expect(screen.queryByTestId('task-create-dialog')).toBeNull();
-    expect(mutate).not.toHaveBeenCalled();
+  it('без workflow.manage — read-only с пояснением: пикера и «Отключить» нет', async () => {
+    setup([TASK('t3', true)], false);
+    expect(screen.getByText(ui.automation.creationScope.noWorkflowPermission)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: ui.automation.entry.connectTaskType })).toBeNull();
+    const menu = await openRowMenu('Быстрая');
+    expect(
+      within(menu).queryByRole('menuitem', { name: ui.automation.entry.disconnect }),
+    ).toBeNull();
   });
 
-  it('список без чекбоксов: пакетных команд «над выбранными» нет, правка — тумблером строки', () => {
-    const { mutate } = setup([
-      TASK('t6', false, { name: 'Быстрая' }),
-      TASK('t7', true, { name: 'Медленная' }),
-    ]);
-    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
-    // Кнопок «Включить выбранные»/«Выключить выбранные» и островка нет.
-    expect(screen.queryByRole('button', { name: /выбранн/ })).toBeNull();
-    // Сводка «Включено: N из M» — тихим текстом в тулбаре.
-    expect(
-      screen.getByText(
-        ui.automation.entry.noProjectSummary.replace('{enabled}', '1').replace('{total}', '2'),
-      ),
-    ).toBeTruthy();
-    fireEvent.click(screen.getByRole('switch', { name: /Быстрая/ }));
-    expect(mutate).toHaveBeenCalledTimes(1);
+  it('чекбоксы вернулись (пакетное отключение), тумблеров нет', () => {
+    const { mutate } = setup([TASK('t6', true, { name: 'Быстрая' })]);
+    expect(screen.getAllByRole('checkbox').length).toBeGreaterThan(0);
+    expect(screen.queryAllByRole('switch')).toHaveLength(0);
+    fireEvent.click(within(rowOf('Быстрая')).getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: ui.automation.entry.disconnectSelected }));
     expect(mutate).toHaveBeenCalledWith({
       typeId: 't6',
-      creation: expect.objectContaining({ withoutProject: true }),
+      creation: expect.objectContaining({ withoutProject: false }),
     });
   });
 
@@ -180,19 +133,16 @@ describe('страница «Без проекта» (#857)', () => {
     fireEvent.click(row);
     expect(openCardSpy).toHaveBeenCalledTimes(1);
     expect(openCardSpy.mock.calls).toEqual([[{ kind: 'process-type', id: 't8' }, rect]]);
-    // Клик по тумблеру строки — правка связки, карточку не открывает.
-    fireEvent.click(screen.getByRole('switch', { name: /Быстрая/ }));
-    expect(openCardSpy).toHaveBeenCalledTimes(1);
   });
 
   it('«⋯» строки: «Открыть» — карточка в стек, «Настройки типа…» — общий стор настроек', async () => {
-    setup([TASK('t9', false, { name: 'Медленная' })]);
+    setup([TASK('t9', true, { name: 'Медленная' })]);
     const menu = await openRowMenu('Медленная');
     expect(
       within(menu)
         .getAllByRole('menuitem')
         .map((item) => item.textContent),
-    ).toEqual([ui.common.open, ui.automation.menuSettingsType]);
+    ).toEqual([ui.common.open, ui.automation.menuSettingsType, ui.automation.entry.disconnect]);
     fireEvent.click(within(menu).getByRole('menuitem', { name: ui.automation.menuSettingsType }));
     expect(useTypeSettingsStore.getState().target).toEqual({ kind: 'process-type', id: 't9' });
     expect(openCardSpy).not.toHaveBeenCalled();
@@ -204,7 +154,7 @@ describe('страница «Без проекта» (#857)', () => {
   it('журнал сортируется по имени и описанию; клик по строке открывает карточку типа задачи', () => {
     setup([
       TASK('t8', true, { name: 'Быстрая', description: 'Для мелочей' }),
-      TASK('t9', false, { name: 'Медленная', description: '' }),
+      TASK('t9', true, { name: 'Медленная', description: '' }),
     ]);
     const headers = screen.getAllByRole('columnheader');
     const nameHeader = headers.find(

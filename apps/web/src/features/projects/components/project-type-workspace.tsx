@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 import { Permission, ui } from '@nodus/contracts';
 import type { NodeKind, ProjectType } from '@nodus/contracts';
 import { Empty, EmptyTitle } from '@nodus/ui/components/empty';
@@ -26,12 +26,6 @@ import { ProjectTypeKindsTab } from './project-type-kinds.js';
 type WorkspaceTab = 'schema' | 'form' | 'creation' | 'kinds';
 
 /** Окно создания типа задачи (слот фичи automation, I6) — из «Что здесь можно создавать». */
-interface ProcessTypeCreateSlot {
-  onClose: () => void;
-  onCreated: (id: string) => void;
-  baseId?: string;
-}
-
 /**
  * Тип проекта в разделе «Процессы» (#857) — рабочая область в раме карточки
  * (вердикт владельца 26.11.2026; ревизия UI v3): полоса вкладок `Схема` ·
@@ -48,11 +42,9 @@ interface ProcessTypeCreateSlot {
  */
 export function ProjectTypeWorkspace({
   typeId,
-  renderProcessTypeCreate,
   renderCreateField,
 }: {
   typeId: string;
-  renderProcessTypeCreate?: (slot: ProcessTypeCreateSlot) => ReactNode;
   /** Окно «Создать атрибут» из лотка формы (слот app, I6). */
   renderCreateField?: RenderCreateField;
 }) {
@@ -96,7 +88,6 @@ export function ProjectTypeWorkspace({
       type={type}
       kinds={kinds}
       canSetup={canSetup}
-      renderProcessTypeCreate={renderProcessTypeCreate}
       renderCreateField={renderCreateField}
     />
   );
@@ -106,13 +97,11 @@ function ProjectTypeFrame({
   type,
   kinds,
   canSetup,
-  renderProcessTypeCreate,
   renderCreateField,
 }: {
   type: ProjectType;
   kinds: NodeKind[];
   canSetup: boolean;
-  renderProcessTypeCreate?: (slot: ProcessTypeCreateSlot) => ReactNode;
   renderCreateField?: RenderCreateField;
 }) {
   const form = useProjectTypeForm(type);
@@ -186,11 +175,7 @@ function ProjectTypeFrame({
       ) : null}
       {tab === 'creation' ? (
         <TypeCardPanel idPrefix={idPrefix} tab="creation">
-          <ProjectTypeCreationTab
-            type={type}
-            canSetup={canSetup}
-            renderProcessTypeCreate={renderProcessTypeCreate}
-          />
+          <ProjectTypeCreationTab type={type} canSetup={canSetup} />
         </TypeCardPanel>
       ) : null}
       {tab === 'kinds' ? (

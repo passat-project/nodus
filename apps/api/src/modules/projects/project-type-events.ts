@@ -5,7 +5,9 @@ import type { EventBus } from '../../core/events/event-bus.js';
 
 /** Каталожное событие типа проекта (#631, Р10): форма, привязки и
  *  справочные поля перечитываются у всех клиентов без F5. Вынесено из
- *  контроллера ради лимита строк (I5). */
+ *  контроллера ради лимита строк (I5). `sourceTypeId` при создании копии —
+ *  сигнал подписчикам модели связей (#857): наследование подключений делает
+ *  `project.type_copied`, «с нуля» — расчищает список только у свежих. */
 export function emitProjectTypeChanged(
   eventBus: EventBus,
   tx: TransactionClient,
@@ -13,11 +15,12 @@ export function emitProjectTypeChanged(
   change: 'created' | 'updated' | 'archived' | 'restored',
   fields: string[],
   actorId: string | null,
+  sourceTypeId?: string,
 ): Promise<void> {
   return eventBus.emit(
     tx,
     PROJECT_EVENTS.TYPE_CHANGED,
-    { typeId, change, fields },
+    { typeId, change, fields, ...(sourceTypeId ? { sourceTypeId } : {}) },
     { actorId, aggregateType: 'project_type', aggregateId: typeId },
   );
 }

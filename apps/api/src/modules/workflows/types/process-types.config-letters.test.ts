@@ -36,6 +36,7 @@ function setup() {
     { has: vi.fn(() => true) } as never,
     { emit } as never,
     { effectiveRoles: vi.fn(async () => []) } as never,
+    { liveProjectTypeIds: vi.fn(async () => []) } as never,
   );
   return { service, repo };
 }

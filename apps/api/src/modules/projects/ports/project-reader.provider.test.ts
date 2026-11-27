@@ -20,6 +20,7 @@ function make(enabled = true) {
   const featureFlags = { isEnabled: vi.fn(async () => enabled) };
   const provider = new ProjectReaderProvider(
     projects as never,
+    { liveProjectTypeIds: vi.fn(async () => []) } as never,
     participants as never,
     nodes as never,
     featureFlags as never,
@@ -99,6 +100,7 @@ describe('ProjectReaderProvider — состав задачи секретног
     const featureFlags = { isEnabled: vi.fn(async () => true) };
     return new ProjectReaderProvider(
       projects as never,
+      { liveProjectTypeIds: vi.fn(async () => []) } as never,
       participants as never,
       {} as never,
       featureFlags as never,
@@ -190,6 +192,7 @@ describe('ProjectReaderProvider — шифр чипа по эффективно�
     const moduleRef = { get: vi.fn(() => ({ stateFor })) };
     const provider = new ProjectReaderProvider(
       projects as never,
+      { liveProjectTypeIds: vi.fn(async () => []) } as never,
       {} as never,
       {} as never,
       { isEnabled: vi.fn(async () => opts.enabled ?? true) } as never,

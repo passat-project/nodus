@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react';
 import { ui } from '@nodus/contracts';
-import { Button } from '@nodus/ui/components/button';
 import { NodeLabel } from '@nodus/ui/components/node-label';
 import { cn } from '@nodus/ui/lib/utils';
-import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
 /**
  * Строка единой колонки «Процессов» (#857) — та же грамматика, что у
@@ -126,24 +125,12 @@ export function UnifiedTypeTile({
   );
 }
 
-/** Пустая группа: заглушка и — если категория создаётся — главная кнопка
- *  создания (первый тип иначе создать нечем; у «Писем» каталог заморожен). */
-export function UnifiedGroupEmpty({
-  onCreate,
-  createLabel,
-}: {
-  onCreate?: () => void;
-  createLabel?: string;
-}) {
+/** Пустая группа: тихая заглушка — создание живёт у «+» шапки колонки
+ *  (модель связей #857, вердикт владельца 27.11: одна точка создания). */
+export function UnifiedGroupEmpty() {
   return (
-    <div className="flex flex-col gap-2 px-2.5 pt-1 pb-2">
-      <span className="text-xs text-muted-foreground">{ui.automation.entry.emptyGroup}</span>
-      {onCreate && createLabel ? (
-        <Button type="button" size="sm" className="self-start" onClick={onCreate}>
-          <Plus data-icon="inline-start" strokeWidth={2} />
-          {createLabel}
-        </Button>
-      ) : null}
+    <div className="px-2.5 pt-1 pb-2 text-xs text-muted-foreground">
+      {ui.automation.entry.emptyGroup}
     </div>
   );
 }

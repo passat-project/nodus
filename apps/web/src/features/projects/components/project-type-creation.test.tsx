@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ProcessType, ProjectType } from '@nodus/contracts';
 import { normalizeTypeConfig, ui } from '@nodus/contracts';
@@ -40,7 +40,6 @@ vi.mock('../../../shared/api/use-can-manage-workflows.js', () => ({
 vi.mock('sonner', () => ({ toast: { warning: vi.fn() } }));
 
 const PROJECT_TYPE_ID = '11111111-1111-4111-8111-111111111111';
-const NEW_TYPE_ID = '44444444-4444-4444-8444-444444444444';
 
 const projectType = {
   id: PROJECT_TYPE_ID,
@@ -86,6 +85,12 @@ function processType(patch: {
 }
 
 const TASK = processType({ id: 't1', name: 'Комплект', category: 'task' });
+const OFF_TASK = processType({
+  id: 't2',
+  name: 'Задание смежнику',
+  category: 'task',
+  excluded: [PROJECT_TYPE_ID],
+});
 const LETTER = processType({
   id: 'l1',
   name: 'Входящее письмо',
@@ -93,26 +98,11 @@ const LETTER = processType({
   excluded: [PROJECT_TYPE_ID],
 });
 
-/** Слот создания: захватываем onCreated — создаёт «окно» теста. */
-function makeCreateSlot() {
-  const slot = {
-    onCreated: undefined as ((id: string) => void) | undefined,
-    render: vi.fn((props: { onClose: () => void; onCreated: (id: string) => void }) =>
-      (() => {
-        slot.onCreated = props.onCreated;
-        return <div data-testid="create-slot">slot</div>;
-      })(),
-    ),
-  };
-  return slot;
-}
-
 function setup(
   canSetup = true,
-  tasks: ProcessType[] = [TASK],
+  tasks: ProcessType[] = [TASK, OFF_TASK],
   letters: ProcessType[] = [LETTER],
   manage = true,
-  createSlot: ReturnType<typeof makeCreateSlot> | undefined = undefined,
 ) {
   const mutate = vi.fn();
   openCardSpy.mockClear();
@@ -125,63 +115,53 @@ function setup(
       }) as never,
   );
   vi.mocked(useUpdateTypeCreation).mockReturnValue({ mutate, isPending: false } as never);
-  const view = render(
-    <ProjectTypeCreationTab
-      type={projectType}
-      canSetup={canSetup}
-      renderProcessTypeCreate={createSlot?.render}
-    />,
-  );
-  return { mutate, view };
+  render(<ProjectTypeCreationTab type={projectType} canSetup={canSetup} />);
+  return { mutate };
 }
 
-describe('вкладка «Что здесь можно создавать» — журнальный список (#665, #857)', () => {
+describe('вкладка «Что здесь можно создавать» — список связей (#665, #857)', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
   });
 
-  it('показывает задачи и письма с чипами категорий; выключение пишет исключение', () => {
-    const { mutate } = setup();
+  it('показывает только ПОДКЛЮЧЁННЫЕ типы задач; письма системные — их здесь нет', () => {
+    setup();
     expect(screen.getByText('Комплект')).toBeTruthy();
-    expect(screen.getByText('Входящее письмо')).toBeTruthy();
-    expect(screen.getByText(ui.automation.entry.categoryTask)).toBeTruthy();
-    expect(screen.getByText(ui.automation.entry.categoryLetter)).toBeTruthy();
+    // Отключённый тип и письмо в списке связей не видны.
+    expect(screen.queryByText('Задание смежнику')).toBeNull();
+    expect(screen.queryByText('Входящее письмо')).toBeNull();
+    // Сводка — числом связей, а не «N из M».
+    expect(screen.getByText(/Подключено: 1/)).toBeTruthy();
+  });
 
-    fireEvent.click(screen.getByRole('switch', { name: /Комплект/ }));
+  it('пикер подключает тип из справочника: неподключённые — в списке пикера', async () => {
+    const { mutate } = setup();
+    fireEvent.click(screen.getByRole('button', { name: ui.automation.entry.connectTaskType }));
+    // Запросы — ВНУТРИ окна пикера: за ним живёт таблица связей.
+    const picker = within(screen.getByRole('dialog'));
+    expect(picker.getByText('Задание смежнику')).toBeTruthy();
+    expect(picker.queryByText('Комплект')).toBeNull();
+    expect(picker.queryByText('Входящее письмо')).toBeNull();
+    fireEvent.click(picker.getByRole('checkbox', { name: 'Задание смежнику' }));
+    fireEvent.click(picker.getByRole('button', { name: ui.automation.entry.connectAction }));
+    expect(mutate).toHaveBeenCalledWith({
+      typeId: OFF_TASK.id,
+      creation: expect.objectContaining({ excludedProjectTypeIds: [] }),
+    });
+  });
+
+  it('«Отключить» в меню строки пишет исключение — связь снята, тип жив в справочнике', async () => {
+    const { mutate } = setup();
+    const menu = await openRowMenu('Комплект');
+    fireEvent.click(within(menu).getByRole('menuitem', { name: ui.automation.entry.disconnect }));
     expect(mutate).toHaveBeenCalledWith({
       typeId: TASK.id,
       creation: expect.objectContaining({ excludedProjectTypeIds: [PROJECT_TYPE_ID] }),
     });
   });
 
-  it('включение снимает исключение — та же связь с другой стороны', () => {
-    const { mutate } = setup();
-    fireEvent.click(screen.getByRole('switch', { name: /Входящее письмо/ }));
-    expect(mutate).toHaveBeenCalledWith({
-      typeId: LETTER.id,
-      creation: expect.objectContaining({ excludedProjectTypeIds: [] }),
-    });
-  });
-
-  it('без права настройки тумблеры недоступны и кнопки создания нет', () => {
-    setup(false);
-    expect(screen.getByRole('switch', { name: /Комплект/ })).toHaveProperty('disabled', true);
-    expect(screen.queryByText(ui.automation.entry.createTaskType)).toBeNull();
-  });
-
-  it('без права процессов — пояснение вместо 403', () => {
-    setup(true, [TASK], [LETTER], false);
-    expect(screen.getByText(ui.automation.creationScope.noWorkflowPermission)).toBeTruthy();
-    expect(screen.getByRole('switch', { name: /Комплект/ })).toHaveProperty('disabled', true);
-  });
-
-  it('пустой список — спокойная подсказка', () => {
-    setup(true, [], []);
-    expect(screen.getByText(ui.automation.creationScope.empty)).toBeTruthy();
-  });
-
-  it('снятие работы, привязанной к типу папки, — предупреждение', () => {
+  it('отключение работы, привязанной к разрешённому типу папки, — предупреждение', async () => {
     const bound = {
       ...TASK,
       config: normalizeTypeConfig({
@@ -193,86 +173,79 @@ describe('вкладка «Что здесь можно создавать» —
       }),
     } as ProcessType;
     setup(true, [bound]);
-    fireEvent.click(screen.getByRole('switch', { name: /Комплект/ }));
+    const menu = await openRowMenu('Комплект');
+    fireEvent.click(within(menu).getByRole('menuitem', { name: ui.automation.entry.disconnect }));
     expect(vi.mocked(toast.warning)).toHaveBeenCalledWith(
       ui.automation.creationScope.unbindWarning,
     );
   });
 
-  it('список без чекбоксов: массовых команд над выбранными строками нет, сводка — тихим текстом', () => {
-    setup();
-    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
-    expect(screen.queryByRole('button', { name: /выбранн/ })).toBeNull();
-    // «Разрешено: 1 из 2» — сводка связки перед шестерёнкой вида.
-    expect(screen.getByText(/1 из 2/)).toBeTruthy();
+  it('чекбоксы + островок: «Отключить выбранные» пишет исключения пачкой', () => {
+    const { mutate } = setup(true, [TASK, OFF_TASK]);
+    // Выделим строку «Комплект» чекбоксом строки.
+    fireEvent.click(within(rowOf('Комплект')).getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: ui.automation.entry.disconnectSelected }));
+    expect(mutate).toHaveBeenCalledWith({
+      typeId: TASK.id,
+      creation: expect.objectContaining({ excludedProjectTypeIds: [PROJECT_TYPE_ID] }),
+    });
   });
 
-  it('клик по строке (не по тумблеру) кладёт карточку типа задачи ПОВЕРХ с прямоугольником строки', () => {
-    const { mutate } = setup();
+  it('без права настройки нет ни пикера, ни «Отключить» в меню', async () => {
+    setup(false);
+    expect(screen.queryByRole('button', { name: ui.automation.entry.connectTaskType })).toBeNull();
+    const menu = await openRowMenu('Комплект');
+    expect(
+      within(menu).queryByRole('menuitem', { name: ui.automation.entry.disconnect }),
+    ).toBeNull();
+  });
+
+  it('без права процессов — пояснение вместо 403, пикера нет', () => {
+    setup(true, [TASK, OFF_TASK], [LETTER], false);
+    expect(screen.getByText(ui.automation.creationScope.noWorkflowPermission)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: ui.automation.entry.connectTaskType })).toBeNull();
+  });
+
+  it('пустой список связей — спокойная подсказка; в пикере — весь справочник', () => {
+    setup(true, [OFF_TASK]);
+    expect(screen.getByText(ui.automation.entry.connectedEmpty)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: ui.automation.entry.connectTaskType }));
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(screen.getByText('Задание смежнику')).toBeTruthy();
+  });
+
+  it('в пикере всё уже подключено — честная заглушка, не пустота', () => {
+    setup(true, [TASK]);
+    fireEvent.click(screen.getByRole('button', { name: ui.automation.entry.connectTaskType }));
+    expect(screen.getByText(ui.automation.entry.pickerNothingLeft)).toBeTruthy();
+  });
+
+  it('клик по строке кладёт карточку типа задачи ПОВЕРХ с прямоугольником строки', () => {
+    setup();
     const row = rowOf('Комплект');
     const rect = withRowRect(row);
     fireEvent.click(row);
     expect(openCardSpy).toHaveBeenCalledTimes(1);
     expect(openCardSpy.mock.calls).toEqual([[{ kind: 'process-type', id: TASK.id }, rect]]);
-    // Клик по тумблеру — правка связки, карточку не открывает.
-    fireEvent.click(screen.getByRole('switch', { name: /Комплект/ }));
-    expect(mutate).toHaveBeenCalledTimes(1);
-    expect(openCardSpy).toHaveBeenCalledTimes(1);
   });
 
   it('«⋯» строки: «Открыть» — карточка в стек, «Настройки типа…» — общий стор настроек', async () => {
     setup();
-    const menu = await openRowMenu('Входящее письмо');
+    const menu = await openRowMenu('Комплект');
     expect(
       within(menu)
         .getAllByRole('menuitem')
         .map((item) => item.textContent),
-    ).toEqual([ui.common.open, ui.automation.menuSettingsType]);
+    ).toEqual([ui.common.open, ui.automation.menuSettingsType, ui.automation.entry.disconnect]);
     fireEvent.click(within(menu).getByRole('menuitem', { name: ui.automation.menuSettingsType }));
     expect(useTypeSettingsStore.getState().target).toEqual({
       kind: 'process-type',
-      id: LETTER.id,
+      id: TASK.id,
     });
     expect(openCardSpy).not.toHaveBeenCalled();
-    const second = await openRowMenu('Входящее письмо');
+    const second = await openRowMenu('Комплект');
     fireEvent.click(within(second).getByRole('menuitem', { name: ui.common.open }));
     // «Открыть» из меню — без прямоугольника источника (раскрытие из центра).
-    expect(openCardSpy.mock.calls).toEqual([[{ kind: 'process-type', id: LETTER.id }]]);
-  });
-
-  it('создать-и-связать: созданный тип дождётся живых данных и разрешится', () => {
-    const slot = makeCreateSlot();
-    const { mutate, view } = setup(true, [TASK], [LETTER], true, slot);
-    fireEvent.click(screen.getByRole('button', { name: ui.automation.entry.createTaskType }));
-    expect(screen.getByTestId('create-slot')).toBeTruthy();
-    expect(slot.onCreated).toBeTruthy();
-
-    // «Окно» создало тип: живые данные ещё без него — связка не пишется.
-    act(() => slot.onCreated!(NEW_TYPE_ID));
-    expect(mutate).not.toHaveBeenCalled();
-
-    // Справочник перечитан: тип появился — связка пишется в его настройку.
-    vi.mocked(useLiveProcessTypes).mockImplementation(
-      (category) =>
-        ({
-          data:
-            category === 'task'
-              ? [TASK, processType({ id: NEW_TYPE_ID, name: 'Новый', category: 'task' })]
-              : [LETTER],
-        }) as never,
-    );
-    act(() => {
-      view.rerender(
-        <ProjectTypeCreationTab
-          type={projectType}
-          canSetup
-          renderProcessTypeCreate={slot.render}
-        />,
-      );
-    });
-    expect(mutate).toHaveBeenCalledWith({
-      typeId: NEW_TYPE_ID,
-      creation: expect.objectContaining({ excludedProjectTypeIds: [] }),
-    });
+    expect(openCardSpy.mock.calls).toEqual([[{ kind: 'process-type', id: TASK.id }]]);
   });
 });

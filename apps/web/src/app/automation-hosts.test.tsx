@@ -239,12 +239,12 @@ describe('контракт монтажа окна настроек: шелл, �
 });
 
 describe('хосты тел карточек и рамы — одни слоты (#857)', () => {
-  it('ProjectTypeWorkspaceHost: typeId, слот создания типа задачи и слот «Создать атрибут»', () => {
+  it('ProjectTypeWorkspaceHost: typeId и слот «Создать атрибут»; слота создания типов НЕТ — модель связей (#857)', () => {
     render(<ProjectTypeWorkspaceHost id={ID.project} />);
     const workspace = screen.getByTestId('workspace');
     expect(workspace.dataset.id).toBe(ID.project);
-    // Окна — код фичи automation: хост подставляет их фиче projects (I6).
-    expect(workspace.dataset.slots).toBe('yes');
+    // Окно атрибута — код фичи automation: хост подставляет его фиче projects (I6).
+    expect(workspace.dataset.slots).toBe('no');
     expect(workspace.dataset.fieldSlot).toBe('yes');
   });
 

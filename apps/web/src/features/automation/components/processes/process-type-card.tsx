@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import type { ProcessType, WorkflowDetail } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { NodeChip } from '@nodus/ui/components/node-chip';
@@ -49,7 +49,6 @@ export function ProcessTypeCard({
   workflow,
   suspended = false,
   idPrefix,
-  renderProjectTypeCreate,
 }: {
   type: ProcessType;
   /** Нет — маршрут ещё грузится: панели пустые, как при `suspended`. Такую
@@ -61,7 +60,6 @@ export function ProcessTypeCard({
   suspended?: boolean;
   /** Префикс id вкладок; у карточки стека свой, чтобы не дублировать раму. */
   idPrefix?: string;
-  renderProjectTypeCreate?: (slot: ProcessTypeCreateSlot) => ReactNode;
 }) {
   const locked = type.category !== 'task';
   const canManage = useCanManageWorkflows();
@@ -183,11 +181,7 @@ export function ProcessTypeCard({
 
       {tab === 'creation' ? (
         <TypeCardPanel idPrefix={prefix} tab="creation">
-          <ProcessTypeCreationTab
-            type={type}
-            canSave={canManage && !locked}
-            renderProjectTypeCreate={renderProjectTypeCreate}
-          />
+          <ProcessTypeCreationTab type={type} canSave={canManage && !locked} />
         </TypeCardPanel>
       ) : null}
     </TypeCardFrame>

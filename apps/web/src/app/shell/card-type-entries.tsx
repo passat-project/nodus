@@ -13,7 +13,7 @@ import { ProjectIdentityIcon } from '../../shared/ui/project-identity-icon.js';
 import { useWorkflowDetail } from '../../shared/workflow/workflow-api.js';
 import { ProcessTypeGlyph } from '../../shared/workflow/process-type-icon.js';
 import { typeToneOf } from '../../shared/workflow/type-tone.js';
-import { ProjectTypeWorkspaceHost, renderProjectTypeCreate } from '../automation-hosts.js';
+import { ProjectTypeWorkspaceHost } from '../automation-hosts.js';
 
 /**
  * Карточки типов «Процессов» в общем стеке (ревизия UI v3, #857): строка
@@ -174,7 +174,6 @@ function ProcessTypeBody({ id, top, panel }: TypeCardPartProps) {
           // Свой префикс id вкладок: карточка может лежать поверх рамы ТОГО ЖЕ
           // типа — иначе вкладки и панели дублировали бы id.
           idPrefix={`process-type-card-${id}`}
-          renderProjectTypeCreate={renderProjectTypeCreate}
         />
       ) : null}
       <UnsavedDialog

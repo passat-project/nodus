@@ -211,13 +211,20 @@ describe('единая колонка «Процессов» (#857)', () => {
     expect(screen.getByText('Здание')).toBeTruthy();
   });
 
-  it('пустая группа «Задачи» — главная кнопка создаёт тип без основы (регрессия #857)', () => {
-    // Создание теперь живёт в пустой группе (кнопок «+» в заголовках нет).
+  it('пустая группа — тихая заглушка; «+» шапки создаёт тип задачи без основы (#857, модель связей)', async () => {
+    // Создание — единственная точка колонки: меню «+» справа от поиска.
     setup({
       processTypes: [fixtures.processTypes[1]!, fixtures.processTypes[2]!],
     });
     expect(screen.getByText(ui.automation.entry.emptyGroup)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: ui.automation.newType }));
+    // В заглушке НЕТ второй кнопки создания — только «+» шапки.
+    expect(screen.queryByRole('button', { name: ui.automation.newType })).toBeNull();
+    const plus = screen.getByRole('button', { name: ui.automation.entry.columnCreate });
+    fireEvent.pointerDown(plus, { button: 0, pointerType: 'mouse' });
+    fireEvent.click(plus);
+    fireEvent.click(
+      await screen.findByRole('menuitem', { name: ui.automation.entry.createTaskType }),
+    );
     expect(screen.getByTestId('task-create-dialog')).toBeTruthy();
     expect(dialogProps.last!.defaultBaseTypeId).toBeUndefined();
     // закрытие снимает диалог
@@ -265,7 +272,7 @@ describe('единая колонка «Процессов» (#857)', () => {
     expect(props2.onSelectProjectType).toHaveBeenCalledWith('new-p');
   });
 
-  it('пустые «Папки» — главная кнопка открывает слот создания типа папки', () => {
+  it('«+» шапки → «Тип папки»: слот создания открывается и выбирает созданное', async () => {
     const props = setup({ kinds: [] });
     let created: (id: string) => void = () => {};
     props.renderKindCreate = (slot) => {
@@ -274,7 +281,10 @@ describe('единая колонка «Процессов» (#857)', () => {
     };
     cleanup();
     render(<SlotProbe {...props} />);
-    fireEvent.click(screen.getByRole('button', { name: ui.projects.schemasCreateKind }));
+    const plus = screen.getByRole('button', { name: ui.automation.entry.columnCreate });
+    fireEvent.pointerDown(plus, { button: 0, pointerType: 'mouse' });
+    fireEvent.click(plus);
+    fireEvent.click(await screen.findByRole('menuitem', { name: ui.projects.schemasCreateKind }));
     expect(screen.getByTestId('kind-slot')).toBeTruthy();
     created('new-k');
     expect(props.onSelectKind).toHaveBeenCalledWith('new-k');

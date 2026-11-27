@@ -95,14 +95,8 @@ const TYPE = (id: string, name: string) =>
     archivedAt: null,
   }) as unknown as ProjectType;
 
-type RenderProcessTypeCreate = NonNullable<
-  Parameters<typeof ProjectTypeWorkspace>[0]['renderProcessTypeCreate']
->;
-
-function setup(typeId: string, renderProcessTypeCreate?: RenderProcessTypeCreate) {
-  render(
-    <ProjectTypeWorkspace typeId={typeId} renderProcessTypeCreate={renderProcessTypeCreate} />,
-  );
+function setup(typeId: string) {
+  render(<ProjectTypeWorkspace typeId={typeId} />);
 }
 
 const TAB = {
@@ -223,19 +217,12 @@ describe('тип проекта в раме «Процессов» — одна 
     expect(useTypeSettingsStore.getState().target).toEqual({ kind: 'project-type', id: 'p1' });
   });
 
-  it('слоты фичи automation доходят до своих вкладок (I6): окно типа задачи — до создания, окно атрибута — до формы', () => {
+  it('слот окна атрибута доходит до вкладки формы (I6); создание типов живёт у «+» колонки — у вкладок слотов создания нет', () => {
     state.types = [TYPE('p1', 'Договор')];
-    const renderProcessTypeCreate = vi.fn<RenderProcessTypeCreate>(() => null);
     const renderCreateField = vi.fn(() => null);
-    render(
-      <ProjectTypeWorkspace
-        typeId="p1"
-        renderProcessTypeCreate={renderProcessTypeCreate}
-        renderCreateField={renderCreateField}
-      />,
-    );
+    render(<ProjectTypeWorkspace typeId="p1" renderCreateField={renderCreateField} />);
     fireEvent.click(screen.getByRole('tab', { name: TAB.creation }));
-    expect(screen.getByTestId('creation-tab').dataset.createSlot).toBe('yes');
+    expect(screen.getByTestId('creation-tab').dataset.createSlot).toBe('no');
     fireEvent.click(screen.getByRole('tab', { name: TAB.form }));
     expect(screen.getByTestId('form-tab').dataset.createFieldSlot).toBe('yes');
   });

@@ -16,6 +16,7 @@ import {
   type ParticipantSource,
 } from '../project-participants.repository.js';
 import { ProjectNodesRepository } from '../project-nodes.repository.js';
+import { ProjectTypesRepository } from '../project-types.repository.js';
 import { codeOf } from '../project-legacy-fields.js';
 import { ProjectsRepository, type ProjectRefRow } from '../projects.repository.js';
 import type {
@@ -59,6 +60,7 @@ export class ProjectReaderProvider implements ProjectReader, ProjectChatReader {
 
   constructor(
     private readonly projects: ProjectsRepository,
+    private readonly projectTypes: ProjectTypesRepository,
     private readonly participants: ProjectParticipantsRepository,
     private readonly nodes: ProjectNodesRepository,
     private readonly featureFlags: FeatureFlagService,
@@ -328,6 +330,12 @@ export class ProjectReaderProvider implements ProjectReader, ProjectChatReader {
     if (!(await this.enabled())) return null;
     const project = await this.projects.findById(projectId, tx);
     return project ? { id: project.type.id, name: project.type.name } : null;
+  }
+
+  /** Живые типы проектов для модели связей (#857): нейтрален при флаге off. */
+  async liveProjectTypeIds(tx?: TransactionClient): Promise<string[]> {
+    if (!(await this.enabled())) return [];
+    return this.projectTypes.liveProjectTypeIds(tx);
   }
 
   /** Вид папки задачи (#665): привязка работ к типу папки. */

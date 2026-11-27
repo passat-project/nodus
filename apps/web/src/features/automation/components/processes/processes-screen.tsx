@@ -243,7 +243,6 @@ export function ProcessesScreen(slots: ProcessesScreenSlots) {
             type={shown ?? selected}
             workflow={shown ? workflow : undefined}
             suspended={suspended}
-            renderProjectTypeCreate={slots.renderProjectTypeCreate}
           />
         </main>
       );

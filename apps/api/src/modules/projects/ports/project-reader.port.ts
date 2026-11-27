@@ -95,6 +95,11 @@ export interface ProjectReader {
     tx?: TransactionClient,
   ): Promise<{ id: string; name: string } | null>;
 
+  /** Живые типы проектов (#857, модель связей): свежий тип задачи стартует
+   *  неподключённым — настройщик сам подключает его типам проектов. Пусто
+   *  при выключенном модуле (нейтрально, I10). */
+  liveProjectTypeIds(tx?: TransactionClient): Promise<string[]>;
+
   /** Вид папки, в которой стоит задача (#665): null — узла нет, он чужой
    *  проекту или модуль выключен. Принадлежность проверяет assertNodeAllowed. */
   nodeKindOf(projectId: string, nodeId: string): Promise<string | null>;

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, Plus, RotateCcw } from 'lucide-react';
+import { Check, Plus } from 'lucide-react';
 import type { NodeKind, ProjectType } from '@nodus/contracts';
 import {
   allowedNodeKinds,
@@ -10,13 +10,15 @@ import {
 } from '@nodus/contracts';
 import { Button } from '@nodus/ui/components/button';
 import { NodeChip } from '@nodus/ui/components/node-chip';
-import { Switch } from '@nodus/ui/components/switch';
 
 import { useTypeSettingsStore } from '../../../shared/ui/type-settings-store.js';
+import { CatalogPicker } from '../../../shared/ui/catalog-picker.js';
 import { CardTabToolbar } from '../../../shared/ui/entity-card/card-tab-toolbar.js';
 import { PanelNote } from '../../../shared/ui/panel/panel-kit.js';
 import { NodeKindTile } from '../../../shared/ui/node-kind-icon.js';
 import { DataTable, type DataTableField } from '../../../shared/views/data-table.js';
+import { BulkIsland } from '../../../shared/views/bulk-island.js';
+import { useRowSelection } from '../../../shared/views/use-row-selection.js';
 import { ListToolbar, ListToolbarSummary } from '../../../shared/views/list-toolbar.js';
 import type { FilterFieldDef } from '../../../shared/views/list-filters.js';
 import { useListToolbar } from '../../../shared/views/use-list-toolbar.js';
@@ -27,22 +29,22 @@ import {
 } from '../../../shared/api/process-types-api.js';
 import { useCanManageWorkflows } from '../../../shared/api/use-can-manage-workflows.js';
 import { useUpdateProjectType } from '../api/project-catalog-mutations.js';
-import { kindIdsAfterToggle, kindsSummary, visibleTypeKinds } from '../lib/project-type-summary.js';
-import { NodeKindCreateDialog } from '../node-kinds/components/node-kind-create-dialog.js';
+import { kindIdsAfterToggle, visibleTypeKinds } from '../lib/project-type-summary.js';
 import { kindRowSummary } from '../node-kinds/components/node-kind-summary.js';
 
 /** Ключ вида: колонки и ширины общие для всех типов проектов (#857). */
 const VIEW_KEY = 'processes.type-kinds';
 
 /**
- * Вкладка «Какие папки здесь бывают» (#556; вкладка рамы типа — #857; ревизия
- * UI v3) — СПИСОК в грамматике журналов портала: `ListToolbar` + таблица
- * `shared/views` на всю ширину вкладки, без чекбоксов и островка массовых
- * команд. Строка: значок + название, сводка формы, тумблер «тип доступен» в
- * ячейке действий. `null` в `kindIds` — все типы; снятие делает список явным,
- * возврат к полному набору снова пишет `null` (тихая команда справа в
- * тулбаре, рядом со сводкой). Клик по строке открывает карточку типа папки
- * ПОВЕРХ с анимацией из строки — рама остаётся на месте.
+ * Вкладка «Какие папки здесь бывают» (#556; вкладка рамы типа — #857; модель
+ * связей, вердикт владельца 27.11) — список ПОДКЛЮЧЁННЫХ типов папок, а не
+ * весь справочник с тумблерами: «это же просто связи». Подключение — окном
+ * пикера из справочника (`CatalogPicker`, по центру, с чекбоксами), создание
+ * типов живёт у «+» колонки «Процессов», отключение — в меню строки и
+ * пачкой (чекбоксы + островок). Клик по строке открывает настройку типа
+ * папки поверх (компактное окно). `null` в `kindIds` — историческое «все
+ * типы»: список показывает фактический набор, первое отключение делает его
+ * явным.
  */
 export function ProjectTypeKindsTab({
   type,
@@ -60,12 +62,14 @@ export function ProjectTypeKindsTab({
   const canManageWorkflows = useCanManageWorkflows();
   const toolbar = useListToolbar(VIEW_KEY);
   const openSettings = useTypeSettingsStore((s) => s.openSettings);
-  const [createOpen, setCreateOpen] = useState(false);
 
   const visible = visibleTypeKinds(type, kinds);
   const allowed = allowedNodeKinds(type.kindIds, visible);
   const allowedIds = allowed.map((kind) => kind.id);
-  const explicit = type.kindIds !== null;
+  // Чекбоксы + островок: связи отключают и пачкой (вердикт владельца 27.11).
+  const selection = useRowSelection(allowedIds);
+  const selectedRows = allowed.filter((kind) => selection.selected.has(kind.id));
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   // «Отметил тип — предложено разрешить привязанные типы работ» (#665):
   // у включённого типа есть работы, выключенные в этом типе проекта.
@@ -81,13 +85,25 @@ export function ProjectTypeKindsTab({
   const q = toolbar.query.trim().toLowerCase();
   const rows = useMemo(
     () =>
-      visible.filter(
+      allowed.filter(
         (kind) =>
           !q ||
           kind.name.toLowerCase().includes(q) ||
           kindRowSummary(kind).toLowerCase().includes(q),
       ),
-    [visible, q],
+    [allowed, q],
+  );
+  /** Пикер: живые типы папок, которых ещё нет в подключённых. */
+  const connectable = useMemo(
+    () =>
+      visible
+        .filter((kind) => !allowedIds.includes(kind.id))
+        .map((kind) => ({
+          id: kind.id,
+          name: kind.name,
+          icon: <NodeKindTile icon={kind.icon} color={kind.color} className="size-6 rounded-md" />,
+        })),
+    [visible, allowedIds],
   );
 
   function allowBoundWorks(): void {
@@ -157,24 +173,17 @@ export function ProjectTypeKindsTab({
           defs={[] as FilterFieldDef<NodeKind>[]}
           left={
             canSetup ? (
-              <Button onClick={() => setCreateOpen(true)}>
+              <Button onClick={() => setPickerOpen(true)}>
                 <Plus data-icon="inline-start" />
-                {ui.projects.schemasCreateKind}
+                {ui.automation.entry.connectFolderKind}
               </Button>
             ) : null
           }
           right={
             <>
-              <ListToolbarSummary>{kindsSummary(type, kinds)}</ListToolbarSummary>
-              {canSetup && explicit && allowed.length < visible.length ? (
-                <Button
-                  variant="ghost"
-                  onClick={() => update.mutate({ id: type.id, kindIds: null })}
-                >
-                  <RotateCcw data-icon="inline-start" />
-                  {ui.projects.schemasResetKinds}
-                </Button>
-              ) : null}
+              <ListToolbarSummary>
+                {ui.automation.entry.connectedSummary.replace('{count}', String(allowed.length))}
+              </ListToolbarSummary>
               <ViewSettings viewKey={VIEW_KEY} defs={defs} />
             </>
           }
@@ -187,9 +196,9 @@ export function ProjectTypeKindsTab({
           defs={defs}
           rows={rows}
           rowKey={(kind) => kind.id}
-          selectable={false}
+          selection={selection}
           label={ui.projects.schemasKinds}
-          emptyTitle={q ? ui.automation.entry.searchEmpty : ui.projects.schemasKindsEmpty}
+          emptyTitle={q ? ui.automation.entry.searchEmpty : ui.automation.entry.connectedEmpty}
           // Тип папки — незначимая сущность: карточки у неё нет, строка
           // открывает компактное окно настроек этого типа.
           onOpenRow={(kind) => openSettings({ kind: 'node-kind', id: kind.id })}
@@ -199,17 +208,44 @@ export function ProjectTypeKindsTab({
               label: ui.automation.menuSettingsType,
               onSelect: () => openSettings({ kind: 'node-kind', id: kind.id }),
             },
+            ...(canSetup
+              ? [
+                  {
+                    id: 'disconnect',
+                    label: ui.automation.entry.disconnect,
+                    onSelect: () => toggle(kind.id, false),
+                  },
+                ]
+              : []),
           ]}
-          actions={(kind) => (
-            <Switch
-              checked={allowedIds.includes(kind.id)}
-              disabled={!canSetup}
-              aria-label={`${kind.name}: ${ui.projects.schemasKindAvailable}`}
-              onCheckedChange={(checked) => toggle(kind.id, checked)}
-            />
-          )}
         />
       </div>
+      <BulkIsland
+        visible={canSetup && selectedRows.length > 0}
+        count={selectedRows.length}
+        ariaLabel={ui.projects.schemasKinds}
+        onClear={selection.clear}
+      >
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            for (const kind of selectedRows) toggle(kind.id, false);
+            selection.clear();
+          }}
+        >
+          {ui.automation.entry.disconnectSelected}
+        </Button>
+      </BulkIsland>
+      <CatalogPicker
+        title={ui.automation.entry.connectFolderKind}
+        groups={[{ id: 'kind', label: ui.automation.entry.groups.folder, items: connectable }]}
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onConnect={(ids) => {
+          for (const id of ids) toggle(id, true);
+        }}
+      />
 
       {canSetup && canManageWorkflows && boundWorks.length > 0 ? (
         <div className="shrink-0 px-6 pb-3">
@@ -223,21 +259,6 @@ export function ProjectTypeKindsTab({
             </span>
           </PanelNote>
         </div>
-      ) : null}
-
-      {createOpen ? (
-        <NodeKindCreateDialog
-          onClose={() => setCreateOpen(false)}
-          onCreated={(id) => {
-            // При «все типы» новый тип уже разрешён — явный список не нужен.
-            if (type.kindIds !== null) {
-              update.mutate({
-                id: type.id,
-                kindIds: kindIdsAfterToggle(type.kindIds, visible, id, true),
-              });
-            }
-          }}
-        />
       ) : null}
     </div>
   );

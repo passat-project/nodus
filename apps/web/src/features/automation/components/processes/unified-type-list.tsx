@@ -7,15 +7,19 @@ import { Archive, Search, X } from 'lucide-react';
 import { useArchiveProcessType } from '../../api/automation-api.js';
 import { ProcessTypeCreateDialog } from '../types/type-create-dialog.js';
 import { KindRow, NoProjectRow, ProcessTypeRow, ProjectTypeRow } from './unified-type-rows.js';
+import { UnifiedCreateMenu } from './unified-create-menu.js';
 import { UnifiedGroupEmpty, UnifiedGroupHeader } from './unified-type-row.js';
 
 /**
- * Левая колонка единого входа «Процессы» (#857, единая модель §5): четыре
+ * Левая колонка единого входа «Процессов» (#857, единая модель §5): четыре
  * группы в строгом порядке — Проекты (последней строкой «Без проекта»),
  * Задачи, Письма, Папки. Группы сворачиваются, поиск один на все (фильтрует
- * по имени, раскрывает группу с найденным, прячет пустые), «+» в заголовке
- * создаёт тип категории (в т.ч. копией; у «Писем» создания нет — каталог
- * заморожен, #55). Архив — свёрнутой группой внизу, все категории вместе.
+ * по имени, раскрывает группу с найденным, прячет пустые). СОЗДАНИЕ —
+ * единственная точка: тихий «+» справа от поиска (как у чатов/каналов
+ * мессенджера, вердикт владельца 27.11) с меню «Тип проекта / Тип задачи /
+ * Тип папки» (у «Писем» создания нет — каталог заморожен, #55); созданный
+ * тип появляется в своей группе, в типы его подключают пикером (модель
+ * связей). Архив — свёрнутой группой внизу, все категории вместе.
  * Проектные группы скрыты без права `project.setup.manage`; строки —
  * `unified-type-rows.tsx`.
  */
@@ -165,8 +169,6 @@ export function UnifiedTypeList(props: UnifiedTypeListProps) {
     label: string;
     count: number;
     rows: ReactNode[];
-    onCreate?: () => void;
-    createLabel?: string;
   }[] = [
     ...(canSetup
       ? [
@@ -186,8 +188,6 @@ export function UnifiedTypeList(props: UnifiedTypeListProps) {
                   ]
                 : []),
             ],
-            onCreate: () => setProjectCreate({}),
-            createLabel: ui.projects.typesCreate,
           },
         ]
       : []),
@@ -196,9 +196,6 @@ export function UnifiedTypeList(props: UnifiedTypeListProps) {
       label: ui.automation.entry.groups.task,
       count: aliveTasks.length,
       rows: aliveTasks.map(processRow),
-      ...(canManage
-        ? { onCreate: () => setTaskCreate({}), createLabel: ui.automation.newType }
-        : {}),
     },
     {
       id: 'letter',
@@ -213,8 +210,6 @@ export function UnifiedTypeList(props: UnifiedTypeListProps) {
             label: ui.automation.entry.groups.folder,
             count: aliveKinds.length,
             rows: aliveKinds.map(kindRow),
-            onCreate: () => setKindCreate({}),
-            createLabel: ui.projects.schemasCreateKind,
           },
         ]
       : []),
@@ -229,7 +224,7 @@ export function UnifiedTypeList(props: UnifiedTypeListProps) {
 
   return (
     <aside className="flex w-80 shrink-0 flex-col border-r border-border bg-card">
-      <div className="flex h-14 shrink-0 items-center border-b border-border px-2">
+      <div className="flex h-14 shrink-0 items-center gap-1 border-b border-border px-2">
         <div className="relative min-w-0 flex-1">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -250,6 +245,13 @@ export function UnifiedTypeList(props: UnifiedTypeListProps) {
             </button>
           ) : null}
         </div>
+        <UnifiedCreateMenu
+          canSetup={canSetup}
+          canManage={canManage}
+          onCreateProject={() => setProjectCreate({})}
+          onCreateTask={() => setTaskCreate({})}
+          onCreateKind={() => setKindCreate({})}
+        />
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-1.5">
@@ -268,13 +270,7 @@ export function UnifiedTypeList(props: UnifiedTypeListProps) {
                   collapsed={!open}
                   onToggle={() => toggle(group.id)}
                 />
-                {open ? (
-                  group.rows.length > 0 ? (
-                    group.rows
-                  ) : (
-                    <UnifiedGroupEmpty onCreate={group.onCreate} createLabel={group.createLabel} />
-                  )
-                ) : null}
+                {open ? group.rows.length > 0 ? group.rows : <UnifiedGroupEmpty /> : null}
               </div>
             );
           })

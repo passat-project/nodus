@@ -22,6 +22,7 @@ import {
   type RoleMembershipReader,
 } from '../../../core/ports/role-membership.port.js';
 import { assertLetterCatalogEditable } from '../catalog/letter-lock.js';
+import { PROJECT_READER, type ProjectReader } from '../../projects/ports/project-reader.port.js';
 import { WorkflowEntityRegistry } from '../workflow/engine/entity-adapter.registry.js';
 import { WorkflowRepository } from '../workflow/workflow.repository.js';
 import { maskCreationPresets, processTypeDto, type ProcessTypeRow } from './process-type.mapper.js';
@@ -50,6 +51,7 @@ export class ProcessTypesService {
     private readonly adapters: WorkflowEntityRegistry,
     private readonly eventBus: EventBus,
     @Inject(ROLE_MEMBERSHIP_READER) private readonly membership: RoleMembershipReader,
+    @Inject(PROJECT_READER) private readonly projects: ProjectReader,
   ) {}
 
   async list(
@@ -115,6 +117,20 @@ export class ProcessTypesService {
         await this.repo.copyTypeBindings(tx, body.base.typeId, type.id);
       }
       await this.repo.attachToDefaultScheme(tx, type.id, workflowId);
+      // Модель связей (#857): свежий тип задачи (не копия) стартует
+      // НИГДЕ не подключённым — в типы проектов его подключает настройщик
+      // сам, пикером из справочника. Копия наследует места создания основы;
+      // письма системные (ADR-0027) — их поток настройки не касаются.
+      if (body.category === 'task' && body.base.kind === 'simple') {
+        const config = normalizeTypeConfig(type.config);
+        const excluded = await this.projects.liveProjectTypeIds(tx);
+        await this.repo.updateConfig(
+          tx,
+          type.id,
+          { ...config, creation: { ...config.creation, excludedProjectTypeIds: excluded } },
+          { markCustomized: false },
+        );
+      }
       await this.eventBus.emit(
         tx,
         WORKFLOW_EVENTS.TYPE_CREATED,

@@ -16,6 +16,7 @@ function setup(
     type?: Record<string, unknown> | null;
     rows?: Record<string, unknown>[];
     roles?: { id: string; code: string }[];
+    liveProjectTypeIds?: string[];
   } = {},
 ) {
   const repo = {
@@ -57,6 +58,9 @@ function setup(
     { has: vi.fn(() => true) } as never,
     { emit } as never,
     membership as never,
+    // Read-порт проектов (модель связей #857): свежий тип задачи стартует
+    // неподключённым — без живых типов проектов список исключений пуст.
+    { liveProjectTypeIds: vi.fn(async () => opts.liveProjectTypeIds ?? []) } as never,
   );
   return { service, repo, workflows, emit, membership };
 }
@@ -97,8 +101,24 @@ describe('ProcessTypesService (#378)', () => {
     );
   });
 
-  it('основа «копия типа»: маршрут и привязки атрибутов копируются новыми id', async () => {
-    const { service, repo, workflows } = setup();
+  it('свежий тип задачи стартует НИГДЕ не подключённым: все живые типы проектов — в исключения (#857)', async () => {
+    const live = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
+    const { service, repo } = setup({ liveProjectTypeIds: live });
+    await service.create(USER, body({ kind: 'simple' }));
+    expect(repo.updateConfig).toHaveBeenCalledWith(
+      TX,
+      'new-type',
+      expect.objectContaining({
+        creation: expect.objectContaining({ excludedProjectTypeIds: live }),
+      }),
+      { markCustomized: false },
+    );
+  });
+
+  it('основа «копия типа»: маршрут и привязки атрибутов копируются новыми id; связи основы наследуются — исключения НЕ перезаписываются (#857)', async () => {
+    const { service, repo, workflows } = setup({
+      liveProjectTypeIds: ['11111111-1111-4111-8111-111111111111'],
+    });
     const created = await service.create(USER, body({ kind: 'copy', typeId: 'src-type' }));
     expect(repo.workflowIdOf).toHaveBeenCalledWith('src-type');
     expect(workflows.load).toHaveBeenCalledWith('wf-src', TX);

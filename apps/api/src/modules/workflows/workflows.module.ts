@@ -9,6 +9,7 @@ import { ProjectsPortsModule } from '../projects/projects-ports.module.js';
 import { WorkflowPublishedHandler } from './events/workflow-published.handler.js';
 import { ProcessTypeCreationCleanupHandler } from './events/process-type-creation-cleanup.handler.js';
 import { ProjectTypeCopiedScopeHandler } from './events/project-type-copied-scope.handler.js';
+import { ProjectTypeCreatedScopeHandler } from './events/project-type-created-scope.handler.js';
 import { ProcessTypesController } from './types/process-types.controller.js';
 import { ProcessTypesService } from './types/process-types.service.js';
 import { WorkflowEditorController } from './workflow/editor/workflow-editor.controller.js';
@@ -51,6 +52,8 @@ import { CustomFieldsPortsModule } from '../custom-fields/custom-fields-ports.mo
     ProcessTypeCreationCleanupHandler,
     // Копия типа проекта наследует исключения «где создаётся» (#857, #665).
     ProjectTypeCopiedScopeHandler,
+    // Свежий тип проекта стартует без подключённых типов задач (#857).
+    ProjectTypeCreatedScopeHandler,
   ],
 })
 export class WorkflowsModule {}

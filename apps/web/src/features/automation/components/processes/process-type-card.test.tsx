@@ -123,17 +123,13 @@ function setup(
     workflow?: typeof WORKFLOW | null;
   } = {},
 ) {
-  const state = {
-    type: patch.type ?? TYPE(),
-    renderProjectTypeCreate: vi.fn(() => <div data-testid="project-create-slot" />),
-  };
+  const state = { type: patch.type ?? TYPE() };
   const view = render(
     <ProcessTypeCard
       type={state.type}
       workflow={patch.workflow === null ? undefined : (patch.workflow ?? WORKFLOW)}
       suspended={patch.suspended}
       idPrefix={patch.idPrefix}
-      renderProjectTypeCreate={state.renderProjectTypeCreate}
     />,
   );
   return { view, state };
@@ -234,8 +230,9 @@ describe('карточка типа процесса — рама с вклад�
     const creation = screen.getByTestId('creation-tab');
     expect(selected(TAB.creation)).toBe(true);
     expect(creation.getAttribute('data-can-save')).toBe('yes');
-    // Слот окна создания типа проекта прокинут из фичи projects (I6).
-    expect(creation.getAttribute('data-create-slot')).toBe('yes');
+    // Слота создания у вкладки больше НЕТ (модель связей #857): создание
+    // типов живёт у «+» колонки «Процессов», здесь — только связи.
+    expect(creation.getAttribute('data-create-slot')).toBe('no');
     expect(screen.queryByTestId('route-editor')).toBeNull();
   });
 
@@ -277,19 +274,13 @@ describe('карточка типа процесса — рама с вклад�
   });
 
   it('смена типа сбрасывает вкладку на «Маршрут»', () => {
-    const { view, state } = setup();
+    const { view } = setup();
     fireEvent.click(tab(TAB.form));
     expect(screen.getByTestId('form-tab')).toBeTruthy();
 
     const next = TYPE({ id: 't2', name: 'Смета' });
     act(() => {
-      view.rerender(
-        <ProcessTypeCard
-          type={next}
-          workflow={WORKFLOW}
-          renderProjectTypeCreate={state.renderProjectTypeCreate}
-        />,
-      );
+      view.rerender(<ProcessTypeCard type={next} workflow={WORKFLOW} />);
     });
     expect(screen.queryByTestId('form-tab')).toBeNull();
     expect(selected(TAB.route)).toBe(true);

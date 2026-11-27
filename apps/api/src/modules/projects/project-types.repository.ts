@@ -51,6 +51,17 @@ export class ProjectTypesRepository {
     return rows.map((row) => this.toDto(row));
   }
 
+  /** Живые типы проектов — только id (модель связей #857: старт свежего
+   *  типа задачи «нигде не подключён»). */
+  async liveProjectTypeIds(tx?: TransactionClient): Promise<string[]> {
+    const rows = await (tx ?? this.prisma).projectType.findMany({
+      select: { id: true },
+      where: { archivedAt: null },
+      orderBy: [{ name: 'asc' }],
+    });
+    return rows.map((row) => row.id);
+  }
+
   async findActive(id: string): Promise<ProjectType | null> {
     const row = await this.prisma.projectType.findFirst({
       select: typeSelect,

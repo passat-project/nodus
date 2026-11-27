@@ -152,7 +152,14 @@ describe('создание типа проекта копией (#857)', () => {
       1,
       {},
       PROJECT_EVENTS.TYPE_CHANGED,
-      { typeId: 'type-1', change: 'created', fields: ['name', 'form', 'kindIds'] },
+      // Копия несёт sourceTypeId: подписчик модели связей (#857) не
+      // расчищает ей список подключённых типов — наследует type_copied.
+      {
+        typeId: 'type-1',
+        change: 'created',
+        fields: ['name', 'form', 'kindIds'],
+        sourceTypeId: 'source-1',
+      },
       { actorId: 'user-1', aggregateType: 'project_type', aggregateId: 'type-1' },
     );
     expect(deps.eventBus.emit).toHaveBeenNthCalledWith(
