@@ -27,6 +27,10 @@ export { errorMessages } from './ru-errors.js';
  *  ru-dev-ui.ts (строки не должны уезжать в прод-бандл вместе с `ui`). */
 export { devUiStrings } from './ru-dev-ui.js';
 
+/** Списки с расширением (#435): заголовки системных колонок (CSV) и уровни
+ *  сохранённых настроек. */
+export { listSystemFieldLabel, listsStrings } from './ru-lists.js';
+
 /**
  * Русские UI-строки портала (I15: компоненты не содержат хард-строк).
  * Терминология — русская деловая (ux-principles.md): без англицизмов.

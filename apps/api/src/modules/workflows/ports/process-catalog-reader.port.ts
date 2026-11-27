@@ -28,6 +28,17 @@ export interface CatalogStageWithType extends CatalogStage {
   typeName: string;
 }
 
+/** Минимальные флаги живой стадии (#435): перевод предикатов списков
+ * (outcome / «результат выдан» / живость stage_id) в множества stage_id. */
+export interface CatalogStageFlag {
+  id: string;
+  workflowId: string;
+  sortOrder: number;
+  systemState: string;
+  outcome: string | null;
+  resultIssued: boolean;
+}
+
 export interface ProcessCatalogReader {
   /** Тип по id (по умолчанию — системный «Стандартный») с маршрутом и
    *  опубликованной формой создания. `category` — ожидаемая категория
@@ -72,4 +83,10 @@ export interface ProcessCatalogReader {
     category: ProcessCategory;
     viewerId?: string;
   }): Promise<CatalogStageWithType[]>;
+
+  /** Живые стадии всех живых типов категории одним набором (#435):
+   *  предикаты списков (outcome / result_issued / stage_is) переводятся в
+   *  множества stage_id по этим флагам. Имена/цвета не нужны — только
+   *  системные флаги, один запрос на категорию. */
+  liveStageFlags(category: ProcessCategory): Promise<CatalogStageFlag[]>;
 }

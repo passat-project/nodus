@@ -9,6 +9,14 @@ import { customFieldRefSchema } from '../custom-fields/custom-field-refs.js';
 import { customFieldFormulasSchema } from '../custom-fields/formula-api.schemas.js';
 import { userRefSchema } from '../directory/user-ref.schema.js';
 import { lockReasonSchema, taskFieldLockSchema } from '../forms/field-lock.js';
+import {
+  jsonQueryParam,
+  LIST_VIEW_LIMITS,
+  listFilterSchema,
+  listGroupSchema,
+  listSortSchema,
+  listTotalSchema,
+} from '../lists/list-view.schemas.js';
 import { cursorQuerySchema } from '../pagination/paginated.schema.js';
 import { projectRefSchema } from '../projects/project.schemas.js';
 import { pressRoundViewSchema } from '../workflows/press.js';
@@ -118,6 +126,12 @@ export const taskListItemSchema = z.object({
    *  производное — старые моки/клиенты могут его не присылать (пусто =
    *  формул нет). */
   customFieldFormulas: customFieldFormulasSchema.optional(),
+  /** «Кто решил» (#435): автор последнего решения по журналу переходов
+   *  (переход/кнопка/отметка сбора человеком); null — решений людьми ещё
+   *  не было. Производное — присутствует в списках с расширением. */
+  decidedBy: userRefSchema.nullable().optional(),
+  /** «Когда решили» (#435): момент того же решения. */
+  decidedAt: z.iso.datetime().nullable().optional(),
   updatedAt: z.iso.datetime(),
 });
 
@@ -459,6 +473,14 @@ export const listTasksQuerySchema = cursorQuerySchema.extend({
   projectId: z.uuid().optional(),
   /** Задачи исполнителя (вкладка «Задачи» карточки сотрудника). */
   assigneeId: z.uuid().optional(),
+  /** Расширение списка #435: фильтр/сортировка/группировка/итоги — JSON в
+   *  query-параметрах (транспорт — jsonQueryParam). При наличии любого из
+   *  них список идёт ext-конвейером: серверная сортировка по любой колонке,
+   *  группы и итоги по всей видимой выборке. */
+  filter: jsonQueryParam(listFilterSchema).optional(),
+  sort: jsonQueryParam(z.array(listSortSchema).max(LIST_VIEW_LIMITS.sort)).optional(),
+  group: jsonQueryParam(listGroupSchema).optional(),
+  totals: jsonQueryParam(z.array(listTotalSchema).max(LIST_VIEW_LIMITS.totals)).optional(),
 });
 
 export type ListTasksQuery = z.infer<typeof listTasksQuerySchema>;

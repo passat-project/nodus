@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Permission, type AuthUser } from '@nodus/contracts';
 
-import type { Prisma } from '../../../generated/prisma/client.js';
+import { Prisma } from '../../../generated/prisma/client.js';
 import {
   ORG_STRUCTURE_READER,
   type OrgStructureReader,
@@ -125,6 +125,87 @@ export function visibleTasksWhere(
     };
   }
   return { ...alive, OR: or };
+}
+
+// ===== SQL-эквивалент той же видимости (#435) =====
+//
+// Ext-списки (фильтр/сортировка/группировка/итоги) считают на сервере по
+// всей выборке — Prisma orderBy по JSONB-атрибутам не умеет (research
+// 27.11), поэтому строки/группы/итоги идут сырым SQL. Видимость ОДНА:
+// этот эмиттер — построчный перевод visibleTasksWhere над тем же Viewer;
+// меняешь where — правь sql в ТОМ ЖЕ коммите (эквивалентность держат
+// тесты task-visibility.test.ts на живой БД).
+
+function involvesSql(t: string, userIds: readonly string[]): Prisma.Sql {
+  const ids = [...new Set(userIds)];
+  return Prisma.sql`(
+    ${Prisma.raw(t)}.creator_id = ANY(${uuidArray(ids)})
+    OR ${Prisma.raw(t)}.assignee_id = ANY(${uuidArray(ids)})
+    OR EXISTS (
+      SELECT 1 FROM task_participants tp
+      WHERE tp.task_id = ${Prisma.raw(t)}.id AND tp.user_id = ANY(${uuidArray(ids)})
+    )
+  )`;
+}
+
+function uuidArray(ids: readonly string[]): Prisma.Sql {
+  return Prisma.sql`ARRAY[${Prisma.join(
+    ids.map((id) => Prisma.sql`${id}::uuid`),
+    ', ',
+  )}]::uuid[]`;
+}
+
+function notHiddenSql(t: string, hidden: readonly string[]): Prisma.Sql | null {
+  if (hidden.length === 0) return null;
+  // Ветка IS NULL обязательна: SQL `NULL <> ALL(...)` ложен (ловушка Р3).
+  return Prisma.sql`(${Prisma.raw(t)}.project_id IS NULL OR ${Prisma.raw(t)}.project_id <> ALL(${uuidArray(hidden)}))`;
+}
+
+/**
+ * SQL-WHERE видимости задач — эквивалент visibleTasksWhere(viewer, scope)
+ * для запросов ext-списков (#435). `t` — алиас таблицы tasks в запросе.
+ */
+export function visibleTasksSql(viewer: Viewer, scope: 'mine' | 'all', t = 't'): Prisma.Sql {
+  const tbl = Prisma.raw(t);
+  const alive = Prisma.sql`${tbl}.deleted_at IS NULL`;
+  const gate = notHiddenSql(t, viewer.hiddenProjectIds);
+  const mine = involvesSql(t, [viewer.id]);
+  const mineGated = gate ? Prisma.sql`(${mine} AND ${gate})` : Prisma.sql`(${mine})`;
+  const pressIds = viewer.pressTaskIds ?? [];
+  const pressBranch =
+    pressIds.length > 0
+      ? Prisma.sql`(${tbl}.id = ANY(${uuidArray(pressIds)}) AND ${tbl}.confidential = false${gate ? Prisma.sql` AND ${gate}` : Prisma.empty})`
+      : null;
+  if (scope === 'mine') {
+    return pressBranch
+      ? Prisma.sql`(${alive} AND (${mineGated} OR ${pressBranch}))`
+      : Prisma.sql`(${alive} AND ${mineGated})`;
+  }
+  const or: Prisma.Sql[] = [mineGated];
+  if (viewer.subordinateIds.length > 0) {
+    const sub = involvesSql(t, viewer.subordinateIds);
+    or.push(
+      Prisma.sql`(${sub} AND ${tbl}.confidential = false${gate ? Prisma.sql` AND ${gate}` : Prisma.empty})`,
+    );
+  }
+  if (viewer.visibleProjectIds.length > 0) {
+    or.push(
+      Prisma.sql`(${tbl}.project_id = ANY(${uuidArray(viewer.visibleProjectIds)}) AND ${tbl}.confidential = false)`,
+    );
+  }
+  const deciderIds = viewer.deciderTaskIds ?? [];
+  if (deciderIds.length > 0) {
+    or.push(
+      Prisma.sql`(${tbl}.id = ANY(${uuidArray(deciderIds)}) AND ${tbl}.confidential = false${gate ? Prisma.sql` AND ${gate}` : Prisma.empty})`,
+    );
+  }
+  if (pressBranch) or.push(pressBranch);
+  if (viewer.permissions.includes(Permission.TASK_VIEW_ALL)) {
+    or.push(
+      Prisma.sql`(${tbl}.confidential = false${gate ? Prisma.sql` AND ${gate}` : Prisma.empty})`,
+    );
+  }
+  return Prisma.sql`(${alive} AND (${Prisma.join(or, ' OR ')}))`;
 }
 
 @Injectable()

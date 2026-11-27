@@ -212,6 +212,10 @@ const CODE_TO_STATUS: Record<ErrorCode, number> = {
   // Поиск (#952): statement_timeout — сервис не успел, клиент может уточнить
   // запрос и повторить (504, не 500: состояние портала исправно).
   [ErrorCode.SEARCH_TIMEOUT]: HttpStatus.GATEWAY_TIMEOUT,
+  // Списки с расширением (#435): негодное поле/оператор — 422 (вход).
+  [ErrorCode.LIST_FIELD_INVALID]: HttpStatus.UNPROCESSABLE_ENTITY,
+  // Выгрузка списка (#435): колонку CSV собрать не удалось — 422 (вход).
+  [ErrorCode.LIST_EXPORT_COLUMN_INVALID]: HttpStatus.UNPROCESSABLE_ENTITY,
 };
 
 /** Код для HTTP-исключений Nest/Fastify (400 у нас — всегда валидация входа). */

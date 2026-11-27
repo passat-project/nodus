@@ -29,7 +29,9 @@ import {
   letterHistoryEntrySchema,
   letterListItemSchema,
   letterResolversSchema,
+  hasListExt,
   listLettersQuerySchema,
+  listResultSchema,
   paginatedSchema,
   Permission,
   setLetterMainDocumentBodySchema,
@@ -50,6 +52,7 @@ import {
   type LetterListItem,
   type LetterResolvers,
   type ListLettersQuery,
+  type ListResult,
   type Paginated,
   type WorkflowTransition,
 } from '@nodus/contracts';
@@ -68,6 +71,7 @@ import { LetterHistoryService } from '../history/letter-history.service.js';
 import { LettersMainDocumentService } from './letters-main-document.service.js';
 import { LettersManualCreateService } from './letters-manual-create.service.js';
 import { LettersMutationService } from './letters-mutation.service.js';
+import { LettersExtService } from './letters-ext.service.js';
 import { LettersQueryService } from './letters-query.service.js';
 import { readLetterMultipart } from './letter-upload.js';
 import { LetterTransitionsService } from '../workflow/letter-transitions.service.js';
@@ -94,6 +98,7 @@ const historyQuery = z.object({
 export class LettersController {
   constructor(
     private readonly query: LettersQueryService,
+    private readonly ext: LettersExtService,
     private readonly mutations: LettersMutationService,
     private readonly manualCreate: LettersManualCreateService,
     private readonly mainDocument: LettersMainDocumentService,
@@ -102,9 +107,12 @@ export class LettersController {
   ) {}
 
   @Get()
-  @ApiOperation({ summary: 'Список писем: box=new|incoming|outgoing, поиск, курсор' })
-  @ApiOkResponse({ standardSchema: paginatedSchema(letterListItemSchema) })
-  @ApiErrors(400, 401, 403)
+  @ApiOperation({
+    summary:
+      'Список писем: box=new|incoming|outgoing, поиск, курсор; ?filter/&sort/&group/&totals (#435) — ext-конвейер',
+  })
+  @ApiOkResponse({ standardSchema: listResultSchema(letterListItemSchema) })
+  @ApiErrors(400, 401, 403, 422)
   list(
     @GetUser() user: AuthUser,
     @Query({
@@ -112,8 +120,9 @@ export class LettersController {
       pipes: [new ZodValidationPipe(listLettersQuerySchema)],
     })
     q: ListLettersQuery,
-  ): Promise<Paginated<LetterListItem>> {
-    return this.query.list(user, q);
+  ): Promise<ListResult<LetterListItem>> {
+    // Расширение (#435): любой из filter/sort/group/totals — ext-конвейер.
+    return hasListExt(q) ? this.ext.list(user, q) : this.query.list(user, q);
   }
 
   @Get('resolvers')

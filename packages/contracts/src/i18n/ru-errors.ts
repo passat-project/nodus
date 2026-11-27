@@ -157,4 +157,6 @@ export const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.ASSISTANT_PROVIDER_UNAVAILABLE]: 'Провайдер моделей не отвечает',
   [ErrorCode.ASSISTANT_MCP_NOT_FOUND]: 'MCP-сервер не найден',
   [ErrorCode.SEARCH_TIMEOUT]: 'Запрос слишком тяжёлый — уточните его и повторите',
+  [ErrorCode.LIST_FIELD_INVALID]: 'Поле списка неизвестно или не подходит этой выборке',
+  [ErrorCode.LIST_EXPORT_COLUMN_INVALID]: 'Колонку выгрузки собрать не удалось',
 };

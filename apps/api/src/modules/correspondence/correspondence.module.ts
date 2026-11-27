@@ -41,6 +41,8 @@ import { LettersController } from './letters/letters.controller.js';
 import { LettersManualCreateService } from './letters/letters-manual-create.service.js';
 import { LettersMainDocumentService } from './letters/letters-main-document.service.js';
 import { LettersMutationService } from './letters/letters-mutation.service.js';
+import { LettersExtRepository } from './letters/letters-ext.repository.js';
+import { LettersExtService } from './letters/letters-ext.service.js';
 import { LettersQueryService } from './letters/letters-query.service.js';
 import { LettersRelationService } from './letters/letters-relation.service.js';
 import { LettersRepository } from './letters/letters.repository.js';
@@ -92,6 +94,7 @@ import { LetterWorkflowAdapter } from './workflow/letter-workflow.adapter.js';
     LetterSearchSourceProvider,
     // Репозитории — единственная точка доступа к таблицам модуля (patterns.md).
     LettersRepository,
+    LettersExtRepository,
     LetterRelationsRepository,
     LetterAttachedRefsRepository,
     // Уборка значений удалённого атрибута (#582): событие custom_field.definition_changed.
@@ -121,6 +124,8 @@ import { LetterWorkflowAdapter } from './workflow/letter-workflow.adapter.js';
     LetterHistoryRepository,
     LetterDtoMapper,
     LettersQueryService,
+    // Ext-список писем (#435): фильтр/сортировка/группы/итоги сырым SQL.
+    LettersExtService,
     LettersTreeService,
     LettersRelationService,
     LetterFieldsValidator,

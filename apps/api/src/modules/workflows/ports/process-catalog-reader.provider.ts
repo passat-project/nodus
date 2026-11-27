@@ -21,6 +21,7 @@ import { typeSubjectOf } from '../types/type-subject.js';
 import { WorkflowRepository } from '../workflow/workflow.repository.js';
 import type {
   CatalogStage,
+  CatalogStageFlag,
   CatalogStageWithType,
   ProcessCatalogReader,
 } from './process-catalog-reader.port.js';
@@ -166,5 +167,27 @@ export class ProcessCatalogReaderProvider implements ProcessCatalogReader {
           subject,
         ).canView,
     );
+  }
+
+  async liveStageFlags(category: ProcessCategory): Promise<CatalogStageFlag[]> {
+    // Только живые типы категории: архивные маршруты предикатам не поставляют
+    // стадий (как живой индекс вычисления #635).
+    const types = await this.types.list('exclude', category);
+    const workflowMap = await this.types.workflowMap();
+    const workflowIds = [
+      ...new Set(
+        types.flatMap((type) => (workflowMap.has(type.id) ? [workflowMap.get(type.id)!] : [])),
+      ),
+    ];
+    if (workflowIds.length === 0) return [];
+    const stages = await this.workflows.findStagesOfWorkflows(workflowIds);
+    return stages.map((s) => ({
+      id: s.id,
+      workflowId: s.workflowId,
+      sortOrder: s.sortOrder,
+      systemState: s.systemState,
+      outcome: s.outcome,
+      resultIssued: s.resultIssued,
+    }));
   }
 }

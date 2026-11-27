@@ -69,6 +69,8 @@ import { TaskFormulaService } from './tasks/task-formula.service.js';
 import { TaskFieldsWriter } from './tasks/task-fields.writer.js';
 import { ProjectsPortsModule } from '../projects/projects-ports.module.js';
 import { TasksController } from './tasks/tasks.controller.js';
+import { TasksExtRepository } from './tasks/tasks-ext.repository.js';
+import { TasksExtService } from './tasks/tasks-ext.service.js';
 import { TasksQueryRepository } from './tasks/tasks-query.repository.js';
 import { TasksQueryService } from './tasks/tasks-query.service.js';
 import { TasksRepository } from './tasks/tasks.repository.js';
@@ -124,6 +126,8 @@ import { TaskWorkflowController } from './workflow/task-workflow.controller.js';
     // Репозитории — единственная точка доступа к таблицам модуля (patterns.md).
     TasksRepository,
     TasksQueryRepository,
+    // Ext-список задач (#435): фильтр/сортировка/группы/итоги сырым SQL.
+    TasksExtRepository,
     TaskFactsRepository,
     PlacementsRepository,
     PersonalBoardsRepository,
@@ -172,6 +176,7 @@ import { TaskWorkflowController } from './workflow/task-workflow.controller.js';
     PersonalTemplateBootstrap,
     TaskDtoMapper,
     TasksQueryService,
+    TasksExtService,
     TasksService,
     TaskEditService,
     TaskFormulaService,

@@ -317,6 +317,13 @@ export const ErrorCode = {
   /** Поиск по порталу (#952): запрос превысил `statement_timeout` (504;
    *  Postgres 57014 / Prisma P2028) — интерфейс предлагает уточнить запрос. */
   SEARCH_TIMEOUT: 'SEARCH_TIMEOUT',
+  /** Списки с расширением (#435): поле фильтра/сортировки/группировки/итогов
+   *  неизвестно (атрибут удалён или опечатка), системное поле чужой сущности
+   *  или оператор несовместим со значением (`details {field, reason}`; 422). */
+  LIST_FIELD_INVALID: 'LIST_FIELD_INVALID',
+  /** Выгрузка списка (#435): колонка вида ссылается на недоступное поле —
+   *  сервер не может собрать CSV (`details {field}`; 422). */
+  LIST_EXPORT_COLUMN_INVALID: 'LIST_EXPORT_COLUMN_INVALID',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

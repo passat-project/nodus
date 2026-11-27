@@ -39,7 +39,7 @@ import {
 import { LetterAttachedRefsRepository } from './letter-attached-refs.repository.js';
 import { LetterDtoMapper } from './letter-dto.mapper.js';
 import { LetterThreadingService } from './letter-threading.service.js';
-import type { LetterCursor, LetterDetailRow } from './letter-row.js';
+import type { LetterCursor, LetterDetailRow, LetterListRow } from './letter-row.js';
 import { LettersRepository, listOrderOf } from './letters.repository.js';
 
 const cursorSchema = z.object({ at: z.string().min(1), id: z.uuid() });
@@ -84,24 +84,29 @@ export class LettersQueryService {
     const after = q.cursor ? (decodeCursor(q.cursor, cursorSchema) as LetterCursor) : undefined;
     const rows = await this.repo.list(where, listOrderOf(q.box), after, q.limit);
     const page = rows.slice(0, q.limit);
-    const ids = page.map((row) => row.id);
-    const [counts, viewed] = await Promise.all([
-      this.repo.attachmentCounts(ids),
-      // Личный индикатор «я ещё не открывал» (редизайн #56).
-      this.repo.viewedLetterIds(user.id, ids),
-    ]);
-    // Бейджи «Ответ на …» в строке очереди «Новые» (#56, Р5); цель-конфиденциальное
-    // вне участия не показывается (#461, Р4): плоская ссылка — тот же сток, что дерево.
-    const replyTos = await this.visibleReplyTos(user, ids);
     const last = page[page.length - 1];
     const axis = listOrderOf(q.box);
     return {
-      items: await this.mapper.toListItems(page, counts, user, replyTos, viewed),
+      items: await this.pageItems(user, page),
       nextCursor:
         rows.length > q.limit && last
           ? encodeCursor({ at: last[axis]!.toISOString(), id: last.id })
           : null,
     };
+  }
+
+  /** DTO страницы писем (#435: общий конвейер гидратации списка и ext-пути):
+   * счётчики файлов, личный «я открывал», бейджи «Ответ на …» (цель-конфиденциальное
+   * вне участия не показывается, #461 Р4 — плоская ссылка, тот же сток, что дерево). */
+  async pageItems(user: AuthUser, rows: readonly LetterListRow[]): Promise<LetterListItem[]> {
+    const ids = rows.map((row) => row.id);
+    const [counts, viewed, replyTos] = await Promise.all([
+      this.repo.attachmentCounts(ids),
+      // Личный индикатор «я ещё не открывал» (редизайн #56).
+      this.repo.viewedLetterIds(user.id, ids),
+      this.visibleReplyTos(user, ids),
+    ]);
+    return this.mapper.toListItems(rows, counts, user, replyTos, viewed);
   }
 
   /** Карточка: видимость → права → DTO (ссылки и файлы только видимому).

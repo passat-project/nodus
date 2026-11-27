@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 import { customFieldKeySchema } from '../custom-fields/custom-field-key.js';
+import { customFieldValuesSchema } from '../custom-fields/custom-field-values.js';
+import { cursorQuerySchema } from '../pagination/paginated.schema.js';
 import { CONDITION_LIMITS, conditionPredicateSchema } from '../workflows/condition-query.js';
 
 /**
@@ -215,7 +217,130 @@ export type CreateListExportBody = z.infer<typeof createListExportBodySchema>;
 export const listExportStatusSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('queued') }),
   z.object({ status: z.literal('running') }),
-  z.object({ status: z.literal('done'), fileId: z.uuid() }),
+  z.object({ status: z.literal('done'), fileId: z.uuid(), url: z.string() }),
   z.object({ status: z.literal('failed'), error: z.string() }),
 ]);
 export type ListExportStatus = z.infer<typeof listExportStatusSchema>;
+
+/** Ответ POST /views/export (#435): ≤1000 строк — файл готов в том же
+ *  запросе (done + подписанная ссылка выдачи), больше — фоновая очередь
+ *  (queued + exportId статуса). Тело запроса идемпотентно
+ *  (Idempotency-Key): реплей возвращает первый статус, файл не плодится. */
+export const createListExportResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('done'), fileId: z.uuid(), url: z.string() }),
+  z.object({ status: z.literal('queued'), exportId: z.uuid() }),
+]);
+export type CreateListExportResult = z.infer<typeof createListExportResultSchema>;
+
+/** Значение одного итога (общего или в группе). */
+export const listTotalValueSchema = z.object({
+  fn: z.string(),
+  value: z.union([z.string(), z.number()]).nullable(),
+});
+export type ListTotalValue = z.infer<typeof listTotalValueSchema>;
+
+/** Ответ списка с расширением (#435): сверх `{ items, nextCursor }` —
+ *  группы и итоги, посчитанные сервером по всей видимой выборке (поля
+ *  присутствуют, только когда их запросили). */
+export function listResultSchema<T extends z.ZodType>(itemSchema: T) {
+  return z.object({
+    items: z.array(itemSchema),
+    nextCursor: z.string().min(1).nullable(),
+    groups: z.array(listGroupBucketSchema).optional(),
+    totals: z.array(listTotalValueSchema).optional(),
+  });
+}
+
+export interface ListResult<T> {
+  items: T[];
+  nextCursor: string | null;
+  groups?: ListGroupBucket[];
+  totals?: ListTotalValue[];
+}
+
+/** Строка списка папок проекта (#435: список папок как вкладка-список).
+ *  Значения атрибутов — в customFields по id определения; ссылки гидрирует
+ *  клиент из реестра определений и своих данных. */
+export const folderListItemSchema = z.object({
+  id: z.uuid(),
+  projectId: z.uuid(),
+  parentId: z.uuid().nullable(),
+  kindId: z.uuid(),
+  name: z.string(),
+  code: z.string().nullable(),
+  customFields: customFieldValuesSchema,
+  createdAt: z.iso.datetime(),
+});
+export type FolderListItem = z.infer<typeof folderListItemSchema>;
+
+/** Транспорт расширения в query-параметрах GET (#435): JSON в urlencoded-
+ *  строке — `?filter=%5B...%5D&sort=...&group=...&totals=...`. Честный JSON
+ *  (не реляная кодировка): ext — объекты контракта, а не плоские фильтры
+ *  `filter[поле]` из api-conventions. Общий парсер для задач, писем, папок. */
+export function jsonQueryParam<T extends z.ZodType>(schema: T, maxBytes = 8192) {
+  return z
+    .string()
+    .max(maxBytes)
+    .transform((raw, ctx) => {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        ctx.addIssue({ code: 'custom', message: 'invalid JSON' });
+        return z.NEVER;
+      }
+      const result = schema.safeParse(parsed);
+      if (!result.success) {
+        ctx.addIssue({ code: 'custom', message: 'invalid ext payload' });
+        return z.NEVER;
+      }
+      return result.data;
+    });
+}
+
+/** Query-параметры списка папок проекта (#435): рамка проекта — путь
+ *  `/projects/:id/folders`, снимается только фильтром внутри неё. */
+export const listFoldersQuerySchema = cursorQuerySchema.extend({
+  filter: jsonQueryParam(listFilterSchema).optional(),
+  sort: jsonQueryParam(z.array(listSortSchema).max(LIST_VIEW_LIMITS.sort)).optional(),
+  group: jsonQueryParam(listGroupSchema).optional(),
+  totals: jsonQueryParam(z.array(listTotalSchema).max(LIST_VIEW_LIMITS.totals)).optional(),
+});
+export type ListFoldersQuery = z.infer<typeof listFoldersQuerySchema>;
+
+/** Query-параметры расширения списка: каждый необязателен, вместе —
+ *  listQueryExtSchema. Схемы-владельцы списков делают extend этого набора. */
+export const listQueryExtParamsSchema = z.object({
+  filter: jsonQueryParam(listFilterSchema),
+  sort: jsonQueryParam(z.array(listSortSchema).max(LIST_VIEW_LIMITS.sort)),
+  group: jsonQueryParam(listGroupSchema),
+  totals: jsonQueryParam(z.array(listTotalSchema).max(LIST_VIEW_LIMITS.totals)),
+});
+export type ListQueryExtParams = {
+  filter?: ListFilter;
+  sort?: ListSort[];
+  group?: ListGroup;
+  totals?: ListTotal[];
+};
+
+/** Расширение присутствует в запросе? (выбор пути: ext-конвейер или
+ *  прежний список). Присутствует — даже пустой: `?totals=[{"fn":"count"}]`
+ *  без фильтра тоже просит итоги. */
+export function hasListExt(q: ListQueryExtParams): boolean {
+  return (
+    q.filter !== undefined ||
+    q.sort !== undefined ||
+    q.group !== undefined ||
+    q.totals !== undefined
+  );
+}
+
+/** Нормализация params → ListQueryExt (умолчания как в контракте). */
+export function toListQueryExt(q: ListQueryExtParams): ListQueryExt {
+  return {
+    filter: q.filter ?? [],
+    sort: q.sort ?? [],
+    group: q.group,
+    totals: q.totals ?? [],
+  };
+}

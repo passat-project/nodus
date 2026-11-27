@@ -23,12 +23,13 @@ import {
   changeTaskTypeBodySchema,
   createSubtaskBodySchema,
   createTaskBodySchema,
+  hasListExt,
   lockReasonQuerySchema,
   taskFormulaBodySchema,
   formulaMovePreviewResponseSchema,
   formulaResponseSchema,
+  listResultSchema,
   listTasksQuerySchema,
-  paginatedSchema,
   taskBranchSchema,
   taskBulkBodySchema,
   taskBulkResultSchema,
@@ -43,9 +44,9 @@ import {
   type TaskFormulaBody,
   type FormulaMovePreviewResponse,
   type FormulaResponse,
+  type ListResult,
   type ListTasksQuery,
   type LockReasonQuery,
-  type Paginated,
   type TaskBranch,
   type TaskBulkBody,
   type TaskBulkResult,
@@ -67,6 +68,7 @@ import { TaskTypeChangeService } from '../types/task-type-change.service.js';
 import { TaskEditService } from './task-edit.service.js';
 import { TaskFormulaService } from './task-formula.service.js';
 import { TasksQueryService } from './tasks-query.service.js';
+import { TasksExtService } from './tasks-ext.service.js';
 import { TasksService } from './tasks.service.js';
 
 const uuid = new ZodValidationPipe(z.uuid());
@@ -92,21 +94,27 @@ export class TasksController {
     private readonly tasks: TasksService,
     private readonly edit: TaskEditService,
     private readonly query: TasksQueryService,
+    private readonly ext: TasksExtService,
     private readonly bulk: BulkService,
     private readonly typeChange: TaskTypeChangeService,
     private readonly formulas: TaskFormulaService,
   ) {}
 
   @Get()
-  @ApiOperation({ summary: 'Список/фид колонки задач (курсор, видимость, фильтры)' })
-  @ApiOkResponse({ standardSchema: paginatedSchema(taskListItemSchema) })
-  @ApiErrors(400, 401)
+  @ApiOperation({
+    summary:
+      'Список/фид задач (курсор, видимость, фильтры); ?filter/&sort/&group/&totals (#435) — ext-конвейер: серверная сортировка по любой колонке, группы и итоги по всей выборке',
+  })
+  @ApiOkResponse({ standardSchema: listResultSchema(taskListItemSchema) })
+  @ApiErrors(400, 401, 422)
   list(
     @GetUser() user: AuthUser,
     @Query({ schema: listTasksQuerySchema, pipes: [new ZodValidationPipe(listTasksQuerySchema)] })
     q: ListTasksQuery,
-  ): Promise<Paginated<TaskListItem>> {
-    return this.query.list(user, q);
+  ): Promise<ListResult<TaskListItem>> {
+    // Расширение (#435): любой из filter/sort/group/totals переключает список
+    // на ext-конвейер; без них — прежний путь (структурно совместим).
+    return hasListExt(q) ? this.ext.list(user, q) : this.query.list(user, q);
   }
 
   @Get('stages')

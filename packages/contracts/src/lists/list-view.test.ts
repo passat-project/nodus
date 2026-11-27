@@ -7,13 +7,18 @@ import {
   LIST_VIEW_LIMITS,
   createListExportBodySchema,
   createSavedViewBodySchema,
+  hasListExt,
+  jsonQueryParam,
   listFieldSchema,
   listFilterSchema,
+  listFoldersQuerySchema,
   listGroupBucketSchema,
   listQueryExtSchema,
+  listResultSchema,
   listSystemFieldSchema,
   listTotalSchema,
   savedViewSchema,
+  toListQueryExt,
 } from './list-view.schemas.js';
 
 const hours = customFieldKey('00000000-0000-4000-8000-000000000001');
@@ -122,5 +127,46 @@ describe('контракт списков #435', () => {
     ).toBe(false);
     expect(CSV_EXPORT.bom).toBe('\uFEFF');
     expect(CSV_EXPORT.delimiter).toBe(';');
+  });
+});
+
+describe('транспорт расширения в query (#435)', () => {
+  it('jsonQueryParam: JSON-строка → распарсенное значение схемы', () => {
+    const filter = jsonQueryParam(listFilterSchema).parse(
+      JSON.stringify([{ kind: 'type_is', typeId: '00000000-0000-4000-8000-000000000010' }]),
+    );
+    expect(filter).toEqual([{ kind: 'type_is', typeId: '00000000-0000-4000-8000-000000000010' }]);
+    expect(jsonQueryParam(listFilterSchema).safeParse('не json').success).toBe(false);
+    expect(jsonQueryParam(listFilterSchema).safeParse('{"kind":"x"}').success).toBe(false);
+  });
+
+  it('hasListExt/toListQueryExt: умолчания и признак присутствия', () => {
+    expect(hasListExt({})).toBe(false);
+    expect(hasListExt({ totals: [] })).toBe(true);
+    const ext = toListQueryExt({ sort: [{ field: 'number', dir: 'desc' }] });
+    expect(ext).toEqual({ filter: [], sort: [{ field: 'number', dir: 'desc' }], totals: [] });
+  });
+
+  it('listResultSchema: группы/итоги опциональны поверх страницы', () => {
+    const result = listResultSchema(listSystemFieldSchema).parse({
+      items: ['number'],
+      nextCursor: null,
+      groups: [{ key: null, count: 1, totals: [{ fn: 'count', value: 1 }] }],
+      totals: [{ fn: 'count', value: 1 }],
+    });
+    expect(result.groups).toHaveLength(1);
+    expect(
+      listResultSchema(listSystemFieldSchema).parse({ items: [], nextCursor: null }).groups,
+    ).toBeUndefined();
+  });
+
+  it('listFoldersQuerySchema: рамка проекта + ext, cursor/limit как у списков', () => {
+    const q = listFoldersQuerySchema.parse({
+      filter: JSON.stringify([{ kind: 'system_state', state: 'active' }]),
+      limit: '30',
+    });
+    expect(q.filter).toEqual([{ kind: 'system_state', state: 'active' }]);
+    expect(q.limit).toBe(30);
+    expect(listFoldersQuerySchema.parse({}).limit).toBe(50);
   });
 });

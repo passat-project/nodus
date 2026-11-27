@@ -8,6 +8,14 @@ import {
   customFieldValuesSchema,
 } from '../custom-fields/custom-field-values.js';
 import { userRefSchema } from '../directory/user-ref.schema.js';
+import {
+  jsonQueryParam,
+  LIST_VIEW_LIMITS,
+  listFilterSchema,
+  listGroupSchema,
+  listSortSchema,
+  listTotalSchema,
+} from '../lists/list-view.schemas.js';
 import { cursorQuerySchema } from '../pagination/paginated.schema.js';
 import { projectRefSchema } from '../projects/project.schemas.js';
 import { taskStageSchema } from '../tasks/task.schemas.js';
@@ -291,6 +299,11 @@ export const listLettersQuerySchema = cursorQuerySchema.extend({
   box: letterBoxSchema.optional(),
   counterpartyId: z.uuid().optional(),
   search: z.string().trim().min(1).max(LETTER_LIMITS.search).optional(),
+  /** Расширение списка #435 (как у задач): JSON в query-параметрах. */
+  filter: jsonQueryParam(listFilterSchema).optional(),
+  sort: jsonQueryParam(z.array(listSortSchema).max(LIST_VIEW_LIMITS.sort)).optional(),
+  group: jsonQueryParam(listGroupSchema).optional(),
+  totals: jsonQueryParam(z.array(listTotalSchema).max(LIST_VIEW_LIMITS.totals)).optional(),
 });
 export type ListLettersQuery = z.infer<typeof listLettersQuerySchema>;
 

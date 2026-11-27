@@ -54,6 +54,14 @@ export class LettersRepository {
     });
   }
 
+  /** Строки по id (гидратация ext-страницы #435; порядок выравнивает сервис). */
+  rowsByIds(ids: readonly string[]): Promise<LetterListRow[]> {
+    return this.prisma.letter.findMany({
+      where: { id: { in: [...ids] } },
+      select: letterListSelect,
+    });
+  }
+
   findDetail(where: Prisma.LetterWhereInput): Promise<LetterDetailRow | null> {
     return this.prisma.letter.findFirst({ where, select: letterDetailSelect });
   }

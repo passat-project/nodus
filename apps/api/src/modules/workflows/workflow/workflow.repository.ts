@@ -152,6 +152,16 @@ export class WorkflowRepository {
     });
   }
 
+  /** Живые стадии набора маршрутов одним запросом (#435: флаги предикатов
+   *  списков — по всем живым типам категории). */
+  findStagesOfWorkflows(workflowIds: readonly string[], tx?: TransactionClient) {
+    if (workflowIds.length === 0) return Promise.resolve([]);
+    return (tx ?? this.prisma).workflowStage.findMany({
+      where: { workflowId: { in: [...new Set(workflowIds)] }, archivedAt: null },
+      orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+    });
+  }
+
   /** Типы, идущие по маршруту (payload публикации, read редактора). */
   async typeIdsOf(workflowId: string, tx?: TransactionClient): Promise<string[]> {
     const entries = await (tx ?? this.prisma).workflowSchemeEntry.findMany({

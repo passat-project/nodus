@@ -46,6 +46,9 @@ import {
   TaskUpdatedProjectFormulaHandler,
 } from './events/formula-task-source.handler.js';
 import { ProjectStructureController } from './project-structure.controller.js';
+import { ProjectFoldersController } from './project-folders.controller.js';
+import { ProjectFoldersRepository } from './project-folders.repository.js';
+import { ProjectFoldersService } from './project-folders.service.js';
 import { ProjectStructureService } from './project-structure.service.js';
 import { ProjectStructureMoveService } from './project-structure-move.service.js';
 import { ProjectValuesWriter } from './project-values.writer.js';
@@ -74,6 +77,7 @@ import {
     ProjectCatalogsController,
     ProjectNodeKindsController,
     ProjectStructureController,
+    ProjectFoldersController,
   ],
   providers: [
     UserProfileProvider,
@@ -96,6 +100,9 @@ import {
     ProjectNodesRepository,
     ProjectStructureService,
     ProjectStructureMoveService,
+    // Список папок проекта с расширением (#435).
+    ProjectFoldersRepository,
+    ProjectFoldersService,
     // Формулы ячеек атрибутов (#632): сервис формул проекта/папки и писатель
     // значений (материализация результата — штатным путём, Р4).
     ProjectValuesWriter,
