@@ -638,6 +638,27 @@
   }
 }
 
+/* Бегущая полоска прогресса карточки скачивания (#1069): размер файла
+ * неизвестен — сегмент проходит слева направо по нижней кромке. При
+ * reduced-motion — статичный сегмент слева (глобальное правило гасит
+ * длительность, но оставляло бы сегмент за краем). */
+@utility popup-progress-run {
+  animation: popup-progress-indeterminate 1.2s ease-in-out infinite;
+}
+@keyframes popup-progress-indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .popup-progress-run {
+    animation: none;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

@@ -25,6 +25,13 @@ export const popupDownloadSchema = z.object({
    *  скачиваний не присылает вовсе); необязательное с единицей по умолчанию —
    *  обратная совместимость payload без счётчика. */
   count: z.number().int().min(1).max(10_000).default(1),
+  /** Состояние карточки (#1069): `downloading` — файл ещё качается (полоска
+   *  прогресса, без кнопки папки, автоскрытие на паузе); нет/`done` —
+   *  завершённая карточка «Файл скачан»/«Скачано: N»/ошибка. Пишет оболочка. */
+  state: z.enum(['downloading', 'done']).optional(),
+  /** Прогресс 0..100 (#1069), только при `state: 'downloading'`; нет — размер
+   *  неизвестен (полоска идёт бегущей, без процентов). */
+  progress: z.number().int().min(0).max(100).optional(),
 });
 export type PopupDownload = z.infer<typeof popupDownloadSchema>;
 

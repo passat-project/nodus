@@ -64,6 +64,13 @@ windows = { version = "0.61", features = [
   "Win32_UI_WindowsAndMessaging",
   "Win32_UI_Input_KeyboardAndMouse",
 ] }
+# Прогресс скачиваний (#1069): webview2-com уже в дереве (через wry/tauri) —
+# прямая зависимость ради ICoreWebView2DownloadOperation/DownloadStarting,
+# которых нет в DownloadEvent wry; новой внешней кодовой базы нет.
+webview2-com = "0.39"
+# Interface/PWSTR той же линии, что у webview2-com (windows-core 0.62);
+# `windows 0.61` выше — Win32 API оболочки, версии не смешиваются.
+windows-core = "0.62"
 
 [profile.release]
 codegen-units = 1
