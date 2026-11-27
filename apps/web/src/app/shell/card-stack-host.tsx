@@ -6,8 +6,9 @@ import { useCounterpartyCard } from '../../shared/counterparties/queries.js';
 import { LetterCard } from '../../features/correspondence/components/card/letter-card.js';
 import { LetterTitle } from '../../features/correspondence/components/card/letter-title.js';
 import { CounterpartyCard } from '../../features/crm/components/counterparty-card.js';
-import { MessengerBody, type ChatTab } from '../../features/chat/components/messenger-body.js';
+import { MessengerBody } from '../../features/chat/components/messenger-body.js';
 import { MessengerTabs } from '../../features/chat/components/messenger-tabs.js';
+import { useConversationTab } from '../../features/chat/components/use-conversation-tab.js';
 import { useUsersList } from '../../features/directory/api/directory-api.js';
 import { EmployeeCard } from '../../features/directory/components/employee-card.js';
 import { subscribeMessengerThread, takeMessengerThread } from '../../shared/chat/messenger-nav.js';
@@ -137,7 +138,9 @@ function CounterpartyEntry({ id, source, onClose, dormant }: EntryProps) {
  *  search-параметры не пишем). */
 function MessengerEntry({ id, source, onClose, dormant }: EntryProps) {
   const [conversationId, setConversationId] = useState(id);
-  const [tab, setTab] = useState<ChatTab>('chats');
+  // Вкладка следует типу беседы при смене (F5-восстановление `?cards=`,
+  // пересылка, подмена карточки), ручной выбор не перебивается (#1062).
+  const [tab, setTab] = useConversationTab(conversationId);
   // Пристоенный тред (messenger-nav): потребляется на МАУНТЕ карточки,
   // при подмене верхней карточки и ПО ПОДПИСКЕ — клик по уведомлению о
   // трэде при уже открытой карточке той же беседы (openCard там no-op, #300).

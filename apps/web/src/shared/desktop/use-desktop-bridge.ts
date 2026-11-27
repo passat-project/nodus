@@ -5,6 +5,8 @@ import { useNavigate } from '@tanstack/react-router';
 import type { OpenLetterEvent } from '@nodus/contracts';
 
 import { api } from '../api-client.js';
+import { cachedConversation } from '../chat/chat-queries.js';
+import { chatConversationUrl } from '../chat/messenger-nav.js';
 import { requestMessageJump } from '../chat/jump-store.js';
 import { enqueueSend } from '../chat/send-queue.js';
 import { openOrFocusTab } from '../lib/tab-bridge.js';
@@ -31,14 +33,21 @@ export function useDesktopBridge(handlers: {
     // Трэд в событии (попап об ответе в трэде, #300) — окном трэда через
     // deep-link `?thread=`. Сообщение-причина (#1072) — прыжок к нему:
     // лента/тред докрутят и подсветят; пока сообщение за сгибом, квитанция
-    // чтения не уходила и счётчик висел.
+    // чтения не уходила и счётчик висел. Вкладка по типу беседы сразу в
+    // адресе (#1062): попап оболочки и `nodus://chat/<id>` не оставляют
+    // пользователя на «Чатах» с пустым левым списком. Тип неизвестен
+    // (беседы нет в кэше) — страница выведет его сама после deep-link-поиска.
     (conversationId: string, threadRootId?: string | null, messageId?: string | null) => {
-      const url = `/chat/${conversationId}${threadRootId ? `?thread=${threadRootId}` : ''}`;
+      const conversation = cachedConversation(queryClient, conversationId);
+      const url = chatConversationUrl(conversationId, {
+        type: conversation?.type,
+        threadRootId,
+      });
       openOrFocusTab(url, '/chat');
       void navigate({ href: url });
       if (messageId) requestMessageJump(conversationId, messageId, threadRootId ?? null);
     },
-    [navigate],
+    [navigate, queryClient],
   );
 
   useEffect(() => {

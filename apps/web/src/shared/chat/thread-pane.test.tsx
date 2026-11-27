@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TooltipProvider } from '@nodus/ui/components/tooltip';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,9 +22,9 @@ class ResizeObserverStub {
 vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 
 /**
- * Окно треда канала (#1021): бар «Обсуждение N» на тонe рамы — обои чата
- * только ниже бара; крестика в шапке нет (закрытие — полоса «Обсудить» или
- * Esc); корень + ответы рендерятся общей лентой.
+ * Окно треда канала (#1021, #1061): бар «Обсуждение N» на тонe рамы — обои
+ * чата только ниже бара; в side-варианте справа крестик «Закрыть» у края
+ * колонки, в drill — только «К ленте»; корень + ответы рендерятся общей лентой.
  */
 
 const CONV = '11111111-1111-4111-8111-111111111111';
@@ -85,7 +85,7 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-function renderPane(variant: 'drill' | 'side' = 'side') {
+function renderPane(variant: 'drill' | 'side' = 'side', onClose = vi.fn()) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(chatKeys.thread(CONV, ROOT), page);
   client.setQueryData(chatKeys.threadStates(CONV), { items: [], nextCursor: null });
@@ -97,21 +97,24 @@ function renderPane(variant: 'drill' | 'side' = 'side') {
           threadRootId={ROOT}
           variant={variant}
           barClass="h-14"
-          onClose={vi.fn()}
+          onClose={onClose}
         />
       </TooltipProvider>
     </QueryClientProvider>,
   );
 }
 
-describe('ThreadPane — окно обсуждения (#1021)', () => {
-  it('бар «Обсуждение 2» рендерится; БЕЗ крестика закрытия (закрытие — полоса/Esc)', () => {
-    renderPane();
+describe('ThreadPane — окно обсуждения (#1021, #1061)', () => {
+  it('side: бар «Обсуждение 2» и крестик «Закрыть» у правого края; клик закрывает', () => {
+    const onClose = vi.fn();
+    renderPane('side', onClose);
     expect(screen.getByText('Обсуждение')).toBeTruthy();
     expect(screen.getByText('2')).toBeTruthy();
-    // Крестика нет ни в side (раньше был), ни в drill («К ленте» — другая
-    // роль): закрытие окна — повторный клик по полосе поста или Esc.
-    expect(screen.queryByRole('button', { name: ui.common.close })).toBeNull();
+    // Выход из треда виден всегда, даже если полоса поста ушла из вида.
+    const close = screen.getByRole('button', { name: ui.common.close });
+    expect(close.getAttribute('title')).toBe(ui.common.close);
+    fireEvent.click(close);
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('корневой пост и ответы рендерятся общей лентой (серии ответов)', () => {
@@ -119,11 +122,11 @@ describe('ThreadPane — окно обсуждения (#1021)', () => {
     expect(screen.getByText('корневой пост канала')).toBeTruthy();
     expect(screen.getByText('первый ответ в обсуждении')).toBeTruthy();
     expect(screen.getByText('второй ответ в обсуждении')).toBeTruthy();
-    // «Следить» — на месте (единственные действия шапки).
+    // «Следить» — на месте рядом с крестиком.
     expect(screen.getByRole('button', { name: ui.chat.watchThread })).toBeTruthy();
   });
 
-  it('drill-вариант: кнопка «К ленте» вместо крестика', () => {
+  it('drill-вариант: только «К ленте», крестика нет', () => {
     renderPane('drill');
     expect(screen.getByRole('button', { name: ui.chat.backToFeed })).toBeTruthy();
     expect(screen.queryByRole('button', { name: ui.common.close })).toBeNull();

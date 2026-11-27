@@ -36,7 +36,7 @@ import {
   resolveForwardRoute,
   topCardIsMessengerInSearch,
 } from './forward-navigation.js';
-import { stageMessengerThread } from './messenger-nav.js';
+import { messengerTabSearch, stageMessengerThread } from './messenger-nav.js';
 import { ThreadLevel } from './forward-thread-picker.js';
 import { useSelectionStore } from './selection-store.js';
 
@@ -152,10 +152,20 @@ function ForwardBody({ request, onDone }: { request: ForwardRequest; onDone: () 
         return;
       }
       if (route === 'navigate-chat') {
+        // Вкладка — по типу получателя (#1062): пересылка в чат задачи ведёт
+        // на «Чаты задач и писем», в личный — на «Чаты» (параметр снимается).
+        const tabSearch = messengerTabSearch(conversation.type);
         void navigate({
           to: '/chat/$conversationId',
           params: { conversationId: conversation.id },
-          search: (prev) => ({ ...prev, thread: threadRootId ?? undefined }),
+          search: (prev) => {
+            const next: Record<string, unknown> = {
+              ...prev,
+              thread: threadRootId ?? undefined,
+            };
+            delete next.tab;
+            return { ...next, ...tabSearch };
+          },
         });
         return;
       }

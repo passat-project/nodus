@@ -47,13 +47,15 @@
 
 - Моно-вкладки раздела в топбаре: средний клик + ПКМ `tabOpenInNew`
   (`app/shell/top-bar.tsx`, только в оболочке — в браузере штатные ссылки).
-- Строки списка бесед мессенджера: средний клик → вкладка `/chat/<id>`
-  (`features/chat/components/conversation-list.tsx`).
+- Строки списка бесед мессенджера: средний клик → вкладка `/chat/<id>` с
+  вкладкой по типу беседы (`?tab=tasks` для задачи/письма, #1062;
+  `features/chat/components/conversation-list.tsx`).
 - Заголовок «Чат·Имя»: `features/chat/pages/chat-page.tsx` ставит
   сессионный заголовок активной вкладке, уход со страницы снимает.
 - Deep-link оболочки: `shared/desktop/use-desktop-bridge.ts` —
   `openOrFocusTab(url, '/chat')` (своя /chat-вкладка активируется, нет —
-  новая) + navigate моста; трэд #300 — `?thread=`.
+  новая) + navigate моста; трэд #300 — `?thread=`, вкладка задачи/письма —
+  `?tab=tasks` (#1062).
 
 ## Ограничения
 

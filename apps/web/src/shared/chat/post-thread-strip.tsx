@@ -1,4 +1,4 @@
-import { ArrowRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import type { ChatMessage } from '@nodus/contracts';
 import { ui } from '@nodus/contracts';
 import { cn } from '@nodus/ui/lib/utils';
@@ -70,14 +70,25 @@ export function ThreadStrip({
   );
 }
 
-/** Правый конец полосы: «Обсудить →» (тон поверхности, #127). */
-export function ThreadStripEnter({ surface }: { surface: ReturnType<typeof messageSurface> }) {
+/** Правый конец полосы — ЧЕСТНЫЙ тумблер треда (#1061): открыт — «Свернуть ←»
+ *  (клик вернёт к ленте), закрыт — «Обсудить →» (тон поверхности, #127). */
+export function ThreadStripEnter({
+  surface,
+  open,
+}: {
+  surface: ReturnType<typeof messageSurface>;
+  open: boolean;
+}) {
   return (
     <span
       className={cn('ml-auto inline-flex items-center gap-1 text-xs font-medium', surface.linkText)}
     >
-      {ui.chat.toThread}
-      <ArrowRight className="size-3" strokeWidth={1.75} />
+      {open ? ui.chat.collapseThread : ui.chat.toThread}
+      {open ? (
+        <ArrowLeft className="size-3" strokeWidth={1.75} />
+      ) : (
+        <ArrowRight className="size-3" strokeWidth={1.75} />
+      )}
     </span>
   );
 }

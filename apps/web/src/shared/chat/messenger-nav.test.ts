@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  chatConversationUrl,
   messengerTabForType,
+  messengerTabSearch,
+  resolveChatTab,
   stageMessengerConversation,
   stageMessengerThread,
   subscribeMessengerConversation,
@@ -72,5 +75,34 @@ describe('messenger-nav', () => {
     expect(messengerTabForType('direct')).toBe('chats');
     expect(messengerTabForType('group')).toBe('chats');
     expect(messengerTabForType('project_channel')).toBe('chats');
+  });
+
+  it('адрес беседы несёт вкладку задачи/письма и тред (#1062)', () => {
+    expect(chatConversationUrl(CONV, { type: 'task' })).toBe(`/chat/${CONV}?tab=tasks`);
+    expect(chatConversationUrl(CONV, { type: 'letter', threadRootId: THREAD })).toBe(
+      `/chat/${CONV}?tab=tasks&thread=${THREAD}`,
+    );
+    // Личные/групповые — канонический адрес без параметра; тред сохраняется.
+    expect(chatConversationUrl(CONV, { type: 'direct' })).toBe(`/chat/${CONV}`);
+    expect(chatConversationUrl(CONV, { type: 'group', threadRootId: THREAD })).toBe(
+      `/chat/${CONV}?thread=${THREAD}`,
+    );
+  });
+
+  it('search вкладки: задачи/письма → tab=tasks, остальные → без параметра (#1062)', () => {
+    expect(messengerTabSearch('task')).toEqual({ tab: 'tasks' });
+    expect(messengerTabSearch('letter')).toEqual({ tab: 'tasks' });
+    expect(messengerTabSearch('direct')).toEqual({});
+    expect(messengerTabSearch(undefined)).toEqual({});
+  });
+
+  it('resolveChatTab: явный ?tab= главнее, без него — тип беседы (#1062)', () => {
+    expect(resolveChatTab('tasks', 'direct')).toBe('tasks');
+    expect(resolveChatTab('settings', 'task')).toBe('settings');
+    expect(resolveChatTab('chats', 'task')).toBe('chats');
+    expect(resolveChatTab(undefined, 'task')).toBe('tasks');
+    expect(resolveChatTab(undefined, 'letter')).toBe('tasks');
+    expect(resolveChatTab(undefined, 'direct')).toBe('chats');
+    expect(resolveChatTab(undefined, undefined)).toBe('chats');
   });
 });

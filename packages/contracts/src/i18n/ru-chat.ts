@@ -98,6 +98,9 @@ export const chatStrings = {
   repliesFew: 'ответа',
   repliesMany: 'ответов',
   toThread: 'Обсудить',
+  /** Тумблер треда в открытом состоянии: полоса поста ведёт ОБРАТНО к ленте
+   *  (вердикт владельца 25.11.2026, #1061). */
+  collapseThread: 'Свернуть',
   newPostPlaceholder: 'Написать в канал…',
   replyPlaceholder: 'Ответить в обсуждении…',
   backToFeed: 'К ленте',

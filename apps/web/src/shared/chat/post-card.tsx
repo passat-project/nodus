@@ -76,10 +76,11 @@ export function PostCard({
   reactionsHidden: boolean;
   /** Окно треда ЭТОГО поста сейчас открыто (полоса = тумблер, #1021). */
   threadOpen: boolean;
-  /** Открыть/закрыть тред. КЛИКОВЫЙ вход — только полоса «Обсудить» (решение
+  /** Открыть/закрыть тред. КЛИКОВЫЙ вход — только полоса-тумблер (решение
    *  владельца 24.11.2026, #1021): клик по телу поста тред не открывает,
-   *  повторный клик по полосе — закрывает (крестика в шапке окна нет);
-   *  существующий вход ПКМ «Ответить» сохранён — тоже открывает тред. */
+   *  полоса в открытом состоянии подписана «Свернуть ←» (#1061); крестик
+   *  «Закрыть» есть в шапке окна треда (side, вердикт 25.11.2026).
+   *  Существующий вход ПКМ «Ответить» сохранён — тоже открывает тред. */
   onToggleThread: () => void;
 }) {
   const surface = messageSurface(mine);
@@ -149,7 +150,7 @@ export function PostCard({
               lastReplyAt={lastReplyAt}
               threadUnread={threadUnread}
             />
-            <ThreadStripEnter surface={surface} />
+            <ThreadStripEnter surface={surface} open={threadOpen} />
           </button>
         ) : null}
       </div>
@@ -330,7 +331,7 @@ export function PostCard({
               lastReplyAt={lastReplyAt}
               threadUnread={threadUnread}
             />
-            <ThreadStripEnter surface={surface} />
+            <ThreadStripEnter surface={surface} open={threadOpen} />
           </button>
         </div>
         {/* Рамка выделения — overlay НАД контентом (раунд 4: у медиа-постов
