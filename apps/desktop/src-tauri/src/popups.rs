@@ -799,12 +799,19 @@ pub fn popup_open(
     conversation_id: Option<String>,
     thread_root_id: Option<String>,
     letter_id: Option<String>,
+    message_id: Option<String>,
 ) -> Result<(), String> {
     // Цель — ровно одна (#618): письмо открывается событием open-letter,
     // беседа — как раньше (трэд — окно трэда, #300).
     let bad_thread = thread_root_id
         .as_deref()
         .is_some_and(|t| !bridge::is_valid_conversation(t));
+    // Сообщение-причина клика (#1072): портал прыгает к нему; длина — как
+    // у id попапа (у правок префикс «edit:» + uuid).
+    let bad_message = message_id.as_deref().is_some_and(|m| m.len() > 200);
+    if bad_message {
+        return Err("invalid_payload".into());
+    }
     let letter = match (conversation_id.as_deref(), letter_id.as_deref()) {
         (Some(c), None) => {
             if !bridge::is_valid_conversation(c) {
@@ -835,7 +842,7 @@ pub fn popup_open(
         bridge::push_to_portal(
             &app,
             "open-conversation",
-            &serde_json::json!({ "conversationId": conversation_id, "threadRootId": thread_root_id }),
+            &serde_json::json!({ "conversationId": conversation_id, "threadRootId": thread_root_id, "messageId": message_id }),
         );
     }
     let _ = window.close();

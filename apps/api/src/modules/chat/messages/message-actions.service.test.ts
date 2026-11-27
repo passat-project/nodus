@@ -79,7 +79,16 @@ function makeService() {
     } as never,
     projectChat as never,
   );
-  return { service, conversations, messages, mapper, eventBus, userProfiles, projectChat };
+  return {
+    service,
+    conversations,
+    messages,
+    mapper,
+    eventBus,
+    userProfiles,
+    projectChat,
+    threadParticipants,
+  };
 }
 
 describe('MessageActionsService.forward — раскрытие скрытой беседы (#103)', () => {
@@ -205,6 +214,19 @@ describe('MessageActionsService.forward — канал проекта подчи
     expect(projectChat.canPost).toHaveBeenCalledWith(PROJECT, ACTOR);
     expect(messages.insertMessage).toHaveBeenCalled();
     expect(result.rows).toHaveLength(1);
+  });
+
+  it('копии-корни в ленте канала: пересылающий — наблюдатель их тредов (#1072)', async () => {
+    const { service, conversations, projectChat, threadParticipants } = makeService();
+    asProjectChannel(conversations);
+    projectChat.canPost.mockResolvedValue(true);
+
+    const result = await service.forward(ACTOR, TARGET, body, 'fwd-key');
+
+    expect(result.rows.length).toBeGreaterThan(0);
+    for (const row of result.rows) {
+      expect(threadParticipants.upsert).toHaveBeenCalledWith(row.id, ME, 'author', TX);
+    }
   });
 
   it('пересылка в тред канала — canPost не применяется (треды открыты участникам)', async () => {

@@ -7,6 +7,7 @@ import { isModalLayerOpen } from '../attention/modal-layers.js';
 import { withoutPatronymic } from '../lib/format.js';
 import { chatKeys } from '../chat/chat-keys.js';
 import { getOpenConversation } from '../chat/open-conversation.js';
+import { isOpenThreadMatch } from '../chat/open-thread.js';
 import { threadNotifyAllowed } from '../chat/thread-notify-gate.js';
 import {
   desktopFlashTaskbar,
@@ -64,7 +65,7 @@ export function notifyDesktopMessage(payload: unknown, queryClient: QueryClient)
   // видно, попап нужен. Попапы копятся до реакции (очередь в оболочке),
   // бейдж считает непрочитанное.
   const active = isUserActive();
-  if (active && !isModalLayerOpen() && getOpenConversation() === conversationId) {
+  if (active && !isModalLayerOpen() && isLookingAtMessage(conversationId, incoming.threadRootId)) {
     record(ids, 'looking');
     return;
   }
@@ -149,6 +150,16 @@ export function notifyDesktopMessage(payload: unknown, queryClient: QueryClient)
       });
     void desktopFlashTaskbar(urgent);
   }
+}
+
+/** «Смотрю на сообщение» (#1072): корневое — открыта беседа (лента);
+ *  ответ в треде — открыто окно ИМЕННО этого треда. Лента канала ответов
+ *  треда не показывает — «нахожусь в канале» больше не глушит тред. */
+function isLookingAtMessage(conversationId: string, threadRootId: string | null): boolean {
+  if (threadRootId !== null) {
+    return isOpenThreadMatch({ conversationId, threadRootId });
+  }
+  return getOpenConversation() === conversationId;
 }
 
 function record(

@@ -5,6 +5,7 @@ import { useAuthStore } from '../../../shared/auth-store.js';
 import { isUserActive } from '../../../shared/attention/attention-store.js';
 import { isModalLayerOpen } from '../../../shared/attention/modal-layers.js';
 import { getOpenConversation } from '../../../shared/chat/open-conversation.js';
+import { getOpenThread } from '../../../shared/chat/open-thread.js';
 
 /**
  * Тост-контур уведомлений (#100, вердикты 30.09): стак личного (каждое
@@ -88,6 +89,8 @@ export function shouldToast(
   ctx: {
     viewerId: string | null;
     openConversationId: string | null;
+    /** Открытое окно треда (#1072): область тишины ответа в треде. */
+    openThread: { conversationId: string; threadRootId: string } | null;
     muted: ReadonlySet<string>;
     snoozed: ReadonlySet<string>;
     dnd: { enabled: boolean; start: string; end: string };
@@ -114,13 +117,16 @@ export function shouldToast(
   }
   // B6: открытый активный КОНКРЕТНЫЙ чат-источник — только счётчики; события
   // без беседы (действия) null-сравнением не гасятся (bug: null === null).
-  if (
-    snapshot.priority !== 'urgent' &&
-    snapshot.conversationId !== null &&
-    ctx.userActive &&
-    ctx.openConversationId === snapshot.conversationId
-  ) {
-    return null;
+  // Ответ в треде (#1072) гасится только открытым окном ЭТОГО треда: лента
+  // канала ответов не показывает — «в канале» ≠ «вижу тред».
+  if (snapshot.priority !== 'urgent' && snapshot.conversationId !== null && ctx.userActive) {
+    const looking =
+      snapshot.threadRootId !== null
+        ? ctx.openThread !== null &&
+          ctx.openThread.conversationId === snapshot.conversationId &&
+          ctx.openThread.threadRootId === snapshot.threadRootId
+        : ctx.openConversationId === snapshot.conversationId;
+    if (looking) return null;
   }
   return snapshot.priority === 'medium' ? 'actions' : 'personal';
 }
@@ -137,6 +143,7 @@ export const useNotificationsToastStore = create<NotificationsToastState>((set, 
     const lane = shouldToast(snapshot, attempt, {
       viewerId: useAuthStore.getState().user?.id ?? null,
       openConversationId: getOpenConversation(),
+      openThread: getOpenThread(),
       muted: state.mutedConversations,
       snoozed: state.snoozedConversations,
       dnd: state.dnd,

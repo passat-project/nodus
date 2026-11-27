@@ -127,10 +127,13 @@ export const popupReplyEventSchema = z.object({
 export type PopupReplyEvent = z.infer<typeof popupReplyEventSchema>;
 
 /** Событие «оболочка → веб»: открыть беседу (deep link `nodus://chat/<id>` или кнопка попапа).
- * threadRootId — клик по попапу об ответе в трэде раскрывает окно трэда (#300). */
+ * threadRootId — клик по попапу об ответе в трэде раскрывает окно трэда (#300);
+ * messageId — сообщение-причина клика (id попапа, у правок с префиксом `edit:`):
+ * портал прыгает к нему и гасит непрочитанность (#1072). */
 export const openConversationEventSchema = z.object({
   conversationId: z.string().uuid(),
   threadRootId: z.string().uuid().nullable().optional(),
+  messageId: z.string().min(1).max(200).nullable().optional(),
 });
 export type OpenConversationEvent = z.infer<typeof openConversationEventSchema>;
 

@@ -29,14 +29,36 @@ describe('findLastMine', () => {
     expect(findLastMine(items, ME)?.id).toBe('b');
   });
 
-  it('пропускает летящий темп, удалённое и пересланное', () => {
+  it('пропускает летящий темп, удалённое и пересланное ЧУЖОЕ', () => {
     const items = [
       msg('ok'),
-      msg('fwd', { forwardedFrom: {} as ChatMessage['forwardedFrom'] }),
+      msg('fwd', {
+        forwardedFrom: {
+          author: { id: 'x', displayName: 'X', avatarUrl: null },
+          conversationId: 'conv-src',
+          messageId: 'src-1',
+          threadRootId: null,
+        },
+      }),
       msg('del', { deletedAt: '2026-10-07T10:00:00Z' }),
       msg('temp', { seq: 0 }),
     ];
     expect(findLastMine(items, ME)?.id).toBe('ok');
+  });
+
+  it('пересланное СВОЕГО текста — правится последним (#1072)', () => {
+    const items = [
+      msg('ok'),
+      msg('fwd-own', {
+        forwardedFrom: {
+          author: { id: ME, displayName: 'Я', avatarUrl: null },
+          conversationId: 'conv-src',
+          messageId: 'src-1',
+          threadRootId: null,
+        },
+      }),
+    ];
+    expect(findLastMine(items, ME)?.id).toBe('fwd-own');
   });
 
   it('без пользователя — ничего', () => {

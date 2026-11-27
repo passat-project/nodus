@@ -108,7 +108,7 @@ function PersonalToastCard({
     // чтобы копии не расходились (баг: тост письма уводил в ридер).
     const card = snapshot.priority === 'urgent' ? null : sourceCardOf(snapshot);
     if (card) {
-      openSourceCard(openCard, card, snapshot.threadRootId);
+      openSourceCard(openCard, card, snapshot.threadRootId, undefined, snapshot.messageId);
     } else {
       openNotificationReader(snapshot.notificationId);
     }

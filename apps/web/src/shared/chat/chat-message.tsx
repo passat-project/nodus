@@ -4,7 +4,7 @@ import { cn } from '@nodus/ui/lib/utils';
 import { Message, MessageAvatar, MessageContent } from '@nodus/ui/components/message';
 import { Bubble, BubbleContent } from '@nodus/ui/components/bubble';
 
-import { openCardViaBridge } from '../lib/card-bridge.js';
+import { jumpToForwardSource } from './forward-source-jump.js';
 import { shortPersonName, withoutPatronymic } from '../lib/format.js';
 import { personTone } from '../ui/person-tone.js';
 import { attachmentsLayout, mediaBubbleWidth, MessageAttachments } from './attachments.js';
@@ -191,20 +191,10 @@ export const ChatMessageItem = memo(function ChatMessageItem({
     useJumpStore.getState().request(message.conversationId, replyId, message.threadRootId);
   }
 
-  /** Клик по «Переслано от» — к оригиналу. В мессенджере (страница/карточка)
-   *  навигация ВНУТРИ него: переключиться на беседу-источник/тред — слайдер
-   *  не открывается (вердикт 25.09); в карточке слайдера это замена её
-   *  содержимого (без вложенных слайдеров). Чат карточки сущности открывает
-   *  мессенджер-карточку поверх (легитимная роль слайдера). Далее jump-запрос
-   *  подбирает лента целевой беседы (переживает навигацию, jump-store). */
-  function jumpToForwardSource() {
-    const from = message.forwardedFrom;
-    if (!from) return;
-    if (from.conversationId !== message.conversationId) {
-      if (host) host.openConversation(from.conversationId, from.threadRootId);
-      else openCardViaBridge({ kind: 'messenger', id: from.conversationId });
-    }
-    useJumpStore.getState().request(from.conversationId, from.messageId, from.threadRootId);
+  /** Клик по «Переслано от» — к оригиналу: общий механизм для пузыря чата и
+   *  карточки поста канала (forward-source-jump.ts, вердикт 25.09). */
+  function jumpForwardSource() {
+    jumpToForwardSource(message, host);
   }
 
   // Медиа (single/gallery) — АРХИТЕКТУРА «ЧАСТЕЙ» (раунд 3 п.3/п.4):
@@ -232,7 +222,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
             showName={showName}
             finSide={finSide}
             onJumpToReply={jumpToReply}
-            onJumpToForwardSource={jumpToForwardSource}
+            onJumpToForwardSource={jumpForwardSource}
             reactionsRow={reactionsRow}
             receiptsHidden={receiptsHidden}
           >
@@ -320,7 +310,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
             {/* Атрибуция пересылки — следующая строка пузыря (канон
                 Telegram lng_forwarded). */}
             {message.forwardedFrom ? (
-              <ForwardedHeader from={message.forwardedFrom} onClick={jumpToForwardSource} />
+              <ForwardedHeader from={message.forwardedFrom} onClick={jumpForwardSource} />
             ) : null}
             {/* Цитата ответа (A2): замороженный снапшот — клик ведёт к
                 оригиналу (актуальная версия + «изменено» там же). */}

@@ -421,6 +421,17 @@ describe('MessagesService', () => {
       );
     });
 
+    it('корневой пост канала: автор — наблюдатель своего треда с публикации (#1072)', async () => {
+      conversations.findTypeAndPermissions.mockResolvedValue({
+        id: CONV,
+        type: 'project_channel',
+        permissions: { ...DEFAULT_CONVERSATION_PERMISSIONS },
+        projectId: 'proj-1',
+      });
+      await service.send(ACTOR, CONV, { text: 'Новость' }, 'key-ch');
+      expect(threadParticipants.upsert).toHaveBeenCalledWith('msg-new', ME, 'author', TX);
+    });
+
     it('переименования окна отправки уходят в claim (#146): имя применяется до DTO/события', async () => {
       const body: SendMessageBody = {
         text: 'Файл',

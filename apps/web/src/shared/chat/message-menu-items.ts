@@ -246,10 +246,11 @@ export function buildMessageItems(input: MessageMenuInput): {
       run: actions.delete,
     },
   );
-  // Пересланную копию нельзя править даже автору пересылки (#111): текст
-  // принадлежит оригинальному автору — правка позволила бы исказить чужие
-  // слова (модель Telegram: только удаление). Стикер (#143): править и
-  // копировать нечего (текст пуст) — оба пункта скрываются.
+  // Пересланную копию правит только владелец исходного текста (#1072,
+  // ревизия #111): копия ЧУЖИХ слов неизменна (правка исказила бы их под
+  // атрибуцией «Переслано от»), свой текст — можно (оригинал не меняется;
+  // сервер держит то же правило). Стикер (#143): править и копировать нечего
+  // (текст пуст) — оба пункта скрываются.
   // «Удалить» на чужом — право модерации (#245): админ/владелец беседы или
   // модератор портала (группы/каналы; серверная проверка та же, I8).
   // Окно-источник (#237): только набор Telegram — copy/forward/select/
@@ -257,9 +258,11 @@ export function buildMessageItems(input: MessageMenuInput): {
   const isSticker = message.attachments.some((a) => a.kind === 'sticker');
   // Блок перехода (#380) — запись журнала, не текст: правка разошлась бы
   // с transition_records (сервер тоже отвечает 403).
+  const forwardOwnText =
+    !message.forwardedFrom || message.forwardedFrom.author.id === message.author.id;
   const editable =
     mine &&
-    !message.forwardedFrom &&
+    forwardOwnText &&
     !isSticker &&
     message.kind !== 'task_transition' &&
     message.kind !== 'letter_transition' &&

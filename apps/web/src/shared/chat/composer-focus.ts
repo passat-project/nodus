@@ -271,21 +271,29 @@ export function focusConversationComposerWhenFree(conversationId: string, deadli
 
 /** Фокус в композер ПОСЛЕ закрытия оверлей-слоя (пункты контекстного меню
  *  «Ответить»/«Редактировать»): Radix возвращает фокус триггеру на размонтаже
- *  контента (после exit-анимации) — немедленный focus перетирается (баг-
- *  вердикт 24.09: «после Редактировать курсор не в поле»). Ждём кадров, пока
- *  activeElement вне редактируемых и вне оверлей-слоёв, тогда фокусим.
- *  Постоянные вместилища композера (карточка-слайдер, role="dialog") ожидание
- *  не держат — см. insideOverlayLayer (вердикт 25.09). */
+ *  контента — немедленный focus перетирается (баг-вердикт 24.09). Ждём кадров,
+ *  пока activeElement вне редактируемых и вне оверлей-слоёв. ЗАРЕГИСТРИРОВАННЫЙ
+ *  композер — уже «свободно» (#1072): передача курсора между композерами —
+ *  штатный путь канона (раньше язычок «Ответить» в треде с preventDefault #71
+ *  оставлял активной ленту — ожидание истекало, курсор не переезжал). */
 export function focusComposerWhenFree(id: string, deadlineMs = 600): void {
   const started = performance.now();
   function tick() {
     const el = registry.get(id);
-    if (!el || document.activeElement === el) return;
-    if (isEditable(document.activeElement) || insideOverlayLayer(document.activeElement, el)) {
+    const active = document.activeElement;
+    if (!el || active === el) return;
+    const foreignEditable = isEditable(active) && !isRegisteredComposer(active);
+    if (foreignEditable || insideOverlayLayer(active, el)) {
       if (performance.now() - started < deadlineMs) requestAnimationFrame(tick);
       return;
     }
     el.focus({ preventScroll: true });
   }
   requestAnimationFrame(tick);
+}
+
+/** Элемент — один из зарегистрированных композеров реестра. */
+function isRegisteredComposer(el: Element | null): boolean {
+  for (const item of registry.values()) if (item === el) return true;
+  return false;
 }
