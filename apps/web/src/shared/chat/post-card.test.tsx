@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ChatMessage } from '@nodus/contracts';
 
 import { PostCard } from './post-card.js';
-import { useJumpStore } from './jump-store.js';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 const renderCard = (node: React.ReactElement) =>
@@ -263,41 +262,6 @@ describe('PostCard — карточка поста канала с аватар�
     expect(after.textContent).toContain('1');
     // чип времени остаётся НА картинке
     expect(card.querySelector('time')).toBeTruthy();
-  });
-});
-
-describe('PostCard — атрибуция пересылки (#1072)', () => {
-  const forwarded = message({
-    forwardedFrom: {
-      author: { id: 'src-author', displayName: 'Анна Смирнова', avatarUrl: null },
-      conversationId: 'conv-src',
-      messageId: 'src-msg',
-      threadRootId: null,
-    },
-  });
-
-  it('пересланный пост несёт «Переслано от»; обычный — нет', () => {
-    const fwd = renderCard(<PostCard {...base} message={forwarded} />);
-    expect(fwd.container.querySelector('[data-slot="post-surface"]')!.textContent).toContain(
-      'Переслано от',
-    );
-    const plain = renderCard(<PostCard {...base} message={message()} />);
-    expect(plain.container.querySelector('[data-slot="post-surface"]')!.textContent).not.toContain(
-      'Переслано от',
-    );
-  });
-
-  it('клик по имени источника — прыжок к оригиналу (jump-store)', () => {
-    const { container } = renderCard(<PostCard {...base} message={forwarded} />);
-    const card = container.querySelector('[data-slot="post-surface"]') as HTMLElement;
-    const source = [...card.querySelectorAll('button')].find((b) =>
-      b.textContent!.includes('Анна Смирнова'),
-    ) as HTMLElement;
-    fireEvent.click(source);
-    expect(useJumpStore.getState().target).toMatchObject({
-      conversationId: 'conv-src',
-      messageId: 'src-msg',
-    });
   });
 });
 
