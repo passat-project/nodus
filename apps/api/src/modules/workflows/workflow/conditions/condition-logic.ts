@@ -31,7 +31,9 @@ export interface ConditionStageInfo {
   resultIssued: boolean;
 }
 
-/** Индекс стадий по типу записи: stage_is/system_state/outcome/result_issued. */
+/** Индекс стадий по типу записи: stage_is/system_state/outcome/result_issued.
+ *  Внутренний Map итерируется в порядке маршрута (sortOrder) — на этом
+ *  держится «результат выдан» (отметка действует «с этого статуса и дальше»). */
 export interface ConditionStageIndex {
   /** typeId → стадия по stageId (живые стадии маршрута типа). */
   stages: ReadonlyMap<string, ReadonlyMap<string, ConditionStageInfo>>;
@@ -105,18 +107,23 @@ function stageOf(row: ConditionRow, index: ConditionStageIndex): ConditionStageI
   return index.stages.get(row.typeId)?.get(row.stageId);
 }
 
-/** «Результат выдан» (#635, §11): стадия записи отмечена в маршруте её типа;
- *  в маршруте нет ни одной отметки — выдана = закрыта успешно. */
+/** «Результат выдан» (#635, §11): отметка статуса действует «с этого статуса
+ *  и дальше» («Выдано в печать» и все статусы после него — выдано, хотя
+ *  работа ещё не закрыта); в маршруте нет ни одной отметки — выдана =
+ *  закрыта успешно. Дальше = позже по порядку маршрута (sortOrder). */
 function resultIssued(row: ConditionRow, index: ConditionStageIndex): boolean {
   const stages = row.typeId === null ? undefined : index.stages.get(row.typeId);
   if (!stages || row.stageId === null) return false;
-  const hasMarks = [...stages.values()].some((stage) => stage.resultIssued);
-  if (hasMarks) {
+  if (![...stages.values()].some((stage) => stage.resultIssued)) {
     const stage = stages.get(row.stageId);
-    return stage?.resultIssued ?? false;
+    return stage?.systemState === 'closed' && stage?.outcome === 'success';
   }
-  const stage = stages.get(row.stageId);
-  return stage?.systemState === 'closed' && stage?.outcome === 'success';
+  let issued = false;
+  for (const [stageId, stage] of stages) {
+    if (stage.resultIssued) issued = true;
+    if (stageId === row.stageId) return issued;
+  }
+  return false;
 }
 
 function fieldPredicate(

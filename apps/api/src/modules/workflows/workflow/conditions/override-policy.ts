@@ -43,6 +43,8 @@ export function isProjectManagement(subject: OverrideSubject): boolean {
  * `task.override_gate`; для records/formula — политика каждого непройденного
  * (forbidden где-то = не пускает никого). Прежние и новые проверяются
  * независимо: право на все прежние И допуск политики всех новых.
+ * `validators` вызывающий фильтрует до непройденных (failedValidatorsOf):
+ * пройденная проверка прав не даёт и не отбирает.
  */
 export function overrideAllowed(
   failed: readonly TransitionBlockReason[],

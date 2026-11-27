@@ -211,7 +211,14 @@ export class WorkflowEngine implements WorkflowEnginePort {
     }));
     const pick = scored.find((s) => s.reasons.length === 0) ?? scored[0]!;
     if (pick.reasons.length > 0) {
-      assertGateOverride(pick.reasons, subject1, actor.id, pick.t.rules.validators, opts);
+      assertGateOverride(
+        pick.reasons,
+        subject1,
+        actor.id,
+        liveGates,
+        pick.t.rules.validators,
+        opts,
+      );
     }
     // Заменная кнопка DnD (#866, AUD-008): окно и замки — той кнопки, чьи
     // гейты прошли. Окно уже применено для picked; запасная кнопка с
@@ -391,7 +398,14 @@ export class WorkflowEngine implements WorkflowEnginePort {
     // Обход гейта с причиной — как у перехода (#635, единая модель): право
     // task.override_gate + непустая причина. Без обхода — 409 с причинами.
     if (gateReasons.length > 0) {
-      assertGateOverride(gateReasons, subjectAfter, actor.id, action.rules.validators, opts);
+      assertGateOverride(
+        gateReasons,
+        subjectAfter,
+        actor.id,
+        liveGates,
+        action.rules.validators,
+        opts,
+      );
     }
     if (action.form.enabled && action.form.locks?.length) {
       await adapter.applyLocks?.(tx, entityId, actor.id, action.form.locks, {

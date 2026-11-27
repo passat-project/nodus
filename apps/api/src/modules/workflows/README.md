@@ -168,12 +168,16 @@
   lte/contains/not_contains/in_any/filled/not_filled; совместимость с типом
   атрибута — матрица `CONDITION_FIELD_OPS_BY_TYPE` в contracts), `stage_is`
   (стадия маршрута типа записи), `system_state`, `outcome`, `result_issued`
-  («результат выдан»: стадия записи отмечена в маршруте её типа; нет отметок
-  в маршруте — выдана = закрыта успешно). Отметка — колонка
+  («результат выдан»: стадия записи отмечена в маршруте её типа ИЛИ стоит
+  позже отмеченной по порядку маршрута (sortOrder) — «с этого статуса и все
+  статусы после него»; нет отметок в маршруте — выдана = закрыта успешно).
+  Отметка — колонка
   `workflow_stages.result_issued` (expand-миграция
   `20261127132111_workflow_stage_result_issued`), пишется публикацией и
   читается документом/копией типа.
-- **Обход**: политика каждой непройденной проверки (`gateOverridePolicy`):
+- **Обход**: политика каждой непройденной проверки (`gateOverridePolicy`;
+  пройденная проверка политику не спрашивает — её `extraUserIds` не дают
+  прав, её `forbidden` не запрещает, `failedValidatorsOf` в gate-runtime):
   `forbidden` — не пускает никого (403 `WORKFLOW_GATE_OVERRIDE_FORBIDDEN`);
   `default` — руководство проекта записи (руководитель/помощники — факты
   `WorkflowActorSubject.projectRoles` собирают адаптеры) ∪ `task.override_gate`

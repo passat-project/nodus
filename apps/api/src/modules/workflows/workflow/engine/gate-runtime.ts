@@ -96,18 +96,39 @@ export async function precomputeGates(args: {
     ...(conditionsPass ? { conditionsPass } : {}),
     ...(validatorReason ? { validatorReason } : {}),
     canOverrideOf: (validators, blockedBy) =>
-      overrideAllowed(blockedBy, validators, subject, actor.id).allowed,
+      overrideAllowed(blockedBy, failedValidatorsOf(validators, validatorReason), subject, actor.id)
+        .allowed,
   };
+}
+
+/** Непройденные проверки кнопки (#635): политика обхода спрашивается только
+ *  у них — ПРОЙДЕННАЯ проверка прав не даёт (её extraUserIds не открывают
+ *  обход другой, непройденной) и не отбирает (её forbidden не запрещает).
+ *  Прежние гейты проходят как есть: их допуск решает право, по kinds причин.
+ *  Сверка идёт по вычисленной причине валидатора, а не по виду: у одной
+ *  кнопки может быть несколько проверок records/formula. */
+export function failedValidatorsOf(
+  validators: readonly WorkflowValidator[],
+  validatorReason: AsyncValidatorReason | undefined,
+): readonly WorkflowValidator[] {
+  return validators.filter((validator) => {
+    if (validator.kind !== 'records' && validator.kind !== 'formula') return true;
+    return (validatorReason?.(validator) ?? null) !== null;
+  });
 }
 
 /** Обход гейтов (#378; #635 — политика каждой непройденной проверки):
  *  409 без флага обхода (причины — в details); forbidden-проверка не пускает
  *  никого (403 WORKFLOW_GATE_OVERRIDE_FORBIDDEN); далее допуск политики
- *  (право/руководство/роль/доп. сотрудники) и обязательная причина. */
+ *  (право/руководство/роль/доп. сотрудники) и обязательная причина.
+ *  Политику спрашивают только НЕПРОЙДЕННЫЕ проверки кнопки: `gates` несёт
+ *  вычисленные причины (failedValidatorsOf), пройденная проверка прав не
+ *  даёт (extraUserIds) и не отбирает (forbidden). */
 export function assertGateOverride(
   reasons: readonly TransitionBlockReason[],
   subject: GatesSubject,
   actorId: string,
+  gates: GateRuntime | undefined,
   validators: readonly WorkflowValidator[],
   opts: { override?: boolean; reason?: string },
 ): void {
@@ -118,7 +139,12 @@ export function assertGateOverride(
       { reasons },
     );
   }
-  const { allowed, forbidden } = overrideAllowed(reasons, validators, subject, actorId);
+  const { allowed, forbidden } = overrideAllowed(
+    reasons,
+    failedValidatorsOf(validators, gates?.validatorReason),
+    subject,
+    actorId,
+  );
   if (forbidden) {
     throw new DomainException(
       ErrorCode.WORKFLOW_GATE_OVERRIDE_FORBIDDEN,

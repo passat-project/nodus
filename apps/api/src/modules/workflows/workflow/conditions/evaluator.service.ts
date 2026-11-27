@@ -91,7 +91,11 @@ export class ConditionEvaluator {
     const ensureStages = async (typeIds: readonly string[]): Promise<void> => {
       for (const typeId of typeIds) {
         if (typeStages.has(typeId)) continue;
-        const workflowId = await this.types.workflowIdOf(typeId);
+        // Выборка может содержать записи без маршрута (проект, папка: их
+        // typeId — тип проекта/вид папки, схемы этапов у них нет, #856):
+        // предикаты этапа/итога/«результат выдан» по ним ложны, а не 404
+        // всей кнопочной панели записи.
+        const workflowId = await this.types.workflowIdOf(typeId).catch(() => null);
         const stages = workflowId ? await this.workflows.findStages(workflowId, tx) : [];
         typeStages.set(
           typeId,
