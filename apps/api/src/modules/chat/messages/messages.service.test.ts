@@ -428,9 +428,7 @@ describe('MessagesService', () => {
         permissions: { ...DEFAULT_CONVERSATION_PERMISSIONS },
         projectId: 'proj-1',
       });
-
       await service.send(ACTOR, CONV, { text: 'Новость' }, 'key-ch');
-
       expect(threadParticipants.upsert).toHaveBeenCalledWith('msg-new', ME, 'author', TX);
     });
 

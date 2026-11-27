@@ -166,21 +166,16 @@ describe('MessagesService.edit (#188: текст + состав вложений
   });
 
   it('пересланную копию СВОЕГО текста автор пересылки правит (#1072)', async () => {
-    repo.findByIdInConversation.mockResolvedValue(
-      makeMessage({ fwdMessageId: 'src-msg', fwdConversationId: 'src-conv', fwdAuthorId: ME }),
-    );
+    const fwd = { fwdMessageId: 'src-msg', fwdConversationId: 'src-conv', fwdAuthorId: ME };
+    repo.findByIdInConversation.mockResolvedValue(makeMessage(fwd));
     repo.updateEditText.mockResolvedValue(
       makeMessage({
+        ...fwd,
         text: 'поправленное своё',
         editedAt: new Date('2026-11-27T13:00:00Z'),
-        fwdMessageId: 'src-msg',
-        fwdConversationId: 'src-conv',
-        fwdAuthorId: ME,
       }),
     );
-
     const result = await service.edit(ME, CONV, 'msg-1', { text: 'поправленное своё' });
-
     expect(repo.updateEditText).toHaveBeenCalledWith(
       CONV,
       'msg-1',
