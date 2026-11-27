@@ -238,7 +238,7 @@ describe('вкладка «Форма создания»: правки идут 
     ).toBe(true);
   });
 
-  it('формула названия открывается из неподвижного верха', () => {
+  it('формула названия открывается из системной строки листа', () => {
     openTab(FORM);
     fireEvent.click(screen.getByRole('button', { name: b.titleFormula }));
     expect(screen.getByText(b.titleFormulaHint)).toBeTruthy();

@@ -19,9 +19,11 @@ const b = ui.forms.builder;
  * показывает сотруднику.
  *
  * `fill` — вкладка «Форма создания» (ревизия 27.11): лист занимает остаток
- * высоты вкладки и сам не прокручивается — прокручивается только его
- * содержимое под неподвижным верхом («Название», «Тип»). Без `fill` — лист
- * по содержимому, как в окне перехода.
+ * высоты вкладки, а прокрутка — ОДНА на весь лист, как в настоящем окне
+ * сотрудника: системные строки и поля едут вместе (вердикт владельца
+ * 27.11: «мы должны видеть форму точно так же, как её увидит пользователь,
+ * все поля прокручиваются»). Без `fill` — лист по содержимому, как в окне
+ * перехода.
  */
 export function BuilderSheet<X>({
   host,
@@ -50,9 +52,9 @@ export function BuilderSheet<X>({
   if (fill) {
     return (
       <div className="mx-auto flex min-h-0 w-full max-w-2xl min-w-0 flex-col overflow-hidden rounded-xl bg-popover ring-1 ring-foreground/10">
-        <div className="shrink-0 px-6 pt-6">{host.fixedTop}</div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-3 pb-6">
-          {canvas}
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-6 pb-6">
+          {host.fixedTop}
+          <div className="pt-3">{canvas}</div>
           {host.footer}
         </div>
       </div>

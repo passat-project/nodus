@@ -154,7 +154,8 @@ export function ChipPreview({ block }: { block: BuilderBlock<CreationExtra> }) {
   );
 }
 
-/** Неподвижный верх окна: название (с формулой) и тип — всегда первыми. */
+/** Системные строки листа: название (с формулой) и тип — всегда первые,
+ *  прокручиваются вместе с полями, как в настоящем окне создания. */
 export function CreationFixedRows({
   typeName,
   titleFormula,
