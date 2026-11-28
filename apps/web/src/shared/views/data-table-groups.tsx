@@ -33,7 +33,7 @@ export function GroupHeaderRow({
   return (
     <div
       role="row"
-      className="sticky top-10 z-[5] flex h-9 w-max min-w-full items-center gap-2 border-b border-border/60 bg-muted px-4"
+      className="sticky top-10 z-[5] flex h-12 w-max min-w-full items-center gap-2 border-b border-border/60 bg-muted px-4"
     >
       <button
         type="button"
@@ -107,7 +107,7 @@ export function TotalsRow({
   return (
     <div
       role="row"
-      className="sticky bottom-0 z-[5] flex h-9 w-max min-w-full items-center gap-3 border-t border-border bg-card px-4"
+      className="sticky bottom-0 z-[5] flex h-12 w-max min-w-full items-center gap-3 border-t border-border bg-card px-4"
     >
       <span className="shrink-0 text-label-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
         {ui.lists.panel.totalsRow}
