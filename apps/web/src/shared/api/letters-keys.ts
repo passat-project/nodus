@@ -4,6 +4,8 @@ import type { LetterBox } from '@nodus/contracts';
 export interface LettersListFilters {
   search?: string;
   counterpartyId?: string;
+  /** Рамка проекта вкладки-списка (#435): только письма этого проекта. */
+  projectId?: string;
 }
 
 /** Ключи кэша корреспонденции — CANONICAL в shared (образец: tasks-keys.ts):
@@ -21,7 +23,11 @@ export const lettersKeys = {
     [
       ...lettersKeys.lists(),
       box ?? 'registered',
-      { search: filters.search ?? '', counterpartyId: filters.counterpartyId ?? '' },
+      {
+        search: filters.search ?? '',
+        counterpartyId: filters.counterpartyId ?? '',
+        projectId: filters.projectId ?? '',
+      },
     ] as const,
   /** Письма контрагента (вкладка «Письма» карточки CRM). */
   byCounterparty: (counterpartyId: string) => lettersKeys.list(null, { counterpartyId }),

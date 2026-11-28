@@ -298,6 +298,9 @@ export type LetterDetail = z.infer<typeof letterDetailSchema>;
 export const listLettersQuerySchema = cursorQuerySchema.extend({
   box: letterBoxSchema.optional(),
   counterpartyId: z.uuid().optional(),
+  /** Рамка проекта вкладки-списка (#435): только письма этого проекта —
+   *  фильтр на сервере, поверх видимости ящика. */
+  projectId: z.uuid().optional(),
   search: z.string().trim().min(1).max(LETTER_LIMITS.search).optional(),
   /** Расширение списка #435 (как у задач): JSON в query-параметрах. */
   filter: jsonQueryParam(listFilterSchema).optional(),

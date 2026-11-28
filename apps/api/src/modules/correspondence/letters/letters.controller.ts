@@ -122,8 +122,12 @@ export class LettersController {
     })
     q: ListLettersQuery,
   ): Promise<ListResult<LetterListItem>> {
-    // Расширение (#435): любой из filter/sort/group/totals — ext-конвейер.
-    return hasListExt(q) ? this.ext.list(user, q) : this.query.list(user, q);
+    // Расширение (#435): любой из filter/sort/group/totals ИЛИ рамка проекта
+    // (projectId держится ext-конвейером и без прочих ext-параметров) —
+    // иначе старый путь молча стрипнул бы рамку.
+    return hasListExt(q) || q.projectId !== undefined
+      ? this.ext.list(user, q)
+      : this.query.list(user, q);
   }
 
   @Get('resolvers')

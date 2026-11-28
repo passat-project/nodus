@@ -50,7 +50,7 @@ describe('parseApiMockEnv (#48)', () => {
       new Set(['custom-fields', 'dictionaries', 'crm', 'roles', 'settings', 'search']),
     );
     // Новые домены — в конце списка: буквальные маршруты писем остаются первыми.
-    expect(API_MOCK_DOMAINS.slice(-7)).toEqual([
+    expect(API_MOCK_DOMAINS.slice(-8)).toEqual([
       'custom-fields',
       'dictionaries',
       'crm',
@@ -58,6 +58,7 @@ describe('parseApiMockEnv (#48)', () => {
       'settings',
       'assistant',
       'search',
+      'views',
     ]);
   });
 

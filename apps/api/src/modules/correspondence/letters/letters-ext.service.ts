@@ -79,6 +79,8 @@ export class LettersExtService {
     const stages = buildStageFlagIndex(stageFlags);
 
     const parts: Prisma.Sql[] = this.ext.frameSql(q, user.id, canViewConfidential(user));
+    // Рамка проекта вкладки-списка (#435): только письма этого проекта.
+    if (q.projectId) parts.push(Prisma.sql`l.project_id = ${q.projectId}::uuid`);
     if (q.counterpartyId) parts.push(Prisma.sql`l.counterparty_id = ${q.counterpartyId}::uuid`);
     if (q.search) {
       const counterpartyIds = await this.counterparties.searchIds(q.search, SEARCH_COUNTERPARTIES);

@@ -310,10 +310,13 @@ function ProjectViewLettersTable({
   clientDefs,
   filterState,
 }: ViewTableProps) {
-  // Рамка проекта у писем держится клиентом: API списков писем рамки проекта
-  // не имеет — строки фильтруются по project.id, группы считаются по
-  // загруженным страницам (письма проекта — десятки строк).
-  const query = useLettersInfinite(null, { search: search || undefined }, { ext: extParams });
+  // Рамка проекта (#435): сервер — `?projectId=` в `GET /letters` держит
+  // строки и группы/итоги по всей выборке проекта, запросом не снимается.
+  const query = useLettersInfinite(
+    null,
+    { projectId, search: search || undefined },
+    { ext: extParams },
+  );
   const serverRows = useMemo(() => letterRows(query.data), [query.data]);
   const defs = useLetterFilterDefs(serverRows, {});
   const filter = useMemo<ActiveListFilter<LetterListItem>>(
@@ -324,28 +327,11 @@ function ProjectViewLettersTable({
     }),
     [defs, clientDefs, filterState],
   );
-  const rows = useFilteredList(
-    serverRows.filter((letter) => letter.project?.id === projectId),
-    filter,
-  );
+  const rows = useFilteredList(serverRows, filter);
   const openCard = useOpenCard();
   const fields = useLetterTableFields({});
   const { data: definitions } = useCustomFieldDefinitions('letter');
   const labeler = useGroupKeyLabeler('letter', definitions);
-  const groupBuckets = useMemo(() => {
-    if (!extParams.group) return undefined;
-    const keyOf = (letter: LetterListItem) => letterRowValue(letter, extParams.group!.field);
-    const byKey = new Map<string, number>();
-    for (const row of rows) {
-      const key = keyOf(row);
-      byKey.set(key === null ? '\u0000' : String(key), (byKey.get(String(key)) ?? 0) + 1);
-    }
-    return [...byKey.entries()].map(([key, count]) => ({
-      key: key === '\u0000' ? null : key,
-      count,
-      totals: [],
-    }));
-  }, [extParams.group, rows]);
   return (
     <DataTable
       viewKey={viewKey}
@@ -367,7 +353,7 @@ function ProjectViewLettersTable({
         isServerSortable: (field: { id: string }) => listFieldOfColumn(field.id, 'letter') !== null,
         groups: extParams.group
           ? {
-              buckets: groupBuckets ?? [],
+              buckets: query.data?.pages[0]?.groups ?? [],
               keyOf: (letter) => letterRowValue(letter, extParams.group!.field),
               labelOf: (key) => labeler(extParams.group!.field, key),
             }

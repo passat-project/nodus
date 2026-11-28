@@ -28,6 +28,7 @@ function listPath(
   // Длиннее лимита контракта сервер ответил бы 400 — режем здесь, у всех потребителей.
   if (filters.search) params.set('search', filters.search.slice(0, LETTER_LIMITS.search));
   if (filters.counterpartyId) params.set('counterpartyId', filters.counterpartyId);
+  if (filters.projectId) params.set('projectId', filters.projectId);
   if (cursor) params.set('cursor', cursor);
   if (ext && hasListExtParams(ext)) applyExtParams(params, ext);
   const qs = params.toString();

@@ -313,6 +313,50 @@ describe.skipIf(!process.env.DATABASE_URL)('ext-списки (#435)', () => {
     expect(body.items.map((i) => i.id).sort()).toEqual([...ids].sort());
   });
 
+  it('письма: рамка проекта ?projectId= — только письма проекта, запросом не расширяется', async () => {
+    // Одно письмо привязываем к проекту мира, остальные — без проекта:
+    // рамка держится сервером, чужие направления не подмешиваются.
+    const inProject = await prisma.letter.create({
+      data: {
+        typeId: (await prisma.processType.findUniqueOrThrow({ where: { code: 'letter-incoming' } }))
+          .id,
+        workflowId: (
+          await prisma.workflow.findUniqueOrThrow({ where: { code: 'letter.incoming' } })
+        ).id,
+        stageId: (
+          await prisma.workflowStage.findFirstOrThrow({
+            where: { workflow: { code: 'letter.incoming' }, code: 'new' },
+          })
+        ).id,
+        systemState: 'backlog',
+        direction: 'incoming',
+        subject: `Письмо в проекте ${runTag}`,
+        projectId,
+        regNumber: `Вх-2026/${runTag}`,
+        regSeriesId: (await prisma.numberSeries.findFirstOrThrow({ where: { prefix: 'Вх' } })).id,
+        regYear: 2026,
+        regSeq: 1,
+        regDate: new Date(),
+        registeredAt: new Date(),
+        registrarId: w.alice.id,
+        createdBy: w.alice.id,
+      },
+    });
+    w.cleanupIds.letters.push(inProject.id);
+    const framed = await w.fx.api(w.alice, 'GET', `/letters?projectId=${projectId}&limit=100`);
+    expect(framed.status, await framed.clone().text()).toBe(200);
+    const framedBody = (await framed.json()) as Paginated<{ id: string; project?: { id: string } }>;
+    // В проекте мира может быть и прежнее письмо — рамка держит ВСЕ строки
+    // проекта и только их; созданное присутствует.
+    expect(framedBody.items.some((i) => i.id === inProject.id)).toBe(true);
+    const ids = await prisma.letter.findMany({ where: { projectId }, select: { id: true } });
+    expect(framedBody.items.map((i) => i.id).sort()).toEqual(ids.map((i) => i.id).sort());
+    const plain = await w.fx.api(w.alice, 'GET', '/letters?limit=100');
+    const plainBody = (await plain.json()) as Paginated<{ id: string }>;
+    // Без рамки — общий журнал (режим журнала, не утечка): там есть и другие.
+    expect(plainBody.items.length).toBeGreaterThan(1);
+  });
+
   it('папки проекта: рамка пути + группировка по виду', async () => {
     const kind = await prisma.nodeKind.create({
       data: {

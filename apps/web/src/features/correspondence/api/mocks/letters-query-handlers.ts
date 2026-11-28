@@ -77,13 +77,15 @@ export const lettersQueryHandlers = [
     const raw = Object.fromEntries(new URL(request.url).searchParams);
     const parsed = listLettersQuerySchema.safeParse(raw);
     if (!parsed.success) return apiError(400, 'VALIDATION_FAILED');
-    const { box, counterpartyId, search, cursor, limit } = parsed.data;
+    const { box, counterpartyId, projectId, search, cursor, limit } = parsed.data;
     const actor = getMockActor();
     // «Новые» — только канцелярии (Р7): без права — 403, не пустой список.
     if (box === 'new' && !canRegisterLetters(actor)) return apiError(403, 'FORBIDDEN');
     let items = demoLetters
       .filter((letter) => canSeeLetter(letter, actor))
-      .filter((letter) => (box ? boxOf(letter) === box : letter.registeredAt !== null));
+      .filter((letter) => (box ? boxOf(letter) === box : letter.registeredAt !== null))
+      // Рамка проекта вкладки-списка (#435): серверный ?projectId=.
+      .filter((letter) => (projectId ? letter.project?.id === projectId : true));
     if (counterpartyId) {
       const matches = await counterpartyMatcher(counterpartyId, request);
       items = items.filter((letter) => matches(letter.counterparty));
