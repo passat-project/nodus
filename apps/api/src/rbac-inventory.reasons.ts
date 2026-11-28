@@ -59,6 +59,14 @@ const SEARCH_VISIBILITY =
   'проекты/решающий), проектов, бесед (членство без hidden ∪ гейтованный решающий), формула письма ' +
   '(регистратор/адресат/конфиденциальность/«Новые»), directory.read для сотрудников; выключенный ' +
   'модуль не отдаёт свой тип';
+const PROJECT_FOLDERS_LIST =
+  'список папок проекта (#435): та же видимость, что у дерева структуры (#467) — секретный не-участнику 404';
+const SAVED_VIEWS_READ =
+  'сохранённые настройки списков (#435): чтение — видимость рамки (проект — участию, журнал — свой набор, чужие личные не отдаются)';
+const SAVED_VIEWS_WRITE =
+  'сохранённые настройки списков (#435): права уровней в сервисе — личную правит владелец, проектную руководство проекта, списка типа workflow.manage; чужую — 404';
+const LIST_EXPORT =
+  'выгрузка CSV списка (#435): та же видимость строк, что у списка (рамка+фильтр+видимость), файл — подписанной ссылкой';
 
 export const INTENTIONALLY_WITHOUT_PERMISSION: Record<string, string> = {
   // Чтение (#334)
@@ -85,6 +93,14 @@ export const INTENTIONALLY_WITHOUT_PERMISSION: Record<string, string> = {
   'POST /projects/:id/leave': PROJECT_MEMBERSHIP,
   // Дерево проекта (#467)
   'GET /projects/:id/structure': PROJECT_STRUCTURE,
+  // Списки и виды (#435): права уровней и видимость рамки — в сервисе views.
+  'GET /projects/:id/folders': PROJECT_FOLDERS_LIST,
+  'GET /views': SAVED_VIEWS_READ,
+  'POST /views': SAVED_VIEWS_WRITE,
+  'PATCH /views/:id': SAVED_VIEWS_WRITE,
+  'DELETE /views/:id': SAVED_VIEWS_WRITE,
+  'POST /views/export': LIST_EXPORT,
+  'GET /views/export/:id': LIST_EXPORT,
   // Формулы ячеек атрибутов (#632): чтение — видимость проекта/папки,
   // мутации — право правки записи в сервисе (структура/карточка).
   'GET /projects/:id/custom-fields/:fieldId/formula': PROJECT_VISIBILITY,
