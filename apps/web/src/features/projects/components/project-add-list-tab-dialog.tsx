@@ -184,8 +184,12 @@ export function ProjectAddListTabDialog({
             ))}
           </div>
 
-          {/* Та же панель фильтра, что в журналах: условия + группировка/итоги. */}
-          <div className="overflow-hidden rounded-lg border border-border">
+          {/* Та же панель фильтра, что в журналах: условия + группировка/итоги.
+              shrink-0 обязателен: flex-body иначе СЖИМАЕТ панель до огрызка,
+              а обёртка с overflow-hidden режет нижние поля без всякого
+              скролла (волна владельца 28.11); при природной высоте панели
+              переполняется и скроллится ТЕЛО окна. */}
+          <div className="shrink-0 overflow-hidden rounded-lg border border-border">
             <FilterPanel
               toolbar={toolbar}
               defs={defs as FilterFieldDef<never>[]}
