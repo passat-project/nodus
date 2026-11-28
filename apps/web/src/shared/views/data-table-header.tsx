@@ -206,8 +206,10 @@ export function DataTableHeader({
       scope?.classList.remove('nodus-coldrag');
       if (!d) return;
       if (!d.active) {
-        // Клик без движения — сортировка.
-        if (commit && field.sortValue !== undefined) onCycleSort(field.id);
+        // Клик без движения — сортировка (в ext-режиме #435 кликабельность
+        // решает карта полей списка, а не sortValue реестра).
+        const sortable = isSortable ? isSortable(field) : field.sortValue !== undefined;
+        if (commit && sortable) onCycleSort(field.id);
         return;
       }
       if (commit) {

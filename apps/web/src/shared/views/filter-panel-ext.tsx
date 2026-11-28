@@ -49,7 +49,7 @@ function TotalRow({
           else onChange({ fn: fn as 'sum' | 'min' | 'max', field: fieldOf(fields[0]?.value) });
         }}
       >
-        <SelectTrigger className="h-8 w-28 shrink-0 min-w-0">
+        <SelectTrigger aria-label={t.totals} className="h-8 w-28 shrink-0 min-w-0">
           <SelectValue />
         </SelectTrigger>
         <SelectContent position="popper">

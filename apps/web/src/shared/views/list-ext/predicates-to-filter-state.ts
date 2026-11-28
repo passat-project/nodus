@@ -15,6 +15,8 @@ import type { FilterState } from '../list-filters.js';
 interface FieldParts {
   op?: ConditionFieldOp;
   value?: unknown;
+  from?: unknown;
+  to?: unknown;
 }
 
 export function predicatesToFilterState(filter: ListFilter): FilterState {
@@ -31,12 +33,29 @@ export function predicatesToFilterState(filter: ListFilter): FilterState {
     }
     if (predicate.kind !== 'field') continue;
     const current = parts.get(predicate.field) ?? {};
-    current.op = predicate.op;
-    if ('value' in predicate) current.value = predicate.value;
+    if (predicate.op === 'gte' || predicate.op === 'lte') {
+      // Диапазон — ПАРОЙ предикатов одного поля: границы копятся отдельно
+      // (вторая не затирает первую).
+      const value = predicate.value;
+      const isDate = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value);
+      const bound = isDate ? String(value).slice(0, 10) : value;
+      if (predicate.op === 'gte') current.from = bound;
+      else current.to = bound;
+    } else {
+      current.op = predicate.op;
+      if ('value' in predicate) current.value = predicate.value;
+    }
     parts.set(predicate.field, current);
   }
   for (const [field, part] of parts) {
     if (customFieldIdOfKey(field) === null) continue;
+    if (part.from !== undefined || part.to !== undefined) {
+      const range: { from?: unknown; to?: unknown } = {};
+      if (part.from !== undefined) range.from = part.from;
+      if (part.to !== undefined) range.to = part.to;
+      state[field] = range as FilterState[string];
+      continue;
+    }
     switch (part.op) {
       case 'contains':
         if (typeof part.value === 'string') state[field] = part.value;
@@ -52,19 +71,6 @@ export function predicatesToFilterState(filter: ListFilter): FilterState {
         if (Array.isArray(part.value) && typeof part.value[0] === 'string')
           state[field] = part.value[0];
         break;
-      case 'gte':
-      case 'lte': {
-        const range = (typeof state[field] === 'object' ? state[field] : {}) as {
-          from?: unknown;
-          to?: unknown;
-        };
-        const value = part.value;
-        const isDate = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value);
-        const bound = isDate ? String(value).slice(0, 10) : value;
-        const next = { ...range, [part.op === 'gte' ? 'from' : 'to']: bound };
-        state[field] = next as FilterState[string];
-        break;
-      }
       default:
         break;
     }

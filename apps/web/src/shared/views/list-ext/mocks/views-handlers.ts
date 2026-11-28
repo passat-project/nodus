@@ -9,7 +9,6 @@ import type {
 import { ErrorCode, createSavedViewBodySchema, updateSavedViewBodySchema } from '@nodus/contracts';
 
 import { getMockActor } from '../../../mocks/mock-actor.js';
-import { demoNodeRows } from '../../../mocks/data/project-nodes.js';
 import { applyMockExt } from './mock-list-ext.js';
 
 /**
@@ -57,22 +56,29 @@ function badRequest(code: ErrorCode, status: number, details?: unknown) {
   return HttpResponse.json({ code, message: code, ...(details ? { details } : {}) }, { status });
 }
 
-function rowsOfExport(entity: 'task' | 'letter' | 'folder'): {
+async function rowsOfExport(entity: 'task' | 'letter' | 'folder'): Promise<{
   items: FolderListItem[];
   valueOf: (row: FolderListItem, field: string) => string | number | null;
-} {
-  // Демо-строки выгрузки: папки — из демо-структуры, задачи/письма — пусто
-  // (их генерируют свои домены; для CSV-мока достаточно полей).
+}> {
+  // Демо-строки выгрузки: папки — лёгкий локальный посев (импорт демо-
+  // структуры тянет весь демо-мир циклом module-eval), задачи/письма —
+  // пусто (их генерируют свои домены; для CSV-мока важен конвейер).
   if (entity === 'folder') {
-    const folders: FolderListItem[] = demoNodeRows.map((row) => ({
-      id: row.id,
-      projectId: row.projectId,
-      parentId: row.parentId,
-      kindId: row.kindId,
-      name: row.name,
-      code: row.code,
-      customFields: row.customFields,
-      createdAt: row.createdAt,
+    const folders: FolderListItem[] = (
+      [
+        ['1', 'Стадия П'],
+        ['2', 'Комплект КЖ-01'],
+        ['3', 'Раздел АР'],
+      ] as [string, string][]
+    ).map(([n, name]) => ({
+      id: `f0000000-0000-4000-8000-00000000000${n}`,
+      projectId: 'p0000000-0000-4000-8000-000000000001',
+      parentId: null,
+      kindId: `k0000000-0000-4000-8000-00000000000${n}`,
+      name,
+      code: null,
+      customFields: {},
+      createdAt: '2026-11-01T00:00:00.000Z',
     }));
     return { items: folders, valueOf: folderListValue };
   }
@@ -191,7 +197,7 @@ export const viewsHandlers = [
 
   http.post('/api/v1/views/export', async ({ request }) => {
     const body = (await request.json()) as CreateSavedViewBody;
-    const source = rowsOfExport(body.entity);
+    const source = await rowsOfExport(body.entity);
     const ext = applyMockExt<FolderListItem>({
       rows: source.items,
       filter: body.filter,

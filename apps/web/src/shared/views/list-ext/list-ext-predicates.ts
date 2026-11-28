@@ -170,10 +170,10 @@ function isLiveField(field: string, definitions: readonly CustomFieldDefinition[
  *  поля НЕ шлются (сервер — 422 LIST_FIELD_INVALID), список не ломается. */
 export function sanitizeSavedViewExt<
   V extends {
-    filter: ConditionPredicate[];
-    sort: { field: string }[];
+    filter: readonly ConditionPredicate[];
+    sort: readonly { field: string; dir?: unknown }[];
     group?: { field: string };
-    totals: { fn: string; field?: string }[];
+    totals: readonly { fn: string; field?: string }[];
   },
 >(view: V, definitions: readonly CustomFieldDefinition[]): V {
   return {

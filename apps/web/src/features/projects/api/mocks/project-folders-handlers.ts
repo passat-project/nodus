@@ -1,6 +1,11 @@
 import { http, HttpResponse } from 'msw';
 import type { FolderListItem } from '@nodus/contracts';
 
+// Демо-задачи грузятся РАНЬШЕ структуры: project-nodes тянет tasks →
+// projects → project-types → nodeKindIds(project-nodes) — цикл module-eval
+// (gotcha «циклы мок-данных»); tasks-first разрывает его, как у хендлеров
+// задач (tasks.js в их импортах первый).
+import '../../../../shared/mocks/data/tasks.js';
 import { demoNodeRows } from '../../../../shared/mocks/data/project-nodes.js';
 import { folderRowValue } from '../../../../shared/views/list-ext/list-field-values.js';
 import {
