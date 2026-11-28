@@ -9,7 +9,7 @@ import { VIEWS_EXPORT_QUEUE, VIEWS_EXPORT_QUEUE_PREFIX } from './views-export.qu
 /**
  * In-process BullMQ-воркер выгрузки списков (#435, паттерн letter-body-pdf):
  * конвейер лёгкий (SQL + сборка строки) — concurrency 4. Отказ — ретраи
- * очереди; исчерпаны — статус failed с текстом ошибки (автор видит в UI).
+ * очереди; исчерпаны — статус failed (стабильная фраза в UI, детали — здесь).
  */
 @Injectable()
 export class ViewsExportWorker implements OnModuleInit, OnModuleDestroy {
@@ -40,7 +40,7 @@ export class ViewsExportWorker implements OnModuleInit, OnModuleDestroy {
         'Выгрузка списка не собрана (ретраи очереди)',
       );
       if (job && job.attemptsMade >= (job.opts.attempts ?? 3)) {
-        void this.service.markFailed(job.data.exportId, error);
+        void this.service.markFailed(job.data.exportId);
       }
     });
   }

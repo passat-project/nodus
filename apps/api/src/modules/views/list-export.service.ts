@@ -76,11 +76,34 @@ export class ListExportService {
       filter: body.filter,
       sort: body.sort,
     };
+    // Уборка просроченных выгрузок (TTL) — фоном, заказ не блокирует и не
+    // падает от её ошибки (файлы старых заказов не копятся бесконечно).
+    void this.repo
+      .deleteExpired(LIST_VIEW_LIMITS.exportTtlDays)
+      .then((fileIds) => (fileIds.length > 0 ? this.storage.remove(fileIds) : Promise.resolve()))
+      .catch(() => undefined);
     const count = await source.count(user, query);
+    if (count > LIST_VIEW_LIMITS.csvMaxRows) {
+      throw new DomainException(
+        ErrorCode.VALIDATION_FAILED,
+        'Export selection is too large, narrow the filter',
+        { rows: count, max: LIST_VIEW_LIMITS.csvMaxRows },
+        422,
+      );
+    }
     if (count <= LIST_VIEW_LIMITS.csvSyncRows) {
       const { csv } = await this.build(user, query, body.columns);
       const fileId = await this.saveFile(user.id, csv, body.entity);
       return { status: 'done', fileId, url: this.signedUrls.fileContentUrl(fileId) };
+    }
+    const active = await this.repo.countActiveByUser(user.id);
+    if (active >= LIST_VIEW_LIMITS.exportActivePerUser) {
+      throw new DomainException(
+        ErrorCode.VALIDATION_FAILED,
+        'Too many active exports, wait for previous to finish',
+        { active, max: LIST_VIEW_LIMITS.exportActivePerUser },
+        422,
+      );
     }
     const exportId = randomUUID();
     await this.repo.create({
@@ -111,7 +134,9 @@ export class ListExportService {
           url: this.signedUrls.fileContentUrl(row.fileId!),
         };
       case 'failed':
-        return { status: 'failed', error: row.error ?? 'export failed' };
+        // Стабильная фраза без внутренностей исключения (сырой текст Prisma
+        // утекал бы в статус); диагностика — в логе воркера.
+        return { status: 'failed', error: 'export failed' };
       case 'running':
         return { status: 'running' };
       default:
@@ -147,11 +172,11 @@ export class ListExportService {
     await this.repo.markDone(exportId, fileId, rowCount);
   }
 
-  /** Финальный отказ (ретраи исчерпаны). */
-  async markFailed(exportId: string, error: unknown): Promise<void> {
-    await this.repo
-      .markFailed(exportId, error instanceof Error ? error.message : String(error))
-      .catch(() => undefined);
+  /** Финальный отказ (ретраи исчерпаны). В строку — стабильная пометка
+   *  без текста исключения (утечка внутренностей в статус); полный текст
+   *  ошибки воркер уже записал в лог. */
+  async markFailed(exportId: string): Promise<void> {
+    await this.repo.markFailed(exportId, 'export failed').catch(() => undefined);
   }
 
   private sourceOf(entity: CreateListExportBody['entity']): ListExportSource {

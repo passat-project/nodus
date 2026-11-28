@@ -26,6 +26,13 @@ export const LIST_VIEW_LIMITS = {
   totals: 6,
   /** Строк синхронной выгрузки CSV; больше — фоновая очередь (#435). */
   csvSyncRows: 1000,
+  /** Потолок строк выгрузки вообще (фоновая включительно): свыше — 422,
+   *  выборку сужают фильтром (эксплуатация: память и диск не бездонны). */
+  csvMaxRows: 100_000,
+  /** Одновременных фоновых выгрузок на пользователя (queued + running). */
+  exportActivePerUser: 3,
+  /** Дней жизни записи и файла выгрузки (чистка при каждом новом заказе). */
+  exportTtlDays: 7,
 } as const;
 
 /** CSV-выгрузка (#435): русский Excel — UTF-8 c BOM и «;». */
@@ -213,7 +220,9 @@ export const updateSavedViewBodySchema = z.object({
   level: listViewLevelSchema.optional(),
   filter: listFilterSchema.optional(),
   sort: z.array(listSortSchema).max(LIST_VIEW_LIMITS.sort).optional(),
-  group: listGroupSchema.optional(),
+  /** null — снять группировку (иначе «не трогать»; у group нет пустого
+   * значения-списка, как у sort/totals — снятие только явным null). */
+  group: listGroupSchema.nullable().optional(),
   totals: z.array(listTotalSchema).max(LIST_VIEW_LIMITS.totals).optional(),
   columns: z.array(listViewColumnSchema).max(LIST_VIEW_LIMITS.columns).optional(),
 });

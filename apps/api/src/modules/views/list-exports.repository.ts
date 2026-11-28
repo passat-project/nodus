@@ -40,6 +40,29 @@ export class ListExportsRepository {
     return this.prisma.listExport.findUnique({ where: { id } });
   }
 
+  /** Активные (queued/running) заказы пользователя — лимит одновременных
+   *  фоновых выгрузок на одного (анти-абраз эксплуатации). */
+  countActiveByUser(userId: string): Promise<number> {
+    return this.prisma.listExport.count({
+      where: { requestedBy: userId, status: { in: ['queued', 'running'] } },
+    });
+  }
+
+  /** Уборка просроченных выгрузок (TTL): возвращает fileId удалённых строк —
+   *  вызывающий убирает и файлы из хранилища. */
+  async deleteExpired(ttlDays: number): Promise<string[]> {
+    const horizon = new Date(Date.now() - ttlDays * 24 * 60 * 60 * 1000);
+    const expired = await this.prisma.listExport.findMany({
+      where: { createdAt: { lt: horizon } },
+      select: { id: true, fileId: true },
+    });
+    if (expired.length === 0) return [];
+    await this.prisma.listExport.deleteMany({
+      where: { id: { in: expired.map((row) => row.id) } },
+    });
+    return expired.map((row) => row.fileId).filter((fileId): fileId is string => fileId !== null);
+  }
+
   markRunning(id: string) {
     return this.prisma.listExport.update({ where: { id }, data: { status: 'running' } });
   }

@@ -220,6 +220,18 @@ describe.skipIf(!process.env.DATABASE_URL)('виды и выгрузка (#435)'
     expect(patched.name).toBe('Личная Бориса v2');
     expect(patched.filter).toEqual([{ kind: 'type_is', typeId: bulkTypeId }]);
     expect(patched.columns).toEqual([{ field: 'title' }]);
+    // Группировка ставится и снимается: group null — «снять» (пропуск ключа
+    // означал бы «не трогать», и снятие молча терялось бы при перечитке).
+    const grouped = await w.fx.api(w.bob, 'PATCH', `/views/${bobView.id}`, {
+      body: { group: { field: 'stage' } },
+    });
+    expect(grouped.status, await grouped.clone().text()).toBe(200);
+    expect(((await grouped.json()) as SavedView).group).toEqual({ field: 'stage' });
+    const cleared = await w.fx.api(w.bob, 'PATCH', `/views/${bobView.id}`, {
+      body: { group: null },
+    });
+    expect(cleared.status, await cleared.clone().text()).toBe(200);
+    expect(((await cleared.json()) as SavedView).group).toBeUndefined();
   });
 
   it('CSV ≤1000: синхронный файл с BOM и «;» в байтах', async () => {

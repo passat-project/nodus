@@ -19,6 +19,7 @@ import {
   listTotalSchema,
   savedViewSchema,
   toListQueryExt,
+  updateSavedViewBodySchema,
 } from './list-view.schemas.js';
 
 const hours = customFieldKey('00000000-0000-4000-8000-000000000001');
@@ -109,6 +110,23 @@ describe('контракт списков #435', () => {
       totals: [{ fn: 'sum', value: '24' }],
     });
     expect(bucket.key).toBeNull();
+  });
+
+  it('правка вида: group null снимает группировку, пропуск ключа — «не трогать»', () => {
+    const clear = updateSavedViewBodySchema.parse({ group: null });
+    expect(clear.group).toBeNull();
+    const keep = updateSavedViewBodySchema.parse({ name: 'v2' });
+    expect(keep.group).toBeUndefined();
+    expect('group' in keep).toBe(false);
+    // Создание null-группу не принимает: у нового вида группировку не «снимают».
+    expect(
+      createSavedViewBodySchema.safeParse({
+        name: 'Мой',
+        entity: 'task',
+        scope: { kind: 'journal' },
+        group: null,
+      }).success,
+    ).toBe(false);
   });
 
   it('выгрузка CSV: тело валидно, статусы полны, константы русского Excel', () => {

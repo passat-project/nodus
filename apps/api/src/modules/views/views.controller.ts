@@ -68,7 +68,7 @@ export class ViewsController {
   @Get()
   @ApiOperation({
     summary:
-      'Настройки рамки: ?journal=true (личние), ?projectId= (общие + личние + списки типов проекта), ?typeId= (настройщик)',
+      'Настройки рамки: ?journal=true (личные), ?projectId= (общие + личные + списки типов проекта), ?typeId= (настройщик)',
   })
   @ApiOkResponse({ standardSchema: z.array(savedViewSchema) })
   @ApiErrors(400, 401, 403, 404)

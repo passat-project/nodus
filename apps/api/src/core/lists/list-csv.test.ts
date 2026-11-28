@@ -26,4 +26,15 @@ describe('CSV списков (#435)', () => {
     expect(csvCell('просто')).toBe('просто');
     expect(csvCell('a;b')).toBe('"a;b"');
   });
+
+  it('формулоопасная строка нейтрализуется апострофом (OWASP CSV injection)', () => {
+    expect(csvCell('=HYPERLINK("http://evil","отчёт")')).toBe(
+      '\'=HYPERLINK("http://evil","отчёт")',
+    );
+    expect(csvCell('+SUM(A1:A9)')).toBe("'+SUM(A1:A9)");
+    expect(csvCell('-счёт')).toBe("'-счёт");
+    expect(csvCell('@cmd')).toBe("'@cmd");
+    // Отрицательные ЧИСЛА безопасны: остаются числами, без апострофа.
+    expect(csvCell(-42)).toBe('-42');
+  });
 });

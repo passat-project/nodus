@@ -73,9 +73,9 @@ import { useFilterDefsOfEntity } from '../lib/view-tab-filter-defs.js';
  * инструментов + канонической таблицы. Рамка проекта НЕ снимается: запрос
  * всегда идёт с projectId (условий projectId в панели нет), базовые предикаты
  * вида (например type_is «переработки») остаются поверх панельных правок —
- * панель только ДОБАВЛЯЕТ условия. Письма проекта: рамка держится клиентом
- * (в API списков писем рамки проекта нет — группы/итоги по загруженным
- * страницам, отставание до серверной рамки; задачи и папки — целиком сервер).
+ * панель только ДОБАВЛЯЕТ условия. Все три сущности — целиком сервер:
+ * ext-конвейер с рамкой projectId держит строки, группы и итоги по всей
+ * выборке (у писем — `?projectId=` в ext-списке).
  */
 export function ProjectViewTab({ projectId, view }: { projectId: string; view: SavedView }) {
   const viewKey = `projects.view.${view.id}`;
@@ -89,7 +89,7 @@ export function ProjectViewTab({ projectId, view }: { projectId: string; view: S
   const search = useDebouncedValue(toolbar.query.trim(), 250);
 
   // Применение сохранённой настройки — на монтирование вкладки и приход
-  // реестра атрибутов (до него predикаты cf.* не собрать); правки панели
+  // реестра атрибутов (до него предикаты cf.* не собрать); правки панели
   // живут в сессии, refetch вида их не сбрасывает (ключ — состав реестра).
   const savedRef = useRef(saved);
   savedRef.current = saved;
@@ -164,7 +164,9 @@ export function ProjectViewTab({ projectId, view }: { projectId: string; view: S
         body: {
           filter: filterPredicates,
           sort: ext.sort,
-          ...(ext.group ? { group: ext.group } : {}),
+          // null — снять группировку: пропуск ключа означал бы «не трогать»,
+          // и снятая группировка молча возвращалась при повторном открытии.
+          group: ext.group ?? null,
           totals: ext.totals,
         },
       },

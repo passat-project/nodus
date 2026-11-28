@@ -32,7 +32,7 @@
 ## Контракты
 
 - `GET /views?journal=true[&entity=]` — личные настройки журнала;
-  `GET /views?projectId=` — общие проектные + личние пользователя + списки
+  `GET /views?projectId=` — общие проектные + личные пользователя + списки
   типов, создаваемых в этом проекте (#665 «где создаётся»); `GET
 /views?typeId=` — каталог настроек типа (только `workflow.manage`).
 - `POST /views` (Idempotency-Key) — `{name, entity, scope, level?, filter,

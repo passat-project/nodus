@@ -7,12 +7,16 @@ import { CSV_EXPORT } from '@nodus/contracts';
  */
 
 /** Ячейка CSV: пустая — пусто, число — без кавычек, текст — в кавычках
- * при любом спецсимволе; `"` удваивается (RFC 4180). */
+ * при любом спецсимволе; `"` удваивается (RFC 4180). Строка с ведущими
+ * `= + - @` или табуляцией — формулоопасна (OWASP CSV injection): Excel
+ * исполнил бы её формулой и после кавычек, поэтому префиксуем апострофом.
+ * Числа (включая отрицательные) безопасны и остаются числами. */
 export function csvCell(value: string | number | null): string {
   if (value === null || value === undefined) return '';
-  const text = typeof value === 'number' ? formatNumber(value) : value;
-  if (/[;"\r\n]/.test(text)) return `"${text.replaceAll('"', '""')}"`;
-  return text;
+  if (typeof value === 'number') return formatNumber(value);
+  const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  if (/[;"\r\n]/.test(safe)) return `"${safe.replaceAll('"', '""')}"`;
+  return safe;
 }
 
 /** Число без экспоненциальной записи (Excel так читает надёжнее). */
