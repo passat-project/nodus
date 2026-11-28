@@ -14,15 +14,17 @@ function Harness({
   defaultActive = 'structure',
   requestedActive,
   defaultGroups,
+  stableTabs = STABLE,
 }: {
   kind?: 'project' | 'letter';
   defaultActive?: string;
   requestedActive?: string;
   defaultGroups?: readonly (readonly string[])[];
+  stableTabs?: readonly string[];
 }) {
   const tabs = useCardTabs({
     kind,
-    stableTabs: STABLE,
+    stableTabs,
     defaultActive,
     requestedActive,
     defaultGroups,
@@ -170,5 +172,38 @@ describe('useCardTabs: внешнее обновление prefs', () => {
     expect(screen.getByTestId('groups').textContent).toBe('tasks+about+structure');
     expect(screen.getByTestId('widths').textContent).toBe('');
     expect(useUiPrefsStore.getState().personal.cardTabs?.project?.widths?.groups).toBeUndefined();
+  });
+});
+
+/** Вкладки-списки проекта (#435) приходят запросом ПОЗЖЕ маунта карточки:
+ *  опоздавший стабильный состав обязан попасть в полосу — до фикса группы
+ *  строились один раз и вкладка «появлялась» только после ручного
+ *  выключения/включения видимости (волна владельца 28.11). */
+describe('useCardTabs: опоздавший стабильный состав (#435)', () => {
+  afterEach(async () => {
+    cleanup();
+    await act(async () => useUiPrefsStore.setState({ personal: {}, company: {} }));
+  });
+
+  it('вкладка, пришедшая после маунта, появляется в полосе без переключений', async () => {
+    const { rerender } = render(<Harness />);
+    expect(screen.getByTestId('groups').textContent).toBe('structure+tasks+about');
+
+    await act(async () => {
+      rerender(<Harness stableTabs={['structure', 'tasks', 'about', 'view:v-1']} />);
+    });
+    expect(screen.getByTestId('groups').textContent).toBe('structure+tasks+about+view:v-1');
+  });
+
+  it('сохранённый порядок и активная вкладка переживают пересборку', async () => {
+    const { rerender } = render(<Harness defaultActive="tasks" />);
+    await act(async () => {
+      screen.getByRole('button', { name: 'host-activate' }).click();
+    });
+    await act(async () => {
+      // Тот же состав другим массивом — эффект не должен сбрасывать состояние.
+      rerender(<Harness defaultActive="tasks" stableTabs={[...STABLE]} />);
+    });
+    expect(screen.getByTestId('actives').textContent).toBe('structure');
   });
 });

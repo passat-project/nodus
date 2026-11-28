@@ -84,7 +84,7 @@ export const listsStrings = {
   },
   /** Вкладки-списки карточки проекта (#435): создание из «+». */
   tabs: {
-    addList: 'Список…',
+    addList: 'Новый список',
     addListTitle: 'Новая вкладка-список',
     whatToShow: 'Что показывать',
     entityTask: 'Задачи этого проекта',

@@ -6,7 +6,6 @@ import {
   ListTree,
   MessagesSquare,
   Plus,
-  Trash2,
   Users,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -63,21 +62,20 @@ export function projectViewTabDefs(views: readonly SavedView[]): CardTabDef[] {
   }));
 }
 
-/** «+» личного набора вкладок: скрытие/возврат системных вкладок, вкладки-
- *  списки (#435 — скрытие и удаление) и создание новой («Список…»). Последнюю
- *  видимую скрыть нельзя (рабочая зона не остаётся пустой). */
+/** «+» личного набора вкладок: скрытие/возврат системных вкладок и вкладок-
+ *  списков (#435 — только видимость; удаление списка — кнопкой в его панели)
+ *  и создание нового («Новый список»). Последнюю видимую скрыть нельзя
+ *  (рабочая зона не остаётся пустой). */
 export function ProjectTabsTrailing({
   visible,
   viewTabs,
   onToggle,
   onAddList,
-  onDeleteViewTab,
 }: {
   visible: readonly string[];
   viewTabs: readonly SavedView[];
   onToggle: (id: string) => void;
   onAddList: () => void;
-  onDeleteViewTab: (viewId: string) => void;
 }) {
   return (
     <DropdownMenu>
@@ -104,34 +102,20 @@ export function ProjectTabsTrailing({
                 const tabId = `view:${view.id}`;
                 const checked = visible.includes(tabId);
                 return (
-                  <div key={view.id} className="group relative">
-                    <DropdownMenuCheckboxItem
-                      checked={checked}
-                      disabled={checked && visible.length <= 1}
-                      onCheckedChange={() => onToggle(tabId)}
-                      onSelect={(event) => event.preventDefault()}
-                      className="pr-8"
-                    >
-                      <span className="min-w-0 truncate" title={view.name}>
-                        {view.name}
-                        <span className="ml-1.5 text-muted-foreground">
-                          {listsStrings.listEntityLabels[view.entity]}
-                        </span>
+                  <DropdownMenuCheckboxItem
+                    key={view.id}
+                    checked={checked}
+                    disabled={checked && visible.length <= 1}
+                    onCheckedChange={() => onToggle(tabId)}
+                    onSelect={(event) => event.preventDefault()}
+                  >
+                    <span className="min-w-0 truncate" title={view.name}>
+                      {view.name}
+                      <span className="ml-1.5 text-muted-foreground">
+                        {listsStrings.listEntityLabels[view.entity]}
                       </span>
-                    </DropdownMenuCheckboxItem>
-                    <button
-                      type="button"
-                      aria-label={ui.lists.tabs.deleteTab}
-                      title={ui.lists.tabs.deleteTab}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteViewTab(view.id);
-                      }}
-                      className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 hover:text-danger"
-                    >
-                      <Trash2 className="size-3.5" strokeWidth={1.75} />
-                    </button>
-                  </div>
+                    </span>
+                  </DropdownMenuCheckboxItem>
                 );
               })}
             </DropdownMenuGroup>

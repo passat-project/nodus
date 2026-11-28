@@ -1,3 +1,4 @@
+/* eslint-disable nodus-internal/max-lines-warn -- движок вкладок карточек: маунт/файлы/стабильный состав/prefs-синк в одном месте (#435: пересборка на опоздавшие вкладки-списки) */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CardKind, CardTabsPref } from '@nodus/contracts';
 
@@ -95,6 +96,31 @@ export function useCardTabs(options: UseCardTabsOptions) {
   const [state, setState] = useState<CardTabsState>(() =>
     rebuild(initialPref, options, hiddenFromPref(initialPref, options.stableTabs)),
   );
+
+  // Состав СТАБИЛЬНЫХ вкладок пришёл позже маунта (вкладки-списки проекта
+  // #435 грузятся запросом): пересобрать группы — новые видимые вкладки
+  // добавляются в конец первой области (groupsFromPref), порядок и активная
+  // сохраняются. Без этого опоздавшая вкладка оставалась вне полосы, пока
+  // человек не переключит её видимость вручную.
+  const stableKey = options.stableTabs.join('|');
+  const stableKeyRef = useRef(stableKey);
+  useEffect(() => {
+    if (stableKeyRef.current === stableKey) return;
+    stableKeyRef.current = stableKey;
+    setState((previous) => {
+      const pref = prefFromState(previous, { hidden, widths, panelOpen }) ?? undefined;
+      const groups = groupsFromPref(pref, {
+        stableTabs: options.stableTabs,
+        fileTabs: options.fileTabs ?? [],
+        hidden,
+      });
+      return createCardTabsState(groups, {
+        visited: Object.keys(previous.visited),
+        focusGroupId: previous.focusGroupId,
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- стабильный состав
+  }, [stableKey]);
 
   // Файлы открылись/закрылись: пересобрать состав, сохранив порядок
   // стабильных вкладок и посещённые панели. Id файлов в prefs не пишем.

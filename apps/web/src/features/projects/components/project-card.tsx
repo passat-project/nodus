@@ -5,10 +5,7 @@ import type { SavedView } from '@nodus/contracts';
 import { CardHeaderActionsPortal } from '../../../app/shell/card-header-actions.js';
 import { useProjectConversation } from '../../../shared/chat/chat-queries.js';
 import { ChatSidePanel, ChatPanelToggle } from '../../../shared/chat/chat-side-panel.js';
-import {
-  useDeleteSavedView,
-  useProjectSavedViews,
-} from '../../../shared/views/list-ext/saved-views-api.js';
+import { useProjectSavedViews } from '../../../shared/views/list-ext/saved-views-api.js';
 import { CardLayoutButton } from '../../../shared/ui/entity-card/card-layout-button.js';
 import { CardTabAreas } from '../../../shared/ui/entity-card/card-tab-areas.js';
 import type { CardTabDef } from '../../../shared/ui/entity-card/card-tab-strip.js';
@@ -67,7 +64,6 @@ export function ProjectCard({ projectId }: { projectId: string }) {
   const participant = project ? isProjectParticipant(project) : false;
   const { data: conversation } = useProjectConversation(projectId, participant);
   const savedViews = useProjectSavedViews(projectId);
-  const deleteView = useDeleteSavedView();
   const [addListOpen, setAddListOpen] = useState(false);
   const rowRef = useRef<HTMLDivElement>(null);
   const rowWidth = useElementWidth(rowRef);
@@ -168,7 +164,6 @@ export function ProjectCard({ projectId }: { projectId: string }) {
                 viewTabs={viewTabs}
                 onToggle={cardTabs.toggleHidden}
                 onAddList={() => setAddListOpen(true)}
-                onDeleteViewTab={(viewId) => deleteView.mutate(viewId)}
               />
             ) : null
           }

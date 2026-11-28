@@ -9,6 +9,8 @@ import type {
   ViewSort,
 } from '@nodus/contracts';
 import { listsStrings } from '@nodus/contracts';
+import { Trash2 } from 'lucide-react';
+import { Button } from '@nodus/ui/components/button';
 
 import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import { letterRows, useLettersInfinite } from '../../../shared/api/letters-list.js';
@@ -47,6 +49,7 @@ import {
 } from '../../../shared/views/list-ext/list-field-options.js';
 import { useListExt } from '../../../shared/views/list-ext/use-list-ext.js';
 import { useListExportAction } from '../../../shared/views/list-ext/use-list-export-action.js';
+import { useDeleteSavedView } from '../../../shared/views/list-ext/saved-views-api.js';
 import { useGroupKeyLabeler } from '../../../shared/views/list-ext/use-list-lookups.js';
 import { useLetterTableFields } from '../../../shared/views/letter-table-fields.js';
 import { useLetterFilterDefs } from '../../../shared/views/letter-filter-fields.js';
@@ -143,6 +146,9 @@ export function ProjectViewTab({ projectId, view }: { projectId: string; view: S
     [view.entity, definitionList],
   );
   const exportCsv = useListExportAction();
+  // Удаление списка — в его же панели (в меню «+» только видимость вкладок):
+  // настройка живёт там, где настраивается.
+  const deleteView = useDeleteSavedView();
 
   const visibleColumns = useMemo(
     () =>
@@ -184,7 +190,23 @@ export function ProjectViewTab({ projectId, view }: { projectId: string; view: S
             removedFieldIds: [...split.removedFieldIds],
             onReset: () => ext.reset(),
           }}
-          right={<ViewSettings viewKey={viewKey} defs={fields} />}
+          right={
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={listsStrings.tabs.deleteTab}
+                title={listsStrings.tabs.deleteTab}
+                disabled={deleteView.isPending}
+                onClick={() => deleteView.mutate(view.id)}
+                className="text-muted-foreground hover:text-danger"
+              >
+                <Trash2 className="size-4" strokeWidth={1.75} />
+              </Button>
+              <ViewSettings viewKey={viewKey} defs={fields} />
+            </>
+          }
         />
       </CardTabToolbar>
       <div className="min-h-0 flex-1">

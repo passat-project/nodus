@@ -56,9 +56,8 @@ describe('ProjectTabsTrailing: «+» с вкладками-списками (#43
     Element.prototype.releasePointerCapture ??= () => undefined;
   });
 
-  it('меню содержит «Список…», сохранённые вкладки и удаление', () => {
+  it('меню содержит «Новый список» и сохранённые вкладки; удаления в меню нет', () => {
     const onAddList = vi.fn();
-    const onDeleteViewTab = vi.fn();
     const saved = view('v-1', 'Сметы', 'letter');
     render(
       <ProjectTabsTrailing
@@ -66,17 +65,16 @@ describe('ProjectTabsTrailing: «+» с вкладками-списками (#43
         viewTabs={[saved]}
         onToggle={vi.fn()}
         onAddList={onAddList}
-        onDeleteViewTab={onDeleteViewTab}
       />,
     );
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Вкладки' }));
-    const add = screen.getByText('Список…');
+    const add = screen.getByText('Новый список');
     fireEvent.click(add);
     expect(onAddList).toHaveBeenCalledTimes(1);
 
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Вкладки' }));
     expect(screen.getByText('Сметы')).not.toBeNull();
-    fireEvent.click(screen.getByLabelText('Удалить вкладку-список'));
-    expect(onDeleteViewTab).toHaveBeenCalledWith('v-1');
+    // Удаление списка — кнопкой в его панели, не в меню видимости вкладок.
+    expect(screen.queryByLabelText('Удалить вкладку-список')).toBeNull();
   });
 });

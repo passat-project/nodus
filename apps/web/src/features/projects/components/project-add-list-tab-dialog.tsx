@@ -141,7 +141,7 @@ export function ProjectAddListTabDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] w-[min(40rem,calc(100vw-2rem))] overflow-hidden p-0">
+      <DialogContent className="max-h-[85vh] w-full overflow-hidden p-0 sm:max-w-3xl">
         <DialogHeader className="px-4 pt-4">
           <DialogTitle>{t.addListTitle}</DialogTitle>
         </DialogHeader>
