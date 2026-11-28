@@ -9,7 +9,8 @@ import type {
   ViewSort,
 } from '@nodus/contracts';
 import { listsStrings } from '@nodus/contracts';
-import { Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { Save, Trash2 } from 'lucide-react';
 import { Button } from '@nodus/ui/components/button';
 
 import { useOpenCard } from '../../../app/shell/use-card-stack.js';
@@ -49,7 +50,10 @@ import {
 } from '../../../shared/views/list-ext/list-field-options.js';
 import { useListExt } from '../../../shared/views/list-ext/use-list-ext.js';
 import { useListExportAction } from '../../../shared/views/list-ext/use-list-export-action.js';
-import { useDeleteSavedView } from '../../../shared/views/list-ext/saved-views-api.js';
+import {
+  useDeleteSavedView,
+  useUpdateSavedView,
+} from '../../../shared/views/list-ext/saved-views-api.js';
 import { useGroupKeyLabeler } from '../../../shared/views/list-ext/use-list-lookups.js';
 import { useLetterTableFields } from '../../../shared/views/letter-table-fields.js';
 import { useLetterFilterDefs } from '../../../shared/views/letter-filter-fields.js';
@@ -149,6 +153,26 @@ export function ProjectViewTab({ projectId, view }: { projectId: string; view: S
   // Удаление списка — в его же панели (в меню «+» только видимость вкладок):
   // настройка живёт там, где настраивается.
   const deleteView = useDeleteSavedView();
+  // Правка настроек созданного списка: текущее состояние панели (условия
+  // базовые+панельные, сортировка, группировка, итоги) записывается в вид —
+  // личную правит владелец, общую руководство (права решает сервер).
+  const updateView = useUpdateSavedView();
+  const saveChanges = () =>
+    updateView.mutate(
+      {
+        id: view.id,
+        body: {
+          filter: filterPredicates,
+          sort: ext.sort,
+          ...(ext.group ? { group: ext.group } : {}),
+          totals: ext.totals,
+        },
+      },
+      {
+        onSuccess: () => toast.success(listsStrings.tabs.changesSaved, { description: view.name }),
+        onError: () => toast.error(listsStrings.tabs.saveChangesError),
+      },
+    );
 
   const visibleColumns = useMemo(
     () =>
@@ -192,6 +216,18 @@ export function ProjectViewTab({ projectId, view }: { projectId: string; view: S
           }}
           right={
             <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={listsStrings.tabs.saveChanges}
+                title={listsStrings.tabs.saveChanges}
+                disabled={updateView.isPending}
+                onClick={saveChanges}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <Save className="size-4" strokeWidth={1.75} />
+              </Button>
               <Button
                 type="button"
                 variant="ghost"

@@ -1,5 +1,10 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CreateSavedViewBody, ListEntity, SavedView } from '@nodus/contracts';
+import type {
+  CreateSavedViewBody,
+  ListEntity,
+  SavedView,
+  UpdateSavedViewBody,
+} from '@nodus/contracts';
 
 import { api } from '../../api-client.js';
 
@@ -57,6 +62,20 @@ export function useDeleteSavedView() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api<void>(`/views/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: savedViewsKeys.all });
+    },
+  });
+}
+
+/** Правка настройки: обновить настройки уже созданного списка (условия/
+ *  сортировка/группировка/итоги) из его же панели — владелец личной,
+ *  руководство проектной, настройщик типовой (права решает сервер). */
+export function useUpdateSavedView() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: UpdateSavedViewBody }) =>
+      api<SavedView>(`/views/${id}`, { method: 'PATCH', body }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: savedViewsKeys.all });
     },
