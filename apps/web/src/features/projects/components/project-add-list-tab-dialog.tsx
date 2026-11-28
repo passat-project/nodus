@@ -141,11 +141,11 @@ export function ProjectAddListTabDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] w-full overflow-hidden p-0 sm:max-w-3xl">
-        <DialogHeader className="px-4 pt-4">
+      <DialogContent className="flex max-h-[85vh] w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
+        <DialogHeader className="flex h-14 shrink-0 items-center border-b border-border px-4">
           <DialogTitle>{t.addListTitle}</DialogTitle>
         </DialogHeader>
-        <div className="flex min-h-0 flex-col gap-3 overflow-y-auto px-4 pb-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
           <NodeLabel label={t.whatToShow} />
           <div className="grid grid-cols-3 gap-2">
             {ENTITY_CHOICES.map((choice) => (
@@ -214,11 +214,13 @@ export function ProjectAddListTabDialog({
             </>
           ) : null}
           <p className="text-body-xs text-muted-foreground">{t.configure}</p>
-          <div className="flex justify-end">
-            <Button disabled={!name.trim() || createView.isPending} onClick={save}>
-              {t.saveTab}
-            </Button>
-          </div>
+        </div>
+        {/* Футер закреплён (канон окна-пикера): длинная панель фильтра
+            скроллится телом, кнопка сохранения всегда доступна. */}
+        <div className="flex h-14 shrink-0 items-center justify-end gap-2 border-t border-border px-4">
+          <Button disabled={!name.trim() || createView.isPending} onClick={save}>
+            {t.saveTab}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
