@@ -235,7 +235,7 @@ export function DataTableHeader({
     <div
       ref={headerRef}
       role="row"
-      className="sticky top-0 z-10 grid w-max min-w-full items-center gap-3 border-b border-border bg-card px-4 py-2"
+      className="sticky top-0 z-10 grid h-10 w-max min-w-full items-center gap-3 border-b border-border bg-card px-4"
       style={style}
     >
       {/* Транзишены разъезда соседних колонок — только в живом drag;
