@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ListTodo, Mail, FolderTree } from 'lucide-react';
 import type { ListEntity, SavedView } from '@nodus/contracts';
@@ -108,6 +108,18 @@ export function ProjectAddListTabDialog({
     [toolbar.filters, definitionList],
   );
 
+  // Смена «что показывать» — новый список: прежние условия принадлежат
+  // другой сущности и не переносятся (иначе атрибут задач у писем читался
+  // бы «удалённым» — волна владельца 28.11).
+  const entityRef = useRef(entity);
+  useEffect(() => {
+    if (entityRef.current === entity) return;
+    entityRef.current = entity;
+    toolbar.resetAll();
+    ext.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- только смена сущности
+  }, [entity]);
+
   const save = () => {
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -141,9 +153,14 @@ export function ProjectAddListTabDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
-        <DialogHeader className="flex h-14 shrink-0 items-center border-b border-border px-4">
-          <DialogTitle>{t.addListTitle}</DialogTitle>
+      {/* Высота ФИКСИРОВАННАЯ (канон многошаговых окон): шапка/футер и кнопки
+          не меняют положения при смене «что показывать» — растёт только
+          скроллящееся тело. */}
+      <DialogContent className="flex h-[85vh] w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
+        {/* h-11 — центр строки совпадает с центром крестика окна (top-2 +
+            icon-sm 28px → 22px), волна владельца: «выровнять по крестику». */}
+        <DialogHeader className="flex h-11 shrink-0 flex-row items-center border-b border-border px-4">
+          <DialogTitle className="text-base font-semibold">{t.addListTitle}</DialogTitle>
         </DialogHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
           <NodeLabel label={t.whatToShow} />
