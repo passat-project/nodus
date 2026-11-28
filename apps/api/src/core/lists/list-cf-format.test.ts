@@ -46,4 +46,38 @@ describe('формат значений атрибутов CSV (#435)', () => {
     );
     expect(formatCfValue({ id: 'f', type: 'users', settings: {} }, null, REFS, LABELS)).toBeNull();
   });
+
+  it('enum/counterparty/task/letter/node — тоже имя ссылки; не-строка — null', () => {
+    expect(formatCfValue({ id: 'f', type: 'enum', settings: {} }, UUID1, REFS, LABELS)).toBe(
+      'Сметный отдел',
+    );
+    expect(formatCfValue({ id: 'f', type: 'node', settings: {} }, UUID2, REFS, LABELS)).toBeNull();
+    expect(formatCfValue({ id: 'f', type: 'user', settings: {} }, 42, REFS, LABELS)).toBeNull();
+  });
+
+  it('bool — подпись ячейки; деньги без объекта — null, строка читаема как есть', () => {
+    expect(formatCfValue({ id: 'f', type: 'bool', settings: {} }, false, REFS, LABELS)).toBe('нет');
+    expect(formatCfValue({ id: 'f', type: 'money', settings: {} }, 7, REFS, LABELS)).toBeNull();
+    expect(formatCfValue({ id: 'f', type: 'money', settings: {} }, {}, REFS, LABELS)).toBeNull();
+    expect(formatCfValue({ id: 'f', type: 'number', settings: {} }, 'семь', REFS, LABELS)).toBe(
+      'семь',
+    );
+    expect(formatCfValue({ id: 'f', type: 'duration', settings: {} }, '120', REFS, LABELS)).toBe(
+      '120',
+    );
+  });
+
+  it('массивы без типа-списка читаются читаемо: имена/id через запятую', () => {
+    expect(
+      formatCfValue({ id: 'f', type: 'date', settings: {} }, [UUID1, 'свободное'], REFS, LABELS),
+    ).toBe('Сметный отдел, свободное');
+    // id без имени в справочнике остаётся собой (якорь), а не пустотой.
+    expect(formatCfValue({ id: 'f', type: 'date', settings: {} }, [UUID2], REFS, LABELS)).toBe(
+      UUID2,
+    );
+    expect(formatCfValue({ id: 'f', type: 'date', settings: {} }, true, REFS, LABELS)).toBe('да');
+    expect(
+      formatCfValue({ id: 'f', type: 'date', settings: {} }, { o: 1 }, REFS, LABELS),
+    ).toBeNull();
+  });
 });
