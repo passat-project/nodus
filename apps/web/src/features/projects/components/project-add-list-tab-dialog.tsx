@@ -22,8 +22,12 @@ import {
   numericFieldOptions,
 } from '../../../shared/views/list-ext/list-field-options.js';
 import { splitAttributeFilter } from '../../../shared/views/list-ext/list-ext-predicates.js';
+import { predicatesToFilterState } from '../../../shared/views/list-ext/predicates-to-filter-state.js';
 import { useListExt } from '../../../shared/views/list-ext/use-list-ext.js';
-import { useCreateSavedView } from '../../../shared/views/list-ext/saved-views-api.js';
+import {
+  useCreateSavedView,
+  useUpdateSavedView,
+} from '../../../shared/views/list-ext/saved-views-api.js';
 import type { FilterPreset } from '../../../shared/views/use-list-toolbar.js';
 import { useFilterDefsOfEntity } from '../lib/view-tab-filter-defs.js';
 
@@ -64,16 +68,19 @@ function useEphemeralFilters() {
 }
 
 /**
- * Окно новой вкладки-списка проекта (#435): «+» полосы вкладок → «Список…» →
+ * Окно вкладки-списка проекта (#435): создание («+» полосы вкладок →
+ * «Новый список») и правка настроек существующей (карандаш тулбара вкладки):
  * что показывать (задачи этого проекта / письма / папки) → та же панель
  * фильтра, что в журналах (условия, колонки задаются шестерёнкой вкладки,
  * группировка, итоги) → название и доступ (общая проектная — руководство,
- * личная — себе) → «Сохранить вкладкой». Рамку проекта окно не предлагает
- * снять — условий projectId в панели нет.
+ * личная — себе) → «Сохранить вкладкой». В правке сущность и уровень не
+ * меняются (рамка и права — место хранения), патчится всё остальное.
+ * Рамку проекта окно не предлагает снять — условий projectId в панели нет.
  */
 export function ProjectAddListTabDialog({
   projectId,
   canManage,
+  editView,
   open,
   onOpenChange,
   onSaved,
@@ -81,14 +88,18 @@ export function ProjectAddListTabDialog({
   projectId: string;
   /** Руководство проекта: может сохранить общую вкладку (сервер решает). */
   canManage: boolean;
+  /** Правка существующего списка: подставить его настройки, PATCH вместо POST. */
+  editView?: SavedView;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved: (view: SavedView) => void;
 }) {
   const t = ui.lists.tabs;
-  const [entity, setEntity] = useState<ListEntity>('task');
-  const [name, setName] = useState('');
-  const [level, setLevel] = useState<'personal' | 'project'>('personal');
+  const [entity, setEntity] = useState<ListEntity>(editView?.entity ?? 'task');
+  const [name, setName] = useState(editView?.name ?? '');
+  const [level, setLevel] = useState<'personal' | 'project'>(
+    editView?.level === 'project' ? 'project' : 'personal',
+  );
   const { toolbar } = useEphemeralFilters();
   const ext = useListExt();
   const defs = useFilterDefsOfEntity(entity);
@@ -103,10 +114,20 @@ export function ProjectAddListTabDialog({
     [entity, definitionList],
   );
   const createView = useCreateSavedView();
+  const updateView = useUpdateSavedView();
   const split = useMemo(
     () => splitAttributeFilter(toolbar.filters, definitionList),
     [toolbar.filters, definitionList],
   );
+
+  // Правка: подставить настройки существующего списка (условия в форму
+  // панели, сортировку/группировку/итоги — в состояние расширения).
+  useEffect(() => {
+    if (!open || !editView) return;
+    toolbar.setFilters(predicatesToFilterState(editView.filter));
+    ext.applyViewExt(editView);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- подстановка при открытии
+  }, [open, editView]);
 
   // Смена «что показывать» — новый список: прежние условия принадлежат
   // другой сущности и не переносятся (иначе атрибут задач у писем читался
@@ -123,6 +144,31 @@ export function ProjectAddListTabDialog({
   const save = () => {
     const trimmed = name.trim();
     if (!trimmed) return;
+    // Правка существующего: рамку/уровень/сущность не трогаем (место
+    // хранения и права), патчим имя и настройки выборки.
+    if (editView) {
+      updateView.mutate(
+        {
+          id: editView.id,
+          body: {
+            name: trimmed,
+            filter: split.predicates,
+            sort: ext.sort,
+            group: ext.group ?? null,
+            totals: ext.totals,
+          },
+        },
+        {
+          onSuccess: (view) => {
+            toast.success(t.changesSaved, { description: view.name });
+            onSaved(view);
+            onOpenChange(false);
+          },
+          onError: () => toast.error(t.saveTabEditError),
+        },
+      );
+      return;
+    }
     createView.mutate(
       {
         name: trimmed,
@@ -160,29 +206,37 @@ export function ProjectAddListTabDialog({
         {/* h-11 — центр строки совпадает с центром крестика окна (top-2 +
             icon-sm 28px → 22px), волна владельца: «выровнять по крестику». */}
         <DialogHeader className="flex h-11 shrink-0 flex-row items-center border-b border-border px-4">
-          <DialogTitle className="text-base font-semibold">{t.addListTitle}</DialogTitle>
+          <DialogTitle className="text-base font-semibold">
+            {editView ? t.editListTitle : t.addListTitle}
+          </DialogTitle>
         </DialogHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
-          <NodeLabel label={t.whatToShow} />
-          <div className="grid grid-cols-3 gap-2">
-            {ENTITY_CHOICES.map((choice) => (
-              <button
-                key={choice.entity}
-                type="button"
-                onClick={() => setEntity(choice.entity)}
-                aria-pressed={entity === choice.entity}
-                className={cn(
-                  'flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-left text-sm transition-colors',
-                  entity === choice.entity
-                    ? 'border-ring bg-accent text-foreground'
-                    : 'text-secondary-foreground hover:bg-accent/50',
-                )}
-              >
-                <choice.icon className="size-4 shrink-0" strokeWidth={1.75} />
-                <span className="min-w-0 truncate">{choice.label}</span>
-              </button>
-            ))}
-          </div>
+          {/* Выбор сущности — только созданию: у существующего списка сущность
+              менять нельзя (рамка и настройки принадлежат ей). */}
+          {editView ? null : (
+            <>
+              <NodeLabel label={t.whatToShow} />
+              <div className="grid grid-cols-3 gap-2">
+                {ENTITY_CHOICES.map((choice) => (
+                  <button
+                    key={choice.entity}
+                    type="button"
+                    onClick={() => setEntity(choice.entity)}
+                    aria-pressed={entity === choice.entity}
+                    className={cn(
+                      'flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-left text-sm transition-colors',
+                      entity === choice.entity
+                        ? 'border-ring bg-accent text-foreground'
+                        : 'text-secondary-foreground hover:bg-accent/50',
+                    )}
+                  >
+                    <choice.icon className="size-4 shrink-0" strokeWidth={1.75} />
+                    <span className="min-w-0 truncate">{choice.label}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
 
           {/* Та же панель фильтра, что в журналах: условия + группировка/итоги.
               shrink-0 обязателен: flex-body иначе СЖИМАЕТ панель до огрызка,
@@ -215,7 +269,9 @@ export function ProjectAddListTabDialog({
             placeholder={t.tabNamePlaceholder}
             className="h-8"
           />
-          {canManage ? (
+          {/* Уровень доступа — только созданию: у существующего списка уровень
+              не меняется (права и место хранения). */}
+          {canManage && !editView ? (
             <>
               <NodeLabel label={t.access} />
               <div className="flex flex-col gap-1.5">
@@ -239,8 +295,11 @@ export function ProjectAddListTabDialog({
         {/* Футер закреплён (канон окна-пикера): длинная панель фильтра
             скроллится телом, кнопка сохранения всегда доступна. */}
         <div className="flex h-14 shrink-0 items-center justify-end gap-2 border-t border-border px-4">
-          <Button disabled={!name.trim() || createView.isPending} onClick={save}>
-            {t.saveTab}
+          <Button
+            disabled={!name.trim() || (editView ? updateView : createView).isPending}
+            onClick={save}
+          >
+            {editView ? t.saveTabEdit : t.saveTab}
           </Button>
         </div>
       </DialogContent>

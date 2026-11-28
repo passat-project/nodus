@@ -20,6 +20,19 @@ vi.mock('../../../shared/custom-fields/queries.js', () => ({
 }));
 
 const created = { current: null as Record<string, unknown> | null };
+const makeSavedView = (): SavedView => ({
+  id: 'v-9',
+  name: 'Переработки',
+  entity: 'task',
+  scope: { kind: 'project', projectId: 'p-1' },
+  level: 'project',
+  filter: [],
+  sort: [],
+  totals: [],
+  columns: [],
+  createdAt: '2026-11-01T00:00:00.000Z',
+  createdBy: null,
+});
 const mutate = vi.fn((body: unknown, options: { onSuccess: (view: SavedView) => void }) => {
   created.current = body as Record<string, unknown>;
   options.onSuccess({
@@ -38,6 +51,7 @@ const mutate = vi.fn((body: unknown, options: { onSuccess: (view: SavedView) => 
 });
 vi.mock('../../../shared/views/list-ext/saved-views-api.js', () => ({
   useCreateSavedView: () => ({ mutate, isPending: false }),
+  useUpdateSavedView: () => ({ mutate: () => undefined, isPending: false }),
 }));
 
 beforeEach(() => {
@@ -108,5 +122,32 @@ describe('ProjectAddListTabDialog: что показывать → панель 
     });
     fireEvent.click(screen.getByText('Сохранить вкладкой'));
     expect(created.current).toMatchObject({ level: 'personal' });
+  });
+
+  it('правка существующего: имя подставлено, сущность не переключается', () => {
+    render(
+      <ProjectAddListTabDialog
+        projectId="p-1"
+        canManage={false}
+        editView={{
+          ...makeSavedView(),
+          name: 'Переработки',
+          entity: 'task',
+          level: 'project',
+        }}
+        open
+        onOpenChange={() => undefined}
+        onSaved={() => undefined}
+      />,
+    );
+    // Шага «что показывать» в правке нет — сущность списка не меняется;
+    // уровень тоже (права и место хранения).
+    expect(screen.queryByText('Письма проекта')).toBeNull();
+    expect(screen.queryByText('Кому доступна вкладка')).toBeNull();
+    expect((screen.getByPlaceholderText('Например, Переработки') as HTMLInputElement).value).toBe(
+      'Переработки',
+    );
+    expect(screen.getByText('Редактирование списка')).not.toBeNull();
+    expect(screen.getByText('Сохранить изменения')).not.toBeNull();
   });
 });

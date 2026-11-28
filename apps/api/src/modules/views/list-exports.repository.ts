@@ -41,10 +41,16 @@ export class ListExportsRepository {
   }
 
   /** Активные (queued/running) заказы пользователя — лимит одновременных
-   *  фоновых выгрузок на одного (анти-абраз эксплуатации). */
+   *  фоновых выгрузок на одного (анти-абраз эксплуатации). Считаются только
+   *  свежие (час): джоба живёт в Redis, и при его флеше/пересоздании строка
+   *  висела бы активной до TTL-уборки, занимая слот на пустом месте. */
   countActiveByUser(userId: string): Promise<number> {
     return this.prisma.listExport.count({
-      where: { requestedBy: userId, status: { in: ['queued', 'running'] } },
+      where: {
+        requestedBy: userId,
+        status: { in: ['queued', 'running'] },
+        createdAt: { gt: new Date(Date.now() - 60 * 60 * 1000) },
+      },
     });
   }
 

@@ -33,7 +33,7 @@ export function GroupHeaderRow({
   return (
     <div
       role="row"
-      className="sticky top-[var(--group-header-offset,2.75rem)] z-[5] flex h-9 w-max min-w-full items-center gap-2 border-b border-border/60 bg-muted/50 px-4"
+      className="sticky top-[var(--group-header-offset,2.75rem)] z-[5] flex h-9 w-max min-w-full items-center gap-2 border-b border-border/60 bg-muted px-4"
     >
       <button
         type="button"

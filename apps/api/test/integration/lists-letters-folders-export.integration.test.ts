@@ -1,3 +1,4 @@
+/* eslint-disable nodus-internal/max-lines-warn -- один живой набор #435: ящики/поиск/группы писем + выгрузка писем и папок */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Permission, type Paginated } from '@nodus/contracts';
 

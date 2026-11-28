@@ -1,5 +1,5 @@
 /* eslint-disable nodus-internal/max-lines-warn -- вкладка-список проекта #435: три таблицы сущностей (задачи/письма/папки) одной рамкой — общий тулбар и применение вида, разрезание дублировало бы его */
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   FolderListItem,
   LetterListItem,
@@ -10,7 +10,7 @@ import type {
 } from '@nodus/contracts';
 import { listsStrings } from '@nodus/contracts';
 import { toast } from 'sonner';
-import { Save, Trash2 } from 'lucide-react';
+import { Pencil, Save, Trash2 } from 'lucide-react';
 import { Button } from '@nodus/ui/components/button';
 
 import { useOpenCard } from '../../../app/shell/use-card-stack.js';
@@ -65,6 +65,7 @@ import { ViewSettings } from '../../../shared/views/view-settings.js';
 import { useViewStore } from '../../../shared/views/view-store.js';
 import { useProjectTaskPages } from '../api/projects-api.js';
 import { useProjectFolderPages } from '../api/project-folders-api.js';
+import { ProjectAddListTabDialog } from './project-add-list-tab-dialog.js';
 import { useFilterDefsOfEntity } from '../lib/view-tab-filter-defs.js';
 
 /**
@@ -90,10 +91,19 @@ export function ProjectViewTab({ projectId, view }: { projectId: string; view: S
 
   // Применение сохранённой настройки — на монтирование вкладки и приход
   // реестра атрибутов (до него предикаты cf.* не собрать); правки панели
-  // живут в сессии, refetch вида их не сбрасывает (ключ — состав реестра).
+  // живут в сессии, refetch вида их не сбрасывает (ключ — состав реестра);
+  // правка настроек в окне (PATCH) применяется сразу — её содержание входит
+  // в ключ, refetch без изменений тот же ключ даёт.
   const savedRef = useRef(saved);
   savedRef.current = saved;
-  const applyKey = `${view.id}|${definitionList.map((d) => d.id).join(',')}`;
+  const savedSettingsKey = JSON.stringify([
+    saved.filter,
+    saved.sort,
+    saved.group,
+    saved.totals,
+    saved.columns.map((column) => column.field),
+  ]);
+  const applyKey = `${view.id}|${savedSettingsKey}|${definitionList.map((d) => d.id).join(',')}`;
   const fields = useFieldsOf(view.entity);
   const fieldsRef = useRef(fields);
   fieldsRef.current = fields;
@@ -153,6 +163,8 @@ export function ProjectViewTab({ projectId, view }: { projectId: string; view: S
   // Удаление списка — в его же панели (в меню «+» только видимость вкладок):
   // настройка живёт там, где настраивается.
   const deleteView = useDeleteSavedView();
+  // Окно правки настроек (карандаш тулбара): те же разделы, что при создании.
+  const [editOpen, setEditOpen] = useState(false);
   // Правка настроек созданного списка: текущее состояние панели (условия
   // базовые+панельные, сортировка, группировка, итоги) записывается в вид —
   // личную правит владелец, общую руководство (права решает сервер).
@@ -222,6 +234,17 @@ export function ProjectViewTab({ projectId, view }: { projectId: string; view: S
                 type="button"
                 variant="ghost"
                 size="icon"
+                aria-label={listsStrings.tabs.editSettings}
+                title={listsStrings.tabs.editSettings}
+                onClick={() => setEditOpen(true)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <Pencil className="size-4" strokeWidth={1.75} />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
                 aria-label={listsStrings.tabs.saveChanges}
                 title={listsStrings.tabs.saveChanges}
                 disabled={updateView.isPending}
@@ -282,6 +305,16 @@ export function ProjectViewTab({ projectId, view }: { projectId: string; view: S
           />
         )}
       </div>
+      {/* Правка настроек списка: то же окно, что создание, с подставленными
+          значениями; после PATCH рамка вкладок перечитается сама. */}
+      <ProjectAddListTabDialog
+        projectId={projectId}
+        canManage={false}
+        editView={view}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onSaved={() => undefined}
+      />
     </div>
   );
 }

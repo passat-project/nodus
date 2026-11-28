@@ -28,8 +28,9 @@ describe('CSV списков (#435)', () => {
   });
 
   it('формулоопасная строка нейтрализуется апострофом (OWASP CSV injection)', () => {
+    // Апостроф — до RFC-кавычек: оказывается внутри, Excel читает текст.
     expect(csvCell('=HYPERLINK("http://evil","отчёт")')).toBe(
-      '\'=HYPERLINK("http://evil","отчёт")',
+      `"'=HYPERLINK(""http://evil"",""отчёт"")"`,
     );
     expect(csvCell('+SUM(A1:A9)')).toBe("'+SUM(A1:A9)");
     expect(csvCell('-счёт')).toBe("'-счёт");
