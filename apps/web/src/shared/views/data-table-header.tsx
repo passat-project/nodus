@@ -44,6 +44,7 @@ export function DataTableHeader({
   onAutoFit,
   onCycleSort,
   onReorder,
+  isSortable,
 }: {
   fields: HeaderField[];
   sort?: ViewSort;
@@ -62,6 +63,9 @@ export function DataTableHeader({
   onCycleSort: (fieldId: string) => void;
   /** Коммит порядка на отпускании: ПОЛНЫЙ порядок видимых полей. */
   onReorder: (ids: string[]) => void;
+  /** Переопределение сортируемости (#435): ext-режим решает сервер —
+   *  кликабельность колонки по карте полей списка, не по sortValue. */
+  isSortable?: (field: HeaderField) => boolean;
 }) {
   const headerRef = useRef<HTMLDivElement>(null);
   // Состояние живого перетаскивания (ref — перерисовок во время drag нет).
@@ -251,7 +255,7 @@ export function DataTableHeader({
       {afterLeading ?? null}
       {fields.map((field, index) => {
         const sorted = sort?.field === field.id ? sort.dir : undefined;
-        const sortable = field.sortValue !== undefined;
+        const sortable = isSortable ? isSortable(field) : field.sortValue !== undefined;
         return (
           // columnheader: единственная роль, где aria-sort валиден (аудит
           // #45 — был span role=button, невалидный ARIA). Клик/Enter —

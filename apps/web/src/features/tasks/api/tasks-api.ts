@@ -7,6 +7,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import type {
+  ListResult,
   Paginated,
   TaskBranch,
   TaskDetail,
@@ -23,6 +24,11 @@ import { api } from '../../../shared/api-client.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { invalidateAfterTaskMutation } from '../../../shared/api/task-invalidate.js';
 import { tasksKeys } from '../../../shared/api/tasks-keys.js';
+import {
+  applyExtParams,
+  hasListExtParams,
+  type ListExtParams,
+} from '../../../shared/views/list-ext/list-ext-query.js';
 
 // Ключи кэша и помощник страниц — canonical в shared/api/tasks-keys (общие
 // компоненты создания в shared/tasks тоже ими пользуются); реэкспорт для
@@ -31,35 +37,51 @@ export { mapTaskInPages, tasksKeys } from '../../../shared/api/tasks-keys.js';
 
 /** Список (таблица с деревом): scope «мои» / «все доступные» (подчинённые
  *  по оргструктуре, task.view_all — сервер решает видимость); курсорные страницы по 100, подгрузка sentinel-ом
- * у dna контейнера (industry-паттерн: целиком на клиент крупные списки не
- * живут). Серверный поиск (#956): `search` ищет по названию/номеру во ВСЕЙ
- * выдаче, а не только по загруженным страницам. Дерево строится из
- * загруженного; родитель старше окна страницы отображается корнем
- * (известное ограничение до серверного lazy-дерева). */
-export function useTasksPages(scope: 'mine' | 'all' = 'mine', role?: 'decider', search?: string) {
+ *  у dna контейнера (industry-паттерн: целиком на клиент крупные списки не
+ *  живут). Серверный поиск (#956): `search` ищет по названию/номеру во ВСЕЙ
+ *  выдаче, а не только по загруженным страницам. Дерево строится из
+ *  загруженного; родитель старше окна страницы отображается корнем
+ *  (известное ограничение до серверного lazy-дерева).
+ *  #435: ext-параметры (фильтр-предикаты/сортировка/группировка/итоги) —
+ *  сервер считает по всей выборке, ответ — ListResult с группами и итогами. */
+export function useTasksPages(
+  scope: 'mine' | 'all' = 'mine',
+  role?: 'decider',
+  search?: string,
+  ext?: ListExtParams,
+) {
   const query = search?.trim() ?? '';
+  const extActive = ext !== undefined && hasListExtParams(ext);
+  const extKey = extActive ? JSON.stringify(ext) : undefined;
   return useInfiniteQuery({
     // «Мои» — канонический ключ (оптимистичные патчи бьют в него точно);
     // «Все доступные», «Ждут моего решения» и поиск — свои ключи под тем же
-    // префиксом (инвалидации общие, страницы не смешиваются).
-    queryKey: tasksKeys.listPages(
-      role
-        ? { scope: 'all', role, ...(query ? { search: query } : {}) }
-        : scope === 'all' || query
-          ? {
-              ...(scope === 'all' ? { scope: 'all' as const } : {}),
-              ...(query ? { search: query } : {}),
-            }
-          : undefined,
-    ),
-    queryFn: ({ pageParam }) =>
-      api<Paginated<TaskListItem>>(
-        `/tasks?view=list&scope=${role ? 'all' : scope}&limit=100${
-          role ? `&role=${role}` : ''
-        }${query ? `&search=${encodeURIComponent(query)}` : ''}${
-          pageParam ? `&cursor=${pageParam}` : ''
-        }`,
+    // префиксом (инвалидации общие, страницы не смешиваются); ext (#435) —
+    // своя ветка (страницы другой конвейер и порядок).
+    queryKey: [
+      ...tasksKeys.listPages(
+        role
+          ? { scope: 'all', role, ...(query ? { search: query } : {}) }
+          : scope === 'all' || query
+            ? {
+                ...(scope === 'all' ? { scope: 'all' as const } : {}),
+                ...(query ? { search: query } : {}),
+              }
+            : undefined,
       ),
+      ...(extKey ? [{ ext: extKey }] : []),
+    ],
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams();
+      params.set('view', 'list');
+      params.set('scope', role ? 'all' : scope);
+      params.set('limit', '100');
+      if (role) params.set('role', role);
+      if (query) params.set('search', query);
+      if (pageParam) params.set('cursor', pageParam);
+      if (extActive) applyExtParams(params, ext!);
+      return api<ListResult<TaskListItem>>(`/tasks?${params.toString()}`);
+    },
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
     placeholderData: keepPreviousData,

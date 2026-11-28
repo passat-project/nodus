@@ -23,8 +23,14 @@ import { demoStages } from '../../../../shared/mocks/data/task-stages.js';
 import { demoProcessTypes, demoWorkflowDetails } from '../../../../shared/mocks/data/workflows.js';
 import type { WorkflowDetail } from '@nodus/contracts';
 import { userRef } from '../../../../shared/mocks/data/users.js';
+import { demoCustomFieldDefinitions } from '../../../../shared/mocks/data/custom-fields.js';
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import { taskWithFormulas } from '../../../../shared/custom-fields/formula/formula-dto.js';
+import { taskRowValue } from '../../../../shared/views/list-ext/list-field-values.js';
+import {
+  applyMockExt,
+  parseMockExt,
+} from '../../../../shared/views/list-ext/mocks/mock-list-ext.js';
 import { prepareCreateBody, resolveCreateType } from './task-create-policy.js';
 import { creationFormOf } from '../../../../shared/mocks/data/process-types-store.js';
 import { addTaskLocks } from '../../../../shared/mocks/data/task-locks.js';
@@ -87,12 +93,35 @@ export const tasksListHandlers = [
         (t) => t.title.toLowerCase().includes(search) || String(t.number).includes(search),
       );
     }
+    // Расширение списка (#435): предикаты/сортировка/группировка/итоги —
+    // движок-зеркало серверного конвейера на демо-данных.
+    const ext = parseMockExt(url);
+    const hasExt =
+      ext.filter.length > 0 ||
+      ext.sort.length > 0 ||
+      ext.group !== undefined ||
+      ext.totals.length > 0;
+    const extResult = hasExt
+      ? applyMockExt({
+          rows: filtered,
+          ...ext,
+          entity: 'task',
+          valueOf: taskRowValue,
+          definitions: demoCustomFieldDefinitions,
+        })
+      : null;
+    const ordered = extResult ? extResult.items : filtered;
     const start = cursor ? Number(cursor) || 0 : 0;
     // Формулы типа (#632) считаются на чтении: DTO клонируется, хранимые
     // демо-задачи не мутируются.
-    const items = filtered.slice(start, start + limit).map(taskWithFormulas);
-    const next = start + limit < filtered.length ? String(start + limit) : null;
-    return HttpResponse.json({ items, nextCursor: next });
+    const items = ordered.slice(start, start + limit).map(taskWithFormulas);
+    const next = start + limit < ordered.length ? String(start + limit) : null;
+    return HttpResponse.json({
+      items,
+      nextCursor: next,
+      ...(extResult?.groups ? { groups: extResult.groups } : {}),
+      ...(extResult?.totals ? { totals: extResult.totals } : {}),
+    });
   }),
 
   // Межтиповой каталог стадий (#378): без typeId — статусы всех живых типов

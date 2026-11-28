@@ -18,6 +18,7 @@ import { rolesHandlers } from '../shared/access/mocks/roles-handlers.js';
 import { projectsHandlers } from '../features/projects/api/mocks/projects-handlers.js';
 import { searchHandlers } from '../features/search/api/mocks/search-handlers.js';
 import { tasksHandlers } from '../features/tasks/api/mocks/tasks-handlers.js';
+import { viewsHandlers } from '../shared/views/list-ext/mocks/views-handlers.js';
 import { API_MOCK_DOMAINS, type ApiMockDomain } from '../shared/api/api-mock-config.js';
 
 /**
@@ -48,6 +49,8 @@ const domainHandlers: Record<ApiMockDomain, HttpHandler[]> = {
   assistant: assistantHandlers,
   // Единый поиск (#952): выдача по демо-миру, контракт как у сервера.
   search: searchHandlers,
+  // Сохранённые настройки списков и выгрузка CSV (#435).
+  views: viewsHandlers,
 };
 
 /** Хендлеры мокаемых доменов (#48): 'all' — все (демо-сборка nodus.by),

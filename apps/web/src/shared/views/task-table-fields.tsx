@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { CustomFieldDefinition, TaskListItem, TaskPriority } from '@nodus/contracts';
-import { ui } from '@nodus/contracts';
+import { listSystemFieldLabel, ui } from '@nodus/contracts';
 import { NodeChip } from '@nodus/ui/components/node-chip';
 
 import { useCustomFieldDefinitions } from '../custom-fields/queries.js';
@@ -170,9 +170,32 @@ export function makeTaskTableFields({
       render: (task) => <span className={monoCell}>{formatDateTime(task.updatedAt)}</span>,
       sortValue: (task) => task.updatedAt,
     },
+    // «Кто решил / когда решили» (#435): последнее решение человека по журналу
+    // переходов (DTO ext-списков; обычные списки — null). Скрыты по умолчанию.
+    {
+      id: 'decidedBy',
+      label: listSystemFieldLabel('task', 'decidedBy'),
+      defaultVisible: false,
+      defaultWidth: 160,
+      minWidth: 110,
+      render: (task) => (task.decidedBy ? <PersonCell user={task.decidedBy} /> : null),
+      sortValue: (task) => task.decidedBy?.displayName ?? null,
+    },
+    {
+      id: 'decidedAt',
+      label: listSystemFieldLabel('task', 'decidedAt'),
+      defaultVisible: false,
+      defaultWidth: 140,
+      minWidth: 112,
+      render: (task) =>
+        task.decidedAt ? <span className={monoCell}>{formatDateTime(task.decidedAt)}</span> : null,
+      sortValue: (task) => task.decidedAt ?? null,
+    },
     // Атрибутные колонки (#632) — после системных, скрыты по умолчанию:
-    // общая фабрика видов (значение по грамматике типа, fx/«!», без
-    // сортировки — клиентская сортировка по вычисленным значениям отдельно).
+    // общая фабрика видов (значение по грамматике типа, fx/«!»). sortValue нет
+    // (клиентская сортировка по вычисленным значениям не делается), но в
+    // ext-режиме (#435) колонки сортируются СЕРВЕРОМ — кликабельность даёт
+    // карта полей списка (listFieldOfColumn), не sortValue.
     ...attributeColumnFields<TaskListItem>({ definitions, module: 'task' }),
   ];
 }

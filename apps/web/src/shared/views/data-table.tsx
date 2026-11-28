@@ -1,11 +1,20 @@
+/* eslint-disable nodus-internal/max-lines-warn -- каноническая таблица списков: ext-режим #435 (сортировка сервером, группы, итоги) добавлен в единую машину, разрезание по файлам разнесло бы механику колонок */
 import { memo, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Skeleton } from '@nodus/ui/components/skeleton';
 import { Checkbox } from '@nodus/ui/components/checkbox';
 import { Empty, EmptyTitle } from '@nodus/ui/components/empty';
-import { ui } from '@nodus/contracts';
+import {
+  ui,
+  type ListGroupBucket,
+  type ListTotal,
+  type ListTotalValue,
+  type ViewSort,
+} from '@nodus/contracts';
 
 import { DataTableHeader } from './data-table-header.js';
+import { GroupHeaderRow, TotalsRow, useCollapsedGroups } from './data-table-groups.js';
 import { LEADING_COL_W, RowMenu, type RowMenuItem } from './row-menu.js';
+import { bucketRows } from './list-ext/list-grouping.js';
 import { sortRows } from './sort-rows.js';
 import { useAutoFitColumn } from './use-autofit-column.js';
 import { useFittedColumnWidths } from './use-fitted-columns.js';
@@ -132,6 +141,25 @@ function DataTableRowInner<T>({
  *  меняются ЕЁ данные или её собственный флаг выбора. */
 const DataTableRow = memo(DataTableRowInner) as typeof DataTableRowInner;
 
+/** Расширение сервером (#435): сортировка/группировка/итоги приходят из
+ *  ListResult — таблица только рендерит их, не пересчитывая на клиенте. */
+export interface DataTableExt<T> {
+  /** Серверная сортировка активна (колонка id + направление): клики хедера
+   *  уходят в onServerSortCycle, клиентская сортировка не применяется. */
+  serverSort?: ViewSort | null;
+  onServerSortCycle?: (fieldId: string) => void;
+  /** Колонка сортируется сервером (заголовок кликабелен, стрелка та же). */
+  isServerSortable?: (field: { id: string }) => boolean;
+  /** Группы сервера + ключ/подпись строки. */
+  groups?: {
+    buckets: readonly ListGroupBucket[];
+    keyOf: (row: T) => string | number | null;
+    labelOf: (key: string | number | null) => string;
+  };
+  /** Итоги сервера по всей видимой выборке (строка внизу таблицы). */
+  totals?: { values: readonly ListTotalValue[]; defs: readonly ListTotal[] };
+}
+
 /**
  * Таблица-канон (модель AG Grid/Битрикса, references/views-customization.md) —
  * общая машина всех журналов/списков портала (потребители: журнал писем,
@@ -150,6 +178,11 @@ const DataTableRow = memo(DataTableRowInner) as typeof DataTableRowInner;
  * — ПОРЯДОК колонок — dnd за заголовок (живой черновик: колонка едет целиком,
  *   коммит на drop), СОРТИРОВКА — клик по заголовку ↑/↓ (одна колонка,
  *   стабильная: тай-брейк по rowKey); обе — в пресет вида (концепт #4);
+ *   в ext-режиме (#435) сортировку считает сервер по любой колонке —
+ *   `DataTableExt.serverSort` (стрелка и цикл та же грамматика);
+ * — ГРУППИРОВКА и ИТОГИ (#435): группы и суммы приходят с ответом (ListResult),
+ *   заголовки групп со счётчиком сворачиваются шевроном, итоги — тихой строкой
+ *   внизу; клиент ничего не пересчитывает;
  * — строка — role=button + Enter/Space (вложенных кнопок в кнопке нет:
  *   ячейка действий — span со stopPropagation);
  * — ВЕДУЩАЯ колонка (вердикт владельца 15.09.2026, модель Битрикс24):
@@ -178,13 +211,14 @@ export function DataTable<T>({
   label,
   selectable = true,
   selection: externalSelection,
+  ext,
 }: {
   viewKey: string;
   defs: DataTableField<T>[];
   rows: T[];
   rowKey: (row: T) => string;
   /** Клик/Enter по строке: фича прокидывает rect источника в lastSource
-   * (shared-element раскрытие слайдера) и навигирует. */
+   *  (shared-element раскрытие слайдера) и навигирует. */
   onOpenRow: (row: T, rowEl: HTMLElement) => void;
   onHoverRow?: (row: T) => void;
   isLoading?: boolean;
@@ -209,6 +243,8 @@ export function DataTable<T>({
   /** Внешнее управление выбором (островок массовых действий модуля): если не
    *  передан — таблица держит выбор сама. Один механизм во всех реестрах. */
   selection?: RowSelection;
+  /** Расширение #435 (серверная сортировка/группировка/итоги). */
+  ext?: DataTableExt<T>;
 }) {
   const { visibleFields, sort, setWidth, cycleSort, commitOrder, widthSet } = useViewFields(
     viewKey,
@@ -221,10 +257,17 @@ export function DataTable<T>({
     pan: false,
     mounted: !isLoading && rows.length > 0,
   });
+  const collapsedGroups = useCollapsedGroups();
 
   // Сортировка строк (клиентская, концепт #4; ?sort= на бэке — отдельный
-  // issue): стабильная, null — в конец (sort-rows).
-  const sortedRows = useMemo(() => sortRows(rows, sort, defs, rowKey), [rows, sort, defs, rowKey]);
+  // issue): стабильная, null — в конец (sort-rows). В ext-режиме порядок
+  // держит сервер — клиент не пересортировывает страницу (стрелка и клики
+  // хедера переключены на serverSort/onServerSortCycle).
+  const serverSorted = ext?.serverSort !== undefined;
+  const sortedRows = useMemo(
+    () => (serverSorted ? rows : sortRows(rows, sort, defs, rowKey)),
+    [serverSorted, rows, sort, defs, rowKey],
+  );
 
   const rowKeys = useMemo(() => sortedRows.map(rowKey), [sortedRows, rowKey]);
   const internalSelection = useRowSelection(rowKeys);
@@ -305,6 +348,30 @@ export function DataTable<T>({
     );
   }
 
+  const groups = ext?.groups
+    ? bucketRows(sortedRows, ext.groups.buckets, ext.groups.keyOf)
+    : undefined;
+
+  const renderRow = (row: T) => {
+    const key = rowKey(row);
+    return (
+      <DataTableRow
+        key={key}
+        row={row}
+        rowKey={key}
+        isSelected={selected.has(key)}
+        selectable={selectable}
+        fields={layoutFields}
+        gridTemplateColumns={gridTemplateColumns}
+        onOpenRow={onOpenRow}
+        onHoverRow={onHoverRow}
+        onToggle={toggle}
+        actions={actions}
+        rowMenu={rowMenu}
+      />
+    );
+  };
+
   return (
     // Семантика таблицы (аудит #45: div-grid без ролей; aria-sort жил на
     // span-кнопке — невалидно). Роли: table/row/columnheader(в хедере)/cell.
@@ -324,7 +391,7 @@ export function DataTable<T>({
       >
         <DataTableHeader
           fields={layoutFields}
-          sort={sort}
+          sort={serverSorted ? (ext?.serverSort ?? undefined) : sort}
           headerChecked={headerChecked}
           hasActions={actions !== undefined}
           showSelection={selectable}
@@ -332,33 +399,48 @@ export function DataTable<T>({
           onToggleAll={toggleAll}
           onResize={(fieldId, w) => setWidth(fieldId, w)}
           onAutoFit={autoFitColumn}
-          onCycleSort={cycleSort}
+          onCycleSort={
+            serverSorted
+              ? (fieldId) => {
+                  if (ext?.onServerSortCycle) ext.onServerSortCycle(fieldId);
+                }
+              : cycleSort
+          }
+          isSortable={
+            serverSorted
+              ? (field: { id: string }) =>
+                  ext?.isServerSortable ? ext.isServerSortable(field) : false
+              : undefined
+          }
           onReorder={commitOrder}
         />
-        {sortedRows.map((row) => {
-          const key = rowKey(row);
-          return (
-            <DataTableRow
-              key={key}
-              row={row}
-              rowKey={key}
-              isSelected={selected.has(key)}
-              selectable={selectable}
-              fields={layoutFields}
-              gridTemplateColumns={gridTemplateColumns}
-              onOpenRow={onOpenRow}
-              onHoverRow={onHoverRow}
-              onToggle={toggle}
-              actions={actions}
-              rowMenu={rowMenu}
-            />
-          );
-        })}
+        {groups
+          ? groups.map((group) => {
+              const isCollapsed = collapsedGroups.isCollapsed(group.key);
+              return (
+                <section key={group.key === null ? '\u0000' : `${typeof group.key}:${group.key}`}>
+                  <GroupHeaderRow
+                    label={
+                      group.key === null
+                        ? ui.lists.panel.groupWithoutValue
+                        : ext!.groups!.labelOf(group.key)
+                    }
+                    group={group.bucket}
+                    totalsDefs={ext?.totals?.defs ?? []}
+                    collapsed={isCollapsed}
+                    onToggle={() => collapsedGroups.toggle(group.key)}
+                  />
+                  {isCollapsed ? null : group.rows.map(renderRow)}
+                </section>
+              );
+            })
+          : sortedRows.map(renderRow)}
         {hasNextPage ? (
           <div ref={sentinelRef} className="flex justify-center py-3">
             {isFetchingNextPage ? <Skeleton className="h-8 w-48" /> : <span className="h-1" />}
           </div>
         ) : null}
+        {ext?.totals ? <TotalsRow totals={ext.totals.values} totalsDefs={ext.totals.defs} /> : null}
       </div>
       <EdgeHints room={edge.room} hot={edge.hot} show={hovered} />
     </div>

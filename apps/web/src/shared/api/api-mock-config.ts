@@ -34,6 +34,8 @@ export const API_MOCK_DOMAINS = [
   'assistant',
   // Единый поиск (#952): P1 — окно на моках до бэкенда P2.
   'search',
+  // Сохранённые настройки списков и выгрузка CSV (#435).
+  'views',
 ] as const;
 
 export type ApiMockDomain = (typeof API_MOCK_DOMAINS)[number];

@@ -7,6 +7,7 @@ import { useOpenCard } from '../../../app/shell/use-card-stack.js';
 import { useAuthStore } from '../../../shared/auth-store.js';
 import { DataTableHeader } from '../../../shared/views/data-table-header.js';
 import { LEADING_COL_W, type RowMenuItem } from '../../../shared/views/row-menu.js';
+import type { ListExtParams } from '../../../shared/views/list-ext/list-ext-query.js';
 import { sortRows } from '../../../shared/views/sort-rows.js';
 import { useAutoFitColumn } from '../../../shared/views/use-autofit-column.js';
 import { useFittedColumnWidths } from '../../../shared/views/use-fitted-columns.js';
@@ -19,7 +20,7 @@ import { uiPx } from '../../../shared/ui/ui-scale.js';
 import { EdgeHints } from '../../../shared/ui/board/board-scroller.js';
 import { useBoardEdgeScroll } from '../../../shared/ui/board/use-board-edge-scroll.js';
 import { useTasksPages, usePrefetchTask } from '../api/tasks-api.js';
-import type { TaskListItem } from '@nodus/contracts';
+import type { TaskListItem, ViewSort } from '@nodus/contracts';
 import { useTaskListFields } from '../lib/task-fields.js';
 import { buildTaskRows, filterVisibleRows, type TaskRow } from '../lib/task-tree.js';
 import { graphWidth, TaskListTree } from './task-list-graph.js';
@@ -44,12 +45,22 @@ export function TaskList({
   onCreate,
   scope = 'mine',
   search,
+  extParams,
+  serverSort,
+  onServerSortCycle,
+  isServerSortable,
 }: {
   filter?: ActiveListFilter<TaskListItem>;
   onCreate?: () => void;
   scope?: 'mine' | 'all';
   /** Серверный поиск (#956): приходит уже debounced из строки инструментов. */
   search?: string;
+  /** Расширение #435: предикаты фильтра уходят на сервер (атрибуты). */
+  extParams?: ListExtParams;
+  /** Серверная сортировка активна: хедер кликает в onServerSortCycle. */
+  serverSort?: ViewSort | null;
+  onServerSortCycle?: (fieldId: string) => void;
+  isServerSortable?: (fieldId: string) => boolean;
 }) {
   // Пресет «Ждут моего решения» (#433) — серверный срез: role=decider,
   // scope принудительно all. Клиентский фильтр по странице соврёт на пагинации.
@@ -58,6 +69,7 @@ export function TaskList({
     scope,
     deciderOnly ? 'decider' : undefined,
     search,
+    extParams,
   );
   const openCard = useOpenCard();
   const prefetch = usePrefetchTask();
@@ -90,10 +102,12 @@ export function TaskList({
   // вне фильтра отображается корнем — ограничение клиентской фильтрации дерева.
   const filtered = useFilteredList(items, filter);
   // Сортировка (концепт #4): ПЛОСКИЙ список до построения дерева — получается
-  // сортировка СИБЛИНГОВ внутри веток, структура дерева не ломается.
+  // сортировка СИБЛИНГОВ внутри веток, структура дерева не ломается. #435:
+  // активная серверная сортировка держит порядок страниц — клиент не
+  // пересортировывает (дерево строится из серверного порядка сиблингов).
   const sorted = useMemo(
-    () => sortRows(filtered, sort, taskListFields, (t) => t.id),
-    [filtered, sort, taskListFields],
+    () => (serverSort ? filtered : sortRows(filtered, sort, taskListFields, (t) => t.id)),
+    [filtered, sort, taskListFields, serverSort],
   );
   const rows = useMemo(() => buildTaskRows(sorted), [sorted]);
   const visible = useMemo(() => filterVisibleRows(rows, collapsed), [rows, collapsed]);
@@ -229,7 +243,7 @@ export function TaskList({
       >
         <DataTableHeader
           fields={layoutFields}
-          sort={sort}
+          sort={serverSort ?? sort}
           headerChecked={headerChecked}
           hasActions={false}
           style={{ gridTemplateColumns }}
@@ -237,7 +251,21 @@ export function TaskList({
           onToggleAll={toggleAll}
           onResize={(fieldId, w) => setWidth(fieldId, w)}
           onAutoFit={autoFitColumn}
-          onCycleSort={cycleSort}
+          onCycleSort={
+            onServerSortCycle
+              ? (fieldId) => {
+                  // #435: колонку, которую сортирует сервер, кликает серверный
+                  // цикл; остальные (приоритет, комментарии…) — клиентский.
+                  if (isServerSortable?.(fieldId)) onServerSortCycle(fieldId);
+                  else cycleSort(fieldId);
+                }
+              : cycleSort
+          }
+          isSortable={
+            isServerSortable
+              ? (field) => isServerSortable(field.id) || field.sortValue !== undefined
+              : undefined
+          }
           onReorder={commitOrder}
         />
         {items.length === 0 && onCreate ? (

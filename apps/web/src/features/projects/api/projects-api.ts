@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import type {
+  ListResult,
   Paginated,
   ProjectDetail,
   ProjectHistoryEntry,
@@ -22,6 +23,11 @@ import { projectsKeys } from '../../../shared/api/projects-list.js';
 import { applyServerTask } from '../../../shared/api/task-cache.js';
 import { invalidateAfterTaskMutation } from '../../../shared/api/task-invalidate.js';
 import { tasksKeys } from '../../../shared/api/tasks-keys.js';
+import {
+  applyExtParams,
+  hasListExtParams,
+  type ListExtParams,
+} from '../../../shared/views/list-ext/list-ext-query.js';
 import {
   projectJournalParams,
   projectJournalUrl,
@@ -102,17 +108,31 @@ export function projectKanbanFeedUrl(
 
 /** Задачи проекта (вид «Список»): те же сущности, фильтр projectId
  *  (плейбук §3.1 — один канбан и один список задач, а не два). Серверный
- *  поиск (#956) — своя ветка кэша под префиксом журнала. */
-export function useProjectTaskPages(projectId: string, search?: string) {
+ *  поиск (#956) — своя ветка кэша под префиксом журнала. #435: ext
+ *  (фильтр-предикаты/сортировка/группировка/итоги) — сервер считает по всей
+ *  выборке проекта, ответ — ListResult. */
+export function useProjectTaskPages(projectId: string, search?: string, ext?: ListExtParams) {
   const query = search?.trim() ?? '';
+  const extActive = ext !== undefined && hasListExtParams(ext);
+  const extKey = extActive ? JSON.stringify(ext) : undefined;
   return useInfiniteQuery({
-    queryKey: tasksKeys.listPages({
-      projectId,
-      scope: 'all',
-      ...(query ? { search: query } : {}),
-    }),
-    queryFn: ({ pageParam }) =>
-      api<Paginated<TaskListItem>>(projectTaskFeedUrl(projectId, pageParam, query)),
+    queryKey: [
+      ...tasksKeys.listPages({
+        projectId,
+        scope: 'all',
+        ...(query ? { search: query } : {}),
+      }),
+      ...(extKey ? [{ ext: extKey }] : []),
+    ],
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams();
+      params.set('scope', 'all');
+      params.set('limit', '100');
+      if (query) params.set('search', query);
+      if (pageParam) params.set('cursor', pageParam);
+      if (extActive) applyExtParams(params, ext!);
+      return api<ListResult<TaskListItem>>(`/tasks?projectId=${projectId}&${params.toString()}`);
+    },
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
     enabled: projectId.length > 0,

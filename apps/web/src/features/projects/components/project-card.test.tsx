@@ -36,6 +36,12 @@ vi.mock('./project-tasks-tab.js', () => ({ ProjectTasksTab: () => null }));
 vi.mock('./project-channel-tab.js', () => ({ ProjectChannelTab: () => null }));
 vi.mock('./project-members-tab.js', () => ({ ProjectMembersTab: () => null }));
 vi.mock('./project-history-tab.js', () => ({ ProjectHistoryTab: () => null }));
+// #435: динамические вкладки-списки — виды рамки проекта (реестр пуст).
+vi.mock('../../../shared/views/list-ext/saved-views-api.js', () => ({
+  useProjectSavedViews: () => ({ data: [] }),
+  useCreateSavedView: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteSavedView: () => ({ mutate: vi.fn() }),
+}));
 
 const { ProjectCard } = await import('./project-card.js');
 

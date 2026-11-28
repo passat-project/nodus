@@ -3,21 +3,33 @@ import {
   LETTER_LIMITS,
   type LetterBox,
   type LetterListItem,
+  type ListResult,
   type Paginated,
 } from '@nodus/contracts';
 
 import { api } from '../api-client.js';
 import { lettersKeys, type LettersListFilters } from './letters-keys.js';
+import {
+  applyExtParams,
+  hasListExtParams,
+  type ListExtParams,
+} from '../views/list-ext/list-ext-query.js';
 
 export type LettersPages = InfiniteData<Paginated<LetterListItem>>;
 
-function listPath(box: LetterBox | null, filters: LettersListFilters, cursor: string | null) {
+function listPath(
+  box: LetterBox | null,
+  filters: LettersListFilters,
+  cursor: string | null,
+  ext?: ListExtParams,
+) {
   const params = new URLSearchParams();
   if (box) params.set('box', box);
   // Длиннее лимита контракта сервер ответил бы 400 — режем здесь, у всех потребителей.
   if (filters.search) params.set('search', filters.search.slice(0, LETTER_LIMITS.search));
   if (filters.counterpartyId) params.set('counterpartyId', filters.counterpartyId);
   if (cursor) params.set('cursor', cursor);
+  if (ext && hasListExtParams(ext)) applyExtParams(params, ext);
   const qs = params.toString();
   return `/letters${qs ? `?${qs}` : ''}`;
 }
@@ -25,17 +37,21 @@ function listPath(box: LetterBox | null, filters: LettersListFilters, cursor: st
 /** Список писем курсором — ОДИН хук на продукт (#55, ключ shared): вкладки
  *  «Новые»/«Входящие»/«Исходящие», вкладка «Письма» контрагента, палитра.
  *  Сервер сортирует сам (новые — по поступлению, журналы — по регистрации);
- *  поиск — серверный. `enabled: false` — блок связи не запрашивается. */
+ *  поиск — серверный. `enabled: false` — блок связи не запрашивается.
+ *  #435: ext (фильтр/сортировка/группировка/итоги) — сервер считает по всей
+ *  выборке ящика, ответ — ListResult. */
 export function useLettersInfinite(
   box: LetterBox | null,
   filters: LettersListFilters = {},
-  options: { enabled?: boolean } = {},
+  options: { enabled?: boolean; ext?: ListExtParams } = {},
 ) {
-  const queryKey = lettersKeys.list(box, filters);
+  const ext = options.ext;
+  const extKey = ext !== undefined && hasListExtParams(ext) ? JSON.stringify(ext) : undefined;
+  const queryKey = [...lettersKeys.list(box, filters), ...(extKey ? [{ ext: extKey }] : [])];
   return useInfiniteQuery({
     queryKey,
     queryFn: ({ pageParam, signal }) =>
-      api<Paginated<LetterListItem>>(listPath(box, filters, pageParam), { signal }),
+      api<ListResult<LetterListItem>>(listPath(box, filters, pageParam, ext), { signal }),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
     enabled: options.enabled ?? true,
@@ -44,8 +60,12 @@ export function useLettersInfinite(
     // скелетом на каждую букву); смена вкладки или контрагента — честная
     // загрузка, без чужих строк.
     placeholderData: (previous, previousQuery) =>
-      previousQuery?.queryKey[2] === queryKey[2] &&
-      sameCounterparty(previousQuery.queryKey[3], queryKey[3])
+      previousQuery !== undefined &&
+      previousQuery.queryKey[2] === queryKey[2] &&
+      sameCounterparty(
+        previousQuery.queryKey[3] as { counterpartyId?: string } | undefined,
+        queryKey[3] as { counterpartyId: string },
+      )
         ? previous
         : undefined,
   });

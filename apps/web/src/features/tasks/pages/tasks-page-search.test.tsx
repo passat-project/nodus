@@ -51,6 +51,16 @@ vi.mock('../../../shared/views/task-filter-fields.js', () => ({
 }));
 vi.mock('../lib/task-fields.js', () => ({ useTaskListFields: () => [] }));
 vi.mock('../../../shared/tasks/task-create-store.js', () => ({ openTaskCreate: vi.fn() }));
+// #435: журнал тянет реестр атрибутов, плоский реестр колонок и виды рамки.
+vi.mock('../../../shared/custom-fields/queries.js', () => ({
+  useCustomFieldDefinitions: () => ({ data: [] }),
+}));
+vi.mock('../../../shared/views/task-table-fields.js', () => ({ useTaskTableFields: () => [] }));
+vi.mock('../../../shared/views/list-ext/saved-views-api.js', () => ({
+  useJournalSavedViews: () => ({ data: [] }),
+  useCreateSavedView: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteSavedView: () => ({ mutate: vi.fn() }),
+}));
 
 beforeEach(() => {
   listProps.current = null;

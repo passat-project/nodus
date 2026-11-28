@@ -1,4 +1,5 @@
 import { projectCatalogHandlers } from './project-catalog-handlers.js';
+import { projectFoldersHandlers } from './project-folders-handlers.js';
 import { projectMemberMutationHandlers } from './project-member-mutation-handlers.js';
 import { projectMutationHandlers } from './project-mutation-handlers.js';
 import { projectReadHandlers } from './project-read-handlers.js';
@@ -16,4 +17,5 @@ export const projectsHandlers = [
   ...projectReadHandlers,
   ...projectMutationHandlers,
   ...projectMemberMutationHandlers,
+  ...projectFoldersHandlers,
 ];

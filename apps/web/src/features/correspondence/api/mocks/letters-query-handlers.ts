@@ -27,12 +27,18 @@ import {
   mockPermissionsOfRoleIds,
 } from '../../../../shared/mocks/data/roles.js';
 import { demoUserListItems } from '../../../../shared/mocks/data/users.js';
+import { demoCustomFieldDefinitions } from '../../../../shared/mocks/data/custom-fields.js';
 import { counterpartyMatcher } from '../../../../shared/mocks/live-counterparty.js';
 import { getMockActor } from '../../../../shared/mocks/mock-actor.js';
 import {
   letterListItemWithFormulas,
   letterWithFormulas,
 } from '../../../../shared/custom-fields/formula/formula-dto.js';
+import { letterRowValue } from '../../../../shared/views/list-ext/list-field-values.js';
+import {
+  applyMockExt,
+  parseMockExt,
+} from '../../../../shared/views/list-ext/mocks/mock-list-ext.js';
 import { apiError, notFound } from './letters-mock-checks.js';
 
 /** Чтение писем (#55, §6.2): списки вкладок курсором, держатели решений,
@@ -85,24 +91,42 @@ export const lettersQueryHandlers = [
     items = items
       .filter((letter) => matchesSearch(letter, search))
       .sort(byDesc(box === 'new' ? 'receivedAt' : 'registeredAt'));
-    return HttpResponse.json(
-      page<LetterListItem>(
-        // «Я открывал» — личный признак (редизайн #56): точка в «Новых».
-        // Значения атрибутов, имена ссылок и формульное состояние (#632, Р9)
-        // приезжают строкой списка — колонки атрибутов и значок fx.
-        items.map((letter) =>
-          letterListItemWithFormulas(
-            letterListItemOf(
-              letter,
-              viewedLetterIds.has(letter.id) || letter.registeredAt !== null,
-            ),
-            letter.customFields,
-          ),
-        ),
-        cursor,
-        limit ?? 50,
+    // Расширение списка (#435): предикаты/сортировка/группировка/итоги —
+    // движок-зеркало серверного конвейера на демо-письмах.
+    const ext = parseMockExt(new URL(request.url));
+    const hasExt =
+      ext.filter.length > 0 ||
+      ext.sort.length > 0 ||
+      ext.group !== undefined ||
+      ext.totals.length > 0;
+    // «Я открывал» — личный признак (редизайн #56): точка в «Новых».
+    // Значения атрибутов, имена ссылок и формульное состояние (#632, Р9)
+    // приезжают строкой списка — колонки атрибутов и значок fx.
+    const rows: LetterListItem[] = items.map((letter) =>
+      letterListItemWithFormulas(
+        letterListItemOf(letter, viewedLetterIds.has(letter.id) || letter.registeredAt !== null),
+        letter.customFields,
       ),
     );
+    const extResult = hasExt
+      ? applyMockExt({
+          rows,
+          ...ext,
+          entity: 'letter',
+          valueOf: letterRowValue,
+          definitions: demoCustomFieldDefinitions,
+        })
+      : null;
+    const result = extResult ? extResult.items : rows;
+    const start = cursor ? Number(cursor) || 0 : 0;
+    const slice = result.slice(start, start + (limit ?? 50));
+    const next = start + (limit ?? 50) < result.length ? String(start + (limit ?? 50)) : null;
+    return HttpResponse.json({
+      items: slice,
+      nextCursor: next,
+      ...(extResult?.groups ? { groups: extResult.groups } : {}),
+      ...(extResult?.totals ? { totals: extResult.totals } : {}),
+    });
   }),
 
   /** Держатели `correspondence.resolve` по алфавиту (Р13): группа

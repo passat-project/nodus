@@ -28,8 +28,9 @@ export { errorMessages } from './ru-errors.js';
 export { devUiStrings } from './ru-dev-ui.js';
 
 /** Списки с расширением (#435): заголовки системных колонок (CSV) и уровни
- *  сохранённых настроек. */
+ * сохранённых настроек. */
 export { listSystemFieldLabel, listsStrings } from './ru-lists.js';
+import { listsStrings as listsUiStrings } from './ru-lists.js';
 
 /**
  * Русские UI-строки портала (I15: компоненты не содержат хард-строк).
@@ -167,6 +168,9 @@ export const ui = {
     yes: 'Да',
     notFound: 'Ничего не найдено',
   },
+  /** Списки с расширением (#435): группировка/итоги/вид/CSV в панели фильтра,
+   *  вкладки-списки карточки проекта, статусы выгрузки. */
+  lists: listsUiStrings,
   nav: {
     home: 'Главная',
     tasks: 'Задачи',

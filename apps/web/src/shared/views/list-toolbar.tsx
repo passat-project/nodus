@@ -4,7 +4,7 @@ import { ui } from '@nodus/contracts';
 import { Popover, PopoverAnchor, PopoverContent } from '@nodus/ui/components/popover';
 import { cn } from '@nodus/ui/lib/utils';
 
-import { FilterPanel } from './filter-panel.js';
+import { FilterPanel, type FilterPanelExt } from './filter-panel.js';
 import { filterValueLabel, isActiveFilter, type FilterFieldDef } from './list-filters.js';
 import type { FilterPreset, ListToolbarState } from './use-list-toolbar.js';
 
@@ -54,6 +54,7 @@ export function ListToolbar<T>({
   className,
   hiddenChips = [],
   searchPlaceholder = ui.common.searchPlaceholder,
+  ext,
 }: {
   toolbar: ListToolbarState;
   defs: FilterFieldDef<T>[];
@@ -66,6 +67,9 @@ export function ListToolbar<T>({
   hiddenChips?: readonly string[];
   /** Подсказка поиска — по полям серверного поиска сущности (I15: строка из i18n). */
   searchPlaceholder?: string;
+  /** Расширение панели #435 (группировка/итоги/виды/CSV); без него — прежняя
+   *  панель, журналы без расширения не меняются. */
+  ext?: FilterPanelExt;
 }) {
   const [panelOpen, setPanelOpen] = useState(false);
   // Gotcha (docs/gotchas/frontend.md «Radix Popover из фокуса»): открывать панель
@@ -87,8 +91,12 @@ export function ListToolbar<T>({
   // Панель фильтра открывается, только когда фильтровать есть чем: у списка
   // без полей и пресетов (справочник контрагентов — поиск и архивные
   // серверные, #460) пустая панель была бы мусором под строкой поиска.
+  // #435: расширение (группировка/итоги/виды/CSV) — тоже причина панели.
   const hasPanel =
-    defs.some((d) => !d.hidden) || builtinPresets.length > 0 || toolbar.presets.length > 0;
+    defs.some((d) => !d.hidden) ||
+    builtinPresets.length > 0 ||
+    toolbar.presets.length > 0 ||
+    ext !== undefined;
 
   return (
     <div className={cn('flex h-10 shrink-0 items-center gap-2 px-4', className)}>
@@ -182,7 +190,7 @@ export function ListToolbar<T>({
             if (anchorRef.current?.contains(e.target as Node)) e.preventDefault();
           }}
         >
-          <FilterPanel toolbar={toolbar} defs={defs} builtinPresets={builtinPresets} />
+          <FilterPanel toolbar={toolbar} defs={defs} builtinPresets={builtinPresets} ext={ext} />
         </PopoverContent>
       </Popover>
       {right ? <div className="ml-auto flex shrink-0 items-center gap-1">{right}</div> : null}
